@@ -1,4 +1,5 @@
 import type * as PdfJs from "pdfjs-dist";
+import { decodeItemString, lightCleanPageText } from "./decode";
 
 let pdfjsPromise: Promise<typeof PdfJs> | null = null;
 async function getPdfjs(): Promise<typeof PdfJs> {
@@ -89,13 +90,14 @@ export async function extractPdfPages(
       .map((it: any) => {
         const tx = it.transform;
         return {
-          str: it.str as string,
+          str: decodeItemString(it.str as string),
           x: tx[4] as number,
           y: tx[5] as number,
           width: it.width as number,
           height: it.height as number,
         };
-      });
+      })
+      .filter((it) => it.str.length > 0);
     const columns = detectColumns(items, viewport.width);
     const sorted = sortByColumns(items, viewport.width, columns);
 
@@ -107,7 +109,7 @@ export async function extractPdfPages(
       text += it.str;
       lastY = it.y;
     }
-    text = text.replace(/[ \t]+\n/g, "\n").replace(/\n{3,}/g, "\n\n").trim();
+    text = lightCleanPageText(text);
 
     const extraction: PageExtraction = { pageNumber, text, items: sorted, columns };
     pages.push(extraction);
