@@ -9,6 +9,7 @@ import { clearDoc, loadDoc, saveDoc } from "@/lib/storage";
 
 export const Route = createFileRoute("/")({
   component: DocLensPage,
+  ssr: false,
   head: () => ({
     meta: [
       { title: "DocLens — Document → AI pipeline inspector" },
