@@ -77,6 +77,7 @@ export async function extractPdfPages(
   data: ArrayBuffer,
   onPage?: (page: PageExtraction, total: number) => void,
 ): Promise<PageExtraction[]> {
+  const pdfjsLib = await getPdfjs();
   const pdf = await pdfjsLib.getDocument({ data: data.slice(0) }).promise;
   const pages: PageExtraction[] = [];
   for (let pageNumber = 1; pageNumber <= pdf.numPages; pageNumber++) {
@@ -84,8 +85,7 @@ export async function extractPdfPages(
     const viewport = page.getViewport({ scale: 1 });
     const content = await page.getTextContent();
     const items: TextItem[] = content.items
-      // @ts-expect-error pdfjs typing
-      .filter((it) => typeof it.str === "string")
+      .filter((it: any) => typeof it.str === "string")
       .map((it: any) => {
         const tx = it.transform;
         return {
@@ -99,7 +99,6 @@ export async function extractPdfPages(
     const columns = detectColumns(items, viewport.width);
     const sorted = sortByColumns(items, viewport.width, columns);
 
-    // Rebuild text with line breaks based on Y deltas
     let text = "";
     let lastY: number | null = null;
     for (const it of sorted) {
@@ -118,5 +117,6 @@ export async function extractPdfPages(
 }
 
 export async function loadPdfDocument(data: ArrayBuffer) {
+  const pdfjsLib = await getPdfjs();
   return pdfjsLib.getDocument({ data: data.slice(0) }).promise;
 }
