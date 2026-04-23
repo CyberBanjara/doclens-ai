@@ -1,4 +1,5 @@
 import type * as PdfJs from "pdfjs-dist";
+import { decodeItemString, lightCleanPageText } from "./decode";
 
 let pdfjsPromise: Promise<typeof PdfJs> | null = null;
 async function getPdfjs(): Promise<typeof PdfJs> {
