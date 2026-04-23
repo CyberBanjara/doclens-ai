@@ -60,7 +60,6 @@ export const getRouter = () => {
     context: {},
     scrollRestoration: true,
     defaultPreloadStaleTime: 0,
-    defaultSsr: false,
     defaultErrorComponent: DefaultErrorComponent,
   });
 
