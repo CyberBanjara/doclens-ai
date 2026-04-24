@@ -44,17 +44,10 @@ export function RightPanel({
   const [tab, setTab] = useState<Tab>("text");
   const [chunkIdx, setChunkIdx] = useState(0);
 
-  // Preview model (kept from original API Request Preview tab)
-  const [previewModelId, setPreviewModelId] = useState(MODELS[0].id);
-  const previewModel = MODELS.find((m) => m.id === previewModelId) ?? MODELS[0];
-  const previewChunks = useMemo(() => chunkPages(pages, previewModel), [pages, previewModel]);
   const totalTokens = useMemo(
     () => pages.reduce((sum, p) => sum + estimateTokens(p.text), 0),
     [pages],
   );
-  const safeChunkIdx = Math.min(chunkIdx, Math.max(0, previewChunks.length - 1));
-  const currentChunk = previewChunks[safeChunkIdx];
-  const payload = currentChunk ? buildRequestPayload(previewModel, currentChunk) : null;
 
   // === AI execution state ===
   const [mode, setMode] = useState<AiMode>("summarize");
@@ -66,6 +59,20 @@ export function RightPanel({
   const [streamBuf, setStreamBuf] = useState("");
   const [runError, setRunError] = useState("");
   const abortRef = useRef<AbortController | null>(null);
+
+  // Live request log — every chunk dispatched to OpenRouter is recorded here
+  // so the Request Preview tab shows exactly what was (or will be) sent.
+  interface RequestLogEntry {
+    chunkIndex: number; // 0-based
+    chunkCount: number;
+    payload: Record<string, unknown>;
+    dispatchedAt: number;
+    chars: number;
+    tokens: number;
+  }
+  const [requestLog, setRequestLog] = useState<RequestLogEntry[]>([]);
+  const safeChunkIdx = Math.min(chunkIdx, Math.max(0, requestLog.length - 1));
+  const currentRequest = requestLog[safeChunkIdx];
 
   useEffect(() => {
     const k = getKey();
