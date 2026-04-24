@@ -263,7 +263,7 @@ export function RightPanel({
         </TabButton>
         <TabButton active={tab === "request"} onClick={() => setTab("request")}>
           Request Preview
-          <Badge>{previewChunks.length || 0}</Badge>
+          <Badge>{requestLog.length || 0}</Badge>
         </TabButton>
         <div className="ml-auto px-4 font-mono text-[10px] uppercase tracking-widest text-muted-foreground">
           {analyzing ? <span className="text-primary">{status}</span> : status || "idle"}
