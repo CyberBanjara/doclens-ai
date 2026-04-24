@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { JsonView } from "./JsonView";
-import { MODELS, buildRequestPayload, chunkPages, estimateTokens } from "@/lib/models";
+import { estimateTokens } from "@/lib/models";
 import type { PageExtraction } from "@/lib/pdf";
 import {
   MODE_INSTRUCTIONS,
