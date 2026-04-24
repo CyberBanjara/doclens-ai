@@ -1,181 +1,168 @@
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
+import { AppHeader } from "@/components/AppHeader";
 import { Dropzone } from "@/components/Dropzone";
-import { PdfViewer } from "@/components/PdfViewer";
-import { RightPanel } from "@/components/RightPanel";
-import { extractPdfPages, type PageExtraction } from "@/lib/pdf";
-import { MODELS } from "@/lib/models";
-import { clearDoc, loadDoc, saveDoc } from "@/lib/storage";
+import {
+  createDoc,
+  deleteDoc,
+  getLastOpened,
+  listDocs,
+  setLastOpened,
+  type DocSummary,
+} from "@/lib/storage";
 
 export const Route = createFileRoute("/")({
-  component: DocLensPage,
+  component: DashboardPage,
   ssr: false,
   head: () => ({
     meta: [
-      { title: "DocLens — Document → AI pipeline inspector" },
+      { title: "DocLens — Document Library" },
       {
         name: "description",
         content:
-          "DocLens is a privacy-first, browser-only PDF inspector that shows exactly what an LLM would receive — extracted text, chunking, and the raw API request — before any call is made.",
-      },
-      { property: "og:title", content: "DocLens — Document → AI pipeline inspector" },
-      {
-        property: "og:description",
-        content:
-          "See exactly what an LLM API would receive from your PDF — fully client-side, no uploads.",
+          "Your private, browser-only PDF library. Upload, inspect, and run AI on documents — nothing leaves your device unless you choose.",
       },
     ],
   }),
 });
 
-function DocLensPage() {
-  const [file, setFile] = useState<{ name: string; size: number } | null>(null);
-  const [pdfData, setPdfData] = useState<ArrayBuffer | null>(null);
-  const [pages, setPages] = useState<PageExtraction[]>([]);
-  const [totalPages, setTotalPages] = useState(0);
-  const [modelId, setModelId] = useState<string>(MODELS[0].id);
-  const [analyzing, setAnalyzing] = useState(false);
-  const [status, setStatus] = useState("");
+function DashboardPage() {
+  const navigate = useNavigate();
+  const [docs, setDocs] = useState<DocSummary[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [autoRestore, setAutoRestore] = useState(true);
 
-  // Restore on mount
   useEffect(() => {
     (async () => {
-      const stored = await loadDoc();
-      if (stored) {
-        setFile({ name: stored.fileName, size: stored.fileSize });
-        setPdfData(stored.data);
-        setPages(stored.pages ?? []);
-        setModelId(stored.modelId);
+      const list = await listDocs();
+      setDocs(list);
+      setLoading(false);
+
+      // Auto-restore last opened doc on launch
+      if (autoRestore) {
+        const last = await getLastOpened();
+        if (last && list.some((d) => d.id === last)) {
+          navigate({ to: "/doc/$id", params: { id: last } });
+        }
       }
     })();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const handleFile = async (f: File) => {
+    setAutoRestore(false);
     const buf = await f.arrayBuffer();
-    setFile({ name: f.name, size: f.size });
-    setPdfData(buf);
-    setPages([]);
-    setTotalPages(0);
-    setStatus("");
-    await saveDoc({ fileName: f.name, fileSize: f.size, data: buf, pages: null, modelId });
+    const rec = await createDoc(f, buf);
+    navigate({ to: "/doc/$id", params: { id: rec.id } });
   };
 
-  const handleAnalyze = async () => {
-    if (!pdfData || analyzing) return;
-    setAnalyzing(true);
-    setPages([]);
-    setStatus("extracting…");
-    try {
-      const collected: PageExtraction[] = [];
-      await extractPdfPages(pdfData, (page, total) => {
-        setTotalPages(total);
-        collected.push(page);
-        setPages([...collected]);
-        setStatus(`page ${page.pageNumber}/${total}`);
-      });
-      setStatus(`done · ${collected.length} pages`);
-      if (file) {
-        await saveDoc({
-          fileName: file.name,
-          fileSize: file.size,
-          data: pdfData,
-          pages: collected,
-          modelId,
-        });
-      }
-    } catch (err) {
-      console.error(err);
-      setStatus("error: " + (err instanceof Error ? err.message : "unknown"));
-    } finally {
-      setAnalyzing(false);
-    }
+  const handleDelete = async (id: string, e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    if (!confirm("Delete this document and all its AI results?")) return;
+    await deleteDoc(id);
+    setDocs((prev) => prev.filter((d) => d.id !== id));
   };
 
-  const handleReset = async () => {
-    await clearDoc();
-    setFile(null);
-    setPdfData(null);
-    setPages([]);
-    setTotalPages(0);
-    setStatus("");
+  const stayHere = async () => {
+    setAutoRestore(false);
+    await setLastOpened(null);
   };
 
   return (
-    <div className="flex h-screen flex-col bg-background text-foreground">
-      {/* Top bar */}
-      <header className="flex items-center justify-between border-b border-border bg-surface px-5 py-3">
-        <div className="flex items-center gap-3">
-          <div className="flex h-7 w-7 items-center justify-center rounded-md bg-primary font-mono text-sm font-bold text-primary-foreground">
-            ◐
+    <div className="flex min-h-screen flex-col bg-background text-foreground">
+      <AppHeader />
+      <main className="mx-auto w-full max-w-6xl flex-1 px-5 py-8" onClick={stayHere}>
+        <div className="mb-6 flex items-baseline justify-between">
+          <div>
+            <h2 className="font-mono text-[11px] uppercase tracking-[0.25em] text-muted-foreground">
+              library
+            </h2>
+            <p className="mt-1 text-2xl font-semibold tracking-tight">Your documents</p>
           </div>
-          <div className="flex items-baseline gap-2">
-            <h1 className="text-base font-semibold tracking-tight">DocLens</h1>
-            <span className="font-mono text-[10px] uppercase tracking-[0.2em] text-muted-foreground">
-              document → ai pipeline inspector
-            </span>
+          <div className="font-mono text-[11px] uppercase tracking-widest text-muted-foreground">
+            {loading ? "loading…" : `${docs.length} document${docs.length === 1 ? "" : "s"}`}
           </div>
         </div>
-        <div className="flex items-center gap-2">
-          {file && (
-            <div className="hidden items-center gap-2 rounded-md border border-border bg-background px-3 py-1.5 font-mono text-[11px] sm:flex">
-              <span className="h-1.5 w-1.5 rounded-full bg-primary" />
-              <span className="max-w-[260px] truncate text-foreground">{file.name}</span>
-              <span className="text-muted-foreground">
-                {(file.size / 1024).toFixed(1)} KB
-              </span>
-            </div>
-          )}
-          <button
-            onClick={handleAnalyze}
-            disabled={!pdfData || analyzing}
-            className="rounded-md bg-primary px-3 py-1.5 font-mono text-[11px] uppercase tracking-widest text-primary-foreground transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-40"
-          >
-            {analyzing ? "analyzing…" : "analyze document"}
-          </button>
-          {file && (
-            <button
-              onClick={handleReset}
-              className="rounded-md border border-border bg-background px-3 py-1.5 font-mono text-[11px] uppercase tracking-widest text-muted-foreground transition-colors hover:text-foreground"
-            >
-              reset
-            </button>
-          )}
-        </div>
-      </header>
 
-      {/* Split */}
-      <main className="grid flex-1 grid-cols-1 overflow-hidden md:grid-cols-2">
-        <section className="relative h-full overflow-hidden border-b border-border md:border-b-0 md:border-r">
-          {pdfData ? (
-            <PdfViewer data={pdfData} />
-          ) : (
-            <div className="h-full p-6">
-              <Dropzone onFile={handleFile} />
+        <div className="mb-8 h-44">
+          <Dropzone onFile={handleFile} />
+        </div>
+
+        {!loading && docs.length === 0 ? (
+          <div className="rounded-lg border border-dashed border-border bg-surface/50 p-10 text-center">
+            <div className="font-mono text-[11px] uppercase tracking-widest text-muted-foreground">
+              empty library
             </div>
-          )}
-        </section>
-        <section className="h-full overflow-hidden">
-          <RightPanel
-            pages={pages}
-            totalPages={totalPages || pages.length}
-            modelId={modelId}
-            onModelChange={(id) => {
-              setModelId(id);
-              if (file && pdfData) {
-                saveDoc({
-                  fileName: file.name,
-                  fileSize: file.size,
-                  data: pdfData,
-                  pages,
-                  modelId: id,
-                });
-              }
-            }}
-            analyzing={analyzing}
-            status={status}
-          />
-        </section>
+            <p className="mt-2 text-sm text-foreground/80">
+              Upload a PDF above to get started.
+            </p>
+          </div>
+        ) : (
+          <ul className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
+            {docs.map((d) => (
+              <li key={d.id}>
+                <Link
+                  to="/doc/$id"
+                  params={{ id: d.id }}
+                  className="group block rounded-lg border border-border bg-surface p-4 transition-colors hover:border-border-strong hover:bg-surface-2"
+                >
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="min-w-0 flex-1">
+                      <div className="truncate text-sm font-medium text-foreground group-hover:text-primary">
+                        {d.fileName}
+                      </div>
+                      <div className="mt-1 font-mono text-[10px] uppercase tracking-widest text-muted-foreground">
+                        {(d.fileSize / 1024).toFixed(1)} KB
+                      </div>
+                    </div>
+                    <button
+                      onClick={(e) => handleDelete(d.id, e)}
+                      className="rounded border border-border bg-background px-1.5 py-0.5 font-mono text-[10px] uppercase tracking-widest text-muted-foreground opacity-0 transition-opacity hover:text-destructive group-hover:opacity-100"
+                      aria-label="Delete document"
+                    >
+                      del
+                    </button>
+                  </div>
+                  <div className="mt-4 flex items-center justify-between font-mono text-[10px] uppercase tracking-widest text-muted-foreground">
+                    <span>
+                      <span className="text-foreground">{d.pageCount || "—"}</span> pages
+                    </span>
+                    <span className="flex items-center gap-2">
+                      {d.hasExtraction && (
+                        <span className="rounded bg-primary/15 px-1.5 py-0.5 text-primary">
+                          extracted
+                        </span>
+                      )}
+                      {d.aiResultCount > 0 && (
+                        <span className="rounded bg-accent/15 px-1.5 py-0.5 text-accent">
+                          {d.aiResultCount} ai
+                        </span>
+                      )}
+                    </span>
+                  </div>
+                  <div className="mt-2 font-mono text-[10px] uppercase tracking-widest text-muted-foreground">
+                    opened {formatRelative(d.lastOpenedAt)}
+                  </div>
+                </Link>
+              </li>
+            ))}
+          </ul>
+        )}
       </main>
     </div>
   );
+}
+
+function formatRelative(ts: number): string {
+  if (!ts) return "never";
+  const diff = Date.now() - ts;
+  const m = Math.round(diff / 60000);
+  if (m < 1) return "just now";
+  if (m < 60) return `${m}m ago`;
+  const h = Math.round(m / 60);
+  if (h < 24) return `${h}h ago`;
+  const days = Math.round(h / 24);
+  if (days < 30) return `${days}d ago`;
+  return new Date(ts).toLocaleDateString();
 }
