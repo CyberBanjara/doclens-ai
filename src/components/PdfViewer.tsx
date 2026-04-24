@@ -1,8 +1,17 @@
 import { useEffect, useRef, useState } from "react";
 import { loadPdfDocument } from "@/lib/pdf";
 
-export function PdfViewer({ data }: { data: ArrayBuffer | null }) {
+export function PdfViewer({
+  data,
+  initialScrollTop,
+  onScroll,
+}: {
+  data: ArrayBuffer | null;
+  initialScrollTop?: number;
+  onScroll?: (top: number) => void;
+}) {
   const containerRef = useRef<HTMLDivElement>(null);
+  const scrollRef = useRef<HTMLDivElement>(null);
   const [pageCount, setPageCount] = useState(0);
   const [rendering, setRendering] = useState(false);
 
@@ -40,21 +49,46 @@ export function PdfViewer({ data }: { data: ArrayBuffer | null }) {
         containerRef.current?.appendChild(wrapper);
         await page.render({ canvasContext: ctx, viewport, canvas }).promise;
         if (cancelled) return;
+        if (i === 1 && initialScrollTop && scrollRef.current) {
+          // Restore once initial pages start to fill height
+          requestAnimationFrame(() => {
+            if (scrollRef.current) scrollRef.current.scrollTop = initialScrollTop;
+          });
+        }
+      }
+      // Final restore once all pages laid out
+      if (initialScrollTop && scrollRef.current) {
+        scrollRef.current.scrollTop = initialScrollTop;
       }
       setRendering(false);
     })();
     return () => {
       cancelled = true;
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [data]);
+
+  // Throttled scroll persistence
+  useEffect(() => {
+    const el = scrollRef.current;
+    if (!el || !onScroll) return;
+    let t: ReturnType<typeof setTimeout> | null = null;
+    const handler = () => {
+      if (t) clearTimeout(t);
+      t = setTimeout(() => onScroll(el.scrollTop), 400);
+    };
+    el.addEventListener("scroll", handler, { passive: true });
+    return () => {
+      el.removeEventListener("scroll", handler);
+      if (t) clearTimeout(t);
+    };
+  }, [onScroll]);
 
   if (!data) {
     return (
       <div className="flex h-full items-center justify-center text-muted-foreground">
         <div className="text-center">
-          <div className="font-mono text-xs uppercase tracking-widest">
-            no document loaded
-          </div>
+          <div className="font-mono text-xs uppercase tracking-widest">no document loaded</div>
           <div className="mt-2 text-sm">Upload a PDF to begin</div>
         </div>
       </div>
@@ -62,7 +96,7 @@ export function PdfViewer({ data }: { data: ArrayBuffer | null }) {
   }
 
   return (
-    <div className="relative h-full overflow-auto bg-grid p-6">
+    <div ref={scrollRef} className="relative h-full overflow-auto bg-grid p-6">
       <div ref={containerRef} className="flex flex-col items-center gap-6" />
       {rendering && pageCount === 0 && (
         <div className="absolute inset-0 flex items-center justify-center font-mono text-xs uppercase tracking-widest text-muted-foreground">
