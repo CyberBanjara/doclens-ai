@@ -1,18 +1,17 @@
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import { AppHeader } from "@/components/AppHeader";
 import { PdfViewer } from "@/components/PdfViewer";
 import { RightPanel } from "@/components/RightPanel";
 import { extractPdfPages, type PageExtraction } from "@/lib/pdf";
 import {
-  appendAiResult,
-  deleteAiResult,
   getDoc,
   setLastOpened,
   touchDoc,
   updateDoc,
-  type AiResult,
+  upsertPageAi,
   type DocRecord,
+  type PageAi,
 } from "@/lib/storage";
 
 export const Route = createFileRoute("/doc/$id")({
@@ -31,7 +30,7 @@ function DocPage() {
   const [totalPages, setTotalPages] = useState(0);
   const [analyzing, setAnalyzing] = useState(false);
   const [status, setStatus] = useState("");
-  const [aiResults, setAiResults] = useState<AiResult[]>([]);
+  const [pageAi, setPageAi] = useState<Record<number, PageAi>>({});
 
   useEffect(() => {
     let cancelled = false;
@@ -45,7 +44,7 @@ function DocPage() {
       setDoc(rec);
       setPages(rec.pages ?? []);
       setTotalPages(rec.pageCount || rec.pages?.length || 0);
-      setAiResults(rec.aiResults ?? []);
+      setPageAi(rec.pageAi ?? {});
       await touchDoc(id);
       await setLastOpened(id);
     })();
@@ -77,20 +76,13 @@ function DocPage() {
     }
   };
 
-  const handleAiResult = async (result: AiResult) => {
-    setAiResults((prev) => [...prev.filter((r) => r.id !== result.id), result]);
-    await appendAiResult(id, result);
+  const handleUpdatePage = (pageNumber: number, patch: Partial<PageAi>) => {
+    setPageAi((prev) => {
+      const existing = prev[pageNumber] ?? { pageNumber, status: "idle" as const };
+      return { ...prev, [pageNumber]: { ...existing, ...patch, pageNumber } };
+    });
+    void upsertPageAi(id, pageNumber, patch);
   };
-
-  const handleDeleteAi = async (resultId: string) => {
-    setAiResults((prev) => prev.filter((r) => r.id !== resultId));
-    await deleteAiResult(id, resultId);
-  };
-
-  const fullText = useMemo(
-    () => pages.map((p) => `--- Page ${p.pageNumber} ---\n${p.text}`).join("\n\n"),
-    [pages],
-  );
 
   if (missing) {
     return (
@@ -160,10 +152,8 @@ function DocPage() {
             totalPages={totalPages || pages.length}
             analyzing={analyzing}
             status={status}
-            fullText={fullText}
-            aiResults={aiResults}
-            onAiResult={handleAiResult}
-            onDeleteAiResult={handleDeleteAi}
+            pageAi={pageAi}
+            onUpdatePage={handleUpdatePage}
           />
         </section>
       </main>
