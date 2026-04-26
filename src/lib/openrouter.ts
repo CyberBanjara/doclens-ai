@@ -10,6 +10,11 @@ export interface ORModel {
 const KEY_LS = "doclens.openrouter.key";
 const MODEL_LS = "doclens.openrouter.model";
 const LANG_LS = "doclens.outputLanguage";
+const MODE_LS = "doclens.mode";
+const STYLE_LS = "doclens.style";
+const TEMP_LS = "doclens.temperature";
+const MEM_LS = "doclens.memory";
+const SEQ_LS = "doclens.sequential";
 
 export function getKey(): string {
   if (typeof window === "undefined") return "";
