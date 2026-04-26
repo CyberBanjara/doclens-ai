@@ -10,6 +10,11 @@ export interface ORModel {
 const KEY_LS = "doclens.openrouter.key";
 const MODEL_LS = "doclens.openrouter.model";
 const LANG_LS = "doclens.outputLanguage";
+const MODE_LS = "doclens.mode";
+const STYLE_LS = "doclens.style";
+const TEMP_LS = "doclens.temperature";
+const MEM_LS = "doclens.memory";
+const SEQ_LS = "doclens.sequential";
 
 export function getKey(): string {
   if (typeof window === "undefined") return "";
@@ -36,6 +41,48 @@ export function getOutputLanguage(): string {
 }
 export function setOutputLanguage(lang: string) {
   localStorage.setItem(LANG_LS, lang);
+}
+
+export type GlobalMode = "translate" | "summarize" | "explain" | "keypoints";
+export function getMode(): GlobalMode {
+  if (typeof window === "undefined") return "summarize";
+  return (localStorage.getItem(MODE_LS) as GlobalMode) ?? "summarize";
+}
+export function setMode(m: GlobalMode) {
+  localStorage.setItem(MODE_LS, m);
+}
+
+export function getStyle(): string {
+  if (typeof window === "undefined") return "Neutral";
+  return localStorage.getItem(STYLE_LS) ?? "Neutral";
+}
+export function setStyle(s: string) {
+  localStorage.setItem(STYLE_LS, s);
+}
+
+export function getTemperature(): number {
+  if (typeof window === "undefined") return 0.3;
+  const v = parseFloat(localStorage.getItem(TEMP_LS) ?? "0.3");
+  return Number.isFinite(v) ? v : 0.3;
+}
+export function setTemperature(t: number) {
+  localStorage.setItem(TEMP_LS, String(t));
+}
+
+export function getMemory(): boolean {
+  if (typeof window === "undefined") return true;
+  return localStorage.getItem(MEM_LS) !== "false";
+}
+export function setMemory(b: boolean) {
+  localStorage.setItem(MEM_LS, b ? "true" : "false");
+}
+
+export function getSequential(): boolean {
+  if (typeof window === "undefined") return true;
+  return localStorage.getItem(SEQ_LS) !== "false";
+}
+export function setSequential(b: boolean) {
+  localStorage.setItem(SEQ_LS, b ? "true" : "false");
 }
 
 const HEADERS_BASE = {
@@ -65,14 +112,14 @@ export async function fetchModels(key: string): Promise<ORModel[]> {
 
 export interface StreamOpts {
   key: string;
-  model: string;
-  system: string;
-  user: string;
+  /** Full payload sent to OpenRouter — must include `model`, `messages`, `stream: true`. */
+  payload: Record<string, unknown>;
   signal?: AbortSignal;
   onDelta: (text: string) => void;
 }
 
 export async function streamCompletion(opts: StreamOpts): Promise<void> {
+  const body = { ...opts.payload, stream: true };
   const res = await fetch("https://openrouter.ai/api/v1/chat/completions", {
     method: "POST",
     signal: opts.signal,
@@ -81,14 +128,7 @@ export async function streamCompletion(opts: StreamOpts): Promise<void> {
       "Content-Type": "application/json",
       ...HEADERS_BASE,
     },
-    body: JSON.stringify({
-      model: opts.model,
-      stream: true,
-      messages: [
-        { role: "system", content: opts.system },
-        { role: "user", content: opts.user },
-      ],
-    }),
+    body: JSON.stringify(body),
   });
   if (!res.ok || !res.body) {
     const txt = await res.text().catch(() => "");
@@ -120,6 +160,48 @@ export async function streamCompletion(opts: StreamOpts): Promise<void> {
       }
     }
   }
+}
+
+/** Trailing excerpt from previous page used as memory in next request. */
+export function memoryExcerpt(prev: string | undefined, maxChars = 600): string {
+  if (!prev) return "";
+  const trimmed = prev.trim();
+  if (trimmed.length <= maxChars) return trimmed;
+  return "…" + trimmed.slice(-maxChars);
+}
+
+export interface BuildPagePayloadInput {
+  modelId: string;
+  mode: GlobalMode;
+  language: string;
+  style: string;
+  temperature: number;
+  pageNumber: number;
+  pageText: string;
+  /** Optional trailing excerpt from previous page's result. */
+  previousExcerpt?: string;
+}
+
+export function buildPagePayload(i: BuildPagePayloadInput): Record<string, unknown> {
+  const modeInstr = MODE_INSTRUCTIONS[i.mode]?.instruction ?? MODE_INSTRUCTIONS.summarize.instruction;
+  const styleClause = i.style && i.style !== "Neutral" ? ` Use a ${i.style.toLowerCase()} tone.` : "";
+  const system =
+    `You are a document analysis assistant. Always respond in ${i.language}.${styleClause} ` +
+    `Process one page at a time. Output only the final answer — no preamble.`;
+  const memoryBlock = i.previousExcerpt
+    ? `\n\n[Context from end of previous page — for continuity only, do not re-translate or re-summarize]:\n${i.previousExcerpt}\n`
+    : "";
+  const user = `${modeInstr}${memoryBlock}\n\n--- Page ${i.pageNumber} ---\n${i.pageText}`;
+  return {
+    model: i.modelId,
+    stream: true,
+    temperature: i.temperature,
+    max_tokens: 4000,
+    messages: [
+      { role: "system", content: system },
+      { role: "user", content: user },
+    ],
+  };
 }
 
 export const MODE_INSTRUCTIONS: Record<string, { label: string; instruction: string }> = {

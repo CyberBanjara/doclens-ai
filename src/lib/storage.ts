@@ -2,14 +2,15 @@ import { openDB, type IDBPDatabase } from "idb";
 import type { PageExtraction } from "./pdf";
 
 const DB_NAME = "doclens";
-const DB_VERSION = 3;
+const DB_VERSION = 4;
 const STORE = "documents";
 const META = "meta";
 
 export type AiMode = "translate" | "summarize" | "explain" | "keypoints";
+export type PageStatus = "idle" | "ready" | "running" | "done" | "error";
 
 export interface AiResult {
-  id: string; // ${mode}-${language}-${modelId} or timestamp
+  id: string;
   mode: AiMode;
   language: string;
   modelId: string;
@@ -17,6 +18,33 @@ export interface AiResult {
   content: string;
   createdAt: number;
   chunkCount: number;
+}
+
+/** Per-page AI overrides. Any unset field falls back to the global setting. */
+export interface PageOverrides {
+  mode?: AiMode;
+  language?: string;
+  modelId?: string;
+  style?: string;
+  temperature?: number;
+  memory?: boolean;
+}
+
+/** Per-page AI state stored in IndexedDB. */
+export interface PageAi {
+  pageNumber: number;
+  status: PageStatus;
+  /** Custom (user-edited) request payload. If set, sent verbatim. */
+  customRequest?: Record<string, unknown> | null;
+  /** Marks customRequest as user-modified — auto-regen is suppressed. */
+  isCustom?: boolean;
+  /** Last AI text result for this page. */
+  result?: string;
+  /** Snapshot of payload that produced `result` (for audit). */
+  lastSentRequest?: Record<string, unknown> | null;
+  error?: string;
+  overrides?: PageOverrides;
+  updatedAt?: number;
 }
 
 export interface DocRecord {
@@ -29,7 +57,10 @@ export interface DocRecord {
   createdAt: number;
   lastOpenedAt: number;
   scrollTop?: number;
+  /** Legacy whole-document AI results — kept so old docs don't lose data. */
   aiResults?: AiResult[];
+  /** Per-page AI state, keyed by pageNumber. */
+  pageAi?: Record<number, PageAi>;
 }
 
 export interface DocSummary {
@@ -73,7 +104,9 @@ export async function listDocs(): Promise<DocSummary[]> {
       createdAt: r.createdAt ?? 0,
       lastOpenedAt: r.lastOpenedAt ?? 0,
       hasExtraction: !!r.pages?.length,
-      aiResultCount: r.aiResults?.length ?? 0,
+      aiResultCount:
+        (r.aiResults?.length ?? 0) +
+        Object.values(r.pageAi ?? {}).filter((p) => p.status === "done").length,
     }))
     .sort((a, b) => b.lastOpenedAt - a.lastOpenedAt);
 }
@@ -97,6 +130,7 @@ export async function createDoc(file: File, data: ArrayBuffer): Promise<DocRecor
     createdAt: now,
     lastOpenedAt: now,
     aiResults: [],
+    pageAi: {},
   };
   await d.put(STORE, rec);
   await setLastOpened(id);
@@ -136,6 +170,17 @@ export async function deleteAiResult(docId: string, resultId: string) {
   if (!existing) return;
   const aiResults = (existing.aiResults ?? []).filter((r) => r.id !== resultId);
   await d.put(STORE, { ...existing, aiResults });
+}
+
+/** Merge a partial PageAi for a single page. Fast path used during streaming. */
+export async function upsertPageAi(docId: string, pageNumber: number, patch: Partial<PageAi>) {
+  const d = await db();
+  const existing = (await d.get(STORE, docId)) as DocRecord | undefined;
+  if (!existing) return;
+  const pageAi = { ...(existing.pageAi ?? {}) };
+  const prev = pageAi[pageNumber] ?? { pageNumber, status: "idle" as PageStatus };
+  pageAi[pageNumber] = { ...prev, ...patch, pageNumber, updatedAt: Date.now() };
+  await d.put(STORE, { ...existing, pageAi });
 }
 
 const LAST_OPENED_KEY = "lastOpenedDocId";

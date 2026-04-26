@@ -4,12 +4,24 @@ import { AppHeader } from "@/components/AppHeader";
 import {
   fetchModels,
   getKey,
+  getMemory,
+  getMode,
   getOutputLanguage,
   getSelectedModel,
+  getSequential,
+  getStyle,
+  getTemperature,
+  MODE_INSTRUCTIONS,
   setKey as saveKey,
+  setMemory,
+  setMode as saveMode,
   setOutputLanguage,
   setSelectedModel,
+  setSequential,
+  setStyle as saveStyle,
+  setTemperature,
   validateKey,
+  type GlobalMode,
   type ORModel,
 } from "@/lib/openrouter";
 
@@ -21,6 +33,7 @@ export const Route = createFileRoute("/settings")({
 });
 
 const LANGS = ["English", "Arabic", "French", "Hindi", "Spanish", "Japanese"];
+const STYLES = ["Neutral", "Formal", "Casual", "Academic", "Concise", "Detailed", "Friendly"];
 
 type FilterTab = "all" | "free" | "fast" | "popular";
 
@@ -35,11 +48,21 @@ function SettingsPage() {
   const [customLang, setCustomLang] = useState("");
   const [search, setSearch] = useState("");
   const [tab, setTab] = useState<FilterTab>("all");
+  const [mode, setModeState] = useState<GlobalMode>("summarize");
+  const [style, setStyleState] = useState("Neutral");
+  const [temperature, setTemp] = useState(0.3);
+  const [memory, setMemoryState] = useState(true);
+  const [sequential, setSequentialState] = useState(true);
 
   useEffect(() => {
     setKeyInput(getKey());
     setSelected(getSelectedModel());
     setLanguage(getOutputLanguage());
+    setModeState(getMode());
+    setStyleState(getStyle());
+    setTemp(getTemperature());
+    setMemoryState(getMemory());
+    setSequentialState(getSequential());
     if (getKey()) {
       setKeyStatus("valid");
       void loadModels(getKey());
@@ -168,6 +191,100 @@ function SettingsPage() {
           </div>
           <div className="mt-3 font-mono text-[11px] text-muted-foreground">
             current: <span className="text-primary">{language}</span>
+          </div>
+        </section>
+
+        {/* Pipeline defaults */}
+        <section className="mb-8 rounded-lg border border-border bg-surface p-5">
+          <h3 className="font-mono text-[11px] uppercase tracking-[0.2em] text-muted-foreground">
+            pipeline defaults
+          </h3>
+          <p className="mt-1 text-sm text-foreground/80">
+            Applied to every page unless overridden inline. Per-page overrides always win.
+          </p>
+
+          <div className="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-2">
+            <label className="block">
+              <span className="font-mono text-[10px] uppercase tracking-widest text-muted-foreground">mode</span>
+              <select
+                value={mode}
+                onChange={(e) => {
+                  const v = e.target.value as GlobalMode;
+                  setModeState(v);
+                  saveMode(v);
+                }}
+                className="mt-1 w-full rounded-md border border-border bg-background px-3 py-1.5 font-mono text-[12px] outline-none focus:border-primary"
+              >
+                {Object.entries(MODE_INSTRUCTIONS).map(([k, v]) => (
+                  <option key={k} value={k}>{v.label}</option>
+                ))}
+              </select>
+            </label>
+
+            <label className="block">
+              <span className="font-mono text-[10px] uppercase tracking-widest text-muted-foreground">style / tone</span>
+              <select
+                value={STYLES.includes(style) ? style : "__custom"}
+                onChange={(e) => {
+                  const v = e.target.value;
+                  if (v === "__custom") return;
+                  setStyleState(v);
+                  saveStyle(v);
+                }}
+                className="mt-1 w-full rounded-md border border-border bg-background px-3 py-1.5 font-mono text-[12px] outline-none focus:border-primary"
+              >
+                {STYLES.map((s) => <option key={s} value={s}>{s}</option>)}
+                {!STYLES.includes(style) && <option value="__custom">{style}</option>}
+              </select>
+            </label>
+
+            <label className="block sm:col-span-2">
+              <span className="font-mono text-[10px] uppercase tracking-widest text-muted-foreground">
+                temperature · <span className="text-primary">{temperature.toFixed(2)}</span>
+              </span>
+              <input
+                type="range"
+                min={0}
+                max={1.5}
+                step={0.05}
+                value={temperature}
+                onChange={(e) => {
+                  const v = parseFloat(e.target.value);
+                  setTemp(v);
+                  setTemperature(v);
+                }}
+                className="mt-2 w-full accent-primary"
+              />
+              <div className="mt-1 flex justify-between font-mono text-[10px] text-muted-foreground">
+                <span>0 · deterministic</span><span>0.7</span><span>1.5 · creative</span>
+              </div>
+            </label>
+
+            <label className="flex items-center justify-between rounded-md border border-border bg-background px-3 py-2.5">
+              <span>
+                <span className="block font-mono text-[10px] uppercase tracking-widest text-muted-foreground">memory</span>
+                <span className="text-sm text-foreground/80">Pass trailing excerpt of previous page into next request</span>
+              </span>
+              <input
+                type="checkbox"
+                checked={memory}
+                onChange={(e) => { setMemoryState(e.target.checked); setMemory(e.target.checked); }}
+                className="h-4 w-4 accent-primary"
+              />
+            </label>
+
+            <label className="flex items-center justify-between rounded-md border border-border bg-background px-3 py-2.5">
+              <span>
+                <span className="block font-mono text-[10px] uppercase tracking-widest text-muted-foreground">sequential execution</span>
+                <span className="text-sm text-foreground/80">Run All Pages processes one at a time, in order</span>
+              </span>
+              <input
+                type="checkbox"
+                checked={sequential}
+                onChange={(e) => { setSequentialState(e.target.checked); setSequential(e.target.checked); }}
+                className="h-4 w-4 accent-primary"
+              />
+            </label>
           </div>
         </section>
 
