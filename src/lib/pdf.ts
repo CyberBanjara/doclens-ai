@@ -13,6 +13,57 @@ async function getPdfjs(): Promise<typeof PdfJs> {
   return pdfjsPromise;
 }
 
+/**
+ * Common options for getDocument: enables CMap decoding for non-Latin scripts
+ * (Hindi/Devanagari, CJK, Arabic, etc.) and standard font metrics.
+ */
+const PDF_LOAD_OPTIONS = {
+  cMapUrl: "/pdf/cmaps/",
+  cMapPacked: true,
+  standardFontDataUrl: "/pdf/standard_fonts/",
+  useSystemFonts: true,
+} as const;
+
+/**
+ * Regex matching Unicode Private Use Area (PUA) characters.
+ * These appear as garbled glyphs when fonts lack proper ToUnicode mappings.
+ * Ranges: BMP PUA (E000-F8FF), Supplementary PUA-A (F0000-FFFFD),
+ *         Supplementary PUA-B (100000-10FFFD)
+ */
+const PUA_REGEX = /[\uE000-\uF8FF]|\uDB80[\uDC00-\uDFFD]|\uDBC0[\uDC00-\uDFFD]/g;
+
+/**
+ * Replacement char / surrogate / control char ranges (except normal whitespace).
+ */
+const GARBAGE_REGEX = /[\uFFFD\uFFFE\uFFFF]|[\u0000-\u0008\u000B\u000C\u000E-\u001F]/g;
+
+/**
+ * Clean extracted text by stripping unmappable PUA glyphs and garbage characters.
+ * Returns the cleaned string plus a ratio of how much was garbage (0–1).
+ */
+function cleanExtractedText(raw: string): { text: string; garbageRatio: number } {
+  if (!raw) return { text: "", garbageRatio: 0 };
+
+  const puaMatches = raw.match(PUA_REGEX);
+  const garbageMatches = raw.match(GARBAGE_REGEX);
+  const totalGarbage = (puaMatches?.length ?? 0) + (garbageMatches?.length ?? 0);
+  const nonSpaceChars = raw.replace(/\s/g, "").length;
+  const garbageRatio = nonSpaceChars > 0 ? totalGarbage / nonSpaceChars : 0;
+
+  let cleaned = raw
+    .replace(PUA_REGEX, "")
+    .replace(GARBAGE_REGEX, "");
+
+  // Collapse whitespace artifacts left after stripping
+  cleaned = cleaned
+    .replace(/[ \t]{2,}/g, " ")
+    .replace(/^ +| +$/gm, "")
+    .replace(/\n{3,}/g, "\n\n")
+    .trim();
+
+  return { text: cleaned, garbageRatio };
+}
+
 export interface TextItem {
   str: string;
   x: number;
@@ -26,6 +77,8 @@ export interface PageExtraction {
   text: string;
   items: TextItem[];
   columns: number;
+  /** Ratio of garbage/PUA chars found before cleaning (0–1). High values suggest legacy font issues. */
+  garbageRatio: number;
 }
 
 /**
@@ -75,7 +128,10 @@ export async function extractPdfPages(
   onPage?: (page: PageExtraction, total: number) => void,
 ): Promise<PageExtraction[]> {
   const pdfjsLib = await getPdfjs();
-  const pdf = await pdfjsLib.getDocument({ data: data.slice(0) }).promise;
+  const pdf = await pdfjsLib.getDocument({
+    data: data.slice(0),
+    ...PDF_LOAD_OPTIONS,
+  }).promise;
   const pages: PageExtraction[] = [];
   for (let pageNumber = 1; pageNumber <= pdf.numPages; pageNumber++) {
     const page = await pdf.getPage(pageNumber);
@@ -96,17 +152,39 @@ export async function extractPdfPages(
     const columns = detectColumns(items, viewport.width);
     const sorted = sortByColumns(items, viewport.width, columns);
 
-    let text = "";
+    let rawText = "";
     let lastY: number | null = null;
     for (const it of sorted) {
-      if (lastY !== null && Math.abs(it.y - lastY) > 4) text += "\n";
-      else if (text && !text.endsWith(" ") && !text.endsWith("\n")) text += " ";
-      text += it.str;
+      if (lastY !== null && Math.abs(it.y - lastY) > 4) rawText += "\n";
+      else if (rawText && !rawText.endsWith(" ") && !rawText.endsWith("\n")) rawText += " ";
+      rawText += it.str;
       lastY = it.y;
     }
-    text = text.replace(/[ \t]+\n/g, "\n").replace(/\n{3,}/g, "\n\n").trim();
+    rawText = rawText.replace(/[ \t]+\n/g, "\n").replace(/\n{3,}/g, "\n\n").trim();
 
-    const extraction: PageExtraction = { pageNumber, text, items: sorted, columns };
+    // Clean PUA / garbage characters from extracted text
+    const { text, garbageRatio } = cleanExtractedText(rawText);
+
+    if (garbageRatio > 0.3) {
+      console.warn(
+        `Page ${pageNumber}: ${Math.round(garbageRatio * 100)}% garbage chars detected — ` +
+        `PDF likely uses legacy/non-Unicode fonts. Text may be incomplete.`,
+      );
+    }
+
+    // Also clean individual items for downstream consumers
+    const cleanedItems = sorted.map((it) => ({
+      ...it,
+      str: cleanExtractedText(it.str).text,
+    }));
+
+    const extraction: PageExtraction = {
+      pageNumber,
+      text,
+      items: cleanedItems,
+      columns,
+      garbageRatio,
+    };
     pages.push(extraction);
     onPage?.(extraction, pdf.numPages);
   }
@@ -115,5 +193,8 @@ export async function extractPdfPages(
 
 export async function loadPdfDocument(data: ArrayBuffer) {
   const pdfjsLib = await getPdfjs();
-  return pdfjsLib.getDocument({ data: data.slice(0) }).promise;
+  return pdfjsLib.getDocument({
+    data: data.slice(0),
+    ...PDF_LOAD_OPTIONS,
+  }).promise;
 }

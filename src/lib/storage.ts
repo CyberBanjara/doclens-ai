@@ -36,6 +36,7 @@ export interface StoredPage {
   pageNumber: number;
   text: string;
   columns: number;
+  garbageRatio?: number;
 }
 
 /** Per-page AI state stored in IndexedDB. */
@@ -170,12 +171,19 @@ function toLeanPages(pages: PageExtraction[]): StoredPage[] {
     pageNumber: p.pageNumber,
     text: p.text,
     columns: p.columns,
+    garbageRatio: p.garbageRatio,
   }));
 }
 
 /** Convert StoredPage back to PageExtraction (items=[] since we stripped them) */
 export function toPageExtraction(sp: StoredPage): PageExtraction {
-  return { pageNumber: sp.pageNumber, text: sp.text, columns: sp.columns, items: [] };
+  return { 
+    pageNumber: sp.pageNumber, 
+    text: sp.text, 
+    columns: sp.columns, 
+    items: [],
+    garbageRatio: sp.garbageRatio ?? 0,
+  };
 }
 
 /* ---------- Runtime record validation ---------- */
@@ -189,6 +197,7 @@ function normalizeDoc(raw: any): DocRecord | undefined {
         pageNumber: p.pageNumber ?? 0,
         text: p.text ?? "",
         columns: p.columns ?? 1,
+        garbageRatio: p.garbageRatio ?? 0,
       }))
     : null;
 
@@ -265,6 +274,7 @@ async function migrateIfNeeded(d: IDBPDatabase, raw: any): Promise<void> {
       pageNumber: p.pageNumber,
       text: p.text,
       columns: p.columns,
+      garbageRatio: p.garbageRatio ?? 0,
     }));
   }
   // Strip lastSentRequest from pageAi
@@ -365,6 +375,7 @@ export async function updateDoc(id: string, patch: Partial<DocRecord & { pages: 
         pageNumber: p.pageNumber,
         text: p.text,
         columns: p.columns ?? 1,
+        garbageRatio: p.garbageRatio ?? 0,
       }));
     }
     await safePut(d, STORE, { ...existing, ...leanPatch });
