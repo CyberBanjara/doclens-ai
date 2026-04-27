@@ -87,7 +87,13 @@ export function RightPanel({
         )}
 
         {tab === "pages" && (
-          <PageWorkstation pages={pages} pageAi={pageAi} onUpdatePage={onUpdatePage} />
+          <PageWorkstation
+            pages={pages}
+            pageAi={pageAi}
+            onUpdatePage={onUpdatePage}
+            syncToPage={syncToPage}
+            onPageChange={onPageChange}
+          />
         )}
       </div>
     </div>
