@@ -20,18 +20,26 @@ import {
   type GlobalMode,
   type ORModel,
 } from "@/lib/openrouter";
-import type { PageAi, PageOverrides } from "@/lib/storage";
+import { computeSettingsHash, type PageAi, type PageOverrides } from "@/lib/storage";
+import {
+  createTtsController,
+  isTtsSupported,
+  stopAll as stopAllTts,
+} from "@/lib/tts";
 
 interface Props {
   pages: PageExtraction[];
   pageAi: Record<number, PageAi>;
   onUpdatePage: (pageNumber: number, patch: Partial<PageAi>) => void;
+  /** Externally-driven scroll target (from PDF viewer). */
+  syncToPage?: number | null;
+  /** Fired when the user scrolls a page card into view. */
+  onPageChange?: (page: number) => void;
 }
 
 const STYLES = ["Neutral", "Formal", "Casual", "Academic", "Concise", "Detailed", "Friendly"];
 const QUICK_LANGS = ["English", "Arabic", "French", "Hindi", "Spanish", "Japanese"];
 
-/** Effective settings for a page: per-page override > global. */
 function effective(globals: ReturnType<typeof readGlobals>, ov?: PageOverrides) {
   return {
     mode: ov?.mode ?? globals.mode,
@@ -55,7 +63,7 @@ function readGlobals() {
   };
 }
 
-export function PageWorkstation({ pages, pageAi, onUpdatePage }: Props) {
+export function PageWorkstation({ pages, pageAi, onUpdatePage, syncToPage, onPageChange }: Props) {
   const [globals, setGlobals] = useState(readGlobals);
   const [models, setModels] = useState<ORModel[]>([]);
   const [runningPages, setRunningPages] = useState<Set<number>>(new Set());
@@ -63,8 +71,11 @@ export function PageWorkstation({ pages, pageAi, onUpdatePage }: Props) {
   const abortMap = useRef<Map<number, AbortController>>(new Map());
   const runAllRef = useRef<{ cancelled: boolean } | null>(null);
   const [runAllActive, setRunAllActive] = useState(false);
+  const scrollRef = useRef<HTMLDivElement>(null);
+  const cardRefs = useRef<Map<number, HTMLDivElement>>(new Map());
+  const lockEmitUntilRef = useRef<number>(0);
+  const [currentPage, setCurrentPage] = useState(1);
 
-  // Refresh globals snapshot when window regains focus (user may have changed Settings)
   useEffect(() => {
     const onFocus = () => setGlobals(readGlobals());
     window.addEventListener("focus", onFocus);
@@ -76,6 +87,46 @@ export function PageWorkstation({ pages, pageAi, onUpdatePage }: Props) {
     if (!k) return;
     fetchModels(k).then(setModels).catch(() => {});
   }, []);
+
+  // External sync → scroll target card
+  useEffect(() => {
+    if (!syncToPage) return;
+    const el = cardRefs.current.get(syncToPage);
+    if (!el || !scrollRef.current) return;
+    lockEmitUntilRef.current = Date.now() + 500;
+    const top = el.offsetTop - 8;
+    scrollRef.current.scrollTo({ top, behavior: "smooth" });
+    if (syncToPage !== currentPage) stopAllTts();
+    setCurrentPage(syncToPage);
+  }, [syncToPage]);
+
+  // Track scroll → emit current page
+  useEffect(() => {
+    const el = scrollRef.current;
+    if (!el) return;
+    let raf = 0;
+    const compute = () => {
+      const midpoint = el.scrollTop + el.clientHeight / 3;
+      let active = currentPage;
+      for (const [pn, node] of cardRefs.current.entries()) {
+        if (node.offsetTop <= midpoint) active = pn;
+        else break;
+      }
+      if (active !== currentPage) {
+        setCurrentPage(active);
+        if (Date.now() > lockEmitUntilRef.current) onPageChange?.(active);
+      }
+    };
+    const handler = () => {
+      if (raf) cancelAnimationFrame(raf);
+      raf = requestAnimationFrame(compute);
+    };
+    el.addEventListener("scroll", handler, { passive: true });
+    return () => {
+      el.removeEventListener("scroll", handler);
+      if (raf) cancelAnimationFrame(raf);
+    };
+  }, [currentPage, onPageChange]);
 
   const hasKey = !!getKey();
 
@@ -114,7 +165,9 @@ export function PageWorkstation({ pages, pageAi, onUpdatePage }: Props) {
     const key = getKey();
     if (!key || !eff.modelId) return;
 
-    // Build the payload to send. If user has a custom request, send that verbatim.
+    // Stop any TTS for this page on re-run
+    stopAllTts();
+
     let payload: Record<string, unknown>;
     if (state?.isCustom && state.customRequest) {
       payload = { ...state.customRequest, stream: true };
@@ -130,6 +183,15 @@ export function PageWorkstation({ pages, pageAi, onUpdatePage }: Props) {
         previousExcerpt: eff.memory ? prevExcerpt : undefined,
       });
     }
+
+    const hash = computeSettingsHash({
+      modelId: eff.modelId,
+      mode: eff.mode,
+      language: eff.language,
+      style: eff.style,
+      temperature: eff.temperature,
+      memory: eff.memory,
+    });
 
     const ctrl = new AbortController();
     abortMap.current.set(pageNumber, ctrl);
@@ -148,7 +210,7 @@ export function PageWorkstation({ pages, pageAi, onUpdatePage }: Props) {
           setStreamBufs((b) => ({ ...b, [pageNumber]: buf }));
         },
       });
-      onUpdatePage(pageNumber, { status: "done", result: buf, error: undefined });
+      onUpdatePage(pageNumber, { status: "done", result: buf, error: undefined, settingsHash: hash });
     } catch (e) {
       if ((e as Error).name === "AbortError") {
         onUpdatePage(pageNumber, { status: state?.result ? "done" : "idle" });
@@ -177,13 +239,48 @@ export function PageWorkstation({ pages, pageAi, onUpdatePage }: Props) {
     if (globals.sequential) {
       for (const page of pages) {
         if (runAllRef.current?.cancelled) break;
-        const out = await runPage(page.pageNumber, prev);
-        if (out && (effective(globals, pageAi[page.pageNumber]?.overrides).memory)) {
-          prev = memoryExcerpt(out);
+        const state = pageAi[page.pageNumber];
+        const eff = effective(globals, state?.overrides);
+        const hash = computeSettingsHash({
+          modelId: eff.modelId,
+          mode: eff.mode,
+          language: eff.language,
+          style: eff.style,
+          temperature: eff.temperature,
+          memory: eff.memory,
+        });
+        // Skip if already done with matching settings and not custom
+        const skip =
+          state?.status === "done" &&
+          state.settingsHash === hash &&
+          !state.isCustom &&
+          !!state.result;
+        if (skip) {
+          if (eff.memory) prev = memoryExcerpt(state.result);
+          continue;
         }
+        const out = await runPage(page.pageNumber, prev);
+        if (out && eff.memory) prev = memoryExcerpt(out);
       }
     } else {
-      await Promise.all(pages.map((p) => runPage(p.pageNumber)));
+      await Promise.all(
+        pages.map((p) => {
+          const state = pageAi[p.pageNumber];
+          const eff = effective(globals, state?.overrides);
+          const hash = computeSettingsHash({
+            modelId: eff.modelId,
+            mode: eff.mode,
+            language: eff.language,
+            style: eff.style,
+            temperature: eff.temperature,
+            memory: eff.memory,
+          });
+          if (state?.status === "done" && state.settingsHash === hash && !state.isCustom && state.result) {
+            return Promise.resolve(undefined);
+          }
+          return runPage(p.pageNumber);
+        }),
+      );
     }
     setRunAllActive(false);
   };
@@ -197,7 +294,6 @@ export function PageWorkstation({ pages, pageAi, onUpdatePage }: Props) {
 
   return (
     <div className="flex h-full flex-col">
-      {/* Run-all bar */}
       <div className="flex items-center justify-between border-b border-border bg-surface-2 px-4 py-2.5">
         <div className="flex items-center gap-3 font-mono text-[11px] uppercase tracking-[0.18em] text-muted-foreground">
           <span className="h-1.5 w-1.5 rounded-full bg-primary" />
@@ -224,7 +320,7 @@ export function PageWorkstation({ pages, pageAi, onUpdatePage }: Props) {
         )}
       </div>
 
-      <div className="flex-1 overflow-auto px-4 py-4 space-y-4">
+      <div ref={scrollRef} className="flex-1 overflow-auto px-4 py-4 space-y-4">
         {pages.map((page) => {
           const state = pageAi[page.pageNumber] ?? {
             pageNumber: page.pageNumber,
@@ -232,18 +328,26 @@ export function PageWorkstation({ pages, pageAi, onUpdatePage }: Props) {
           };
           const eff = effective(globals, state.overrides);
           return (
-            <PageCard
+            <div
               key={page.pageNumber}
-              page={page}
-              state={state}
-              eff={eff}
-              models={models}
-              streamBuf={streamBufs[page.pageNumber] ?? ""}
-              isRunning={runningPages.has(page.pageNumber)}
-              onUpdate={(patch) => onUpdatePage(page.pageNumber, patch)}
-              onRun={() => runPage(page.pageNumber)}
-              onCancel={() => cancelPage(page.pageNumber)}
-            />
+              ref={(el) => {
+                if (el) cardRefs.current.set(page.pageNumber, el);
+                else cardRefs.current.delete(page.pageNumber);
+              }}
+            >
+              <PageCard
+                page={page}
+                state={state}
+                eff={eff}
+                models={models}
+                streamBuf={streamBufs[page.pageNumber] ?? ""}
+                isRunning={runningPages.has(page.pageNumber)}
+                isCurrent={currentPage === page.pageNumber}
+                onUpdate={(patch) => onUpdatePage(page.pageNumber, patch)}
+                onRun={() => runPage(page.pageNumber)}
+                onCancel={() => cancelPage(page.pageNumber)}
+              />
+            </div>
           );
         })}
       </div>
@@ -258,24 +362,38 @@ interface CardProps {
   models: ORModel[];
   streamBuf: string;
   isRunning: boolean;
+  isCurrent: boolean;
   onUpdate: (patch: Partial<PageAi>) => void;
   onRun: () => void;
   onCancel: () => void;
 }
 
-function PageCard({ page, state, eff, models, streamBuf, isRunning, onUpdate, onRun, onCancel }: CardProps) {
+function PageCard({ page, state, eff, models, streamBuf, isRunning, isCurrent, onUpdate, onRun, onCancel }: CardProps) {
   const [view, setView] = useState<"request" | "result">(state.status === "done" ? "result" : "request");
   const [editingJson, setEditingJson] = useState(false);
   const [draft, setDraft] = useState("");
   const [draftError, setDraftError] = useState("");
+  const [ttsState, setTtsState] = useState<"idle" | "playing" | "paused" | "ended">("idle");
+  const ttsRef = useRef<ReturnType<typeof createTtsController> | null>(null);
 
-  // Auto-flip to result when done
   useEffect(() => {
     if (state.status === "done") setView("result");
     if (state.status === "running") setView("result");
   }, [state.status]);
 
-  // Auto-generated payload preview (unless user has customised)
+  // Stop TTS on result change / re-run
+  useEffect(() => {
+    return () => {
+      ttsRef.current?.stop();
+    };
+  }, []);
+  useEffect(() => {
+    if (isRunning) {
+      ttsRef.current?.stop();
+      setTtsState("idle");
+    }
+  }, [isRunning]);
+
   const autoPayload = useMemo(() => {
     return buildPagePayload({
       modelId: eff.modelId,
@@ -288,8 +406,7 @@ function PageCard({ page, state, eff, models, streamBuf, isRunning, onUpdate, on
     });
   }, [eff.modelId, eff.mode, eff.language, eff.style, eff.temperature, page.pageNumber, page.text]);
 
-  const previewPayload =
-    state.isCustom && state.customRequest ? state.customRequest : autoPayload;
+  const previewPayload = state.isCustom && state.customRequest ? state.customRequest : autoPayload;
 
   const setOverride = (patch: Partial<PageOverrides>) => {
     onUpdate({ overrides: { ...(state.overrides ?? {}), ...patch } });
@@ -300,7 +417,6 @@ function PageCard({ page, state, eff, models, streamBuf, isRunning, onUpdate, on
     setDraftError("");
     setEditingJson(true);
   };
-
   const saveEdit = () => {
     try {
       const parsed = JSON.parse(draft);
@@ -311,10 +427,26 @@ function PageCard({ page, state, eff, models, streamBuf, isRunning, onUpdate, on
       setDraftError(e instanceof Error ? e.message : "Invalid JSON");
     }
   };
-
   const resetAuto = () => {
     onUpdate({ customRequest: null, isCustom: false });
     setEditingJson(false);
+  };
+
+  const handleTtsPlay = () => {
+    if (!state.result || !isTtsSupported()) return;
+    if (ttsState === "paused" && ttsRef.current) {
+      ttsRef.current.resume();
+      return;
+    }
+    ttsRef.current?.stop();
+    const ctrl = createTtsController(state.result, { onState: setTtsState });
+    ttsRef.current = ctrl;
+    ctrl.play();
+  };
+  const handleTtsPause = () => ttsRef.current?.pause();
+  const handleTtsStop = () => {
+    ttsRef.current?.stop();
+    setTtsState("idle");
   };
 
   const statusColor =
@@ -327,7 +459,11 @@ function PageCard({ page, state, eff, models, streamBuf, isRunning, onUpdate, on
           : "text-muted-foreground";
 
   return (
-    <article className="rounded-md border border-border bg-background/40">
+    <article
+      className={`rounded-md border bg-background/40 transition-colors ${
+        isCurrent ? "border-primary/50 ring-1 ring-primary/30" : "border-border"
+      }`}
+    >
       <header className="flex flex-wrap items-center gap-2 border-b border-border px-3 py-2 font-mono text-[11px] uppercase tracking-widest text-muted-foreground">
         <span className="text-foreground">page {page.pageNumber}</span>
         <span>tok <span className="text-foreground">{estimateTokens(page.text).toLocaleString()}</span></span>
@@ -369,6 +505,36 @@ function PageCard({ page, state, eff, models, streamBuf, isRunning, onUpdate, on
           )}
         </div>
       </header>
+
+      {/* TTS bar */}
+      {state.result && isTtsSupported() && (
+        <div className="flex items-center gap-2 border-b border-border bg-background/20 px-3 py-1.5 font-mono text-[10px] uppercase tracking-widest text-muted-foreground">
+          <span>tts</span>
+          {ttsState !== "playing" ? (
+            <button
+              onClick={handleTtsPlay}
+              className="rounded border border-border px-2 py-0.5 hover:text-foreground"
+            >
+              {ttsState === "paused" ? "▶ resume" : "▶ play"}
+            </button>
+          ) : (
+            <button
+              onClick={handleTtsPause}
+              className="rounded border border-border px-2 py-0.5 hover:text-foreground"
+            >
+              ❚❚ pause
+            </button>
+          )}
+          <button
+            onClick={handleTtsStop}
+            disabled={ttsState === "idle" || ttsState === "ended"}
+            className="rounded border border-border px-2 py-0.5 hover:text-foreground disabled:opacity-30"
+          >
+            ■ stop
+          </button>
+          <span className="ml-auto normal-case text-muted-foreground">{ttsState}</span>
+        </div>
+      )}
 
       {/* Per-page overrides strip */}
       <details className="border-b border-border bg-background/20 px-3 py-1.5 text-xs">
@@ -432,7 +598,6 @@ function PageCard({ page, state, eff, models, streamBuf, isRunning, onUpdate, on
         )}
       </details>
 
-      {/* Body */}
       {view === "request" ? (
         <div className="px-3 py-3">
           {editingJson ? (

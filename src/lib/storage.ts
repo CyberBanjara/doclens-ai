@@ -44,7 +44,28 @@ export interface PageAi {
   lastSentRequest?: Record<string, unknown> | null;
   error?: string;
   overrides?: PageOverrides;
+  /** Hash of effective settings used to produce `result`. Skip-on-rerun key. */
+  settingsHash?: string;
   updatedAt?: number;
+}
+
+/** Stable hash of the settings tuple that controls AI output. */
+export function computeSettingsHash(input: {
+  modelId: string;
+  mode: string;
+  language: string;
+  style: string;
+  temperature: number;
+  memory: boolean;
+}): string {
+  return [
+    input.modelId,
+    input.mode,
+    input.language,
+    input.style,
+    input.temperature.toFixed(3),
+    input.memory ? "1" : "0",
+  ].join("|");
 }
 
 export interface DocRecord {

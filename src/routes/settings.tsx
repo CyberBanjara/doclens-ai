@@ -24,6 +24,16 @@ import {
   type GlobalMode,
   type ORModel,
 } from "@/lib/openrouter";
+import {
+  getTtsPitch,
+  getTtsRate,
+  getTtsVoice,
+  isTtsSupported,
+  listVoices,
+  setTtsPitch,
+  setTtsRate,
+  setTtsVoice,
+} from "@/lib/tts";
 
 export const Route = createFileRoute("/settings")({
   component: SettingsPage,
@@ -35,7 +45,26 @@ export const Route = createFileRoute("/settings")({
 const LANGS = ["English", "Arabic", "French", "Hindi", "Spanish", "Japanese"];
 const STYLES = ["Neutral", "Formal", "Casual", "Academic", "Concise", "Detailed", "Friendly"];
 
-type FilterTab = "all" | "free" | "fast" | "popular";
+type FilterTab = "free" | "popular" | "all";
+
+const POPULAR_RX =
+  /gpt-4o|gpt-4\.1|gpt-5|o1|o3|claude-3|claude-3\.5|claude-sonnet|claude-opus|claude-haiku|gemini-1\.5|gemini-2|llama-3|llama-4|deepseek|mistral-large|grok|qwen/i;
+
+/** Filter to text-input → text-output models only. */
+function isTextToText(m: ORModel): boolean {
+  const arch = (m as any).architecture;
+  if (arch && Array.isArray(arch.input_modalities) && Array.isArray(arch.output_modalities)) {
+    const inputs: string[] = arch.input_modalities;
+    const outputs: string[] = arch.output_modalities;
+    const inOk = inputs.includes("text") && !inputs.some((m) => m !== "text" && m !== "file");
+    const outOk = outputs.length === 1 && outputs[0] === "text";
+    return inOk && outOk;
+  }
+  // Fallback: exclude obvious non-text models by id pattern
+  const id = (m.id ?? "").toLowerCase();
+  if (/(image|vision|tts|audio|whisper|dall-e|sora|video|embed|moderation|rerank)/.test(id)) return false;
+  return true;
+}
 
 function SettingsPage() {
   const [keyInput, setKeyInput] = useState("");
@@ -47,12 +76,16 @@ function SettingsPage() {
   const [language, setLanguage] = useState("English");
   const [customLang, setCustomLang] = useState("");
   const [search, setSearch] = useState("");
-  const [tab, setTab] = useState<FilterTab>("all");
+  const [tab, setTab] = useState<FilterTab>("free");
   const [mode, setModeState] = useState<GlobalMode>("summarize");
   const [style, setStyleState] = useState("Neutral");
   const [temperature, setTemp] = useState(0.3);
   const [memory, setMemoryState] = useState(true);
   const [sequential, setSequentialState] = useState(true);
+  const [voices, setVoices] = useState<SpeechSynthesisVoice[]>([]);
+  const [ttsVoice, setTtsVoiceState] = useState("");
+  const [ttsRate, setTtsRateState] = useState(1);
+  const [ttsPitch, setTtsPitchState] = useState(1);
 
   useEffect(() => {
     setKeyInput(getKey());
@@ -63,10 +96,22 @@ function SettingsPage() {
     setTemp(getTemperature());
     setMemoryState(getMemory());
     setSequentialState(getSequential());
+    setTtsVoiceState(getTtsVoice());
+    setTtsRateState(getTtsRate());
+    setTtsPitchState(getTtsPitch());
     if (getKey()) {
       setKeyStatus("valid");
       void loadModels(getKey());
     }
+  }, []);
+
+  // Voices load asynchronously in some browsers
+  useEffect(() => {
+    if (!isTtsSupported()) return;
+    const load = () => setVoices(listVoices());
+    load();
+    window.speechSynthesis.addEventListener?.("voiceschanged", load);
+    return () => window.speechSynthesis.removeEventListener?.("voiceschanged", load);
   }, []);
 
   const loadModels = async (k: string) => {
@@ -114,20 +159,15 @@ function SettingsPage() {
 
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
-    let list = models;
+    // 1) text→text only across all tabs
+    let list = models.filter(isTextToText);
     if (q) list = list.filter((m) => m.id.toLowerCase().includes(q) || m.name?.toLowerCase().includes(q));
     if (tab === "free") {
       list = list.filter(
         (m) => parseFloat(m.pricing?.prompt ?? "0") === 0 && parseFloat(m.pricing?.completion ?? "0") === 0,
       );
-    } else if (tab === "fast") {
-      list = list.filter((m) => /flash|mini|nano|haiku|small|turbo|fast|8b|7b/i.test(m.id + " " + (m.name ?? "")));
     } else if (tab === "popular") {
-      list = list.filter((m) =>
-        /gpt-4o|gpt-5|claude-3|claude-3\.5|claude-sonnet|gemini-1\.5|gemini-2|llama-3|deepseek|mistral-large/i.test(
-          m.id,
-        ),
-      );
+      list = list.filter((m) => POPULAR_RX.test(m.id));
     }
     return list.slice(0, 200);
   }, [models, search, tab]);
@@ -288,6 +328,59 @@ function SettingsPage() {
           </div>
         </section>
 
+        {/* TTS */}
+        <section className="mb-8 rounded-lg border border-border bg-surface p-5">
+          <h3 className="font-mono text-[11px] uppercase tracking-[0.2em] text-muted-foreground">
+            text-to-speech
+          </h3>
+          <p className="mt-1 text-sm text-foreground/80">
+            {isTtsSupported()
+              ? "Per-page Play / Pause / Stop reads AI results aloud using your browser's voices."
+              : "Web Speech API is not available in this browser."}
+          </p>
+          {isTtsSupported() && (
+            <div className="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-2">
+              <label className="block sm:col-span-2">
+                <span className="font-mono text-[10px] uppercase tracking-widest text-muted-foreground">voice</span>
+                <select
+                  value={ttsVoice}
+                  onChange={(e) => { setTtsVoiceState(e.target.value); setTtsVoice(e.target.value); }}
+                  className="mt-1 w-full rounded-md border border-border bg-background px-3 py-1.5 font-mono text-[12px] outline-none focus:border-primary"
+                >
+                  <option value="">— browser default —</option>
+                  {voices.map((v) => (
+                    <option key={v.name} value={v.name}>
+                      {v.name} ({v.lang}){v.default ? " · default" : ""}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label className="block">
+                <span className="font-mono text-[10px] uppercase tracking-widest text-muted-foreground">
+                  rate · <span className="text-primary">{ttsRate.toFixed(2)}×</span>
+                </span>
+                <input
+                  type="range" min={0.5} max={2} step={0.05}
+                  value={ttsRate}
+                  onChange={(e) => { const v = parseFloat(e.target.value); setTtsRateState(v); setTtsRate(v); }}
+                  className="mt-2 w-full accent-primary"
+                />
+              </label>
+              <label className="block">
+                <span className="font-mono text-[10px] uppercase tracking-widest text-muted-foreground">
+                  pitch · <span className="text-primary">{ttsPitch.toFixed(2)}</span>
+                </span>
+                <input
+                  type="range" min={0} max={2} step={0.05}
+                  value={ttsPitch}
+                  onChange={(e) => { const v = parseFloat(e.target.value); setTtsPitchState(v); setTtsPitch(v); }}
+                  className="mt-2 w-full accent-primary"
+                />
+              </label>
+            </div>
+          )}
+        </section>
+
         {/* OpenRouter API key */}
         <section className="mb-8 rounded-lg border border-border bg-surface p-5">
           <h3 className="font-mono text-[11px] uppercase tracking-[0.2em] text-muted-foreground">
@@ -345,7 +438,7 @@ function SettingsPage() {
           ) : (
             <>
               <div className="mt-4 flex flex-wrap items-center gap-2">
-                {(["all", "free", "fast", "popular"] as FilterTab[]).map((t) => (
+                {(["free", "popular", "all"] as FilterTab[]).map((t) => (
                   <button
                     key={t}
                     onClick={() => setTab(t)}

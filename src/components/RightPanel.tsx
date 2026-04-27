@@ -13,6 +13,8 @@ interface Props {
   status: string;
   pageAi: Record<number, PageAi>;
   onUpdatePage: (pageNumber: number, patch: Partial<PageAi>) => void;
+  syncToPage?: number | null;
+  onPageChange?: (page: number) => void;
 }
 
 export function RightPanel({
@@ -22,8 +24,10 @@ export function RightPanel({
   status,
   pageAi,
   onUpdatePage,
+  syncToPage,
+  onPageChange,
 }: Props) {
-  const [tab, setTab] = useState<Tab>("text");
+  const [tab, setTab] = useState<Tab>("pages");
 
   const totalTokens = useMemo(
     () => pages.reduce((sum, p) => sum + estimateTokens(p.text), 0),
@@ -83,7 +87,13 @@ export function RightPanel({
         )}
 
         {tab === "pages" && (
-          <PageWorkstation pages={pages} pageAi={pageAi} onUpdatePage={onUpdatePage} />
+          <PageWorkstation
+            pages={pages}
+            pageAi={pageAi}
+            onUpdatePage={onUpdatePage}
+            syncToPage={syncToPage}
+            onPageChange={onPageChange}
+          />
         )}
       </div>
     </div>
