@@ -27,12 +27,11 @@ import {
 import {
   getTtsPitch,
   getTtsRate,
-  getTtsVoice,
+  getTtsVoiceFor,
   isTtsSupported,
   listVoices,
   setTtsPitch,
   setTtsRate,
-  setTtsVoice,
 } from "@/lib/tts";
 
 export const Route = createFileRoute("/settings")({
@@ -96,7 +95,7 @@ function SettingsPage() {
     setTemp(getTemperature());
     setMemoryState(getMemory());
     setSequentialState(getSequential());
-    setTtsVoiceState(getTtsVoice());
+    setTtsVoiceState(getTtsVoiceFor(getOutputLanguage()));
     setTtsRateState(getTtsRate());
     setTtsPitchState(getTtsPitch());
     if (getKey()) {
@@ -340,21 +339,25 @@ function SettingsPage() {
           </p>
           {isTtsSupported() && (
             <div className="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-2">
-              <label className="block sm:col-span-2">
-                <span className="font-mono text-[10px] uppercase tracking-widest text-muted-foreground">voice</span>
-                <select
-                  value={ttsVoice}
-                  onChange={(e) => { setTtsVoiceState(e.target.value); setTtsVoice(e.target.value); }}
-                  className="mt-1 w-full rounded-md border border-border bg-background px-3 py-1.5 font-mono text-[12px] outline-none focus:border-primary"
-                >
-                  <option value="">— browser default —</option>
-                  {voices.map((v) => (
-                    <option key={v.name} value={v.name}>
-                      {v.name} ({v.lang}){v.default ? " · default" : ""}
-                    </option>
-                  ))}
-                </select>
-              </label>
+              <Link
+                to="/settings/voice"
+                className="block sm:col-span-2 rounded-md border border-border bg-background px-4 py-3 transition-colors hover:border-primary/50"
+              >
+                <div className="flex items-center justify-between gap-3">
+                  <div className="min-w-0">
+                    <div className="font-mono text-[10px] uppercase tracking-widest text-muted-foreground">
+                      voice · {language}
+                    </div>
+                    <div className="mt-0.5 truncate text-sm text-foreground">
+                      {ttsVoice || <span className="text-muted-foreground italic">— browser default —</span>}
+                    </div>
+                    <div className="mt-0.5 font-mono text-[10px] text-muted-foreground">
+                      {voices.length} system voices · per-language selection · favorites
+                    </div>
+                  </div>
+                  <span className="font-mono text-[11px] uppercase tracking-widest text-primary">choose →</span>
+                </div>
+              </Link>
               <label className="block">
                 <span className="font-mono text-[10px] uppercase tracking-widest text-muted-foreground">
                   rate · <span className="text-primary">{ttsRate.toFixed(2)}×</span>

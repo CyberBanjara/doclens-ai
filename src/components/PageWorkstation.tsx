@@ -439,7 +439,10 @@ function PageCard({ page, state, eff, models, streamBuf, isRunning, isCurrent, o
       return;
     }
     ttsRef.current?.stop();
-    const ctrl = createTtsController(state.result, { onState: setTtsState });
+    const ctrl = createTtsController(state.result, {
+      onState: setTtsState,
+      language: eff.language,
+    });
     ttsRef.current = ctrl;
     ctrl.play();
   };
