@@ -71,6 +71,29 @@ export function PageWorkstation({ pages, pageAi, onUpdatePage }: Props) {
   const [runAllProgress, setRunAllProgress] = useState<{ current: number; total: number; errors: number } | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
   const cardRefs = useRef<Map<number, HTMLDivElement>>(new Map());
+  const mountedRef = useRef(true);
+
+  // Keep refs to latest values so async callbacks don't use stale closures
+  const pageAiRef = useRef(pageAi);
+  pageAiRef.current = pageAi;
+  const globalsRef = useRef(globals);
+  globalsRef.current = globals;
+  const onUpdatePageRef = useRef(onUpdatePage);
+  onUpdatePageRef.current = onUpdatePage;
+  const pagesRef = useRef(pages);
+  pagesRef.current = pages;
+
+  // Cleanup: abort all in-flight requests on unmount
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => {
+      mountedRef.current = false;
+      // Abort all running requests when component unmounts
+      abortMap.current.forEach((c) => c.abort());
+      abortMap.current.clear();
+      if (runAllRef.current) runAllRef.current.cancelled = true;
+    };
+  }, []);
 
   useEffect(() => {
     const onFocus = () => setGlobals(readGlobals());
@@ -83,7 +106,6 @@ export function PageWorkstation({ pages, pageAi, onUpdatePage }: Props) {
     if (!k) return;
     fetchModels(k).then(setModels).catch(() => {});
   }, []);
-
 
 
   const hasKey = !!getKey();
@@ -116,10 +138,12 @@ export function PageWorkstation({ pages, pageAi, onUpdatePage }: Props) {
   }
 
   const runPage = async (pageNumber: number, prevExcerpt?: string) => {
-    const page = pages.find((p) => p.pageNumber === pageNumber);
+    // Read fresh values from refs to avoid stale closures
+    const page = pagesRef.current.find((p) => p.pageNumber === pageNumber);
     if (!page) return;
-    const state = pageAi[pageNumber];
-    const eff = effective(globals, state?.overrides);
+    const state = pageAiRef.current[pageNumber];
+    const currentGlobals = globalsRef.current;
+    const eff = effective(currentGlobals, state?.overrides);
     const key = getKey();
     if (!key || !eff.modelId) return;
 
@@ -153,9 +177,11 @@ export function PageWorkstation({ pages, pageAi, onUpdatePage }: Props) {
 
     const ctrl = new AbortController();
     abortMap.current.set(pageNumber, ctrl);
-    setRunningPages((s) => new Set(s).add(pageNumber));
-    setStreamBufs((b) => ({ ...b, [pageNumber]: "" }));
-    onUpdatePage(pageNumber, { status: "running", error: undefined, lastSentRequest: payload });
+    if (mountedRef.current) {
+      setRunningPages((s) => new Set(s).add(pageNumber));
+      setStreamBufs((b) => ({ ...b, [pageNumber]: "" }));
+    }
+    onUpdatePageRef.current(pageNumber, { status: "running", error: undefined, lastSentRequest: payload });
 
     let buf = "";
     try {
@@ -165,23 +191,34 @@ export function PageWorkstation({ pages, pageAi, onUpdatePage }: Props) {
         signal: ctrl.signal,
         onDelta: (d) => {
           buf += d;
-          setStreamBufs((b) => ({ ...b, [pageNumber]: buf }));
+          if (mountedRef.current) {
+            setStreamBufs((b) => ({ ...b, [pageNumber]: buf }));
+          }
         },
       });
-      onUpdatePage(pageNumber, { status: "done", result: buf, error: undefined, settingsHash: hash });
+      // Save result — this persists to IndexedDB even if unmounted
+      onUpdatePageRef.current(pageNumber, { status: "done", result: buf, error: undefined, settingsHash: hash });
     } catch (e) {
       if ((e as Error).name === "AbortError") {
-        onUpdatePage(pageNumber, { status: state?.result ? "done" : "idle" });
+        onUpdatePageRef.current(pageNumber, { status: state?.result ? "done" : "idle" });
       } else {
-        onUpdatePage(pageNumber, { status: "error", error: e instanceof Error ? e.message : "Unknown error" });
+        onUpdatePageRef.current(pageNumber, { status: "error", error: e instanceof Error ? e.message : "Unknown error" });
       }
     } finally {
       abortMap.current.delete(pageNumber);
-      setRunningPages((s) => {
-        const n = new Set(s);
-        n.delete(pageNumber);
-        return n;
-      });
+      if (mountedRef.current) {
+        setRunningPages((s) => {
+          const n = new Set(s);
+          n.delete(pageNumber);
+          return n;
+        });
+        // Clear stream buffer after completion
+        setStreamBufs((b) => {
+          const next = { ...b };
+          delete next[pageNumber];
+          return next;
+        });
+      }
     }
     return buf;
   };
@@ -200,15 +237,15 @@ export function PageWorkstation({ pages, pageAi, onUpdatePage }: Props) {
     let prev: string | undefined;
     let errorCount = 0;
     let processedCount = 0;
-    const totalToProcess = pages.length;
+    const totalToProcess = pagesRef.current.length;
 
-    setRunAllProgress({ current: 0, total: totalToProcess, errors: 0 });
+    if (mountedRef.current) setRunAllProgress({ current: 0, total: totalToProcess, errors: 0 });
 
     if (freshGlobals.sequential) {
-      for (const page of pages) {
+      for (const page of pagesRef.current) {
         if (runAllRef.current?.cancelled) break;
-        const state = pageAi[page.pageNumber];
-        // Re-read globals fresh per page to catch mid-batch settings changes
+        // Read fresh state from ref, not stale closure
+        const state = pageAiRef.current[page.pageNumber];
         const currentGlobals = readGlobals();
         const eff = effective(currentGlobals, state?.overrides);
         const hash = computeSettingsHash({
@@ -219,7 +256,6 @@ export function PageWorkstation({ pages, pageAi, onUpdatePage }: Props) {
           temperature: eff.temperature,
           memory: eff.memory,
         });
-        // Skip if already done with matching settings and not custom
         const skip =
           state?.status === "done" &&
           state.settingsHash === hash &&
@@ -228,23 +264,24 @@ export function PageWorkstation({ pages, pageAi, onUpdatePage }: Props) {
         if (skip) {
           if (eff.memory) prev = memoryExcerpt(state.result);
           processedCount++;
-          setRunAllProgress({ current: processedCount, total: totalToProcess, errors: errorCount });
+          if (mountedRef.current) setRunAllProgress({ current: processedCount, total: totalToProcess, errors: errorCount });
           continue;
         }
         try {
           const out = await runPage(page.pageNumber, prev);
           if (out && eff.memory) prev = memoryExcerpt(out);
         } catch {
-          // Continue on error — don't stop the batch
           errorCount++;
         }
         processedCount++;
-        setRunAllProgress({ current: processedCount, total: totalToProcess, errors: errorCount });
+        if (mountedRef.current) setRunAllProgress({ current: processedCount, total: totalToProcess, errors: errorCount });
       }
     } else {
+      // Parallel mode with incremental progress tracking
+      let completed = 0;
       const results = await Promise.allSettled(
-        pages.map(async (p) => {
-          const state = pageAi[p.pageNumber];
+        pagesRef.current.map(async (p) => {
+          const state = pageAiRef.current[p.pageNumber];
           const currentGlobals = readGlobals();
           const eff = effective(currentGlobals, state?.overrides);
           const hash = computeSettingsHash({
@@ -256,15 +293,27 @@ export function PageWorkstation({ pages, pageAi, onUpdatePage }: Props) {
             memory: eff.memory,
           });
           if (state?.status === "done" && state.settingsHash === hash && !state.isCustom && state.result) {
+            completed++;
+            if (mountedRef.current) setRunAllProgress({ current: completed, total: totalToProcess, errors: errorCount });
             return undefined;
           }
-          return runPage(p.pageNumber);
+          try {
+            const result = await runPage(p.pageNumber);
+            completed++;
+            if (mountedRef.current) setRunAllProgress({ current: completed, total: totalToProcess, errors: errorCount });
+            return result;
+          } catch (e) {
+            completed++;
+            errorCount++;
+            if (mountedRef.current) setRunAllProgress({ current: completed, total: totalToProcess, errors: errorCount });
+            throw e;
+          }
         }),
       );
       errorCount = results.filter((r) => r.status === "rejected").length;
     }
 
-    // Show summary toast
+    // Show summary toast (safe even if unmounted — toast is global)
     if (runAllRef.current?.cancelled) {
       toast.info("Run All cancelled.", { duration: 3000 });
     } else if (errorCount > 0) {
@@ -276,8 +325,11 @@ export function PageWorkstation({ pages, pageAi, onUpdatePage }: Props) {
       toast.success(`All ${totalToProcess} pages processed successfully.`, { duration: 3000 });
     }
 
-    setRunAllActive(false);
-    setRunAllProgress(null);
+    if (mountedRef.current) {
+      setRunAllActive(false);
+      setRunAllProgress(null);
+    }
+    runAllRef.current = null;
   };
 
   const cancelRunAll = () => {
