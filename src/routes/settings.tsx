@@ -82,6 +82,10 @@ function SettingsPage() {
   const [temperature, setTemp] = useState(0.3);
   const [memory, setMemoryState] = useState(true);
   const [sequential, setSequentialState] = useState(true);
+  const [voices, setVoices] = useState<SpeechSynthesisVoice[]>([]);
+  const [ttsVoice, setTtsVoiceState] = useState("");
+  const [ttsRate, setTtsRateState] = useState(1);
+  const [ttsPitch, setTtsPitchState] = useState(1);
 
   useEffect(() => {
     setKeyInput(getKey());
@@ -92,10 +96,22 @@ function SettingsPage() {
     setTemp(getTemperature());
     setMemoryState(getMemory());
     setSequentialState(getSequential());
+    setTtsVoiceState(getTtsVoice());
+    setTtsRateState(getTtsRate());
+    setTtsPitchState(getTtsPitch());
     if (getKey()) {
       setKeyStatus("valid");
       void loadModels(getKey());
     }
+  }, []);
+
+  // Voices load asynchronously in some browsers
+  useEffect(() => {
+    if (!isTtsSupported()) return;
+    const load = () => setVoices(listVoices());
+    load();
+    window.speechSynthesis.addEventListener?.("voiceschanged", load);
+    return () => window.speechSynthesis.removeEventListener?.("voiceschanged", load);
   }, []);
 
   const loadModels = async (k: string) => {
