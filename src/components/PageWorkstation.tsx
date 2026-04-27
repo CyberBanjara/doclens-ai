@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Link } from "@tanstack/react-router";
+import { toast } from "sonner";
 import { JsonView } from "./JsonView";
 import { estimateTokens } from "@/lib/models";
 import type { PageExtraction } from "@/lib/pdf";
@@ -71,6 +72,7 @@ export function PageWorkstation({ pages, pageAi, onUpdatePage, syncToPage, onPag
   const abortMap = useRef<Map<number, AbortController>>(new Map());
   const runAllRef = useRef<{ cancelled: boolean } | null>(null);
   const [runAllActive, setRunAllActive] = useState(false);
+  const [runAllProgress, setRunAllProgress] = useState<{ current: number; total: number; errors: number } | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
   const cardRefs = useRef<Map<number, HTMLDivElement>>(new Map());
   const lockEmitUntilRef = useRef<number>(0);
@@ -233,14 +235,26 @@ export function PageWorkstation({ pages, pageAi, onUpdatePage, syncToPage, onPag
   };
 
   const handleRunAll = async () => {
+    // Read globals fresh at the start of batch
+    const freshGlobals = readGlobals();
+    setGlobals(freshGlobals);
+
     runAllRef.current = { cancelled: false };
     setRunAllActive(true);
     let prev: string | undefined;
-    if (globals.sequential) {
+    let errorCount = 0;
+    let processedCount = 0;
+    const totalToProcess = pages.length;
+
+    setRunAllProgress({ current: 0, total: totalToProcess, errors: 0 });
+
+    if (freshGlobals.sequential) {
       for (const page of pages) {
         if (runAllRef.current?.cancelled) break;
         const state = pageAi[page.pageNumber];
-        const eff = effective(globals, state?.overrides);
+        // Re-read globals fresh per page to catch mid-batch settings changes
+        const currentGlobals = readGlobals();
+        const eff = effective(currentGlobals, state?.overrides);
         const hash = computeSettingsHash({
           modelId: eff.modelId,
           mode: eff.mode,
@@ -257,16 +271,26 @@ export function PageWorkstation({ pages, pageAi, onUpdatePage, syncToPage, onPag
           !!state.result;
         if (skip) {
           if (eff.memory) prev = memoryExcerpt(state.result);
+          processedCount++;
+          setRunAllProgress({ current: processedCount, total: totalToProcess, errors: errorCount });
           continue;
         }
-        const out = await runPage(page.pageNumber, prev);
-        if (out && eff.memory) prev = memoryExcerpt(out);
+        try {
+          const out = await runPage(page.pageNumber, prev);
+          if (out && eff.memory) prev = memoryExcerpt(out);
+        } catch {
+          // Continue on error — don't stop the batch
+          errorCount++;
+        }
+        processedCount++;
+        setRunAllProgress({ current: processedCount, total: totalToProcess, errors: errorCount });
       }
     } else {
-      await Promise.all(
-        pages.map((p) => {
+      const results = await Promise.allSettled(
+        pages.map(async (p) => {
           const state = pageAi[p.pageNumber];
-          const eff = effective(globals, state?.overrides);
+          const currentGlobals = readGlobals();
+          const eff = effective(currentGlobals, state?.overrides);
           const hash = computeSettingsHash({
             modelId: eff.modelId,
             mode: eff.mode,
@@ -276,13 +300,28 @@ export function PageWorkstation({ pages, pageAi, onUpdatePage, syncToPage, onPag
             memory: eff.memory,
           });
           if (state?.status === "done" && state.settingsHash === hash && !state.isCustom && state.result) {
-            return Promise.resolve(undefined);
+            return undefined;
           }
           return runPage(p.pageNumber);
         }),
       );
+      errorCount = results.filter((r) => r.status === "rejected").length;
     }
+
+    // Show summary toast
+    if (runAllRef.current?.cancelled) {
+      toast.info("Run All cancelled.", { duration: 3000 });
+    } else if (errorCount > 0) {
+      toast.warning(
+        `Completed with ${errorCount} error${errorCount > 1 ? "s" : ""}. Check individual pages for details.`,
+        { duration: 5000 },
+      );
+    } else {
+      toast.success(`All ${totalToProcess} pages processed successfully.`, { duration: 3000 });
+    }
+
     setRunAllActive(false);
+    setRunAllProgress(null);
   };
 
   const cancelRunAll = () => {
@@ -302,22 +341,32 @@ export function PageWorkstation({ pages, pageAi, onUpdatePage, syncToPage, onPag
           <span className="text-muted-foreground">
             · {globals.sequential ? "sequential" : "parallel"} · memory {globals.memory ? "on" : "off"}
           </span>
+          {runAllProgress && (
+            <span className="text-primary">
+              · processing {runAllProgress.current}/{runAllProgress.total}
+              {runAllProgress.errors > 0 && (
+                <span className="text-destructive"> · {runAllProgress.errors} error{runAllProgress.errors > 1 ? "s" : ""}</span>
+              )}
+            </span>
+          )}
         </div>
-        {runAllActive ? (
-          <button
-            onClick={cancelRunAll}
-            className="rounded-md border border-destructive/60 bg-destructive/10 px-3 py-1 font-mono text-[11px] uppercase tracking-widest text-destructive hover:bg-destructive/20"
-          >
-            cancel all
-          </button>
-        ) : (
-          <button
-            onClick={handleRunAll}
-            className="rounded-md bg-primary px-3 py-1 font-mono text-[11px] uppercase tracking-widest text-primary-foreground hover:opacity-90"
-          >
-            ▶ run all pages
-          </button>
-        )}
+        <div className="flex items-center gap-2">
+          {runAllActive ? (
+            <button
+              onClick={cancelRunAll}
+              className="rounded-md border border-destructive/60 bg-destructive/10 px-3 py-1 font-mono text-[11px] uppercase tracking-widest text-destructive hover:bg-destructive/20"
+            >
+              cancel all
+            </button>
+          ) : (
+            <button
+              onClick={handleRunAll}
+              className="rounded-md bg-primary px-3 py-1 font-mono text-[11px] uppercase tracking-widest text-primary-foreground hover:opacity-90"
+            >
+              ▶ run all pages
+            </button>
+          )}
+        </div>
       </div>
 
       <div ref={scrollRef} className="flex-1 overflow-auto px-4 py-4 space-y-4">

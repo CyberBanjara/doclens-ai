@@ -110,56 +110,114 @@ export async function fetchModels(key: string): Promise<ORModel[]> {
   return (json.data ?? []) as ORModel[];
 }
 
+/** Default timeout for a single streaming request (ms). */
+const STREAM_TIMEOUT_MS = 60_000;
+/** Max retries on transient errors (429 / 503). */
+const MAX_RETRIES = 1;
+/** Base delay between retries (ms). Doubled on each attempt. */
+const RETRY_BASE_MS = 2_000;
+
 export interface StreamOpts {
   key: string;
   /** Full payload sent to OpenRouter — must include `model`, `messages`, `stream: true`. */
   payload: Record<string, unknown>;
   signal?: AbortSignal;
   onDelta: (text: string) => void;
+  /** Override default timeout (ms). */
+  timeoutMs?: number;
+}
+
+/** Combine user abort signal with a timeout signal. */
+function combinedSignal(userSignal?: AbortSignal, timeoutMs = STREAM_TIMEOUT_MS): AbortSignal {
+  const timeout = AbortSignal.timeout(timeoutMs);
+  if (!userSignal) return timeout;
+  // AbortSignal.any is available in modern browsers; fallback for older engines.
+  if (typeof AbortSignal.any === "function") {
+    return AbortSignal.any([userSignal, timeout]);
+  }
+  // Manual fallback
+  const ctrl = new AbortController();
+  const onAbort = () => ctrl.abort();
+  userSignal.addEventListener("abort", onAbort, { once: true });
+  timeout.addEventListener("abort", onAbort, { once: true });
+  return ctrl.signal;
+}
+
+/** Returns true for HTTP statuses that should be retried. */
+function isRetryable(status: number): boolean {
+  return status === 429 || status === 503;
 }
 
 export async function streamCompletion(opts: StreamOpts): Promise<void> {
-  const body = { ...opts.payload, stream: true };
-  const res = await fetch("https://openrouter.ai/api/v1/chat/completions", {
-    method: "POST",
-    signal: opts.signal,
-    headers: {
-      Authorization: `Bearer ${opts.key}`,
-      "Content-Type": "application/json",
-      ...HEADERS_BASE,
-    },
-    body: JSON.stringify(body),
-  });
-  if (!res.ok || !res.body) {
-    const txt = await res.text().catch(() => "");
-    throw new Error(`OpenRouter error ${res.status}: ${txt.slice(0, 200)}`);
-  }
-  const reader = res.body.getReader();
-  const decoder = new TextDecoder();
-  let buf = "";
-  while (true) {
-    const { done, value } = await reader.read();
-    if (done) break;
-    buf += decoder.decode(value, { stream: true });
-    let idx: number;
-    while ((idx = buf.indexOf("\n")) !== -1) {
-      let line = buf.slice(0, idx);
-      buf = buf.slice(idx + 1);
-      if (line.endsWith("\r")) line = line.slice(0, -1);
-      if (!line || line.startsWith(":")) continue;
-      if (!line.startsWith("data: ")) continue;
-      const data = line.slice(6).trim();
-      if (data === "[DONE]") return;
-      try {
-        const parsed = JSON.parse(data);
-        const delta = parsed.choices?.[0]?.delta?.content;
-        if (typeof delta === "string" && delta) opts.onDelta(delta);
-      } catch {
-        buf = line + "\n" + buf;
-        break;
+  const signal = combinedSignal(opts.signal, opts.timeoutMs ?? STREAM_TIMEOUT_MS);
+  let lastError: Error | null = null;
+
+  for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
+    if (signal.aborted) throw new DOMException("Aborted", "AbortError");
+
+    // Backoff delay on retries
+    if (attempt > 0) {
+      const delay = RETRY_BASE_MS * Math.pow(2, attempt - 1);
+      await new Promise((r) => setTimeout(r, delay));
+      if (signal.aborted) throw new DOMException("Aborted", "AbortError");
+    }
+
+    const body = { ...opts.payload, stream: true };
+    let res: Response;
+    try {
+      res = await fetch("https://openrouter.ai/api/v1/chat/completions", {
+        method: "POST",
+        signal,
+        headers: {
+          Authorization: `Bearer ${opts.key}`,
+          "Content-Type": "application/json",
+          ...HEADERS_BASE,
+        },
+        body: JSON.stringify(body),
+      });
+    } catch (e) {
+      // Network error or abort
+      throw e;
+    }
+
+    if (!res.ok || !res.body) {
+      const txt = await res.text().catch(() => "");
+      lastError = new Error(`OpenRouter error ${res.status}: ${txt.slice(0, 200)}`);
+      if (isRetryable(res.status) && attempt < MAX_RETRIES) continue;
+      throw lastError;
+    }
+
+    // Stream reading — no retry once streaming starts
+    const reader = res.body.getReader();
+    const decoder = new TextDecoder();
+    let buf = "";
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      buf += decoder.decode(value, { stream: true });
+      let idx: number;
+      while ((idx = buf.indexOf("\n")) !== -1) {
+        let line = buf.slice(0, idx);
+        buf = buf.slice(idx + 1);
+        if (line.endsWith("\r")) line = line.slice(0, -1);
+        if (!line || line.startsWith(":")) continue;
+        if (!line.startsWith("data: ")) continue;
+        const data = line.slice(6).trim();
+        if (data === "[DONE]") return;
+        try {
+          const parsed = JSON.parse(data);
+          const delta = parsed.choices?.[0]?.delta?.content;
+          if (typeof delta === "string" && delta) opts.onDelta(delta);
+        } catch {
+          buf = line + "\n" + buf;
+          break;
+        }
       }
     }
+    return; // Success
   }
+
+  if (lastError) throw lastError;
 }
 
 /** Trailing excerpt from previous page used as memory in next request. */

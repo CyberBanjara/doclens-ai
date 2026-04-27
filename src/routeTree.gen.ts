@@ -11,7 +11,7 @@
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as SettingsRouteImport } from './routes/settings'
 import { Route as IndexRouteImport } from './routes/index'
-import { Route as SettingsVoiceRouteImport } from './routes/settings.voice'
+import { Route as SettingsVoiceRouteImport } from './routes/settings_.voice'
 import { Route as DocIdRouteImport } from './routes/doc.$id'
 
 const SettingsRoute = SettingsRouteImport.update({
@@ -25,7 +25,7 @@ const IndexRoute = IndexRouteImport.update({
   getParentRoute: () => rootRouteImport,
 } as any)
 const SettingsVoiceRoute = SettingsVoiceRouteImport.update({
-  id: '/settings/voice',
+  id: '/settings_/voice',
   path: '/settings/voice',
   getParentRoute: () => rootRouteImport,
 } as any)
@@ -38,35 +38,35 @@ const DocIdRoute = DocIdRouteImport.update({
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/settings': typeof SettingsRoute
-  '/settings/voice': typeof SettingsVoiceRoute
   '/doc/$id': typeof DocIdRoute
+  '/settings/voice': typeof SettingsVoiceRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/settings': typeof SettingsRoute
-  '/settings/voice': typeof SettingsVoiceRoute
   '/doc/$id': typeof DocIdRoute
+  '/settings/voice': typeof SettingsVoiceRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
   '/settings': typeof SettingsRoute
-  '/settings/voice': typeof SettingsVoiceRoute
   '/doc/$id': typeof DocIdRoute
+  '/settings_/voice': typeof SettingsVoiceRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/' | '/settings' | '/settings/voice' | '/doc/$id'
+  fullPaths: '/' | '/settings' | '/doc/$id' | '/settings/voice'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/settings' | '/settings/voice' | '/doc/$id'
-  id: '__root__' | '/' | '/settings' | '/settings/voice' | '/doc/$id'
+  to: '/' | '/settings' | '/doc/$id' | '/settings/voice'
+  id: '__root__' | '/' | '/settings' | '/doc/$id' | '/settings_/voice'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   SettingsRoute: typeof SettingsRoute
-  SettingsVoiceRoute: typeof SettingsVoiceRoute
   DocIdRoute: typeof DocIdRoute
+  SettingsVoiceRoute: typeof SettingsVoiceRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -85,8 +85,8 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof IndexRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/settings/voice': {
-      id: '/settings/voice'
+    '/settings_/voice': {
+      id: '/settings_/voice'
       path: '/settings/voice'
       fullPath: '/settings/voice'
       preLoaderRoute: typeof SettingsVoiceRouteImport
@@ -105,8 +105,8 @@ declare module '@tanstack/react-router' {
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   SettingsRoute: SettingsRoute,
-  SettingsVoiceRoute: SettingsVoiceRoute,
   DocIdRoute: DocIdRoute,
+  SettingsVoiceRoute: SettingsVoiceRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)

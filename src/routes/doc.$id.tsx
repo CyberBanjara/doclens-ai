@@ -1,5 +1,6 @@
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useEffect, useRef, useState } from "react";
+import { toast } from "sonner";
 import { AppHeader } from "@/components/AppHeader";
 import { PdfViewer } from "@/components/PdfViewer";
 import { RightPanel } from "@/components/RightPanel";
@@ -10,6 +11,7 @@ import {
   touchDoc,
   updateDoc,
   upsertPageAi,
+  StorageError,
   type DocRecord,
   type PageAi,
 } from "@/lib/storage";
@@ -70,10 +72,21 @@ function DocPage() {
         setStatus(`page ${page.pageNumber}/${total}`);
       });
       setStatus(`done · ${collected.length} pages`);
-      await updateDoc(id, { pages: collected, pageCount: collected.length });
+      try {
+        await updateDoc(id, { pages: collected, pageCount: collected.length });
+        toast.success(`Extracted ${collected.length} pages successfully.`);
+      } catch (e) {
+        if (e instanceof StorageError && e.code === "QUOTA_EXCEEDED") {
+          toast.error(e.message);
+        } else {
+          toast.error("Extraction complete but failed to save. Storage may be full.");
+        }
+      }
     } catch (err) {
       console.error(err);
-      setStatus("error: " + (err instanceof Error ? err.message : "unknown"));
+      const msg = err instanceof Error ? err.message : "unknown";
+      setStatus("error: " + msg);
+      toast.error(`Extraction failed: ${msg}`);
     } finally {
       setAnalyzing(false);
     }

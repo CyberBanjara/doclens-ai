@@ -1,4 +1,5 @@
 import { Outlet, Link, createRootRoute, HeadContent, Scripts } from "@tanstack/react-router";
+import { Toaster } from "@/components/ui/sonner";
 
 import appCss from "../styles.css?url";
 
@@ -29,18 +30,15 @@ export const Route = createRootRoute({
     meta: [
       { charSet: "utf-8" },
       { name: "viewport", content: "width=device-width, initial-scale=1" },
-      { title: "Lovable App" },
+      { title: "DocLens AI" },
       { name: "description", content: "DocLens AI inspects document-to-AI pipelines, showing users exactly what LLM APIs receive from PDFs." },
-      { name: "author", content: "Lovable" },
-      { property: "og:title", content: "Lovable App" },
+      { name: "author", content: "DocLens" },
+      { property: "og:title", content: "DocLens AI — Document Pipeline Inspector" },
       { property: "og:description", content: "DocLens AI inspects document-to-AI pipelines, showing users exactly what LLM APIs receive from PDFs." },
       { property: "og:type", content: "website" },
       { name: "twitter:card", content: "summary" },
-      { name: "twitter:site", content: "@Lovable" },
-      { name: "twitter:title", content: "Lovable App" },
+      { name: "twitter:title", content: "DocLens AI — Document Pipeline Inspector" },
       { name: "twitter:description", content: "DocLens AI inspects document-to-AI pipelines, showing users exactly what LLM APIs receive from PDFs." },
-      { property: "og:image", content: "https://pub-bb2e103a32db4e198524a2e9ed8f35b4.r2.dev/5aed03f7-bc5c-4ae5-abb4-0c4d4685e81e/id-preview-4494dfeb--7f29fa6e-db25-4d8d-bb9a-5c3cd0307f5a.lovable.app-1777062823226.png" },
-      { name: "twitter:image", content: "https://pub-bb2e103a32db4e198524a2e9ed8f35b4.r2.dev/5aed03f7-bc5c-4ae5-abb4-0c4d4685e81e/id-preview-4494dfeb--7f29fa6e-db25-4d8d-bb9a-5c3cd0307f5a.lovable.app-1777062823226.png" },
     ],
     links: [
       {
@@ -70,5 +68,10 @@ function RootShell({ children }: { children: React.ReactNode }) {
 }
 
 function RootComponent() {
-  return <Outlet />;
+  return (
+    <>
+      <Outlet />
+      <Toaster position="bottom-right" richColors closeButton />
+    </>
+  );
 }

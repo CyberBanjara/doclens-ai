@@ -95,6 +95,90 @@ export interface DocSummary {
   aiResultCount: number;
 }
 
+/* ---------- Storage Error ---------- */
+
+export class StorageError extends Error {
+  constructor(
+    message: string,
+    public readonly code: "QUOTA_EXCEEDED" | "WRITE_FAILED" | "NOT_FOUND",
+  ) {
+    super(message);
+    this.name = "StorageError";
+  }
+}
+
+/* ---------- Write mutex ---------- */
+// Prevents race conditions when multiple operations try to read-modify-write
+// the same document concurrently (e.g. parallel "Run All Pages").
+
+const writeLocks = new Map<string, Promise<void>>();
+
+async function withDocLock<T>(docId: string, fn: () => Promise<T>): Promise<T> {
+  // Wait for any existing lock on this doc to resolve
+  while (writeLocks.has(docId)) {
+    await writeLocks.get(docId);
+  }
+  let resolve!: () => void;
+  const lockPromise = new Promise<void>((r) => {
+    resolve = r;
+  });
+  writeLocks.set(docId, lockPromise);
+  try {
+    return await fn();
+  } finally {
+    writeLocks.delete(docId);
+    resolve();
+  }
+}
+
+/* ---------- Safe IndexedDB write ---------- */
+
+async function safePut(d: IDBPDatabase, store: string, value: unknown, key?: IDBValidKey) {
+  try {
+    if (key !== undefined) {
+      await d.put(store, value, key);
+    } else {
+      await d.put(store, value);
+    }
+  } catch (e: unknown) {
+    if (
+      e instanceof DOMException &&
+      (e.name === "QuotaExceededError" || e.code === 22)
+    ) {
+      throw new StorageError(
+        "Storage quota exceeded. Delete some documents to free space.",
+        "QUOTA_EXCEEDED",
+      );
+    }
+    throw new StorageError(
+      `Failed to write to storage: ${e instanceof Error ? e.message : "Unknown error"}`,
+      "WRITE_FAILED",
+    );
+  }
+}
+
+/* ---------- Runtime record validation ---------- */
+// Ensures records loaded from older DB versions have all required fields.
+
+function normalizeDoc(raw: any): DocRecord | undefined {
+  if (!raw || typeof raw !== "object" || !raw.id || !raw.fileName) return undefined;
+  return {
+    id: raw.id,
+    fileName: raw.fileName,
+    fileSize: raw.fileSize ?? 0,
+    data: raw.data ?? new ArrayBuffer(0),
+    pages: Array.isArray(raw.pages) ? raw.pages : null,
+    pageCount: raw.pageCount ?? raw.pages?.length ?? 0,
+    createdAt: raw.createdAt ?? 0,
+    lastOpenedAt: raw.lastOpenedAt ?? 0,
+    scrollTop: raw.scrollTop,
+    aiResults: Array.isArray(raw.aiResults) ? raw.aiResults : [],
+    pageAi: raw.pageAi && typeof raw.pageAi === "object" ? raw.pageAi : {},
+  };
+}
+
+/* ---------- Database ---------- */
+
 let dbPromise: Promise<IDBPDatabase> | null = null;
 function db() {
   if (!dbPromise) {
@@ -114,9 +198,10 @@ function db() {
 
 export async function listDocs(): Promise<DocSummary[]> {
   const d = await db();
-  const all = (await d.getAll(STORE)) as DocRecord[];
+  const all = (await d.getAll(STORE)) as unknown[];
   return all
-    .filter((r) => r && r.fileName)
+    .map(normalizeDoc)
+    .filter((r): r is DocRecord => !!r)
     .map((r) => ({
       id: r.id,
       fileName: r.fileName,
@@ -134,7 +219,8 @@ export async function listDocs(): Promise<DocSummary[]> {
 
 export async function getDoc(id: string): Promise<DocRecord | undefined> {
   const d = await db();
-  return d.get(STORE, id) as Promise<DocRecord | undefined>;
+  const raw = await d.get(STORE, id);
+  return normalizeDoc(raw);
 }
 
 export async function createDoc(file: File, data: ArrayBuffer): Promise<DocRecord> {
@@ -153,16 +239,18 @@ export async function createDoc(file: File, data: ArrayBuffer): Promise<DocRecor
     aiResults: [],
     pageAi: {},
   };
-  await d.put(STORE, rec);
+  await safePut(d, STORE, rec);
   await setLastOpened(id);
   return rec;
 }
 
 export async function updateDoc(id: string, patch: Partial<DocRecord>) {
-  const d = await db();
-  const existing = (await d.get(STORE, id)) as DocRecord | undefined;
-  if (!existing) return;
-  await d.put(STORE, { ...existing, ...patch });
+  return withDocLock(id, async () => {
+    const d = await db();
+    const existing = normalizeDoc(await d.get(STORE, id));
+    if (!existing) return;
+    await safePut(d, STORE, { ...existing, ...patch });
+  });
 }
 
 export async function touchDoc(id: string, scrollTop?: number) {
@@ -178,30 +266,36 @@ export async function deleteDoc(id: string) {
 }
 
 export async function appendAiResult(docId: string, result: AiResult) {
-  const d = await db();
-  const existing = (await d.get(STORE, docId)) as DocRecord | undefined;
-  if (!existing) return;
-  const aiResults = [...(existing.aiResults ?? []).filter((r) => r.id !== result.id), result];
-  await d.put(STORE, { ...existing, aiResults });
+  return withDocLock(docId, async () => {
+    const d = await db();
+    const existing = normalizeDoc(await d.get(STORE, docId));
+    if (!existing) return;
+    const aiResults = [...(existing.aiResults ?? []).filter((r) => r.id !== result.id), result];
+    await safePut(d, STORE, { ...existing, aiResults });
+  });
 }
 
 export async function deleteAiResult(docId: string, resultId: string) {
-  const d = await db();
-  const existing = (await d.get(STORE, docId)) as DocRecord | undefined;
-  if (!existing) return;
-  const aiResults = (existing.aiResults ?? []).filter((r) => r.id !== resultId);
-  await d.put(STORE, { ...existing, aiResults });
+  return withDocLock(docId, async () => {
+    const d = await db();
+    const existing = normalizeDoc(await d.get(STORE, docId));
+    if (!existing) return;
+    const aiResults = (existing.aiResults ?? []).filter((r) => r.id !== resultId);
+    await safePut(d, STORE, { ...existing, aiResults });
+  });
 }
 
 /** Merge a partial PageAi for a single page. Fast path used during streaming. */
 export async function upsertPageAi(docId: string, pageNumber: number, patch: Partial<PageAi>) {
-  const d = await db();
-  const existing = (await d.get(STORE, docId)) as DocRecord | undefined;
-  if (!existing) return;
-  const pageAi = { ...(existing.pageAi ?? {}) };
-  const prev = pageAi[pageNumber] ?? { pageNumber, status: "idle" as PageStatus };
-  pageAi[pageNumber] = { ...prev, ...patch, pageNumber, updatedAt: Date.now() };
-  await d.put(STORE, { ...existing, pageAi });
+  return withDocLock(docId, async () => {
+    const d = await db();
+    const existing = normalizeDoc(await d.get(STORE, docId));
+    if (!existing) return;
+    const pageAi = { ...(existing.pageAi ?? {}) };
+    const prev = pageAi[pageNumber] ?? { pageNumber, status: "idle" as PageStatus };
+    pageAi[pageNumber] = { ...prev, ...patch, pageNumber, updatedAt: Date.now() };
+    await safePut(d, STORE, { ...existing, pageAi });
+  });
 }
 
 const LAST_OPENED_KEY = "lastOpenedDocId";
@@ -212,5 +306,5 @@ export async function getLastOpened(): Promise<string | null> {
 export async function setLastOpened(id: string | null) {
   const d = await db();
   if (id === null) await d.delete(META, LAST_OPENED_KEY);
-  else await d.put(META, id, LAST_OPENED_KEY);
+  else await safePut(d, META, id, LAST_OPENED_KEY);
 }

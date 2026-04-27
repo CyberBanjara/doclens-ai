@@ -1,13 +1,24 @@
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
+import { toast } from "sonner";
 import { AppHeader } from "@/components/AppHeader";
 import { Dropzone } from "@/components/Dropzone";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import {
   createDoc,
   deleteDoc,
   getLastOpened,
   listDocs,
-  
+  StorageError,
   type DocSummary,
 } from "@/lib/storage";
 
@@ -31,6 +42,7 @@ function DashboardPage() {
   const navigate = useNavigate();
   const [docs, setDocs] = useState<DocSummary[]>([]);
   const [loading, setLoading] = useState(true);
+  const [deleteTarget, setDeleteTarget] = useState<DocSummary | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -58,17 +70,38 @@ function DashboardPage() {
   }, []);
 
   const handleFile = async (f: File) => {
-    const buf = await f.arrayBuffer();
-    const rec = await createDoc(f, buf);
-    navigate({ to: "/doc/$id", params: { id: rec.id } });
+    try {
+      const buf = await f.arrayBuffer();
+      const rec = await createDoc(f, buf);
+      navigate({ to: "/doc/$id", params: { id: rec.id } });
+    } catch (e) {
+      if (e instanceof StorageError && e.code === "QUOTA_EXCEEDED") {
+        toast.error(e.message);
+      } else {
+        toast.error("Failed to save document. Please try again.");
+        console.error(e);
+      }
+    }
   };
 
-  const handleDelete = async (id: string, e: React.MouseEvent) => {
+  const handleDeleteClick = (doc: DocSummary, e: React.MouseEvent) => {
     e.preventDefault();
     e.stopPropagation();
-    if (!confirm("Delete this document and all its AI results?")) return;
-    await deleteDoc(id);
-    setDocs((prev) => prev.filter((d) => d.id !== id));
+    setDeleteTarget(doc);
+  };
+
+  const handleDeleteConfirm = async () => {
+    if (!deleteTarget) return;
+    const { id, fileName } = deleteTarget;
+    setDeleteTarget(null);
+    try {
+      await deleteDoc(id);
+      setDocs((prev) => prev.filter((d) => d.id !== id));
+      toast.success(`"${fileName}" deleted.`);
+    } catch (e) {
+      toast.error("Failed to delete document.");
+      console.error(e);
+    }
   };
 
   return (
@@ -119,7 +152,7 @@ function DashboardPage() {
                       </div>
                     </div>
                     <button
-                      onClick={(e) => handleDelete(d.id, e)}
+                      onClick={(e) => handleDeleteClick(d, e)}
                       className="rounded border border-border bg-background px-1.5 py-0.5 font-mono text-[10px] uppercase tracking-widest text-muted-foreground opacity-0 transition-opacity hover:text-destructive group-hover:opacity-100"
                       aria-label="Delete document"
                     >
@@ -152,6 +185,29 @@ function DashboardPage() {
           </ul>
         )}
       </main>
+
+      {/* Delete confirmation dialog */}
+      <AlertDialog open={!!deleteTarget} onOpenChange={(open) => !open && setDeleteTarget(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete document?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This will permanently delete{" "}
+              <span className="font-medium text-foreground">{deleteTarget?.fileName}</span> and all
+              its AI results. This action cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={handleDeleteConfirm}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              Delete
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }
