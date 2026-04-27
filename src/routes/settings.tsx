@@ -369,7 +369,7 @@ function SettingsPage() {
           ) : (
             <>
               <div className="mt-4 flex flex-wrap items-center gap-2">
-                {(["all", "free", "fast", "popular"] as FilterTab[]).map((t) => (
+                {(["free", "popular", "all"] as FilterTab[]).map((t) => (
                   <button
                     key={t}
                     onClick={() => setTab(t)}
