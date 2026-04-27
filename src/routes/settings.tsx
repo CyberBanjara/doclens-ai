@@ -143,20 +143,15 @@ function SettingsPage() {
 
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
-    let list = models;
+    // 1) text→text only across all tabs
+    let list = models.filter(isTextToText);
     if (q) list = list.filter((m) => m.id.toLowerCase().includes(q) || m.name?.toLowerCase().includes(q));
     if (tab === "free") {
       list = list.filter(
         (m) => parseFloat(m.pricing?.prompt ?? "0") === 0 && parseFloat(m.pricing?.completion ?? "0") === 0,
       );
-    } else if (tab === "fast") {
-      list = list.filter((m) => /flash|mini|nano|haiku|small|turbo|fast|8b|7b/i.test(m.id + " " + (m.name ?? "")));
     } else if (tab === "popular") {
-      list = list.filter((m) =>
-        /gpt-4o|gpt-5|claude-3|claude-3\.5|claude-sonnet|gemini-1\.5|gemini-2|llama-3|deepseek|mistral-large/i.test(
-          m.id,
-        ),
-      );
+      list = list.filter((m) => POPULAR_RX.test(m.id));
     }
     return list.slice(0, 200);
   }, [models, search, tab]);
