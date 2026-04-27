@@ -96,6 +96,7 @@ export function PageWorkstation({ pages, pageAi, onUpdatePage, syncToPage, onPag
     lockEmitUntilRef.current = Date.now() + 500;
     const top = el.offsetTop - 8;
     scrollRef.current.scrollTo({ top, behavior: "smooth" });
+    if (syncToPage !== currentPage) stopAllTts();
     setCurrentPage(syncToPage);
   }, [syncToPage]);
 
