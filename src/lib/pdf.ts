@@ -123,15 +123,24 @@ function sortByColumns(items: TextItem[], pageWidth: number, columns: number): T
   );
 }
 
+async function loadDocFromSource(source: ArrayBuffer | Blob) {
+  const pdfjsLib = await getPdfjs();
+  const blob = source instanceof Blob ? source : new Blob([source], { type: "application/pdf" });
+  const url = URL.createObjectURL(blob);
+  try {
+    const pdf = await pdfjsLib.getDocument({ url, ...PDF_LOAD_OPTIONS }).promise;
+    return pdf;
+  } finally {
+    // Once pdf.js has fetched the bytes it keeps its own internal copy.
+    URL.revokeObjectURL(url);
+  }
+}
+
 export async function extractPdfPages(
-  data: ArrayBuffer,
+  data: ArrayBuffer | Blob,
   onPage?: (page: PageExtraction, total: number) => void,
 ): Promise<PageExtraction[]> {
-  const pdfjsLib = await getPdfjs();
-  const pdf = await pdfjsLib.getDocument({
-    data: data.slice(0),
-    ...PDF_LOAD_OPTIONS,
-  }).promise;
+  const pdf = await loadDocFromSource(data);
   const pages: PageExtraction[] = [];
   for (let pageNumber = 1; pageNumber <= pdf.numPages; pageNumber++) {
     const page = await pdf.getPage(pageNumber);
@@ -191,10 +200,6 @@ export async function extractPdfPages(
   return pages;
 }
 
-export async function loadPdfDocument(data: ArrayBuffer) {
-  const pdfjsLib = await getPdfjs();
-  return pdfjsLib.getDocument({
-    data: data.slice(0),
-    ...PDF_LOAD_OPTIONS,
-  }).promise;
+export async function loadPdfDocument(data: ArrayBuffer | Blob) {
+  return loadDocFromSource(data);
 }

@@ -4,18 +4,18 @@ import { toast } from "sonner";
 import { AppHeader } from "@/components/AppHeader";
 import { PdfViewer } from "@/components/PdfViewer";
 import { RightPanel } from "@/components/RightPanel";
-import { extractPdfPages, type PageExtraction } from "@/lib/pdf";
+import { extractPdfPages } from "@/lib/pdf";
 import {
   getDoc,
-  getDocBinary,
+  getDocBlob,
+  getPageAiSummary,
   setLastOpened,
   touchDoc,
   updateDoc,
-  upsertPageAi,
-  toPageExtraction,
+  writePages,
   StorageError,
   type DocRecord,
-  type PageAi,
+  type PageAiSummaryEntry,
 } from "@/lib/storage";
 
 export const Route = createFileRoute("/doc/$id")({
@@ -30,13 +30,12 @@ function DocPage() {
   const navigate = useNavigate();
   const [doc, setDoc] = useState<DocRecord | null>(null);
   const [missing, setMissing] = useState(false);
-  const [pages, setPages] = useState<PageExtraction[]>([]);
-  const [totalPages, setTotalPages] = useState(0);
+  const [pageCount, setPageCount] = useState(0);
   const [analyzing, setAnalyzing] = useState(false);
   const [status, setStatus] = useState("");
-  const [pageAi, setPageAi] = useState<Record<number, PageAi>>({});
+  /** Lightweight summary only — full text + result are read on demand per page. */
+  const [aiSummary, setAiSummary] = useState<Record<number, PageAiSummaryEntry>>({});
 
-  // Load doc metadata (no binary — PdfViewer loads it on-demand)
   useEffect(() => {
     let cancelled = false;
     (async () => {
@@ -47,10 +46,10 @@ function DocPage() {
         return;
       }
       setDoc(rec);
-      // Convert StoredPage → PageExtraction (items=[] since stripped)
-      setPages(rec.pages?.map(toPageExtraction) ?? []);
-      setTotalPages(rec.pageCount || rec.pages?.length || 0);
-      setPageAi(rec.pageAi ?? {});
+      setPageCount(rec.pageCount ?? 0);
+      const sum = await getPageAiSummary(id);
+      if (cancelled) return;
+      setAiSummary(sum);
       await touchDoc(id);
       await setLastOpened(id);
     })();
@@ -59,30 +58,41 @@ function DocPage() {
     };
   }, [id]);
 
+  const refreshSummary = async () => {
+    const sum = await getPageAiSummary(id);
+    setAiSummary(sum);
+  };
+
   const handleAnalyze = async () => {
     if (!doc || analyzing) return;
     setAnalyzing(true);
-    setPages([]);
     setStatus("extracting…");
     try {
-      // Load binary on-demand just for extraction
-      const binary = await getDocBinary(id);
-      if (!binary) {
+      const blob = await getDocBlob(id);
+      if (!blob) {
         toast.error("PDF binary not found in storage.");
         setAnalyzing(false);
         return;
       }
-      const collected: PageExtraction[] = [];
-      await extractPdfPages(binary, (page, total) => {
-        setTotalPages(total);
-        collected.push(page);
-        setPages([...collected]);
+      let lastTotal = 0;
+      const collected: { pageNumber: number; text: string; columns: number; garbageRatio: number }[] = [];
+      await extractPdfPages(blob, (page, total) => {
+        lastTotal = total;
+        collected.push({
+          pageNumber: page.pageNumber,
+          text: page.text,
+          columns: page.columns,
+          garbageRatio: page.garbageRatio,
+        });
+        setPageCount(total);
         setStatus(`page ${page.pageNumber}/${total}`);
       });
-      setStatus(`done · ${collected.length} pages`);
       try {
-        // updateDoc strips items[] automatically via toLeanPages
-        await updateDoc(id, { pages: collected, pageCount: collected.length });
+        await writePages(id, collected);
+        await updateDoc(id, { pageCount: collected.length });
+        setPageCount(collected.length || lastTotal);
+        await refreshSummary();
+        setStatus(`done · ${collected.length} pages`);
         toast.success(`Extracted ${collected.length} pages successfully.`);
       } catch (e) {
         if (e instanceof StorageError && e.code === "QUOTA_EXCEEDED") {
@@ -101,12 +111,14 @@ function DocPage() {
     }
   };
 
-  const handleUpdatePage = (pageNumber: number, patch: Partial<PageAi>) => {
-    setPageAi((prev) => {
-      const existing = prev[pageNumber] ?? { pageNumber, status: "idle" as const };
-      return { ...prev, [pageNumber]: { ...existing, ...patch, pageNumber } };
+  /** Called by per-row workstation cards to keep the doc-level summary in sync. */
+  const handlePageAiChange = (pageNumber: number, entry: PageAiSummaryEntry | null) => {
+    setAiSummary((prev) => {
+      const next = { ...prev };
+      if (entry) next[pageNumber] = entry;
+      else delete next[pageNumber];
+      return next;
     });
-    void upsertPageAi(id, pageNumber, patch);
   };
 
   if (missing) {
@@ -156,7 +168,7 @@ function DocPage() {
               disabled={analyzing}
               className="rounded-md bg-primary px-3 py-1.5 font-mono text-[11px] uppercase tracking-widest text-primary-foreground transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-40"
             >
-              {analyzing ? "analyzing…" : pages.length ? "re-extract" : "analyze document"}
+              {analyzing ? "analyzing…" : pageCount ? "re-extract" : "analyze document"}
             </button>
             <button
               onClick={() => navigate({ to: "/" })}
@@ -173,12 +185,12 @@ function DocPage() {
         </section>
         <section className="h-full overflow-hidden">
           <RightPanel
-            pages={pages}
-            totalPages={totalPages || pages.length}
+            docId={id}
+            pageCount={pageCount}
             analyzing={analyzing}
             status={status}
-            pageAi={pageAi}
-            onUpdatePage={handleUpdatePage}
+            aiSummary={aiSummary}
+            onPageAiChange={handlePageAiChange}
           />
         </section>
       </main>

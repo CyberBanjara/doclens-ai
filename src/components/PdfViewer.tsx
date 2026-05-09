@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { loadPdfDocument } from "@/lib/pdf";
-import { getDocBinary } from "@/lib/storage";
+import { getDocBlob } from "@/lib/storage";
 import type { PDFDocumentProxy, PDFPageProxy } from "pdfjs-dist";
 
 interface Props {
@@ -10,7 +10,8 @@ interface Props {
 
 const DPR = typeof window !== "undefined" ? window.devicePixelRatio || 1 : 1;
 const TARGET_WIDTH = 800;
-const BUFFER = 2;
+/** Max bitmaps kept simultaneously (current page ±2). */
+const MAX_RENDERED = 5;
 
 interface PageMeta {
   pageNumber: number;
@@ -20,21 +21,24 @@ interface PageMeta {
 }
 
 /**
- * PDF viewer that loads the binary on-demand from IndexedDB,
- * then uses pdf.js page.render() for full-fidelity canvas rendering.
+ * PDF viewer with lazy canvas rendering driven by IntersectionObserver.
+ * Bitmaps for off-screen pages are released (canvas.width/height = 0)
+ * to free GPU memory. At most MAX_RENDERED canvases hold pixel data.
  */
 export function PdfViewer({ docId }: Props) {
   const [doc, setDoc] = useState<PDFDocumentProxy | null>(null);
   const [pageMetas, setPageMetas] = useState<PageMeta[]>([]);
-  const [visibleRange, setVisibleRange] = useState<[number, number]>([0, 3]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+
   const scrollRef = useRef<HTMLDivElement>(null);
   const canvasRefs = useRef<Map<number, HTMLCanvasElement>>(new Map());
   const renderedPages = useRef<Set<number>>(new Set());
   const renderingPages = useRef<Set<number>>(new Set());
+  const recentlyVisibleOrder = useRef<number[]>([]);
+  const observerRef = useRef<IntersectionObserver | null>(null);
 
-  // Load PDF binary on-demand from IndexedDB
+  // Load PDF on-demand from IndexedDB (as Blob → objectURL)
   useEffect(() => {
     let cancelled = false;
     setLoading(true);
@@ -44,15 +48,15 @@ export function PdfViewer({ docId }: Props) {
 
     (async () => {
       try {
-        const binary = await getDocBinary(docId);
+        const blob = await getDocBlob(docId);
         if (cancelled) return;
-        if (!binary) {
+        if (!blob) {
           setError("PDF binary not found in storage.");
           setLoading(false);
           return;
         }
 
-        const pdfDoc = await loadPdfDocument(binary);
+        const pdfDoc = await loadPdfDocument(blob);
         if (cancelled) return;
         setDoc(pdfDoc);
 
@@ -79,8 +83,19 @@ export function PdfViewer({ docId }: Props) {
       }
     })();
 
-    return () => { cancelled = true; };
+    return () => {
+      cancelled = true;
+    };
   }, [docId]);
+
+  /** Release bitmap memory: width=0 first frees GPU, then restore CSS dims. */
+  const releasePage = useCallback((pageNumber: number) => {
+    const canvas = canvasRefs.current.get(pageNumber);
+    if (!canvas) return;
+    canvas.width = 0;
+    canvas.height = 0;
+    renderedPages.current.delete(pageNumber);
+  }, []);
 
   const renderPage = useCallback(
     async (pageNumber: number) => {
@@ -109,6 +124,16 @@ export function PdfViewer({ docId }: Props) {
 
         await page.render({ canvasContext: ctx, viewport, canvas } as any).promise;
         renderedPages.current.add(pageNumber);
+
+        // Cap rendered set: drop oldest entries past MAX_RENDERED.
+        const order = recentlyVisibleOrder.current;
+        while (renderedPages.current.size > MAX_RENDERED) {
+          const dropFrom = order.find((n) => renderedPages.current.has(n) && n !== pageNumber);
+          if (dropFrom === undefined) break;
+          releasePage(dropFrom);
+          const idx = order.indexOf(dropFrom);
+          if (idx !== -1) order.splice(idx, 1);
+        }
       } catch (err) {
         if (err instanceof Error && err.message.includes("cancelled")) return;
         console.error(`PdfViewer: render error page ${pageNumber}`, err);
@@ -116,81 +141,59 @@ export function PdfViewer({ docId }: Props) {
         renderingPages.current.delete(pageNumber);
       }
     },
-    [doc, pageMetas],
+    [doc, pageMetas, releasePage],
   );
 
-  const clearPage = useCallback((pageNumber: number) => {
-    const canvas = canvasRefs.current.get(pageNumber);
-    if (!canvas) return;
-    canvas.width = 1;
-    canvas.height = 1;
-    renderedPages.current.delete(pageNumber);
-  }, []);
-
-  const updateVisibleRange = useCallback(() => {
-    const container = scrollRef.current;
-    if (!container || pageMetas.length === 0) return;
-
-    const scrollTop = container.scrollTop;
-    const viewportHeight = container.clientHeight;
-    const scrollBottom = scrollTop + viewportHeight;
-
-    let firstVisible = 0;
-    let lastVisible = 0;
-    let cumulativeTop = 0;
-
-    for (let i = 0; i < pageMetas.length; i++) {
-      const pageBottom = cumulativeTop + pageMetas[i].cssHeight + 12;
-      if (pageBottom >= scrollTop) { firstVisible = i; break; }
-      cumulativeTop += pageMetas[i].cssHeight + 12;
-    }
-
-    cumulativeTop = 0;
-    for (let i = 0; i < pageMetas.length; i++) {
-      cumulativeTop += pageMetas[i].cssHeight + 12;
-      lastVisible = i;
-      if (cumulativeTop >= scrollBottom) break;
-    }
-
-    setVisibleRange([
-      Math.max(0, firstVisible - BUFFER),
-      Math.min(pageMetas.length - 1, lastVisible + BUFFER),
-    ]);
-  }, [pageMetas]);
-
+  // IntersectionObserver: render on enter, release on leave.
   useEffect(() => {
-    const container = scrollRef.current;
-    if (!container) return;
-    updateVisibleRange();
-    let rafId = 0;
-    const handleScroll = () => {
-      if (rafId) cancelAnimationFrame(rafId);
-      rafId = requestAnimationFrame(updateVisibleRange);
-    };
-    container.addEventListener("scroll", handleScroll, { passive: true });
+    const root = scrollRef.current;
+    if (!root || pageMetas.length === 0) return;
+
+    const obs = new IntersectionObserver(
+      (entries) => {
+        for (const entry of entries) {
+          const pn = Number((entry.target as HTMLElement).dataset.pageNumber);
+          if (!Number.isFinite(pn) || pn <= 0) continue;
+          if (entry.isIntersecting) {
+            // Track LRU-style for cap eviction
+            const order = recentlyVisibleOrder.current;
+            const idx = order.indexOf(pn);
+            if (idx !== -1) order.splice(idx, 1);
+            order.push(pn);
+            renderPage(pn);
+          } else {
+            // Outside viewport (and 200px buffer) → release bitmap
+            releasePage(pn);
+          }
+        }
+      },
+      { root, rootMargin: "200px 0px", threshold: 0 },
+    );
+    observerRef.current = obs;
+
+    canvasRefs.current.forEach((el) => obs.observe(el.parentElement ?? el));
+
     return () => {
-      container.removeEventListener("scroll", handleScroll);
-      if (rafId) cancelAnimationFrame(rafId);
+      obs.disconnect();
+      observerRef.current = null;
     };
-  }, [updateVisibleRange]);
+  }, [pageMetas, renderPage, releasePage]);
 
+  // Cleanup all bitmaps on unmount / doc change
   useEffect(() => {
-    const [first, last] = visibleRange;
-    for (let i = first; i <= last; i++) {
-      const pn = pageMetas[i]?.pageNumber;
-      if (pn) renderPage(pn);
-    }
-    for (const pn of renderedPages.current) {
-      const idx = pn - 1;
-      if (idx < first || idx > last) clearPage(pn);
-    }
-  }, [visibleRange, pageMetas, renderPage, clearPage]);
-
-  useEffect(() => {
-    const handleResize = () => updateVisibleRange();
-    window.addEventListener("resize", handleResize);
-    return () => window.removeEventListener("resize", handleResize);
-  }, [updateVisibleRange]);
+    return () => {
+      renderedPages.current.forEach((pn) => {
+        const c = canvasRefs.current.get(pn);
+        if (c) {
+          c.width = 0;
+          c.height = 0;
+        }
+      });
+      renderedPages.current.clear();
+      renderingPages.current.clear();
+      recentlyVisibleOrder.current = [];
+    };
+  }, [docId]);
 
   if (loading) {
     return (
@@ -216,35 +219,35 @@ export function PdfViewer({ docId }: Props) {
   return (
     <div ref={scrollRef} className="h-full overflow-auto" style={{ background: "#404040" }}>
       <div className="flex flex-col items-center gap-3 py-4">
-        {pageMetas.map((meta, idx) => {
-          const inRange = idx >= visibleRange[0] && idx <= visibleRange[1];
-          return (
-            <div
-              key={meta.pageNumber}
-              style={{ width: meta.cssWidth, height: meta.cssHeight, maxWidth: "100%" }}
-              className="relative flex-shrink-0 shadow-lg"
-            >
-              <canvas
-                ref={(el) => {
-                  if (el) canvasRefs.current.set(meta.pageNumber, el);
-                  else canvasRefs.current.delete(meta.pageNumber);
-                }}
-                style={{ width: meta.cssWidth, height: meta.cssHeight, maxWidth: "100%", display: "block", background: "#fff" }}
-              />
-              <div className="absolute bottom-2 right-2 rounded bg-black/60 px-2 py-0.5 font-mono text-[10px] text-white/80">
-                {meta.pageNumber}
-              </div>
-              {!inRange && (
-                <div
-                  className="absolute inset-0 flex items-center justify-center bg-white"
-                  style={{ width: meta.cssWidth, height: meta.cssHeight, maxWidth: "100%" }}
-                >
-                  <span className="font-mono text-xs text-gray-400">Page {meta.pageNumber}</span>
-                </div>
-              )}
+        {pageMetas.map((meta) => (
+          <div
+            key={meta.pageNumber}
+            data-page-number={meta.pageNumber}
+            ref={(el) => {
+              if (el && observerRef.current) observerRef.current.observe(el);
+            }}
+            style={{ width: meta.cssWidth, height: meta.cssHeight, maxWidth: "100%" }}
+            className="relative flex-shrink-0 shadow-lg"
+          >
+            <canvas
+              data-page-number={meta.pageNumber}
+              ref={(el) => {
+                if (el) canvasRefs.current.set(meta.pageNumber, el);
+                else canvasRefs.current.delete(meta.pageNumber);
+              }}
+              style={{
+                width: meta.cssWidth,
+                height: meta.cssHeight,
+                maxWidth: "100%",
+                display: "block",
+                background: "#fff",
+              }}
+            />
+            <div className="absolute bottom-2 right-2 rounded bg-black/60 px-2 py-0.5 font-mono text-[10px] text-white/80">
+              {meta.pageNumber}
             </div>
-          );
-        })}
+          </div>
+        ))}
       </div>
     </div>
   );

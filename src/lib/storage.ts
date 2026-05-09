@@ -2,10 +2,11 @@ import { openDB, type IDBPDatabase } from "idb";
 import type { PageExtraction } from "./pdf";
 
 const DB_NAME = "doclens";
-const DB_VERSION = 5;
+const DB_VERSION = 6;
 const STORE = "documents";
 const BLOBS = "blobs";
 const META = "meta";
+const PAGES = "pageData";
 
 export type AiMode = "translate" | "summarize" | "explain" | "keypoints";
 export type PageStatus = "idle" | "ready" | "running" | "done" | "error";
@@ -21,7 +22,6 @@ export interface AiResult {
   chunkCount: number;
 }
 
-/** Per-page AI overrides. Any unset field falls back to the global setting. */
 export interface PageOverrides {
   mode?: AiMode;
   language?: string;
@@ -31,7 +31,6 @@ export interface PageOverrides {
   memory?: boolean;
 }
 
-/** Lean page text — only what's needed after extraction. */
 export interface StoredPage {
   pageNumber: number;
   text: string;
@@ -39,24 +38,37 @@ export interface StoredPage {
   garbageRatio?: number;
 }
 
-/** Per-page AI state stored in IndexedDB. */
 export interface PageAi {
   pageNumber: number;
   status: PageStatus;
-  /** Custom (user-edited) request payload. If set, sent verbatim. */
   customRequest?: Record<string, unknown> | null;
-  /** Marks customRequest as user-modified — auto-regen is suppressed. */
   isCustom?: boolean;
-  /** Last AI text result for this page. */
   result?: string;
   error?: string;
   overrides?: PageOverrides;
-  /** Hash of effective settings used to produce `result`. Skip-on-rerun key. */
   settingsHash?: string;
   updatedAt?: number;
 }
 
-/** Stable hash of the settings tuple that controls AI output. */
+/** Per-page data record stored independently for memory-friendly lazy loading. */
+export interface PageDataRecord {
+  key: string;
+  docId: string;
+  pageNumber: number;
+  text: string;
+  columns: number;
+  garbageRatio: number;
+  pageAi?: PageAi;
+}
+
+/** Lightweight summary of AI state across pages — used for headers/badges only. */
+export interface PageAiSummaryEntry {
+  status: PageStatus;
+  hasResult: boolean;
+  isCustom?: boolean;
+  settingsHash?: string;
+}
+
 export function computeSettingsHash(input: {
   modelId: string;
   mode: string;
@@ -76,21 +88,22 @@ export function computeSettingsHash(input: {
 }
 
 /**
- * Document record — lightweight metadata + text only.
- * PDF binary is stored separately in the "blobs" store and loaded on-demand.
+ * Document metadata only. Page text and AI state are stored separately
+ * in the `pageData` store (keyed by `${id}:${nnnnnn}`).
  */
 export interface DocRecord {
   id: string;
   fileName: string;
   fileSize: number;
-  pages: StoredPage[] | null;
+  pages: StoredPage[] | null; // legacy — always null after v6 migration
   pageCount: number;
   createdAt: number;
   lastOpenedAt: number;
-  /** Legacy whole-document AI results — kept so old docs don't lose data. */
   aiResults?: AiResult[];
-  /** Per-page AI state, keyed by pageNumber. */
+  /** @deprecated kept on the type for back-compat; not loaded into memory after v6. */
   pageAi?: Record<number, PageAi>;
+  /** Cached count of pages with status === "done". */
+  aiDoneCount?: number;
 }
 
 export interface DocSummary {
@@ -163,24 +176,21 @@ async function safePut(d: IDBPDatabase, store: string, value: unknown, key?: IDB
   }
 }
 
-/* ---------- Lean page conversion ---------- */
-// Strip heavy TextItem[] arrays — only store {pageNumber, text, columns}
+/* ---------- Page key helpers ---------- */
 
-function toLeanPages(pages: PageExtraction[]): StoredPage[] {
-  return pages.map((p) => ({
-    pageNumber: p.pageNumber,
-    text: p.text,
-    columns: p.columns,
-    garbageRatio: p.garbageRatio,
-  }));
+function pageKey(docId: string, n: number): string {
+  return `${docId}:${String(n).padStart(6, "0")}`;
 }
 
-/** Convert StoredPage back to PageExtraction (items=[] since we stripped them) */
+function pageRange(docId: string): IDBKeyRange {
+  return IDBKeyRange.bound(`${docId}:`, `${docId}:\uffff`);
+}
+
 export function toPageExtraction(sp: StoredPage): PageExtraction {
-  return { 
-    pageNumber: sp.pageNumber, 
-    text: sp.text, 
-    columns: sp.columns, 
+  return {
+    pageNumber: sp.pageNumber,
+    text: sp.text,
+    columns: sp.columns,
     items: [],
     garbageRatio: sp.garbageRatio ?? 0,
   };
@@ -190,36 +200,16 @@ export function toPageExtraction(sp: StoredPage): PageExtraction {
 
 function normalizeDoc(raw: any): DocRecord | undefined {
   if (!raw || typeof raw !== "object" || !raw.id || !raw.fileName) return undefined;
-
-  // Strip legacy `data` field if migrating from v4
-  const pages = Array.isArray(raw.pages)
-    ? raw.pages.map((p: any) => ({
-        pageNumber: p.pageNumber ?? 0,
-        text: p.text ?? "",
-        columns: p.columns ?? 1,
-        garbageRatio: p.garbageRatio ?? 0,
-      }))
-    : null;
-
-  // Strip lastSentRequest from pageAi to save space
-  let pageAi: Record<number, PageAi> = {};
-  if (raw.pageAi && typeof raw.pageAi === "object") {
-    for (const [k, v] of Object.entries(raw.pageAi) as [string, any][]) {
-      const { lastSentRequest: _, ...rest } = v;
-      pageAi[Number(k)] = rest;
-    }
-  }
-
   return {
     id: raw.id,
     fileName: raw.fileName,
     fileSize: raw.fileSize ?? 0,
-    pages,
-    pageCount: raw.pageCount ?? pages?.length ?? 0,
+    pages: null,
+    pageCount: raw.pageCount ?? 0,
     createdAt: raw.createdAt ?? 0,
     lastOpenedAt: raw.lastOpenedAt ?? 0,
     aiResults: Array.isArray(raw.aiResults) ? raw.aiResults : [],
-    pageAi,
+    aiDoneCount: typeof raw.aiDoneCount === "number" ? raw.aiDoneCount : 0,
   };
 }
 
@@ -229,63 +219,84 @@ let dbPromise: Promise<IDBPDatabase> | null = null;
 function db() {
   if (!dbPromise) {
     dbPromise = openDB(DB_NAME, DB_VERSION, {
-      upgrade(d, oldVersion) {
+      upgrade(d, oldVersion, _newVersion, tx) {
         if (!d.objectStoreNames.contains(STORE)) {
           d.createObjectStore(STORE, { keyPath: "id" });
         }
         if (!d.objectStoreNames.contains(META)) {
           d.createObjectStore(META);
         }
-        // v5: separate blob store for PDF binaries
         if (!d.objectStoreNames.contains(BLOBS)) {
           d.createObjectStore(BLOBS);
         }
-        // Migrate v4→v5: move `data` from docs to blobs store
-        // This happens in the versionchange transaction automatically.
-        // We'll do lazy migration in getDoc/getDocBinary instead since
-        // we can't do async reads in upgrade.
+        if (!d.objectStoreNames.contains(PAGES)) {
+          d.createObjectStore(PAGES, { keyPath: "key" });
+        }
+
+        // v5→v6: split embedded pages[] and pageAi map into per-page records.
+        if (oldVersion > 0 && oldVersion < 6) {
+          (async () => {
+            const docsStore = tx.objectStore(STORE);
+            const pagesStore = tx.objectStore(PAGES);
+            let cursor = await docsStore.openCursor();
+            while (cursor) {
+              const doc: any = cursor.value;
+              const list: any[] = Array.isArray(doc.pages) ? doc.pages : [];
+              const aiMap: Record<string, any> = doc.pageAi ?? {};
+              let done = 0;
+              for (const p of list) {
+                const ai = aiMap[p.pageNumber];
+                if (ai?.status === "done") done++;
+                const rec: PageDataRecord = {
+                  key: pageKey(doc.id, p.pageNumber),
+                  docId: doc.id,
+                  pageNumber: p.pageNumber,
+                  text: p.text ?? "",
+                  columns: p.columns ?? 1,
+                  garbageRatio: p.garbageRatio ?? 0,
+                  pageAi: ai
+                    ? (() => {
+                        const { lastSentRequest: _, ...rest } = ai;
+                        return { ...rest, pageNumber: p.pageNumber } as PageAi;
+                      })()
+                    : undefined,
+                };
+                pagesStore.put(rec);
+              }
+              // Pages-less AI entries (rare): persist with empty text.
+              for (const [k, v] of Object.entries(aiMap)) {
+                const n = Number(k);
+                if (!list.some((p) => p.pageNumber === n)) {
+                  const { lastSentRequest: _, ...rest } = v as any;
+                  pagesStore.put({
+                    key: pageKey(doc.id, n),
+                    docId: doc.id,
+                    pageNumber: n,
+                    text: "",
+                    columns: 1,
+                    garbageRatio: 0,
+                    pageAi: { ...rest, pageNumber: n } as PageAi,
+                  } as PageDataRecord);
+                }
+              }
+              const lean: any = { ...doc };
+              delete lean.pages;
+              delete lean.pageAi;
+              delete lean.data;
+              delete lean.scrollTop;
+              lean.aiDoneCount = done;
+              lean.pageCount = doc.pageCount ?? list.length ?? 0;
+              docsStore.put(lean);
+              cursor = await cursor.continue();
+            }
+          })().catch((e) => {
+            console.error("v6 migration failed", e);
+          });
+        }
       },
     });
   }
   return dbPromise;
-}
-
-/* ---------- Lazy v4→v5 migration ---------- */
-// Old records have `data` embedded in the doc. On first access we:
-// 1. Move binary to blobs store
-// 2. Strip `data` + `items[]` from doc record
-
-async function migrateIfNeeded(d: IDBPDatabase, raw: any): Promise<void> {
-  if (!raw || !raw.id) return;
-  if (!raw.data || !(raw.data instanceof ArrayBuffer) || raw.data.byteLength === 0) return;
-
-  // Move binary to blobs store
-  try {
-    await safePut(d, BLOBS, raw.data, raw.id);
-  } catch {
-    // If quota exceeded, keep embedded — don't lose data
-    return;
-  }
-
-  // Strip data + items from doc
-  const lean = { ...raw, data: undefined };
-  if (Array.isArray(lean.pages)) {
-    lean.pages = lean.pages.map((p: any) => ({
-      pageNumber: p.pageNumber,
-      text: p.text,
-      columns: p.columns,
-      garbageRatio: p.garbageRatio ?? 0,
-    }));
-  }
-  // Strip lastSentRequest from pageAi
-  if (lean.pageAi && typeof lean.pageAi === "object") {
-    for (const k of Object.keys(lean.pageAi)) {
-      delete lean.pageAi[k].lastSentRequest;
-    }
-  }
-  delete lean.data;
-  delete lean.scrollTop;
-  await safePut(d, STORE, lean);
 }
 
 /* ---------- Public API ---------- */
@@ -300,13 +311,11 @@ export async function listDocs(): Promise<DocSummary[]> {
       id: r.id,
       fileName: r.fileName,
       fileSize: r.fileSize,
-      pageCount: r.pageCount ?? r.pages?.length ?? 0,
+      pageCount: r.pageCount ?? 0,
       createdAt: r.createdAt ?? 0,
       lastOpenedAt: r.lastOpenedAt ?? 0,
-      hasExtraction: !!r.pages?.length,
-      aiResultCount:
-        (r.aiResults?.length ?? 0) +
-        Object.values(r.pageAi ?? {}).filter((p) => p.status === "done").length,
+      hasExtraction: (r.pageCount ?? 0) > 0,
+      aiResultCount: (r.aiResults?.length ?? 0) + (r.aiDoneCount ?? 0),
     }))
     .sort((a, b) => b.lastOpenedAt - a.lastOpenedAt);
 }
@@ -315,37 +324,37 @@ export async function getDoc(id: string): Promise<DocRecord | undefined> {
   const d = await db();
   const raw = await d.get(STORE, id);
   if (!raw) return undefined;
-  // Lazy migration: move embedded binary to separate store
-  await migrateIfNeeded(d, raw);
   return normalizeDoc(raw);
 }
 
-/**
- * Load PDF binary on-demand from the blobs store.
- * Returns null if no binary is stored (e.g. deleted or never saved).
- */
-export async function getDocBinary(id: string): Promise<ArrayBuffer | null> {
+/** Load PDF binary as a Blob (cheaper than ArrayBuffer for pdf.js). */
+export async function getDocBlob(id: string): Promise<Blob | null> {
   const d = await db();
-  // Try new blobs store first
-  const blob = await d.get(BLOBS, id);
-  if (blob instanceof ArrayBuffer) return blob;
-  // Fallback: check if still embedded in legacy doc
+  const v = await d.get(BLOBS, id);
+  if (v instanceof Blob) return v;
+  if (v instanceof ArrayBuffer) return new Blob([v], { type: "application/pdf" });
+  // legacy: still embedded?
   const raw = await d.get(STORE, id);
   if (raw?.data instanceof ArrayBuffer && raw.data.byteLength > 0) {
-    return raw.data;
+    return new Blob([raw.data], { type: "application/pdf" });
   }
   return null;
 }
 
-export async function createDoc(file: File, data: ArrayBuffer): Promise<DocRecord> {
+/** @deprecated prefer getDocBlob — kept for callers that still need ArrayBuffer (extraction). */
+export async function getDocBinary(id: string): Promise<ArrayBuffer | null> {
+  const blob = await getDocBlob(id);
+  if (!blob) return null;
+  return await blob.arrayBuffer();
+}
+
+export async function createDoc(file: File, data: ArrayBuffer | Blob): Promise<DocRecord> {
   const d = await db();
   const id = crypto.randomUUID();
   const now = Date.now();
-
-  // Store binary in separate blobs store
-  await safePut(d, BLOBS, data, id);
-
-  // Store lean metadata (no binary, no items)
+  // Prefer storing as Blob so we don't pin a separate ArrayBuffer in memory later.
+  const blob = data instanceof Blob ? data : new Blob([data], { type: file.type || "application/pdf" });
+  await safePut(d, BLOBS, blob, id);
   const rec: DocRecord = {
     id,
     fileName: file.name,
@@ -355,31 +364,106 @@ export async function createDoc(file: File, data: ArrayBuffer): Promise<DocRecor
     createdAt: now,
     lastOpenedAt: now,
     aiResults: [],
-    pageAi: {},
+    aiDoneCount: 0,
   };
   await safePut(d, STORE, rec);
   await setLastOpened(id);
   return rec;
 }
 
-export async function updateDoc(id: string, patch: Partial<DocRecord & { pages: PageExtraction[] | StoredPage[] | null }>) {
+/** Patch top-level metadata. Pages[] is no longer accepted here — use writePages. */
+export async function updateDoc(id: string, patch: Partial<DocRecord>) {
   return withDocLock(id, async () => {
     const d = await db();
     const existing = normalizeDoc(await d.get(STORE, id));
     if (!existing) return;
-
-    // If pages are being updated, strip items to lean format
-    let leanPatch: any = { ...patch };
-    if (leanPatch.pages && Array.isArray(leanPatch.pages)) {
-      leanPatch.pages = leanPatch.pages.map((p: any) => ({
-        pageNumber: p.pageNumber,
-        text: p.text,
-        columns: p.columns ?? 1,
-        garbageRatio: p.garbageRatio ?? 0,
-      }));
-    }
-    await safePut(d, STORE, { ...existing, ...leanPatch });
+    const merged: any = { ...existing, ...patch };
+    delete merged.pages;
+    delete merged.pageAi;
+    await safePut(d, STORE, merged);
   });
+}
+
+/** Persist freshly-extracted pages, splitting them into individual records. */
+export async function writePages(id: string, pages: PageExtraction[] | StoredPage[]) {
+  return withDocLock(id, async () => {
+    const d = await db();
+    const existing = normalizeDoc(await d.get(STORE, id));
+    if (!existing) return;
+    const tx = d.transaction(PAGES, "readwrite");
+    try {
+      // Drop any previous page records for this doc.
+      let cur = await tx.store.openCursor(pageRange(id));
+      while (cur) {
+        await cur.delete();
+        cur = await cur.continue();
+      }
+      for (const p of pages) {
+        const rec: PageDataRecord = {
+          key: pageKey(id, p.pageNumber),
+          docId: id,
+          pageNumber: p.pageNumber,
+          text: (p as StoredPage).text ?? "",
+          columns: (p as StoredPage).columns ?? 1,
+          garbageRatio: (p as StoredPage).garbageRatio ?? 0,
+        };
+        await tx.store.put(rec);
+      }
+      await tx.done;
+    } catch (e) {
+      if (e instanceof DOMException && (e.name === "QuotaExceededError" || e.code === 22)) {
+        throw new StorageError("Storage quota exceeded. Delete some documents to free space.", "QUOTA_EXCEEDED");
+      }
+      throw new StorageError(
+        `Failed to write pages: ${e instanceof Error ? e.message : "Unknown"}`,
+        "WRITE_FAILED",
+      );
+    }
+    await safePut(d, STORE, { ...existing, pageCount: pages.length });
+  });
+}
+
+/** Read a single page's text and AI state. */
+export async function getPageData(docId: string, pageNumber: number): Promise<PageDataRecord | undefined> {
+  const d = await db();
+  const v = await d.get(PAGES, pageKey(docId, pageNumber));
+  return v as PageDataRecord | undefined;
+}
+
+/** Read every page's text+AI for a doc. Heavy — use only for export. */
+export async function getAllPages(docId: string): Promise<PageDataRecord[]> {
+  const d = await db();
+  const all = (await d.getAll(PAGES, pageRange(docId))) as PageDataRecord[];
+  return all.sort((a, b) => a.pageNumber - b.pageNumber);
+}
+
+/** Lightweight per-page AI summary for headers/badges (no `result` text). */
+export async function getPageAiSummary(docId: string): Promise<Record<number, PageAiSummaryEntry>> {
+  const d = await db();
+  const all = (await d.getAll(PAGES, pageRange(docId))) as PageDataRecord[];
+  const out: Record<number, PageAiSummaryEntry> = {};
+  for (const p of all) {
+    if (p.pageAi) {
+      out[p.pageNumber] = {
+        status: p.pageAi.status,
+        hasResult: !!p.pageAi.result,
+        isCustom: p.pageAi.isCustom,
+        settingsHash: p.pageAi.settingsHash,
+      };
+    }
+  }
+  return out;
+}
+
+/** Lightweight metadata for every page (no text, no AI). Used for virtualization headers. */
+export async function getPageMetas(
+  docId: string,
+): Promise<{ pageNumber: number; columns: number; garbageRatio: number }[]> {
+  const d = await db();
+  const all = (await d.getAll(PAGES, pageRange(docId))) as PageDataRecord[];
+  return all
+    .map((p) => ({ pageNumber: p.pageNumber, columns: p.columns, garbageRatio: p.garbageRatio }))
+    .sort((a, b) => a.pageNumber - b.pageNumber);
 }
 
 export async function touchDoc(id: string) {
@@ -390,8 +474,14 @@ export async function touchDoc(id: string) {
 export async function deleteDoc(id: string) {
   const d = await db();
   await d.delete(STORE, id);
-  // Also delete the blob
   try { await d.delete(BLOBS, id); } catch { /* ignore */ }
+  // Remove all per-page records.
+  try {
+    const tx = d.transaction(PAGES, "readwrite");
+    let cur = await tx.store.openCursor(pageRange(id));
+    while (cur) { await cur.delete(); cur = await cur.continue(); }
+    await tx.done;
+  } catch { /* ignore */ }
   const last = await getLastOpened();
   if (last === id) await setLastOpened(null);
 }
@@ -416,18 +506,37 @@ export async function deleteAiResult(docId: string, resultId: string) {
   });
 }
 
-/** Merge a partial PageAi for a single page. Fast path used during streaming. */
+/** Merge a partial PageAi for a single page. Updates the cached doc-level done count. */
 export async function upsertPageAi(docId: string, pageNumber: number, patch: Partial<PageAi>) {
   return withDocLock(docId, async () => {
     const d = await db();
     const existing = normalizeDoc(await d.get(STORE, docId));
     if (!existing) return;
-    const pageAi = { ...(existing.pageAi ?? {}) };
-    const prev = pageAi[pageNumber] ?? { pageNumber, status: "idle" as PageStatus };
-    // Strip lastSentRequest — don't persist it
-    const { lastSentRequest: _, ...cleanPatch } = patch as any;
-    pageAi[pageNumber] = { ...prev, ...cleanPatch, pageNumber, updatedAt: Date.now() };
-    await safePut(d, STORE, { ...existing, pageAi });
+
+    const key = pageKey(docId, pageNumber);
+    const current = ((await d.get(PAGES, key)) as PageDataRecord | undefined) ?? {
+      key,
+      docId,
+      pageNumber,
+      text: "",
+      columns: 1,
+      garbageRatio: 0,
+    };
+    const prevAi: PageAi = current.pageAi ?? { pageNumber, status: "idle" };
+    const { lastSentRequest: _drop, ...cleanPatch } = patch as any;
+    const wasDone = prevAi.status === "done";
+    const nextAi: PageAi = { ...prevAi, ...cleanPatch, pageNumber, updatedAt: Date.now() };
+    const isDone = nextAi.status === "done";
+    await safePut(d, PAGES, { ...current, pageAi: nextAi });
+
+    // Maintain cached done-count
+    let delta = 0;
+    if (!wasDone && isDone) delta = 1;
+    else if (wasDone && !isDone) delta = -1;
+    if (delta !== 0) {
+      const nextDone = Math.max(0, (existing.aiDoneCount ?? 0) + delta);
+      await safePut(d, STORE, { ...existing, aiDoneCount: nextDone });
+    }
   });
 }
 

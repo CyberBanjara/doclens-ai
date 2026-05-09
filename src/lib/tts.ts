@@ -157,6 +157,8 @@ export interface TtsController {
   pause: () => void;
   resume: () => void;
   stop: () => void;
+  /** Cancel any pending speech and release the internal utterance reference. */
+  destroy: () => void;
 }
 
 let activeOwner: symbol | null = null;
@@ -189,10 +191,12 @@ export function createTtsController(text: string, opts: {
 }): TtsController {
   const owner = Symbol("tts");
   const synth = typeof window !== "undefined" ? window.speechSynthesis : null;
+  let currentUtter: SpeechSynthesisUtterance | null = null;
+  let destroyed = false;
 
   return {
     play: () => {
-      if (!synth) return;
+      if (!synth || destroyed) return;
       synth.cancel();
       activeOwner = owner;
       notify();
@@ -206,15 +210,15 @@ export function createTtsController(text: string, opts: {
       const pitch = getTtsPitch();
       const voices = synth.getVoices();
       let voice = voices.find((v) => v.name === voiceName) ?? null;
-      // Fallback: any voice matching the language code
       if (!voice && opts.language) {
         const code = langKey(opts.language).split("-")[0];
         voice = voices.find((v) => v.lang.toLowerCase().startsWith(code)) ?? null;
       }
       let i = 0;
       const speakNext = () => {
-        if (activeOwner !== owner) return;
+        if (destroyed || activeOwner !== owner) return;
         if (i >= chunks.length) {
+          currentUtter = null;
           opts.onState("ended");
           activeOwner = null;
           notify();
@@ -230,6 +234,7 @@ export function createTtsController(text: string, opts: {
             opts.onError?.(e.error);
           }
         };
+        currentUtter = u;
         synth.speak(u);
       };
       opts.onState("playing");
@@ -241,7 +246,7 @@ export function createTtsController(text: string, opts: {
       opts.onState("paused");
     },
     resume: () => {
-      if (!synth || activeOwner !== owner) return;
+      if (!synth || destroyed || activeOwner !== owner) return;
       synth.resume();
       opts.onState("playing");
     },
@@ -252,7 +257,17 @@ export function createTtsController(text: string, opts: {
         activeOwner = null;
         notify();
       }
+      currentUtter = null;
       opts.onState("idle");
+    },
+    destroy: () => {
+      destroyed = true;
+      if (synth && activeOwner === owner) {
+        synth.cancel();
+        activeOwner = null;
+        notify();
+      }
+      currentUtter = null;
     },
   };
 }
