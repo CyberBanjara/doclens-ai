@@ -1,9 +1,9 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Link } from "@tanstack/react-router";
 import { toast } from "sonner";
+import { useVirtualizer } from "@tanstack/react-virtual";
 import { JsonView } from "./JsonView";
 import { estimateTokens } from "@/lib/models";
-import type { PageExtraction } from "@/lib/pdf";
 import {
   buildPagePayload,
   fetchModels,
@@ -21,7 +21,14 @@ import {
   type GlobalMode,
   type ORModel,
 } from "@/lib/openrouter";
-import { computeSettingsHash, type PageAi, type PageOverrides } from "@/lib/storage";
+import {
+  computeSettingsHash,
+  getPageData,
+  upsertPageAi,
+  type PageAi,
+  type PageAiSummaryEntry,
+  type PageOverrides,
+} from "@/lib/storage";
 import {
   createTtsController,
   isTtsSupported,
@@ -29,15 +36,29 @@ import {
 } from "@/lib/tts";
 
 interface Props {
-  pages: PageExtraction[];
-  pageAi: Record<number, PageAi>;
-  onUpdatePage: (pageNumber: number, patch: Partial<PageAi>) => void;
+  docId: string;
+  pageCount: number;
+  aiSummary: Record<number, PageAiSummaryEntry>;
+  onPageAiChange: (pageNumber: number, entry: PageAiSummaryEntry | null) => void;
 }
 
 const STYLES = ["Neutral", "Formal", "Casual", "Academic", "Concise", "Detailed", "Friendly"];
 const QUICK_LANGS = ["English", "Arabic", "French", "Hindi", "Spanish", "Japanese"];
 
-function effective(globals: ReturnType<typeof readGlobals>, ov?: PageOverrides) {
+/** Throttle setState to at most once per `ms` while leading-edge fires immediately. */
+const STREAM_FLUSH_MS = 150;
+
+interface Globals {
+  mode: GlobalMode;
+  language: string;
+  modelId: string;
+  style: string;
+  temperature: number;
+  memory: boolean;
+  sequential: boolean;
+}
+
+function effective(globals: Globals, ov?: PageOverrides) {
   return {
     mode: ov?.mode ?? globals.mode,
     language: ov?.language ?? globals.language,
@@ -48,7 +69,7 @@ function effective(globals: ReturnType<typeof readGlobals>, ov?: PageOverrides) 
   };
 }
 
-function readGlobals() {
+function readGlobals(): Globals {
   return {
     mode: getMode(),
     language: getOutputLanguage(),
@@ -60,35 +81,40 @@ function readGlobals() {
   };
 }
 
-export function PageWorkstation({ pages, pageAi, onUpdatePage }: Props) {
-  const [globals, setGlobals] = useState(readGlobals);
+function summarize(ai: PageAi): PageAiSummaryEntry {
+  return {
+    status: ai.status,
+    hasResult: !!ai.result,
+    isCustom: ai.isCustom,
+    settingsHash: ai.settingsHash,
+  };
+}
+
+export function PageWorkstation({ docId, pageCount, aiSummary, onPageAiChange }: Props) {
+  const [globals, setGlobals] = useState<Globals>(readGlobals);
   const [models, setModels] = useState<ORModel[]>([]);
   const [runningPages, setRunningPages] = useState<Set<number>>(new Set());
+  /** Live streaming buffers (debounced via setInterval flusher). */
   const [streamBufs, setStreamBufs] = useState<Record<number, string>>({});
+
   const abortMap = useRef<Map<number, AbortController>>(new Map());
   const runAllRef = useRef<{ cancelled: boolean } | null>(null);
   const [runAllActive, setRunAllActive] = useState(false);
   const [runAllProgress, setRunAllProgress] = useState<{ current: number; total: number; errors: number } | null>(null);
-  const scrollRef = useRef<HTMLDivElement>(null);
-  const cardRefs = useRef<Map<number, HTMLDivElement>>(new Map());
   const mountedRef = useRef(true);
 
-  // Keep refs to latest values so async callbacks don't use stale closures
-  const pageAiRef = useRef(pageAi);
-  pageAiRef.current = pageAi;
+  const aiSummaryRef = useRef(aiSummary);
+  aiSummaryRef.current = aiSummary;
   const globalsRef = useRef(globals);
   globalsRef.current = globals;
-  const onUpdatePageRef = useRef(onUpdatePage);
-  onUpdatePageRef.current = onUpdatePage;
-  const pagesRef = useRef(pages);
-  pagesRef.current = pages;
+  const onPageAiChangeRef = useRef(onPageAiChange);
+  onPageAiChangeRef.current = onPageAiChange;
 
-  // Cleanup: abort all in-flight requests on unmount
+  // Cleanup: abort everything on unmount
   useEffect(() => {
     mountedRef.current = true;
     return () => {
       mountedRef.current = false;
-      // Abort all running requests when component unmounts
       abortMap.current.forEach((c) => c.abort());
       abortMap.current.clear();
       if (runAllRef.current) runAllRef.current.cancelled = true;
@@ -107,128 +133,133 @@ export function PageWorkstation({ pages, pageAi, onUpdatePage }: Props) {
     fetchModels(k).then(setModels).catch(() => {});
   }, []);
 
-
   const hasKey = !!getKey();
 
-  if (!hasKey || !globals.modelId) {
-    return (
-      <div className="flex h-full items-center justify-center px-6 text-center text-sm text-muted-foreground">
-        <div>
-          <div className="font-mono text-[11px] uppercase tracking-widest">setup required</div>
-          <p className="mt-2">
-            {!hasKey ? "Add your OpenRouter API key to run AI operations." : "Select a model in Settings."}
-          </p>
-          <Link
-            to="/settings"
-            className="mt-4 inline-block rounded-md bg-primary px-3 py-1.5 font-mono text-[11px] uppercase tracking-widest text-primary-foreground"
-          >
-            open settings
-          </Link>
-        </div>
-      </div>
-    );
-  }
+  /* ---------- Per-page execution ---------- */
 
-  if (pages.length === 0) {
-    return (
-      <div className="flex h-full items-center justify-center px-6 text-center text-sm text-muted-foreground">
-        Extract the document first to populate per-page containers.
-      </div>
-    );
-  }
+  const runPage = useCallback(
+    async (pageNumber: number, prevExcerpt?: string): Promise<string | undefined> => {
+      const key = getKey();
+      const currentGlobals = globalsRef.current;
+      if (!key) return;
 
-  const runPage = async (pageNumber: number, prevExcerpt?: string) => {
-    // Read fresh values from refs to avoid stale closures
-    const page = pagesRef.current.find((p) => p.pageNumber === pageNumber);
-    if (!page) return;
-    const state = pageAiRef.current[pageNumber];
-    const currentGlobals = globalsRef.current;
-    const eff = effective(currentGlobals, state?.overrides);
-    const key = getKey();
-    if (!key || !eff.modelId) return;
+      // Read fresh page text + state from IDB
+      const pageRec = await getPageData(docId, pageNumber);
+      if (!pageRec) return;
+      const state: PageAi = pageRec.pageAi ?? { pageNumber, status: "idle" };
+      const eff = effective(currentGlobals, state.overrides);
+      if (!eff.modelId) return;
 
-    // Stop any TTS for this page on re-run
-    stopAllTts();
+      stopAllTts();
 
-    let payload: Record<string, unknown>;
-    if (state?.isCustom && state.customRequest) {
-      payload = { ...state.customRequest, stream: true };
-    } else {
-      payload = buildPagePayload({
+      let payload: Record<string, unknown>;
+      if (state.isCustom && state.customRequest) {
+        payload = { ...state.customRequest, stream: true };
+      } else {
+        payload = buildPagePayload({
+          modelId: eff.modelId,
+          mode: eff.mode,
+          language: eff.language,
+          style: eff.style,
+          temperature: eff.temperature,
+          pageNumber,
+          pageText: pageRec.text,
+          previousExcerpt: eff.memory ? prevExcerpt : undefined,
+        });
+      }
+
+      const hash = computeSettingsHash({
         modelId: eff.modelId,
-        mode: eff.mode as GlobalMode,
+        mode: eff.mode,
         language: eff.language,
         style: eff.style,
         temperature: eff.temperature,
-        pageNumber,
-        pageText: page.text,
-        previousExcerpt: eff.memory ? prevExcerpt : undefined,
+        memory: eff.memory,
       });
-    }
 
-    const hash = computeSettingsHash({
-      modelId: eff.modelId,
-      mode: eff.mode,
-      language: eff.language,
-      style: eff.style,
-      temperature: eff.temperature,
-      memory: eff.memory,
-    });
-
-    const ctrl = new AbortController();
-    abortMap.current.set(pageNumber, ctrl);
-    if (mountedRef.current) {
-      setRunningPages((s) => new Set(s).add(pageNumber));
-      setStreamBufs((b) => ({ ...b, [pageNumber]: "" }));
-    }
-    onUpdatePageRef.current(pageNumber, { status: "running", error: undefined });
-
-    let buf = "";
-    try {
-      await streamCompletion({
-        key,
-        payload,
-        signal: ctrl.signal,
-        onDelta: (d) => {
-          buf += d;
-          if (mountedRef.current) {
-            setStreamBufs((b) => ({ ...b, [pageNumber]: buf }));
-          }
-        },
-      });
-      // Save result — this persists to IndexedDB even if unmounted
-      onUpdatePageRef.current(pageNumber, { status: "done", result: buf, error: undefined, settingsHash: hash });
-    } catch (e) {
-      if ((e as Error).name === "AbortError") {
-        onUpdatePageRef.current(pageNumber, { status: state?.result ? "done" : "idle" });
-      } else {
-        onUpdatePageRef.current(pageNumber, { status: "error", error: e instanceof Error ? e.message : "Unknown error" });
-      }
-    } finally {
-      abortMap.current.delete(pageNumber);
+      const ctrl = new AbortController();
+      abortMap.current.set(pageNumber, ctrl);
       if (mountedRef.current) {
-        setRunningPages((s) => {
-          const n = new Set(s);
-          n.delete(pageNumber);
-          return n;
-        });
-        // Clear stream buffer after completion
-        setStreamBufs((b) => {
-          const next = { ...b };
-          delete next[pageNumber];
-          return next;
-        });
+        setRunningPages((s) => new Set(s).add(pageNumber));
+        setStreamBufs((b) => ({ ...b, [pageNumber]: "" }));
       }
-    }
-    return buf;
-  };
 
-  const cancelPage = (pageNumber: number) => {
+      // Persist running status
+      await upsertPageAi(docId, pageNumber, { status: "running", error: undefined });
+      onPageAiChangeRef.current(pageNumber, { status: "running", hasResult: !!state.result, isCustom: state.isCustom, settingsHash: state.settingsHash });
+
+      // ---- Debounced UI flush ----
+      const bufferRef = { current: "" };
+      const lastUiRef = { current: "" };
+      const flushUi = () => {
+        if (!mountedRef.current) return;
+        if (bufferRef.current === lastUiRef.current) return;
+        lastUiRef.current = bufferRef.current;
+        const snapshot = bufferRef.current;
+        setStreamBufs((b) => ({ ...b, [pageNumber]: snapshot }));
+      };
+      const flushTimer = setInterval(flushUi, STREAM_FLUSH_MS);
+
+      try {
+        await streamCompletion({
+          key,
+          payload,
+          signal: ctrl.signal,
+          onDelta: (d) => {
+            bufferRef.current += d;
+          },
+        });
+        // Final flush before persisting to IDB
+        flushUi();
+        const result = bufferRef.current;
+        await upsertPageAi(docId, pageNumber, {
+          status: "done",
+          result,
+          error: undefined,
+          settingsHash: hash,
+        });
+        onPageAiChangeRef.current(pageNumber, summarize({
+          ...state,
+          status: "done",
+          result,
+          settingsHash: hash,
+        }));
+        return result;
+      } catch (e) {
+        if ((e as Error).name === "AbortError") {
+          const status = state.result ? "done" : "idle";
+          await upsertPageAi(docId, pageNumber, { status });
+          onPageAiChangeRef.current(pageNumber, { ...summarize(state), status });
+        } else {
+          const err = e instanceof Error ? e.message : "Unknown error";
+          await upsertPageAi(docId, pageNumber, { status: "error", error: err });
+          onPageAiChangeRef.current(pageNumber, { ...summarize(state), status: "error" });
+        }
+      } finally {
+        clearInterval(flushTimer);
+        abortMap.current.delete(pageNumber);
+        if (mountedRef.current) {
+          setRunningPages((s) => {
+            const n = new Set(s);
+            n.delete(pageNumber);
+            return n;
+          });
+          setStreamBufs((b) => {
+            const next = { ...b };
+            delete next[pageNumber];
+            return next;
+          });
+        }
+      }
+    },
+    [docId],
+  );
+
+  const cancelPage = useCallback((pageNumber: number) => {
     abortMap.current.get(pageNumber)?.abort();
-  };
+  }, []);
 
   const handleRunAll = async () => {
-    // Read globals fresh at the start of batch
     const freshGlobals = readGlobals();
     setGlobals(freshGlobals);
 
@@ -237,17 +268,22 @@ export function PageWorkstation({ pages, pageAi, onUpdatePage }: Props) {
     let prev: string | undefined;
     let errorCount = 0;
     let processedCount = 0;
-    const totalToProcess = pagesRef.current.length;
+    const totalToProcess = pageCount;
 
     if (mountedRef.current) setRunAllProgress({ current: 0, total: totalToProcess, errors: 0 });
 
     if (freshGlobals.sequential) {
-      for (const page of pagesRef.current) {
+      for (let n = 1; n <= pageCount; n++) {
         if (runAllRef.current?.cancelled) break;
-        // Read fresh state from ref, not stale closure
-        const state = pageAiRef.current[page.pageNumber];
+        const pageRec = await getPageData(docId, n);
+        if (!pageRec) {
+          processedCount++;
+          if (mountedRef.current) setRunAllProgress({ current: processedCount, total: totalToProcess, errors: errorCount });
+          continue;
+        }
+        const state: PageAi = pageRec.pageAi ?? { pageNumber: n, status: "idle" };
         const currentGlobals = readGlobals();
-        const eff = effective(currentGlobals, state?.overrides);
+        const eff = effective(currentGlobals, state.overrides);
         const hash = computeSettingsHash({
           modelId: eff.modelId,
           mode: eff.mode,
@@ -257,7 +293,7 @@ export function PageWorkstation({ pages, pageAi, onUpdatePage }: Props) {
           memory: eff.memory,
         });
         const skip =
-          state?.status === "done" &&
+          state.status === "done" &&
           state.settingsHash === hash &&
           !state.isCustom &&
           !!state.result;
@@ -268,7 +304,7 @@ export function PageWorkstation({ pages, pageAi, onUpdatePage }: Props) {
           continue;
         }
         try {
-          const out = await runPage(page.pageNumber, prev);
+          const out = await runPage(n, prev);
           if (out && eff.memory) prev = memoryExcerpt(out);
         } catch {
           errorCount++;
@@ -277,13 +313,15 @@ export function PageWorkstation({ pages, pageAi, onUpdatePage }: Props) {
         if (mountedRef.current) setRunAllProgress({ current: processedCount, total: totalToProcess, errors: errorCount });
       }
     } else {
-      // Parallel mode with incremental progress tracking
       let completed = 0;
+      const numbers = Array.from({ length: pageCount }, (_, i) => i + 1);
       const results = await Promise.allSettled(
-        pagesRef.current.map(async (p) => {
-          const state = pageAiRef.current[p.pageNumber];
+        numbers.map(async (n) => {
+          const pageRec = await getPageData(docId, n);
+          if (!pageRec) return undefined;
+          const state: PageAi = pageRec.pageAi ?? { pageNumber: n, status: "idle" };
           const currentGlobals = readGlobals();
-          const eff = effective(currentGlobals, state?.overrides);
+          const eff = effective(currentGlobals, state.overrides);
           const hash = computeSettingsHash({
             modelId: eff.modelId,
             mode: eff.mode,
@@ -292,13 +330,13 @@ export function PageWorkstation({ pages, pageAi, onUpdatePage }: Props) {
             temperature: eff.temperature,
             memory: eff.memory,
           });
-          if (state?.status === "done" && state.settingsHash === hash && !state.isCustom && state.result) {
+          if (state.status === "done" && state.settingsHash === hash && !state.isCustom && state.result) {
             completed++;
             if (mountedRef.current) setRunAllProgress({ current: completed, total: totalToProcess, errors: errorCount });
             return undefined;
           }
           try {
-            const result = await runPage(p.pageNumber);
+            const result = await runPage(n);
             completed++;
             if (mountedRef.current) setRunAllProgress({ current: completed, total: totalToProcess, errors: errorCount });
             return result;
@@ -313,7 +351,6 @@ export function PageWorkstation({ pages, pageAi, onUpdatePage }: Props) {
       errorCount = results.filter((r) => r.status === "rejected").length;
     }
 
-    // Show summary toast (safe even if unmounted — toast is global)
     if (runAllRef.current?.cancelled) {
       toast.info("Run All cancelled.", { duration: 3000 });
     } else if (errorCount > 0) {
@@ -337,7 +374,36 @@ export function PageWorkstation({ pages, pageAi, onUpdatePage }: Props) {
     abortMap.current.forEach((c) => c.abort());
   };
 
-  const doneCount = pages.filter((p) => pageAi[p.pageNumber]?.status === "done").length;
+  /* ---------- Empty / setup states ---------- */
+
+  if (!hasKey || !globals.modelId) {
+    return (
+      <div className="flex h-full items-center justify-center px-6 text-center text-sm text-muted-foreground">
+        <div>
+          <div className="font-mono text-[11px] uppercase tracking-widest">setup required</div>
+          <p className="mt-2">
+            {!hasKey ? "Add your OpenRouter API key to run AI operations." : "Select a model in Settings."}
+          </p>
+          <Link
+            to="/settings"
+            className="mt-4 inline-block rounded-md bg-primary px-3 py-1.5 font-mono text-[11px] uppercase tracking-widest text-primary-foreground"
+          >
+            open settings
+          </Link>
+        </div>
+      </div>
+    );
+  }
+
+  if (pageCount === 0) {
+    return (
+      <div className="flex h-full items-center justify-center px-6 text-center text-sm text-muted-foreground">
+        Extract the document first to populate per-page containers.
+      </div>
+    );
+  }
+
+  const doneCount = Object.values(aiSummary).filter((e) => e.status === "done").length;
 
   return (
     <div className="flex h-full flex-col">
@@ -345,7 +411,7 @@ export function PageWorkstation({ pages, pageAi, onUpdatePage }: Props) {
         <div className="flex items-center gap-3 font-mono text-[11px] uppercase tracking-[0.18em] text-muted-foreground">
           <span className="h-1.5 w-1.5 rounded-full bg-primary" />
           per-page workstation
-          <span className="text-foreground">{doneCount}/{pages.length} done</span>
+          <span className="text-foreground">{doneCount}/{pageCount} done</span>
           <span className="text-muted-foreground">
             · {globals.sequential ? "sequential" : "parallel"} · memory {globals.memory ? "on" : "off"}
           </span>
@@ -377,31 +443,77 @@ export function PageWorkstation({ pages, pageAi, onUpdatePage }: Props) {
         </div>
       </div>
 
-      <div ref={scrollRef} className="flex-1 overflow-auto px-4 py-4 space-y-4">
-        {pages.map((page) => {
-          const state = pageAi[page.pageNumber] ?? {
-            pageNumber: page.pageNumber,
-            status: "idle" as const,
-          };
-          const eff = effective(globals, state.overrides);
+      <VirtualPageList
+        docId={docId}
+        pageCount={pageCount}
+        globals={globals}
+        models={models}
+        aiSummary={aiSummary}
+        runningPages={runningPages}
+        streamBufs={streamBufs}
+        onPageAiChange={onPageAiChange}
+        onRun={(n) => void runPage(n)}
+        onCancel={cancelPage}
+      />
+    </div>
+  );
+}
+
+/* ---------- Virtualized list ---------- */
+
+interface ListProps {
+  docId: string;
+  pageCount: number;
+  globals: Globals;
+  models: ORModel[];
+  aiSummary: Record<number, PageAiSummaryEntry>;
+  runningPages: Set<number>;
+  streamBufs: Record<number, string>;
+  onPageAiChange: (pageNumber: number, entry: PageAiSummaryEntry | null) => void;
+  onRun: (pageNumber: number) => void;
+  onCancel: (pageNumber: number) => void;
+}
+
+function VirtualPageList(props: ListProps) {
+  const parentRef = useRef<HTMLDivElement>(null);
+  const rowVirtualizer = useVirtualizer({
+    count: props.pageCount,
+    getScrollElement: () => parentRef.current,
+    estimateSize: () => 280,
+    overscan: 2,
+    measureElement: (el) => el?.getBoundingClientRect().height ?? 280,
+  });
+
+  return (
+    <div ref={parentRef} className="flex-1 overflow-auto px-4 py-4">
+      <div style={{ height: rowVirtualizer.getTotalSize(), position: "relative", width: "100%" }}>
+        {rowVirtualizer.getVirtualItems().map((vr) => {
+          const pageNumber = vr.index + 1;
           return (
             <div
-              key={page.pageNumber}
-              ref={(el) => {
-                if (el) cardRefs.current.set(page.pageNumber, el);
-                else cardRefs.current.delete(page.pageNumber);
+              key={vr.key}
+              data-index={vr.index}
+              ref={rowVirtualizer.measureElement}
+              style={{
+                position: "absolute",
+                top: 0,
+                left: 0,
+                width: "100%",
+                transform: `translateY(${vr.start}px)`,
+                paddingBottom: 16,
               }}
             >
-              <PageCard
-                page={page}
-                state={state}
-                eff={eff}
-                models={models}
-                streamBuf={streamBufs[page.pageNumber] ?? ""}
-                isRunning={runningPages.has(page.pageNumber)}
-                onUpdate={(patch) => onUpdatePage(page.pageNumber, patch)}
-                onRun={() => runPage(page.pageNumber)}
-                onCancel={() => cancelPage(page.pageNumber)}
+              <PageCardLoader
+                docId={props.docId}
+                pageNumber={pageNumber}
+                globals={props.globals}
+                models={props.models}
+                summary={props.aiSummary[pageNumber]}
+                isRunning={props.runningPages.has(pageNumber)}
+                streamBuf={props.streamBufs[pageNumber] ?? ""}
+                onPageAiChange={props.onPageAiChange}
+                onRun={() => props.onRun(pageNumber)}
+                onCancel={() => props.onCancel(pageNumber)}
               />
             </div>
           );
@@ -411,8 +523,93 @@ export function PageWorkstation({ pages, pageAi, onUpdatePage }: Props) {
   );
 }
 
+/* ---------- Per-page card loader (fetches its own data) ---------- */
+
+interface CardLoaderProps {
+  docId: string;
+  pageNumber: number;
+  globals: Globals;
+  models: ORModel[];
+  summary?: PageAiSummaryEntry;
+  isRunning: boolean;
+  streamBuf: string;
+  onPageAiChange: (pageNumber: number, entry: PageAiSummaryEntry | null) => void;
+  onRun: () => void;
+  onCancel: () => void;
+}
+
+function PageCardLoader(props: CardLoaderProps) {
+  const { docId, pageNumber, summary } = props;
+  const [text, setText] = useState<string | null>(null);
+  const [columns, setColumns] = useState(1);
+  const [pageAi, setPageAi] = useState<PageAi>(() => ({
+    pageNumber,
+    status: summary?.status ?? "idle",
+  }));
+
+  // Fetch own data on mount / when key changes / when summary status flips to "done" elsewhere.
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      const rec = await getPageData(docId, pageNumber);
+      if (cancelled) return;
+      if (rec) {
+        setText(rec.text);
+        setColumns(rec.columns);
+        setPageAi(rec.pageAi ?? { pageNumber, status: "idle" });
+      } else {
+        setText("");
+        setPageAi({ pageNumber, status: "idle" });
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+    // Re-fetch when summary transitions (status or hash change) so we get fresh result text after run.
+  }, [docId, pageNumber, summary?.status, summary?.settingsHash, summary?.hasResult]);
+
+  const handleUpdate = async (patch: Partial<PageAi>) => {
+    setPageAi((prev) => ({ ...prev, ...patch, pageNumber }));
+    await upsertPageAi(docId, pageNumber, patch);
+    const rec = await getPageData(docId, pageNumber);
+    if (rec?.pageAi) {
+      props.onPageAiChange(pageNumber, summarize(rec.pageAi));
+    }
+  };
+
+  if (text === null) {
+    return (
+      <div className="rounded-md border border-border bg-background/40 px-3 py-3 font-mono text-[11px] uppercase tracking-widest text-muted-foreground">
+        page {pageNumber} · loading…
+      </div>
+    );
+  }
+
+  return (
+    <PageCard
+      docId={docId}
+      pageNumber={pageNumber}
+      pageText={text}
+      columns={columns}
+      state={pageAi}
+      eff={effective(props.globals, pageAi.overrides)}
+      models={props.models}
+      streamBuf={props.streamBuf}
+      isRunning={props.isRunning}
+      onUpdate={handleUpdate}
+      onRun={props.onRun}
+      onCancel={props.onCancel}
+    />
+  );
+}
+
+/* ---------- Card UI ---------- */
+
 interface CardProps {
-  page: PageExtraction;
+  docId: string;
+  pageNumber: number;
+  pageText: string;
+  columns: number;
   state: PageAi;
   eff: ReturnType<typeof effective>;
   models: ORModel[];
@@ -423,7 +620,18 @@ interface CardProps {
   onCancel: () => void;
 }
 
-function PageCard({ page, state, eff, models, streamBuf, isRunning, onUpdate, onRun, onCancel }: CardProps) {
+function PageCard({
+  pageNumber,
+  pageText,
+  state,
+  eff,
+  models,
+  streamBuf,
+  isRunning,
+  onUpdate,
+  onRun,
+  onCancel,
+}: CardProps) {
   const [view, setView] = useState<"request" | "result">(state.status === "done" ? "result" : "request");
   const [editingJson, setEditingJson] = useState(false);
   const [draft, setDraft] = useState("");
@@ -436,12 +644,14 @@ function PageCard({ page, state, eff, models, streamBuf, isRunning, onUpdate, on
     if (state.status === "running") setView("result");
   }, [state.status]);
 
-  // Stop TTS on result change / re-run
+  // Strict cleanup on unmount: destroy TTS controller fully.
   useEffect(() => {
     return () => {
-      ttsRef.current?.stop();
+      ttsRef.current?.destroy();
+      ttsRef.current = null;
     };
   }, []);
+
   useEffect(() => {
     if (isRunning) {
       ttsRef.current?.stop();
@@ -452,14 +662,14 @@ function PageCard({ page, state, eff, models, streamBuf, isRunning, onUpdate, on
   const autoPayload = useMemo(() => {
     return buildPagePayload({
       modelId: eff.modelId,
-      mode: eff.mode as GlobalMode,
+      mode: eff.mode,
       language: eff.language,
       style: eff.style,
       temperature: eff.temperature,
-      pageNumber: page.pageNumber,
-      pageText: page.text,
+      pageNumber,
+      pageText,
     });
-  }, [eff.modelId, eff.mode, eff.language, eff.style, eff.temperature, page.pageNumber, page.text]);
+  }, [eff.modelId, eff.mode, eff.language, eff.style, eff.temperature, pageNumber, pageText]);
 
   const previewPayload = state.isCustom && state.customRequest ? state.customRequest : autoPayload;
 
@@ -493,7 +703,7 @@ function PageCard({ page, state, eff, models, streamBuf, isRunning, onUpdate, on
       ttsRef.current.resume();
       return;
     }
-    ttsRef.current?.stop();
+    ttsRef.current?.destroy();
     const ctrl = createTtsController(state.result, {
       onState: setTtsState,
       language: eff.language,
@@ -523,8 +733,8 @@ function PageCard({ page, state, eff, models, streamBuf, isRunning, onUpdate, on
       }`}
     >
       <header className="flex flex-wrap items-center gap-2 border-b border-border px-3 py-2 font-mono text-[11px] uppercase tracking-widest text-muted-foreground">
-        <span className="text-foreground">page {page.pageNumber}</span>
-        <span>tok <span className="text-foreground">{estimateTokens(page.text).toLocaleString()}</span></span>
+        <span className="text-foreground">page {pageNumber}</span>
+        <span>tok <span className="text-foreground">{estimateTokens(pageText).toLocaleString()}</span></span>
         <span className={statusColor}>● {state.status}</span>
         {state.isCustom && (
           <span className="rounded bg-accent/15 px-1.5 py-0.5 normal-case tracking-normal text-accent">custom</span>
@@ -564,7 +774,6 @@ function PageCard({ page, state, eff, models, streamBuf, isRunning, onUpdate, on
         </div>
       </header>
 
-      {/* TTS bar */}
       {state.result && isTtsSupported() && (
         <div className="flex items-center gap-2 border-b border-border bg-background/20 px-3 py-1.5 font-mono text-[10px] uppercase tracking-widest text-muted-foreground">
           <span>tts</span>
@@ -594,7 +803,6 @@ function PageCard({ page, state, eff, models, streamBuf, isRunning, onUpdate, on
         </div>
       )}
 
-      {/* Per-page overrides strip */}
       <details className="border-b border-border bg-background/20 px-3 py-1.5 text-xs">
         <summary className="cursor-pointer font-mono text-[10px] uppercase tracking-widest text-muted-foreground hover:text-foreground">
           overrides {state.overrides && Object.keys(state.overrides).length > 0 ? `(${Object.keys(state.overrides).length})` : ""}
