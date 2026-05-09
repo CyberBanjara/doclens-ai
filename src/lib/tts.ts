@@ -157,6 +157,8 @@ export interface TtsController {
   pause: () => void;
   resume: () => void;
   stop: () => void;
+  /** Cancel any pending speech and release the internal utterance reference. */
+  destroy: () => void;
 }
 
 let activeOwner: symbol | null = null;
