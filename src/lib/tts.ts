@@ -271,3 +271,202 @@ export function createTtsController(text: string, opts: {
     },
   };
 }
+
+/* ============================================================
+ * Local neural TTS (Piper via @mintplex-labs/piper-tts-web)
+ * Lazy-loaded only on first use. Falls back to speechSynthesis
+ * when no piper voice is installed for the requested language.
+ * ============================================================ */
+
+const ENGINE_PREF_LS = "doclens.tts.engine"; // "auto" | "neural" | "browser"
+
+export type TtsEngine = "auto" | "neural" | "browser";
+
+export function getTtsEngine(): TtsEngine {
+  if (typeof window === "undefined") return "auto";
+  const v = localStorage.getItem(ENGINE_PREF_LS);
+  return v === "neural" || v === "browser" ? v : "auto";
+}
+export function setTtsEngine(e: TtsEngine) {
+  localStorage.setItem(ENGINE_PREF_LS, e);
+}
+
+/** Map UI language label to a Piper country_code prefix (e.g. "Hindi" → unsupported, "English" → "en"). */
+function piperLangPrefix(language?: string | null): string {
+  const k = langKey(language).split("-")[0].toLowerCase();
+  return k;
+}
+
+type PiperModule = typeof import("@mintplex-labs/piper-tts-web");
+let piperPromise: Promise<PiperModule> | null = null;
+function loadPiper(): Promise<PiperModule> {
+  if (!piperPromise) {
+    piperPromise = import("@mintplex-labs/piper-tts-web");
+  }
+  return piperPromise;
+}
+
+export interface PiperVoiceMeta {
+  voiceId: string;
+  language: string; // country code like en_US
+  langName: string; // english name
+  quality: string;
+  installed: boolean;
+}
+
+/** List all available Piper voices (from CDN catalog) merged with installed state. */
+export async function listPiperVoices(installedIds: string[]): Promise<PiperVoiceMeta[]> {
+  const mod = await loadPiper();
+  const installed = new Set(installedIds);
+  const all = await mod.voices();
+  return all
+    .map((v) => ({
+      voiceId: String(v.key),
+      language: v.language?.code ?? "",
+      langName: v.language?.name_english ?? "",
+      quality: String(v.quality ?? ""),
+      installed: installed.has(String(v.key)),
+    }))
+    .sort((a, b) => a.voiceId.localeCompare(b.voiceId));
+}
+
+export async function downloadPiperVoice(
+  voiceId: string,
+  onProgress?: (loaded: number, total: number) => void,
+): Promise<void> {
+  const mod = await loadPiper();
+  await mod.download(voiceId as never, (p) => onProgress?.(p.loaded, p.total));
+}
+
+export async function removePiperVoice(voiceId: string): Promise<void> {
+  const mod = await loadPiper();
+  await mod.remove(voiceId as never);
+}
+
+export async function listInstalledPiperVoices(): Promise<string[]> {
+  const mod = await loadPiper();
+  return (await mod.stored()) as string[];
+}
+
+/** Best installed piper voice for a language, or null. */
+function pickPiperVoiceFor(language: string | null | undefined, installed: string[], preferred?: string | null): string | null {
+  if (preferred && installed.includes(preferred)) return preferred;
+  const code = piperLangPrefix(language);
+  // installed voiceIds look like "en_US-amy-low"
+  const match = installed.find((id) => id.toLowerCase().startsWith(code + "_"));
+  return match ?? null;
+}
+
+/* ---------- Neural utterance playback ---------- */
+
+async function speakWithPiper(opts: {
+  text: string;
+  voiceId: string;
+  rate: number;
+  signal: AbortSignal;
+  onState: (s: "playing" | "ended") => void;
+}): Promise<void> {
+  const mod = await loadPiper();
+  const chunks = chunkText(opts.text, 280);
+  opts.onState("playing");
+  const audio = new Audio();
+  audio.playbackRate = Math.max(0.25, Math.min(4, opts.rate));
+  const cleanup: { url: string | null } = { url: null };
+  const stop = () => {
+    audio.pause();
+    if (cleanup.url) URL.revokeObjectURL(cleanup.url);
+  };
+  opts.signal.addEventListener("abort", stop, { once: true });
+  for (const c of chunks) {
+    if (opts.signal.aborted) break;
+    const blob = await mod.predict({ text: c, voiceId: opts.voiceId as never });
+    if (opts.signal.aborted) break;
+    if (cleanup.url) URL.revokeObjectURL(cleanup.url);
+    cleanup.url = URL.createObjectURL(blob);
+    audio.src = cleanup.url;
+    await new Promise<void>((resolve) => {
+      const onEnd = () => { audio.removeEventListener("ended", onEnd); audio.removeEventListener("error", onEnd); resolve(); };
+      audio.addEventListener("ended", onEnd);
+      audio.addEventListener("error", onEnd);
+      void audio.play().catch(() => resolve());
+    });
+  }
+  if (cleanup.url) URL.revokeObjectURL(cleanup.url);
+  opts.onState("ended");
+}
+
+/**
+ * Create a controller that tries neural first (if a matching installed voice exists
+ * and engine pref ≠ "browser"), and falls back to speechSynthesis otherwise.
+ */
+export function createSmartTtsController(text: string, opts: {
+  onState: (s: "idle" | "playing" | "paused" | "ended") => void;
+  onError?: (err: string) => void;
+  language?: string | null;
+}): TtsController {
+  let mode: "neural" | "browser" = "browser";
+  let abort: AbortController | null = null;
+  let browserCtrl: TtsController | null = null;
+  let destroyed = false;
+  const enginePref = getTtsEngine();
+
+  const startBrowser = () => {
+    mode = "browser";
+    browserCtrl = createTtsController(text, opts);
+    browserCtrl.play();
+  };
+
+  return {
+    play: () => {
+      if (destroyed) return;
+      if (enginePref === "browser") { startBrowser(); return; }
+      // try neural
+      (async () => {
+        try {
+          const installed = await listInstalledPiperVoices();
+          const preferred = localStorage.getItem("doclens.piper.preferredVoice");
+          const v = pickPiperVoiceFor(opts.language, installed, preferred);
+          if (!v && enginePref === "neural") {
+            opts.onError?.("No neural voice installed for this language.");
+            opts.onState("idle");
+            return;
+          }
+          if (!v) { startBrowser(); return; }
+          mode = "neural";
+          abort = new AbortController();
+          await speakWithPiper({
+            text,
+            voiceId: v,
+            rate: getTtsRate(),
+            signal: abort.signal,
+            onState: (s) => opts.onState(s),
+          });
+        } catch (e) {
+          if (enginePref === "neural") {
+            opts.onError?.(e instanceof Error ? e.message : "Neural TTS failed");
+            opts.onState("idle");
+          } else {
+            startBrowser();
+          }
+        }
+      })();
+    },
+    pause: () => {
+      if (mode === "browser") browserCtrl?.pause();
+      // neural pause not supported — treat as stop
+      else { abort?.abort(); opts.onState("paused"); }
+    },
+    resume: () => {
+      if (mode === "browser") browserCtrl?.resume();
+    },
+    stop: () => {
+      if (mode === "browser") browserCtrl?.stop();
+      else { abort?.abort(); opts.onState("idle"); }
+    },
+    destroy: () => {
+      destroyed = true;
+      browserCtrl?.destroy();
+      abort?.abort();
+    },
+  };
+}
