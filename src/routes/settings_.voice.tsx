@@ -224,7 +224,7 @@ function VoicePage() {
     const sample = sampleFor(language);
     const prev = getTtsVoiceFor(language);
     setTtsVoiceFor(language, v.name);
-    const ctrl = createTtsController(sample, {
+    const ctrl = createSmartTtsController(sample, {
       language,
       onState: (s) => {
         if (s === "ended" || s === "idle") setPreviewing(null);
