@@ -134,6 +134,14 @@ function VoicePage() {
   const [langSearch, setLangSearch] = useState("");
   const [ttsRate, setTtsRateLocal] = useState(1);
   const [ttsPitch, setTtsPitchLocal] = useState(1);
+  const [engine, setEngineLocal] = useState<TtsEngine>("auto");
+  const [piperVoices, setPiperVoices] = useState<PiperVoiceMeta[] | null>(null);
+  const [installed, setInstalled] = useState<VoicePackRecord[]>([]);
+  const [downloading, setDownloading] = useState<string | null>(null);
+  const [dlProgress, setDlProgress] = useState(0);
+  const [showPiperCatalog, setShowPiperCatalog] = useState(false);
+  const [piperSearch, setPiperSearch] = useState("");
+  const [preferredPiper, setPreferredPiper] = useState<string>("");
 
   // Initialize from stored settings
   useEffect(() => {
@@ -141,7 +149,77 @@ function VoicePage() {
     setFavs(new Set(getFavorites()));
     setTtsRateLocal(getTtsRate());
     setTtsPitchLocal(getTtsPitch());
+    setEngineLocal(getTtsEngine());
+    setPreferredPiper(localStorage.getItem("doclens.piper.preferredVoice") ?? "");
+    void refreshInstalled();
   }, []);
+
+  async function refreshInstalled() {
+    const recs = await listVoicePacks();
+    setInstalled(recs);
+  }
+
+  async function openPiperCatalog() {
+    setShowPiperCatalog(true);
+    if (piperVoices) return;
+    try {
+      const ids = await listInstalledPiperVoices();
+      const list = await listPiperVoices(ids);
+      setPiperVoices(list);
+    } catch (e) {
+      toast.error("Failed to load neural voice catalog.");
+      console.error(e);
+    }
+  }
+
+  async function handleInstallPiper(v: PiperVoiceMeta) {
+    setDownloading(v.voiceId);
+    setDlProgress(0);
+    try {
+      await downloadPiperVoice(v.voiceId, (loaded, total) => {
+        setDlProgress(total > 0 ? Math.round((loaded / total) * 100) : 0);
+      });
+      await recordVoicePack({
+        voiceId: v.voiceId,
+        language: v.langName || v.language,
+        installedAt: Date.now(),
+      });
+      await refreshInstalled();
+      if (piperVoices) {
+        setPiperVoices(piperVoices.map((p) => p.voiceId === v.voiceId ? { ...p, installed: true } : p));
+      }
+      toast.success(`Installed ${v.voiceId}`);
+    } catch (e) {
+      toast.error(`Install failed: ${e instanceof Error ? e.message : "unknown"}`);
+    } finally {
+      setDownloading(null);
+      setDlProgress(0);
+    }
+  }
+
+  async function handleRemovePiper(voiceId: string) {
+    try {
+      await removePiperVoice(voiceId);
+      await deleteVoicePack(voiceId);
+      await refreshInstalled();
+      if (piperVoices) {
+        setPiperVoices(piperVoices.map((p) => p.voiceId === voiceId ? { ...p, installed: false } : p));
+      }
+      if (preferredPiper === voiceId) {
+        localStorage.removeItem("doclens.piper.preferredVoice");
+        setPreferredPiper("");
+      }
+      toast.success(`Removed ${voiceId}`);
+    } catch (e) {
+      toast.error(`Remove failed: ${e instanceof Error ? e.message : "unknown"}`);
+    }
+  }
+
+  function handleSetPreferredPiper(voiceId: string) {
+    if (voiceId) localStorage.setItem("doclens.piper.preferredVoice", voiceId);
+    else localStorage.removeItem("doclens.piper.preferredVoice");
+    setPreferredPiper(voiceId);
+  }
 
   // Update selected voice when language changes
   useEffect(() => {
