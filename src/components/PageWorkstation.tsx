@@ -30,7 +30,7 @@ import {
   type PageOverrides,
 } from "@/lib/storage";
 import {
-  createTtsController,
+  createSmartTtsController,
   isTtsSupported,
   stopAll as stopAllTts,
 } from "@/lib/tts";
