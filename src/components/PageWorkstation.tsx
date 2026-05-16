@@ -637,7 +637,7 @@ function PageCard({
   const [draft, setDraft] = useState("");
   const [draftError, setDraftError] = useState("");
   const [ttsState, setTtsState] = useState<"idle" | "playing" | "paused" | "ended">("idle");
-  const ttsRef = useRef<ReturnType<typeof createTtsController> | null>(null);
+  const ttsRef = useRef<ReturnType<typeof createSmartTtsController> | null>(null);
 
   useEffect(() => {
     if (state.status === "done") setView("result");
@@ -704,7 +704,7 @@ function PageCard({
       return;
     }
     ttsRef.current?.destroy();
-    const ctrl = createTtsController(state.result, {
+    const ctrl = createSmartTtsController(state.result, {
       onState: setTtsState,
       language: eff.language,
     });
