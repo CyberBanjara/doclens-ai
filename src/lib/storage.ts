@@ -1,6 +1,18 @@
 import { openDB, type IDBPDatabase } from "idb";
 import type { PageExtraction } from "./pdf";
 
+/** Generate a UUID v4 — works in non-secure contexts (LAN IP over HTTP). */
+function uuid(): string {
+  if (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function") {
+    return crypto.randomUUID();
+  }
+  // Fallback using crypto.getRandomValues (available in all modern browsers)
+  return "10000000-1000-4000-8000-100000000000".replace(/[018]/g, (c) => {
+    const n = Number(c);
+    return (n ^ (crypto.getRandomValues(new Uint8Array(1))[0] & (15 >> (n / 4)))).toString(16);
+  });
+}
+
 const DB_NAME = "doclens";
 const DB_VERSION = 7;
 const STORE = "documents";
@@ -260,9 +272,9 @@ function db() {
                   garbageRatio: p.garbageRatio ?? 0,
                   pageAi: ai
                     ? (() => {
-                        const { lastSentRequest: _, ...rest } = ai;
-                        return { ...rest, pageNumber: p.pageNumber } as PageAi;
-                      })()
+                      const { lastSentRequest: _, ...rest } = ai;
+                      return { ...rest, pageNumber: p.pageNumber } as PageAi;
+                    })()
                     : undefined,
                 };
                 pagesStore.put(rec);
@@ -354,7 +366,7 @@ export async function getDocBinary(id: string): Promise<ArrayBuffer | null> {
 
 export async function createDoc(file: File, data: ArrayBuffer | Blob): Promise<DocRecord> {
   const d = await db();
-  const id = crypto.randomUUID();
+  const id = uuid();
   const now = Date.now();
   // Prefer storing as Blob so we don't pin a separate ArrayBuffer in memory later.
   const blob = data instanceof Blob ? data : new Blob([data], { type: file.type || "application/pdf" });
