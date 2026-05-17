@@ -263,19 +263,22 @@ function SettingsPage() {
             </label>
 
             <label className="block">
-              <span className="font-mono text-[10px] uppercase tracking-widest text-muted-foreground">style / tone</span>
+              <span className="font-mono text-[10px] uppercase tracking-widest text-muted-foreground">
+                explanation style {mode === "translate" ? "(ignored in translate mode)" : ""}
+              </span>
               <select
-                value={STYLES.includes(style) ? style : "__custom"}
+                value={style}
+                disabled={mode === "translate"}
                 onChange={(e) => {
-                  const v = e.target.value;
-                  if (v === "__custom") return;
+                  const v = e.target.value as ExplanationStyle;
                   setStyleState(v);
                   saveStyle(v);
                 }}
-                className="mt-1 w-full rounded-md border border-border bg-background px-3 py-1.5 font-mono text-[12px] outline-none focus:border-primary"
+                className="mt-1 w-full rounded-md border border-border bg-background px-3 py-1.5 font-mono text-[12px] outline-none focus:border-primary disabled:opacity-50"
               >
-                {STYLES.map((s) => <option key={s} value={s}>{s}</option>)}
-                {!STYLES.includes(style) && <option value="__custom">{style}</option>}
+                {EXPLANATION_STYLES.map((s) => (
+                  <option key={s.id} value={s.id}>{s.label}</option>
+                ))}
               </select>
             </label>
 
