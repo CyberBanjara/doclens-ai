@@ -21,6 +21,8 @@ import {
   setStyle as saveStyle,
   setTemperature,
   validateKey,
+  EXPLANATION_STYLES,
+  type ExplanationStyle,
   type GlobalMode,
   type ORModel,
 } from "@/lib/openrouter";
