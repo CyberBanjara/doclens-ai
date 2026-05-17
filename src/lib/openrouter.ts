@@ -234,10 +234,80 @@ export function memoryExcerpt(prev: string | undefined, maxChars = 600): string 
   return "…" + trimmed.slice(-maxChars);
 }
 
+/**
+ * Negative-generation rules embedded directly into the system prompt so the
+ * model produces clean, TTS-friendly plain text natively (no post-filter).
+ */
+const NEGATIVE_RULES = [
+  "Do not produce markdown syntax, asterisks, hashtags, code fences, or backticks.",
+  "Do not produce emojis, decorative symbols, decorative Unicode, ASCII art, or visual separators.",
+  "Do not produce bullet decoration characters, rich-text formatting, or UI styling patterns.",
+  "Do not use excessive or decorative punctuation, decorative quotation styling, or heading markers.",
+  "Output must be clean plain text with natural readable structure suitable for both reading and text-to-speech narration.",
+  "Write smooth, natural, human-like sentences. Avoid robotic phrasing and unnecessary repetition.",
+].join(" ");
+
+const GLOBAL_RULES = [
+  "Preserve factual accuracy. Never invent information not present in the source unless clearly framed as an example, analogy, or interpretation.",
+  "Preserve important technical terminology, explaining it appropriately for the selected style.",
+  "Process one page at a time. Output only the final processed content — no preamble, no meta commentary, no closing remarks.",
+].join(" ");
+
+export interface ExplanationStyleSpec {
+  id: ExplanationStyle;
+  label: string;
+  instruction: string;
+}
+
+export type ExplanationStyle =
+  | "Standard"
+  | "ELI5"
+  | "Storytelling"
+  | "Socratic"
+  | "Step-by-Step"
+  | "Visual Thinking"
+  | "Analogical"
+  | "Practical"
+  | "Expert Deep-Dive"
+  | "Debate"
+  | "Historical Context"
+  | "Motivational"
+  | "Critical Thinking";
+
+export const EXPLANATION_STYLES: ExplanationStyleSpec[] = [
+  { id: "Standard", label: "Standard", instruction: "Use balanced, neutral, clear, and easy-to-understand explanations. Maintain readability and structured flow." },
+  { id: "ELI5", label: "ELI5", instruction: "Explain as if teaching a complete beginner or young learner. Avoid jargon when possible; if technical terms are necessary, define them immediately in simple language. Use intuitive examples and simplified reasoning." },
+  { id: "Storytelling", label: "Storytelling", instruction: "Teach concepts using narratives, scenarios, characters, or story-like progression. Make the explanation emotionally engaging and memorable." },
+  { id: "Socratic", label: "Socratic", instruction: "Teach primarily through guided questions and progressive reasoning. Encourage critical thinking and self-discovery. Avoid instantly revealing conclusions unless necessary." },
+  { id: "Step-by-Step", label: "Step-by-Step", instruction: "Break the explanation into sequential logical stages. Ensure each step builds naturally on the previous one. Maintain clarity throughout the progression." },
+  { id: "Visual Thinking", label: "Visual Thinking", instruction: "Explain using mental imagery, hierarchy, structure, spatial relationships, and diagram-like descriptions. Help the learner mentally visualize systems and relationships." },
+  { id: "Analogical", label: "Analogical", instruction: "Use analogies and comparisons with familiar real-world systems or experiences. Simplify abstract concepts through relatable examples." },
+  { id: "Practical", label: "Practical", instruction: "Focus on real-world applications, implementation methods, use cases, and practical outcomes. Emphasize how concepts are actually used in reality." },
+  { id: "Expert Deep-Dive", label: "Expert Deep-Dive", instruction: "Provide advanced technical depth, nuance, complexity, edge cases, and detailed reasoning. Assume the learner already understands foundational concepts." },
+  { id: "Debate", label: "Debate", instruction: "Present multiple viewpoints, interpretations, arguments, strengths, weaknesses, and counterarguments. Avoid oversimplifying nuanced topics." },
+  { id: "Historical Context", label: "Historical Context", instruction: "Explain the historical background, evolution, discoveries, timeline, and major contributors behind the concepts. Include important historical developments where relevant." },
+  { id: "Motivational", label: "Motivational", instruction: "Use encouraging, confidence-building, supportive language. Reduce intimidation around difficult concepts while remaining informative." },
+  { id: "Critical Thinking", label: "Critical Thinking", instruction: "Analyze assumptions, evaluate evidence, identify limitations, and encourage deeper reasoning. Promote analytical understanding rather than passive acceptance." },
+];
+
+export const MODE_INSTRUCTIONS: Record<GlobalMode, { label: string; instruction: string }> = {
+  translate: {
+    label: "Translate",
+    instruction:
+      "Translate the provided content into the target language. Preserve the original meaning, structure, hierarchy, headings, lists, and logical flow. Do not add explanations, summaries, commentary, interpretation, or extra information. Output only the translated content.",
+  },
+  explain: {
+    label: "Explain",
+    instruction:
+      "Process the provided content according to the selected Explanation Style.",
+  },
+};
+
 export interface BuildPagePayloadInput {
   modelId: string;
   mode: GlobalMode;
   language: string;
+  /** Explanation style — ignored when mode is "translate". */
   style: string;
   temperature: number;
   pageNumber: number;
@@ -247,15 +317,28 @@ export interface BuildPagePayloadInput {
 }
 
 export function buildPagePayload(i: BuildPagePayloadInput): Record<string, unknown> {
-  const modeInstr = MODE_INSTRUCTIONS[i.mode]?.instruction ?? MODE_INSTRUCTIONS.summarize.instruction;
-  const styleClause = i.style && i.style !== "Neutral" ? ` Use a ${i.style.toLowerCase()} tone.` : "";
-  const system =
-    `You are a document analysis assistant. Always respond in ${i.language}.${styleClause} ` +
-    `Process one page at a time. Output only the final answer — no preamble.`;
+  const isTranslate = i.mode === "translate";
+  const styleSpec =
+    EXPLANATION_STYLES.find((s) => s.id === i.style) ?? EXPLANATION_STYLES[0];
+
+  const taskBlock = isTranslate
+    ? `TRANSLATION MODE\nTarget language: ${i.language}.\n${MODE_INSTRUCTIONS.translate.instruction}`
+    : `EXPLANATION MODE\nResponse language: ${i.language}.\nSelected Explanation Style: ${styleSpec.label}.\nStyle directive: ${styleSpec.instruction}`;
+
+  const system = [
+    "You are an advanced AI reading and teaching assistant integrated into a PDF.js-based document reader.",
+    "The user-visible content below was extracted from a PDF page and inserted into this request.",
+    taskBlock,
+    `GLOBAL RULES. ${GLOBAL_RULES}`,
+    `NEGATIVE GENERATION RULES. ${NEGATIVE_RULES}`,
+    "These restrictions must influence generation natively — do not rely on post-processing.",
+  ].join("\n\n");
+
   const memoryBlock = i.previousExcerpt
-    ? `\n\n[Context from end of previous page — for continuity only, do not re-translate or re-summarize]:\n${i.previousExcerpt}\n`
+    ? `\n\n[Context from end of previous page — for continuity only, do not re-translate or re-process]:\n${i.previousExcerpt}\n`
     : "";
-  const user = `${modeInstr}${memoryBlock}\n\n--- Page ${i.pageNumber} ---\n${i.pageText}`;
+  const user = `--- Page ${i.pageNumber} ---\n${i.pageText}${memoryBlock}`;
+
   return {
     model: i.modelId,
     stream: true,
@@ -267,29 +350,6 @@ export function buildPagePayload(i: BuildPagePayloadInput): Record<string, unkno
     ],
   };
 }
-
-export const MODE_INSTRUCTIONS: Record<string, { label: string; instruction: string }> = {
-  translate: {
-    label: "Translate",
-    instruction:
-      "Translate the following document excerpt. Preserve structure, headings, and lists. Output only the translation.",
-  },
-  summarize: {
-    label: "Summarize",
-    instruction:
-      "Summarize the following document excerpt clearly and concisely. Keep key facts, names, and numbers.",
-  },
-  explain: {
-    label: "Explain",
-    instruction:
-      "Explain the following document excerpt in plain, accessible language. Define jargon as you go.",
-  },
-  keypoints: {
-    label: "Key Points",
-    instruction:
-      "Extract the key points from the following document excerpt as a clean bulleted list.",
-  },
-};
 
 export function chunkForContext(text: string, contextTokens: number, reserveOutput = 1500): string[] {
   // ~4 chars per token. Leave room for system + user instruction overhead + output.
