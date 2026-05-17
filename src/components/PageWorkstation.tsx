@@ -43,7 +43,6 @@ interface Props {
   onPageAiChange: (pageNumber: number, entry: PageAiSummaryEntry | null) => void;
 }
 
-import { EXPLANATION_STYLES } from "@/lib/openrouter";
 const STYLES = EXPLANATION_STYLES.map((s) => s.id);
 const QUICK_LANGS = ["English", "Arabic", "French", "Hindi", "Spanish", "Japanese"];
 
