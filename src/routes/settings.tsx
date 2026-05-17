@@ -44,7 +44,7 @@ export const Route = createFileRoute("/settings")({
 });
 
 const LANGS = ["English", "Arabic", "French", "Hindi", "Spanish", "Japanese"];
-const STYLES = ["Neutral", "Formal", "Casual", "Academic", "Concise", "Detailed", "Friendly"];
+const STYLES: ExplanationStyle[] = EXPLANATION_STYLES.map((s) => s.id);
 
 type FilterTab = "free" | "popular" | "all";
 
