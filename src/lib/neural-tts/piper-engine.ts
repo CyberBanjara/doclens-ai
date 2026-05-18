@@ -484,6 +484,19 @@ export async function speakChunked(
     if (resolveSlot) { const r = resolveSlot; resolveSlot = null; r(); }
   };
 
+  let resolveBuffer: (() => void) | null = null;
+  const notifyConsumer = () => {
+    if (resolveBuffer) { const r = resolveBuffer; resolveBuffer = null; r(); }
+  };
+  const waitForBuffer = () =>
+    new Promise<void>((res) => {
+      if (decoded.length > 0 || prefetchIndex >= chunks.length || aborted) {
+        res();
+        return;
+      }
+      resolveBuffer = res;
+    });
+
   // Producer: pre-render chunks, bounded by MAX_BUFFERED decoded buffers.
   const producer = (async () => {
     while (prefetchIndex < chunks.length && !aborted) {
@@ -504,20 +517,6 @@ export async function speakChunked(
       }
     }
   })();
-
-  // Consumer: schedule decoded buffers back-to-back on the AudioContext clock.
-  let resolveBuffer: (() => void) | null = null;
-  const notifyConsumer = () => {
-    if (resolveBuffer) { const r = resolveBuffer; resolveBuffer = null; r(); }
-  };
-  const waitForBuffer = () =>
-    new Promise<void>((res) => {
-      if (decoded.length > 0 || prefetchIndex >= chunks.length || aborted) {
-        res();
-        return;
-      }
-      resolveBuffer = res;
-    });
 
   let nextStartTime = ctx.currentTime;
   let playedCount = 0;
