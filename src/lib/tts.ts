@@ -298,6 +298,9 @@ export function setTtsEngine(e: TtsEngine) {
 
 /** Lazy-import the Piper engine (keeps main bundle lean). */
 function loadPiperEngine() {
+  if (import.meta.env.SSR) {
+    return Promise.reject(new Error("Piper TTS is only available in the browser."));
+  }
   return import("./neural-tts/piper-engine");
 }
 
