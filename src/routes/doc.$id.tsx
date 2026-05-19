@@ -1,10 +1,10 @@
 import { ClientOnly, createFileRoute, Link, useNavigate } from "@tanstack/react-router";
+import { createClientOnlyFn } from "@tanstack/react-start";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
 import { AppHeader } from "@/components/AppHeader";
 import { PdfViewer } from "@/components/PdfViewer";
 import { RightPanel } from "@/components/RightPanel";
-import { extractPdfPages } from "@/lib/pdf";
 import {
   getDoc,
   getDocBlob,
@@ -17,6 +17,14 @@ import {
   type DocRecord,
   type PageAiSummaryEntry,
 } from "@/lib/storage";
+
+const extractPdfPagesClient = createClientOnlyFn(() => async (
+  blob: Blob,
+  onPage: (page: { pageNumber: number; text: string; columns: number; garbageRatio: number }, total: number) => void,
+) => {
+  const { extractPdfPages } = await import("@/lib/pdf");
+  return extractPdfPages(blob, onPage);
+});
 
 export const Route = createFileRoute("/doc/$id")({
   component: DocPage,
@@ -76,7 +84,7 @@ function DocPage() {
       }
       let lastTotal = 0;
       const collected: { pageNumber: number; text: string; columns: number; garbageRatio: number }[] = [];
-      await extractPdfPages(blob, (page, total) => {
+      await extractPdfPagesClient(blob, (page, total) => {
         lastTotal = total;
         collected.push({
           pageNumber: page.pageNumber,
