@@ -1,4 +1,4 @@
-import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
+import { ClientOnly, createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
 import { AppHeader } from "@/components/AppHeader";
@@ -179,21 +179,29 @@ function DocPage() {
           </>
         }
       />
-      <main className="grid flex-1 grid-cols-1 overflow-hidden md:grid-cols-2">
-        <section className="relative h-full overflow-hidden border-b border-border md:border-b-0 md:border-r">
-          <PdfViewer docId={id} />
-        </section>
-        <section className="h-full overflow-hidden">
-          <RightPanel
-            docId={id}
-            pageCount={pageCount}
-            analyzing={analyzing}
-            status={status}
-            aiSummary={aiSummary}
-            onPageAiChange={handlePageAiChange}
-          />
-        </section>
-      </main>
+      <ClientOnly
+        fallback={
+          <main className="flex flex-1 items-center justify-center font-mono text-[11px] uppercase tracking-widest text-muted-foreground">
+            loading workstation…
+          </main>
+        }
+      >
+        <main className="grid flex-1 grid-cols-1 overflow-hidden md:grid-cols-2">
+          <section className="relative h-full overflow-hidden border-b border-border md:border-b-0 md:border-r">
+            <PdfViewer docId={id} />
+          </section>
+          <section className="h-full overflow-hidden">
+            <RightPanel
+              docId={id}
+              pageCount={pageCount}
+              analyzing={analyzing}
+              status={status}
+              aiSummary={aiSummary}
+              onPageAiChange={handlePageAiChange}
+            />
+          </section>
+        </main>
+      </ClientOnly>
     </div>
   );
 }
