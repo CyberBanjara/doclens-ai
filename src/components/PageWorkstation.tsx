@@ -326,8 +326,10 @@ export function PageWorkstation({ docId, pageCount, aiSummary, onPageAiChange }:
   }, [docId]);
 
   const handleRunAll = async () => {
+    if (!ensureKeyReady()) return;
     const freshGlobals = readGlobals();
     setGlobals(freshGlobals);
+
 
     runAllRef.current = { cancelled: false };
     setRunAllActive(true);
