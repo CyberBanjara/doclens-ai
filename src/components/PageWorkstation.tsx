@@ -444,24 +444,47 @@ export function PageWorkstation({ docId, pageCount, aiSummary, onPageAiChange }:
 
   /* ---------- Empty / setup states ---------- */
 
-  if (!hasKey || !globals.modelId) {
+  if (!keyReady || !globals.modelId) {
+    const noKey = !hasKey;
+    const invalid = keyStatus === "invalid";
     return (
       <div className="flex h-full items-center justify-center px-6 text-center text-sm text-muted-foreground">
         <div>
-          <div className="font-mono text-[11px] uppercase tracking-widest">setup required</div>
-          <p className="mt-2">
-            {!hasKey ? "Add your OpenRouter API key to run AI operations." : "Select a model in Settings."}
-          </p>
-          <Link
-            to="/settings"
-            className="mt-4 inline-block rounded-md bg-primary px-3 py-1.5 font-mono text-[11px] uppercase tracking-widest text-primary-foreground"
+          <div
+            className={`font-mono text-[11px] uppercase tracking-widest ${
+              invalid ? "text-destructive" : ""
+            }`}
           >
-            open settings
-          </Link>
+            {invalid ? "api key invalid" : noKey ? "api key required" : "setup required"}
+          </div>
+          <p className="mt-2">
+            {invalid
+              ? "Your saved OpenRouter key is invalid or expired."
+              : noKey
+                ? "Add your OpenRouter API key to start translating."
+                : "Select a model in Settings."}
+          </p>
+          <div className="mt-4 flex items-center justify-center gap-2">
+            {keyReady ? null : (
+              <button
+                onClick={() => openApiKeyModal()}
+                className="rounded-md bg-primary px-3 py-1.5 font-mono text-[11px] uppercase tracking-widest text-primary-foreground hover:opacity-90"
+              >
+                add api key
+              </button>
+            )}
+            <Link
+              to="/settings"
+              className="rounded-md border border-border bg-background px-3 py-1.5 font-mono text-[11px] uppercase tracking-widest text-muted-foreground hover:text-foreground"
+            >
+              open settings
+            </Link>
+          </div>
         </div>
       </div>
     );
   }
+
 
   if (pageCount === 0) {
     return (
