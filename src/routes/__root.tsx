@@ -68,12 +68,14 @@ function RootShell({ children }: { children: React.ReactNode }) {
     </html>
   );
 }
-
 function RootComponent() {
   return (
     <>
       <Outlet />
+      <ApiKeyModal />
       <Toaster position="bottom-right" richColors closeButton />
     </>
   );
+}
+
 }
