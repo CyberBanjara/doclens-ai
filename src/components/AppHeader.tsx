@@ -1,5 +1,6 @@
 import { Link } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
+import { ApiKeyStatusBadge } from "@/components/ApiKeyStatusBadge";
 import { estimateStorage } from "@/lib/storage";
 
 function useQuotaIndicator(): string | null {
