@@ -14,6 +14,12 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import {
+  getKeyStatus,
+  onKeyChange,
+  openApiKeyModal,
+  type KeyStatus,
+} from "@/lib/openrouter";
+import {
   createDoc,
   deleteDoc,
   getLastOpened,
@@ -21,6 +27,7 @@ import {
   StorageError,
   type DocSummary,
 } from "@/lib/storage";
+
 
 export const Route = createFileRoute("/")({
   component: DashboardPage,
@@ -43,6 +50,13 @@ function DashboardPage() {
   const [docs, setDocs] = useState<DocSummary[]>([]);
   const [loading, setLoading] = useState(true);
   const [deleteTarget, setDeleteTarget] = useState<DocSummary | null>(null);
+  const [keyStatus, setKeyStatus] = useState<KeyStatus>("unknown");
+
+  useEffect(() => {
+    setKeyStatus(getKeyStatus());
+    return onKeyChange(() => setKeyStatus(getKeyStatus()));
+  }, []);
+
 
   useEffect(() => {
     let cancelled = false;
@@ -119,6 +133,46 @@ function DashboardPage() {
             {loading ? "loading…" : `${docs.length} document${docs.length === 1 ? "" : "s"}`}
           </div>
         </div>
+
+        {keyStatus !== "valid" && (
+          <div
+            className={`mb-6 flex flex-col gap-3 rounded-lg border px-4 py-3 sm:flex-row sm:items-center sm:justify-between ${
+              keyStatus === "invalid"
+                ? "border-destructive/40 bg-destructive/10"
+                : "border-primary/40 bg-primary/5"
+            }`}
+          >
+            <div className="min-w-0">
+              <div
+                className={`font-mono text-[10px] uppercase tracking-[0.2em] ${
+                  keyStatus === "invalid" ? "text-destructive" : "text-primary"
+                }`}
+              >
+                {keyStatus === "invalid" ? "api key invalid" : "get started"}
+              </div>
+              <p className="mt-1 text-sm text-foreground/85">
+                {keyStatus === "invalid"
+                  ? "Your saved OpenRouter key was rejected. Update it to keep translating."
+                  : "Add your OpenRouter API key to start translating documents."}
+              </p>
+            </div>
+            <div className="flex items-center gap-2">
+              <button
+                onClick={() => openApiKeyModal()}
+                className="rounded-md bg-primary px-3 py-1.5 font-mono text-[11px] uppercase tracking-widest text-primary-foreground hover:opacity-90"
+              >
+                add api key
+              </button>
+              <Link
+                to="/settings"
+                className="rounded-md border border-border bg-background px-3 py-1.5 font-mono text-[11px] uppercase tracking-widest text-muted-foreground hover:text-foreground"
+              >
+                settings
+              </Link>
+            </div>
+          </div>
+        )}
+
 
         <div className="mb-8 h-44">
           <Dropzone onFile={handleFile} />

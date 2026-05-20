@@ -1,5 +1,7 @@
 import { Outlet, Link, createRootRoute, HeadContent, Scripts } from "@tanstack/react-router";
+import { ApiKeyModal } from "@/components/ApiKeyModal";
 import { Toaster } from "@/components/ui/sonner";
+
 
 import appCss from "../styles.css?url";
 
@@ -66,11 +68,11 @@ function RootShell({ children }: { children: React.ReactNode }) {
     </html>
   );
 }
-
 function RootComponent() {
   return (
     <>
       <Outlet />
+      <ApiKeyModal />
       <Toaster position="bottom-right" richColors closeButton />
     </>
   );

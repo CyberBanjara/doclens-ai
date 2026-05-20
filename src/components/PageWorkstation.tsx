@@ -8,6 +8,7 @@ import {
   buildPagePayload,
   fetchModels,
   getKey,
+  getKeyStatus,
   getMemory,
   getMode,
   getOutputLanguage,
@@ -18,10 +19,15 @@ import {
   memoryExcerpt,
   MODE_INSTRUCTIONS,
   EXPLANATION_STYLES,
+  onKeyChange,
+  OpenRouterError,
+  openApiKeyModal,
   streamCompletion,
   type GlobalMode,
+  type KeyStatus,
   type ORModel,
 } from "@/lib/openrouter";
+
 import {
   computeSettingsHash,
   getPageData,
@@ -136,7 +142,33 @@ export function PageWorkstation({ docId, pageCount, aiSummary, onPageAiChange }:
     fetchModels(k).then(setModels).catch(() => {});
   }, []);
 
+  const [keyStatus, setKeyStatusState] = useState<KeyStatus>("unknown");
+  useEffect(() => {
+    setKeyStatusState(getKeyStatus());
+    return onKeyChange(() => {
+      setKeyStatusState(getKeyStatus());
+      const k = getKey();
+      if (k) fetchModels(k).then(setModels).catch(() => {});
+    });
+  }, []);
+
   const hasKey = !!getKey();
+  const keyReady = keyStatus !== "invalid" && keyStatus !== "missing" && hasKey;
+
+  /** Returns true if the key is usable; otherwise opens modal + shows toast and returns false. */
+  const ensureKeyReady = useCallback((): boolean => {
+    if (!getKey()) {
+      toast.error("Add your OpenRouter API key to run translations.");
+      openApiKeyModal("Add a valid OpenRouter API key to start translating.");
+      return false;
+    }
+    if (getKeyStatus() === "invalid") {
+      toast.error("Your OpenRouter API key is invalid or expired.");
+      openApiKeyModal("Your OpenRouter API key is invalid or expired.");
+      return false;
+    }
+    return true;
+  }, []);
 
   /* ---------- Per-page execution ---------- */
 
@@ -144,7 +176,11 @@ export function PageWorkstation({ docId, pageCount, aiSummary, onPageAiChange }:
     async (pageNumber: number, prevExcerpt?: string): Promise<string | undefined> => {
       const key = getKey();
       const currentGlobals = globalsRef.current;
-      if (!key) return;
+      if (!key) {
+        ensureKeyReady();
+        return;
+      }
+
 
       // Read fresh page text + state from IDB
       const pageRec = await getPageData(docId, pageNumber);
@@ -242,7 +278,14 @@ export function PageWorkstation({ docId, pageCount, aiSummary, onPageAiChange }:
           const err = e instanceof Error ? e.message : "Unknown error";
           await upsertPageAi(docId, pageNumber, { status: "error", error: err });
           onPageAiChangeRef.current(pageNumber, { ...summarize(state), status: "error" });
+          if (e instanceof OpenRouterError && e.kind === "auth") {
+            toast.error(err);
+            openApiKeyModal(err);
+          } else if (e instanceof OpenRouterError) {
+            toast.error(err);
+          }
         }
+
       } finally {
         clearInterval(flushTimer);
         abortMap.current.delete(pageNumber);
@@ -283,8 +326,10 @@ export function PageWorkstation({ docId, pageCount, aiSummary, onPageAiChange }:
   }, [docId]);
 
   const handleRunAll = async () => {
+    if (!ensureKeyReady()) return;
     const freshGlobals = readGlobals();
     setGlobals(freshGlobals);
+
 
     runAllRef.current = { cancelled: false };
     setRunAllActive(true);
@@ -399,24 +444,47 @@ export function PageWorkstation({ docId, pageCount, aiSummary, onPageAiChange }:
 
   /* ---------- Empty / setup states ---------- */
 
-  if (!hasKey || !globals.modelId) {
+  if (!keyReady || !globals.modelId) {
+    const noKey = !hasKey;
+    const invalid = keyStatus === "invalid";
     return (
       <div className="flex h-full items-center justify-center px-6 text-center text-sm text-muted-foreground">
         <div>
-          <div className="font-mono text-[11px] uppercase tracking-widest">setup required</div>
-          <p className="mt-2">
-            {!hasKey ? "Add your OpenRouter API key to run AI operations." : "Select a model in Settings."}
-          </p>
-          <Link
-            to="/settings"
-            className="mt-4 inline-block rounded-md bg-primary px-3 py-1.5 font-mono text-[11px] uppercase tracking-widest text-primary-foreground"
+          <div
+            className={`font-mono text-[11px] uppercase tracking-widest ${
+              invalid ? "text-destructive" : ""
+            }`}
           >
-            open settings
-          </Link>
+            {invalid ? "api key invalid" : noKey ? "api key required" : "setup required"}
+          </div>
+          <p className="mt-2">
+            {invalid
+              ? "Your saved OpenRouter key is invalid or expired."
+              : noKey
+                ? "Add your OpenRouter API key to start translating."
+                : "Select a model in Settings."}
+          </p>
+          <div className="mt-4 flex items-center justify-center gap-2">
+            {keyReady ? null : (
+              <button
+                onClick={() => openApiKeyModal()}
+                className="rounded-md bg-primary px-3 py-1.5 font-mono text-[11px] uppercase tracking-widest text-primary-foreground hover:opacity-90"
+              >
+                add api key
+              </button>
+            )}
+            <Link
+              to="/settings"
+              className="rounded-md border border-border bg-background px-3 py-1.5 font-mono text-[11px] uppercase tracking-widest text-muted-foreground hover:text-foreground"
+            >
+              open settings
+            </Link>
+          </div>
         </div>
       </div>
     );
   }
+
 
   if (pageCount === 0) {
     return (

@@ -15,6 +15,17 @@ const STYLE_LS = "doclens.style";
 const TEMP_LS = "doclens.temperature";
 const MEM_LS = "doclens.memory";
 const SEQ_LS = "doclens.sequential";
+const KEY_STATUS_LS = "doclens.openrouter.keyStatus";
+const KEY_CHANGE_EVT = "doclens:openrouter-key-change";
+export const OPEN_API_KEY_MODAL_EVT = "doclens:open-api-key-modal";
+
+export type KeyStatus = "missing" | "valid" | "invalid" | "unknown";
+
+function emitKeyChange() {
+  if (typeof window !== "undefined") {
+    window.dispatchEvent(new Event(KEY_CHANGE_EVT));
+  }
+}
 
 export function getKey(): string {
   if (typeof window === "undefined") return "";
@@ -22,10 +33,52 @@ export function getKey(): string {
 }
 export function setKey(k: string) {
   localStorage.setItem(KEY_LS, k);
+  emitKeyChange();
 }
 export function clearKey() {
   localStorage.removeItem(KEY_LS);
+  localStorage.removeItem(KEY_STATUS_LS);
+  emitKeyChange();
 }
+
+/** Heuristic: OpenRouter keys are prefixed with sk-or-... */
+export function isKeyFormatValid(k: string): boolean {
+  return /^sk-or-[A-Za-z0-9_-]{20,}$/.test(k.trim());
+}
+
+export function getKeyStatus(): KeyStatus {
+  if (typeof window === "undefined") return "unknown";
+  const k = getKey();
+  if (!k) return "missing";
+  const v = localStorage.getItem(KEY_STATUS_LS);
+  return v === "valid" || v === "invalid" ? v : "unknown";
+}
+
+export function setKeyStatus(s: KeyStatus): void {
+  if (typeof window === "undefined") return;
+  if (s === "missing" || s === "unknown") localStorage.removeItem(KEY_STATUS_LS);
+  else localStorage.setItem(KEY_STATUS_LS, s);
+  emitKeyChange();
+}
+
+/** Subscribe to any key/status change (cross-tab + in-tab). */
+export function onKeyChange(cb: () => void): () => void {
+  if (typeof window === "undefined") return () => {};
+  const h = () => cb();
+  window.addEventListener(KEY_CHANGE_EVT, h);
+  window.addEventListener("storage", h);
+  return () => {
+    window.removeEventListener(KEY_CHANGE_EVT, h);
+    window.removeEventListener("storage", h);
+  };
+}
+
+/** Ask the app to open the API key modal (mounted in __root.tsx). */
+export function openApiKeyModal(reason?: string): void {
+  if (typeof window === "undefined") return;
+  window.dispatchEvent(new CustomEvent(OPEN_API_KEY_MODAL_EVT, { detail: { reason } }));
+}
+
 
 export function getSelectedModel(): string {
   if (typeof window === "undefined") return "";
@@ -97,12 +150,23 @@ const HEADERS_BASE = {
 };
 
 export async function validateKey(key: string): Promise<boolean> {
+  const trimmed = key.trim();
+  if (!trimmed) {
+    setKeyStatus("missing");
+    return false;
+  }
+  if (!isKeyFormatValid(trimmed)) {
+    setKeyStatus("invalid");
+    return false;
+  }
   try {
     const res = await fetch("https://openrouter.ai/api/v1/auth/key", {
-      headers: { Authorization: `Bearer ${key}`, ...HEADERS_BASE },
+      headers: { Authorization: `Bearer ${trimmed}`, ...HEADERS_BASE },
     });
+    setKeyStatus(res.ok ? "valid" : "invalid");
     return res.ok;
   } catch {
+    // Network error — don't mark invalid; status stays unknown.
     return false;
   }
 }
@@ -115,6 +179,67 @@ export async function fetchModels(key: string): Promise<ORModel[]> {
   const json = await res.json();
   return (json.data ?? []) as ORModel[];
 }
+
+/* -------- Friendly errors -------- */
+
+export type OpenRouterErrorKind =
+  | "auth"
+  | "credits"
+  | "rate_limit"
+  | "server"
+  | "network"
+  | "unknown";
+
+export class OpenRouterError extends Error {
+  readonly status: number;
+  readonly kind: OpenRouterErrorKind;
+  constructor(message: string, status: number, kind: OpenRouterErrorKind) {
+    super(message);
+    this.name = "OpenRouterError";
+    this.status = status;
+    this.kind = kind;
+  }
+}
+
+function friendlyOpenRouterError(status: number, body: string): OpenRouterError {
+  if (status === 401)
+    return new OpenRouterError(
+      "Your OpenRouter API key is invalid or expired. Add a valid key to continue.",
+      401,
+      "auth",
+    );
+  if (status === 403)
+    return new OpenRouterError(
+      "OpenRouter rejected this key for the selected model. Check key permissions or pick another model.",
+      403,
+      "auth",
+    );
+  if (status === 402)
+    return new OpenRouterError(
+      "Your OpenRouter account is out of credits. Add credits or switch to a free model.",
+      402,
+      "credits",
+    );
+  if (status === 429)
+    return new OpenRouterError(
+      "Rate limit reached on OpenRouter. Please wait a moment and try again.",
+      429,
+      "rate_limit",
+    );
+  if (status >= 500)
+    return new OpenRouterError(
+      "OpenRouter is having trouble right now. Please retry shortly.",
+      status,
+      "server",
+    );
+  const snippet = body.replace(/\s+/g, " ").trim().slice(0, 160);
+  return new OpenRouterError(
+    `Request failed (${status})${snippet ? `: ${snippet}` : "."}`,
+    status,
+    "unknown",
+  );
+}
+
 
 /** Default timeout for a single streaming request (ms). */
 const STREAM_TIMEOUT_MS = 60_000;
@@ -188,10 +313,14 @@ export async function streamCompletion(opts: StreamOpts): Promise<void> {
 
     if (!res.ok || !res.body) {
       const txt = await res.text().catch(() => "");
-      lastError = new Error(`OpenRouter error ${res.status}: ${txt.slice(0, 200)}`);
+      const friendly = friendlyOpenRouterError(res.status, txt);
+      // Persist key-status side effects for auth failures.
+      if (friendly.kind === "auth") setKeyStatus("invalid");
+      lastError = friendly;
       if (isRetryable(res.status) && attempt < MAX_RETRIES) continue;
-      throw lastError;
+      throw friendly;
     }
+
 
     // Stream reading — no retry once streaming starts
     const reader = res.body.getReader();
