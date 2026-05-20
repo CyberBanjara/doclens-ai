@@ -14,6 +14,12 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import {
+  getKeyStatus,
+  onKeyChange,
+  openApiKeyModal,
+  type KeyStatus,
+} from "@/lib/openrouter";
+import {
   createDoc,
   deleteDoc,
   getLastOpened,
@@ -21,6 +27,7 @@ import {
   StorageError,
   type DocSummary,
 } from "@/lib/storage";
+
 
 export const Route = createFileRoute("/")({
   component: DashboardPage,
