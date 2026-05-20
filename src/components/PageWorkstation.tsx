@@ -142,7 +142,33 @@ export function PageWorkstation({ docId, pageCount, aiSummary, onPageAiChange }:
     fetchModels(k).then(setModels).catch(() => {});
   }, []);
 
+  const [keyStatus, setKeyStatusState] = useState<KeyStatus>("unknown");
+  useEffect(() => {
+    setKeyStatusState(getKeyStatus());
+    return onKeyChange(() => {
+      setKeyStatusState(getKeyStatus());
+      const k = getKey();
+      if (k) fetchModels(k).then(setModels).catch(() => {});
+    });
+  }, []);
+
   const hasKey = !!getKey();
+  const keyReady = keyStatus !== "invalid" && keyStatus !== "missing" && hasKey;
+
+  /** Returns true if the key is usable; otherwise opens modal + shows toast and returns false. */
+  const ensureKeyReady = useCallback((): boolean => {
+    if (!getKey()) {
+      toast.error("Add your OpenRouter API key to run translations.");
+      openApiKeyModal("Add a valid OpenRouter API key to start translating.");
+      return false;
+    }
+    if (getKeyStatus() === "invalid") {
+      toast.error("Your OpenRouter API key is invalid or expired.");
+      openApiKeyModal("Your OpenRouter API key is invalid or expired.");
+      return false;
+    }
+    return true;
+  }, []);
 
   /* ---------- Per-page execution ---------- */
 
@@ -150,7 +176,11 @@ export function PageWorkstation({ docId, pageCount, aiSummary, onPageAiChange }:
     async (pageNumber: number, prevExcerpt?: string): Promise<string | undefined> => {
       const key = getKey();
       const currentGlobals = globalsRef.current;
-      if (!key) return;
+      if (!key) {
+        ensureKeyReady();
+        return;
+      }
+
 
       // Read fresh page text + state from IDB
       const pageRec = await getPageData(docId, pageNumber);
