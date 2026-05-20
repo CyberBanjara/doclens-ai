@@ -8,6 +8,7 @@ import {
   buildPagePayload,
   fetchModels,
   getKey,
+  getKeyStatus,
   getMemory,
   getMode,
   getOutputLanguage,
@@ -18,10 +19,15 @@ import {
   memoryExcerpt,
   MODE_INSTRUCTIONS,
   EXPLANATION_STYLES,
+  onKeyChange,
+  OpenRouterError,
+  openApiKeyModal,
   streamCompletion,
   type GlobalMode,
+  type KeyStatus,
   type ORModel,
 } from "@/lib/openrouter";
+
 import {
   computeSettingsHash,
   getPageData,
