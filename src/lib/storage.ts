@@ -613,3 +613,33 @@ export async function estimateStorage(): Promise<{ usage: number; quota: number 
     return null;
   }
 }
+
+export async function clearAllAiResults(): Promise<void> {
+  const d = await db();
+
+  // 1. Reset pageAi in PAGES store
+  const txPage = d.transaction(PAGES, "readwrite");
+  let cursorPage = await txPage.store.openCursor();
+  while (cursorPage) {
+    const val = cursorPage.value;
+    if (val.pageAi) {
+      delete val.pageAi;
+      await cursorPage.update(val);
+    }
+    cursorPage = await cursorPage.continue();
+  }
+  await txPage.done;
+
+  // 2. Reset aiDoneCount in documents store
+  const txDoc = d.transaction(STORE, "readwrite");
+  let cursorDoc = await txDoc.store.openCursor();
+  while (cursorDoc) {
+    const val = cursorDoc.value;
+    if (val.aiDoneCount !== 0) {
+      val.aiDoneCount = 0;
+      await cursorDoc.update(val);
+    }
+    cursorDoc = await cursorDoc.continue();
+  }
+  await txDoc.done;
+}

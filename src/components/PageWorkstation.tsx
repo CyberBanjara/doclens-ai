@@ -23,6 +23,7 @@ import {
   OpenRouterError,
   openApiKeyModal,
   streamCompletion,
+  mapLimit,
   type GlobalMode,
   type KeyStatus,
   type ORModel,
@@ -383,10 +384,12 @@ export function PageWorkstation({ docId, pageCount, aiSummary, onPageAiChange }:
     } else {
       let completed = 0;
       const numbers = Array.from({ length: pageCount }, (_, i) => i + 1);
-      const results = await Promise.allSettled(
-        numbers.map(async (n) => {
+      const results = await mapLimit(
+        numbers,
+        3,
+        async (n) => {
           const pageRec = await getPageData(docId, n);
-          if (!pageRec) return undefined;
+          if (!pageRec) return { status: "fulfilled" as const, value: undefined };
           const state: PageAi = pageRec.pageAi ?? { pageNumber: n, status: "idle" };
           const currentGlobals = readGlobals();
           const eff = effective(currentGlobals, state.overrides);
@@ -401,20 +404,20 @@ export function PageWorkstation({ docId, pageCount, aiSummary, onPageAiChange }:
           if (state.status === "done" && state.settingsHash === hash && !state.isCustom && state.result) {
             completed++;
             if (mountedRef.current) setRunAllProgress({ current: completed, total: totalToProcess, errors: errorCount });
-            return undefined;
+            return { status: "fulfilled" as const, value: undefined };
           }
           try {
             const result = await runPage(n);
             completed++;
             if (mountedRef.current) setRunAllProgress({ current: completed, total: totalToProcess, errors: errorCount });
-            return result;
+            return { status: "fulfilled" as const, value: result };
           } catch (e) {
             completed++;
             errorCount++;
             if (mountedRef.current) setRunAllProgress({ current: completed, total: totalToProcess, errors: errorCount });
-            throw e;
+            return { status: "rejected" as const, reason: e };
           }
-        }),
+        }
       );
       errorCount = results.filter((r) => r.status === "rejected").length;
     }

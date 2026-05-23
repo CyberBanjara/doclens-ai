@@ -301,10 +301,62 @@ class LocalVoiceProvider {
 }
 
 let localProviderInstance: LocalVoiceProvider | null = null;
+let currentAudio: { audio: HTMLAudioElement; url: string } | null = null;
 
 // ─── Engine / Synthesis ────────────────────────────────────────────────────
 
-let currentAudio: HTMLAudioElement | null = null;
+/**
+ * Low-level: synthesize a chunk and return PCM data or Blob.
+ */
+export interface SynthesizedAudio {
+  pcm?: Float32Array;
+  sampleRate?: number;
+  blob?: Blob;
+}
+
+export async function synthesizeAudio(
+  text: string,
+  voiceId: string,
+  speakerId = 0,
+): Promise<SynthesizedAudio> {
+  const engine = await getEngine();
+
+  const result = await Promise.race([
+    engine.generate(text, voiceId, speakerId),
+    new Promise<never>((_, reject) =>
+      setTimeout(() => reject(new Error("Piper synthesis timed out (60s)")), 60_000),
+    ),
+  ]);
+
+  if (result?.audio instanceof Float32Array) {
+    return {
+      pcm: result.audio,
+      sampleRate: result.sampleRate ?? 22050,
+    };
+  }
+  if (result?.file instanceof Blob) return { blob: result.file };
+  if (result instanceof Blob) return { blob: result };
+  console.error("[piper-engine] Unexpected generate() result:", result);
+  throw new Error("Unexpected generate() result format");
+}
+
+/**
+ * Low-level: synthesize a chunk and return the raw WAV Blob.
+ * Caller is responsible for playback and memory.
+ */
+export async function synthesizeBlob(
+  text: string,
+  voiceId: string,
+  speakerId = 0,
+): Promise<Blob> {
+  const audioData = await synthesizeAudio(text, voiceId, speakerId);
+  if (audioData.blob) return audioData.blob;
+  if (audioData.pcm) {
+    const wav = encodeWav(audioData.pcm, audioData.sampleRate ?? 22050);
+    return new Blob([wav], { type: "audio/wav" });
+  }
+  throw new Error("Failed to synthesize blob: no audio format returned");
+}
 
 /**
  * Initialize the PiperWebWorkerEngine (lazy, once).
@@ -331,34 +383,6 @@ async function getEngine(): Promise<any> {
 }
 
 /**
- * Low-level: synthesize a chunk and return the raw WAV Blob.
- * Caller is responsible for playback and memory.
- */
-export async function synthesizeBlob(
-  text: string,
-  voiceId: string,
-  speakerId = 0,
-): Promise<Blob> {
-  const engine = await getEngine();
-
-  const result = await Promise.race([
-    engine.generate(text, voiceId, speakerId),
-    new Promise<never>((_, reject) =>
-      setTimeout(() => reject(new Error("Piper synthesis timed out (60s)")), 60_000),
-    ),
-  ]);
-
-  if (result?.file instanceof Blob) return result.file;
-  if (result instanceof Blob) return result;
-  if (result?.audio instanceof Float32Array) {
-    const wav = encodeWav(result.audio, result.sampleRate ?? 22050);
-    return new Blob([wav], { type: "audio/wav" });
-  }
-  console.error("[piper-engine] Unexpected generate() result:", result);
-  throw new Error("Unexpected generate() result format");
-}
-
-/**
  * Synthesize text using an installed Piper voice via HTMLAudioElement.
  * Used by testVoice — for long-form playback use speakChunked which uses
  * an AudioContext pipeline for gapless output.
@@ -374,10 +398,10 @@ export async function synthesize(
   stop();
 
   const audio = new Audio(url);
-  currentAudio = audio;
+  currentAudio = { audio, url };
   const cleanup = () => {
     URL.revokeObjectURL(url);
-    if (currentAudio === audio) currentAudio = null;
+    if (currentAudio?.audio === audio) currentAudio = null;
   };
   audio.onended = cleanup;
   audio.onerror = cleanup;
@@ -388,8 +412,9 @@ export async function synthesize(
 /** Stop any current Piper playback (HTMLAudio + AudioContext pipeline). */
 export function stop() {
   if (currentAudio) {
-    currentAudio.pause();
-    try { currentAudio.removeAttribute("src"); currentAudio.load(); } catch { /* ignore */ }
+    currentAudio.audio.pause();
+    URL.revokeObjectURL(currentAudio.url);
+    try { currentAudio.audio.removeAttribute("src"); currentAudio.audio.load(); } catch { /* ignore */ }
     currentAudio = null;
   }
   stopAudioContextPlayback();
@@ -505,10 +530,18 @@ export async function speakChunked(
       await waitForSlot();
       if (aborted) return;
       try {
-        const blob = await synthesizeBlob(chunks[prefetchIndex], voiceId);
+        const audioData = await synthesizeAudio(chunks[prefetchIndex], voiceId);
         if (aborted) return;
-        const arrayBuffer = await blob.arrayBuffer();
-        const buffer = await ctx.decodeAudioData(arrayBuffer);
+        let buffer: AudioBuffer;
+        if (audioData.pcm) {
+          buffer = ctx.createBuffer(1, audioData.pcm.length, audioData.sampleRate ?? 22050);
+          buffer.getChannelData(0).set(audioData.pcm);
+        } else if (audioData.blob) {
+          const arrayBuffer = await audioData.blob.arrayBuffer();
+          buffer = await ctx.decodeAudioData(arrayBuffer);
+        } else {
+          throw new Error("No audio format returned");
+        }
         if (aborted) return;
         decoded.push(buffer);
         prefetchIndex++;

@@ -35,6 +35,8 @@ import {
   setTtsPitch,
   setTtsRate,
 } from "@/lib/tts";
+import { estimateStorage, clearAllAiResults } from "@/lib/storage";
+import { toast } from "sonner";
 
 export const Route = createFileRoute("/settings")({
   component: SettingsPage,
@@ -87,6 +89,36 @@ function SettingsPage() {
   const [ttsVoice, setTtsVoiceState] = useState("");
   const [ttsRate, setTtsRateState] = useState(1);
   const [ttsPitch, setTtsPitchState] = useState(1);
+  const [storageStats, setStorageStats] = useState<{ usage: string; quota: string; percent: string } | null>(null);
+  const [clearing, setClearing] = useState(false);
+
+  const updateStorageStats = async () => {
+    const est = await estimateStorage();
+    if (est) {
+      const mbUsage = (est.usage / (1024 * 1024)).toFixed(1);
+      const mbQuota = (est.quota / (1024 * 1024)).toFixed(0);
+      const pct = est.quota > 0 ? ((est.usage / est.quota) * 100).toFixed(2) : "0";
+      setStorageStats({
+        usage: `${mbUsage} MB`,
+        quota: `${mbQuota} MB`,
+        percent: `${pct}%`,
+      });
+    }
+  };
+
+  const handleClearCache = async () => {
+    if (!confirm("Are you sure you want to clear all AI translation/explanation cached results? Extracted document text will be preserved.")) return;
+    setClearing(true);
+    try {
+      await clearAllAiResults();
+      toast.success("AI translation and explanation cache cleared successfully!");
+      void updateStorageStats();
+    } catch (e) {
+      toast.error(`Clear failed: ${e instanceof Error ? e.message : "unknown"}`);
+    } finally {
+      setClearing(false);
+    }
+  };
 
   useEffect(() => {
     setKeyInput(getKey());
@@ -104,6 +136,7 @@ function SettingsPage() {
       setKeyStatus("valid");
       void loadModels(getKey());
     }
+    void updateStorageStats();
   }, []);
 
   // Voices load asynchronously in some browsers
@@ -387,6 +420,46 @@ function SettingsPage() {
               </label>
             </div>
           )}
+        </section>
+
+        {/* Storage & Database Management */}
+        <section className="mb-8 rounded-lg border border-border bg-surface p-5">
+          <h3 className="font-mono text-[11px] uppercase tracking-[0.2em] text-muted-foreground">
+            storage & database management
+          </h3>
+          <p className="mt-1 text-sm text-foreground/80">
+            Monitor browser IndexedDB storage utilization and purge transient AI cache entries.
+          </p>
+
+          <div className="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-2">
+            {storageStats && (
+              <div className="rounded-md border border-border bg-background px-4 py-3">
+                <div className="font-mono text-[10px] uppercase tracking-widest text-muted-foreground">
+                  IndexedDB Usage
+                </div>
+                <div className="mt-1 text-lg font-semibold text-primary">
+                  {storageStats.usage} / {storageStats.quota}
+                </div>
+                <div className="mt-0.5 font-mono text-[10px] text-muted-foreground">
+                  {storageStats.percent} of allocated quota used
+                </div>
+              </div>
+            )}
+            <div className="flex flex-col justify-center rounded-md border border-border bg-background px-4 py-3">
+              <div className="font-mono text-[10px] uppercase tracking-widest text-muted-foreground">
+                AI results cache
+              </div>
+              <div className="mt-2 flex items-center justify-between">
+                <button
+                  onClick={handleClearCache}
+                  disabled={clearing}
+                  className="rounded-md border border-destructive/30 bg-destructive/5 px-3 py-1.5 font-mono text-[11px] uppercase tracking-widest text-destructive hover:bg-destructive/10 disabled:opacity-50"
+                >
+                  {clearing ? "clearing…" : "clear AI cache"}
+                </button>
+              </div>
+            </div>
+          </div>
         </section>
 
         {/* OpenRouter API key */}

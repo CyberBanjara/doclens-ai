@@ -324,30 +324,34 @@ export async function streamCompletion(opts: StreamOpts): Promise<void> {
 
     // Stream reading — no retry once streaming starts
     const reader = res.body.getReader();
-    const decoder = new TextDecoder();
-    let buf = "";
-    while (true) {
-      const { done, value } = await reader.read();
-      if (done) break;
-      buf += decoder.decode(value, { stream: true });
-      let idx: number;
-      while ((idx = buf.indexOf("\n")) !== -1) {
-        let line = buf.slice(0, idx);
-        buf = buf.slice(idx + 1);
-        if (line.endsWith("\r")) line = line.slice(0, -1);
-        if (!line || line.startsWith(":")) continue;
-        if (!line.startsWith("data: ")) continue;
-        const data = line.slice(6).trim();
-        if (data === "[DONE]") return;
-        try {
-          const parsed = JSON.parse(data);
-          const delta = parsed.choices?.[0]?.delta?.content;
-          if (typeof delta === "string" && delta) opts.onDelta(delta);
-        } catch {
-          buf = line + "\n" + buf;
-          break;
+    try {
+      const decoder = new TextDecoder();
+      let buf = "";
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        buf += decoder.decode(value, { stream: true });
+        let idx: number;
+        while ((idx = buf.indexOf("\n")) !== -1) {
+          let line = buf.slice(0, idx);
+          buf = buf.slice(idx + 1);
+          if (line.endsWith("\r")) line = line.slice(0, -1);
+          if (!line || line.startsWith(":")) continue;
+          if (!line.startsWith("data: ")) continue;
+          const data = line.slice(6).trim();
+          if (data === "[DONE]") return;
+          try {
+            const parsed = JSON.parse(data);
+            const delta = parsed.choices?.[0]?.delta?.content;
+            if (typeof delta === "string" && delta) opts.onDelta(delta);
+          } catch {
+            buf = line + "\n" + buf;
+            break;
+          }
         }
       }
+    } finally {
+      reader.releaseLock();
     }
     return; // Success
   }
@@ -507,3 +511,29 @@ export function chunkForContext(text: string, contextTokens: number, reserveOutp
   if (buf) chunks.push(buf);
   return chunks;
 }
+
+export async function mapLimit<T, R>(
+  items: T[],
+  limit: number,
+  fn: (item: T) => Promise<R>
+): Promise<R[]> {
+  const results: R[] = [];
+  const promises: Promise<void>[] = [];
+  let index = 0;
+
+  async function worker() {
+    while (index < items.length) {
+      const curIndex = index++;
+      if (curIndex >= items.length) break;
+      results[curIndex] = await fn(items[curIndex]);
+    }
+  }
+
+  for (let i = 0; i < Math.min(limit, items.length); i++) {
+    promises.push(worker());
+  }
+
+  await Promise.all(promises);
+  return results;
+}
+
