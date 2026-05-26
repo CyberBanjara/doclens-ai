@@ -1,6 +1,6 @@
-import { createFileRoute, Link } from "@tanstack/react-router";
+import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useMemo, useState } from "react";
-import { AppHeader } from "@/components/AppHeader";
+import { SidebarLayout } from "@/components/SidebarLayout";
 import {
   fetchModels,
   getKey,
@@ -26,26 +26,17 @@ import {
   type GlobalMode,
   type ORModel,
 } from "@/lib/openrouter";
-import {
-  getTtsPitch,
-  getTtsRate,
-  getTtsVoiceFor,
-  isTtsSupported,
-  listVoices,
-  setTtsPitch,
-  setTtsRate,
-} from "@/lib/tts";
 import { estimateStorage, clearAllAiResults } from "@/lib/storage";
 import { toast } from "sonner";
 
 export const Route = createFileRoute("/settings")({
   component: SettingsPage,
   head: () => ({
-    meta: [{ title: "DocLens — Settings" }],
+    meta: [{ title: "DocLens — General Settings" }],
   }),
 });
 
-const LANGS = ["English", "Arabic", "French", "Hindi", "Spanish", "Japanese"];
+const LANGS = ["English", "Hindi", "Spanish", "Mandarin", "French", "German"];
 const STYLES: ExplanationStyle[] = EXPLANATION_STYLES.map((s) => s.id);
 
 type FilterTab = "free" | "popular" | "all";
@@ -72,6 +63,7 @@ function isTextToText(m: ORModel): boolean {
 function SettingsPage() {
   const [keyInput, setKeyInput] = useState("");
   const [keyStatus, setKeyStatus] = useState<"unknown" | "valid" | "invalid" | "checking">("unknown");
+  const [showKey, setShowKey] = useState(false);
   const [models, setModels] = useState<ORModel[]>([]);
   const [loadingModels, setLoadingModels] = useState(false);
   const [modelError, setModelError] = useState("");
@@ -85,11 +77,7 @@ function SettingsPage() {
   const [temperature, setTemp] = useState(0.3);
   const [memory, setMemoryState] = useState(true);
   const [sequential, setSequentialState] = useState(true);
-  const [voices, setVoices] = useState<SpeechSynthesisVoice[]>([]);
-  const [ttsVoice, setTtsVoiceState] = useState("");
-  const [ttsRate, setTtsRateState] = useState(1);
-  const [ttsPitch, setTtsPitchState] = useState(1);
-  const [storageStats, setStorageStats] = useState<{ usage: string; quota: string; percent: string } | null>(null);
+  const [storageStats, setStorageStats] = useState<{ usage: string; quota: string; percent: string; pctNum: number } | null>(null);
   const [clearing, setClearing] = useState(false);
 
   const updateStorageStats = async () => {
@@ -97,11 +85,13 @@ function SettingsPage() {
     if (est) {
       const mbUsage = (est.usage / (1024 * 1024)).toFixed(1);
       const mbQuota = (est.quota / (1024 * 1024)).toFixed(0);
-      const pct = est.quota > 0 ? ((est.usage / est.quota) * 100).toFixed(2) : "0";
+      const pctNum = est.quota > 0 ? (est.usage / est.quota) * 100 : 0;
+      const pct = pctNum.toFixed(2);
       setStorageStats({
         usage: `${mbUsage} MB`,
         quota: `${mbQuota} MB`,
         percent: `${pct}%`,
+        pctNum,
       });
     }
   };
@@ -129,23 +119,11 @@ function SettingsPage() {
     setTemp(getTemperature());
     setMemoryState(getMemory());
     setSequentialState(getSequential());
-    setTtsVoiceState(getTtsVoiceFor(getOutputLanguage()));
-    setTtsRateState(getTtsRate());
-    setTtsPitchState(getTtsPitch());
     if (getKey()) {
       setKeyStatus("valid");
       void loadModels(getKey());
     }
     void updateStorageStats();
-  }, []);
-
-  // Voices load asynchronously in some browsers
-  useEffect(() => {
-    if (!isTtsSupported()) return;
-    const load = () => setVoices(listVoices());
-    load();
-    window.speechSynthesis.addEventListener?.("voiceschanged", load);
-    return () => window.speechSynthesis.removeEventListener?.("voiceschanged", load);
   }, []);
 
   const loadModels = async (k: string) => {
@@ -207,79 +185,107 @@ function SettingsPage() {
   }, [models, search, tab]);
 
   return (
-    <div className="flex min-h-screen flex-col bg-background text-foreground">
-      <AppHeader />
-      <main className="mx-auto w-full max-w-5xl flex-1 px-5 py-8">
-        <div className="mb-6 flex items-baseline justify-between">
-          <div>
-            <h2 className="font-mono text-[11px] uppercase tracking-[0.25em] text-muted-foreground">
-              configuration
-            </h2>
-            <p className="mt-1 text-2xl font-semibold tracking-tight">Settings</p>
-          </div>
-          <Link
-            to="/"
-            className="rounded-md border border-border bg-background px-3 py-1.5 font-mono text-[11px] uppercase tracking-widest text-muted-foreground hover:text-foreground"
-          >
-            back
-          </Link>
+    <SidebarLayout
+      pageTitle="General Settings"
+      topBarRight={
+        <span className="rounded-full border border-primary/20 bg-primary/10 px-4 py-1 text-xs font-bold text-primary">
+          System Online
+        </span>
+      }
+    >
+      <div className="mx-auto max-w-7xl space-y-8 p-8 pb-28">
+        {/* Page Header */}
+        <header>
+          <h3 className="text-4xl font-bold tracking-tight text-foreground">
+            General Settings
+          </h3>
+          <p className="mt-2 text-base text-muted-foreground">
+            Configure your AI intelligence core and global defaults.
+          </p>
+        </header>
+
+        {/* Row 1: Output Language + Storage & Database */}
+        <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
+          {/* Output Language */}
+          <section className="glass-panel flex flex-col gap-4 rounded-xl p-6">
+            <div className="flex items-center gap-3">
+              <span className="text-xl text-primary">🌐</span>
+              <h3 className="text-lg font-semibold text-foreground">Output Language</h3>
+            </div>
+            <p className="text-sm text-muted-foreground">
+              Default language for AI-generated summaries and responses.
+            </p>
+            <div className="relative">
+              <input
+                value={customLang}
+                onChange={(e) => setCustomLang(e.target.value)}
+                onKeyDown={(e) => e.key === "Enter" && handleCustomLang()}
+                placeholder="Search languages..."
+                className="w-full rounded-lg border border-border bg-background py-2 pl-10 pr-4 text-sm outline-none transition-colors focus:border-primary"
+              />
+              <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground">🔍</span>
+            </div>
+            <div className="flex flex-wrap gap-2">
+              {LANGS.map((l) => (
+                <button
+                  key={l}
+                  onClick={() => handleLangSelect(l)}
+                  className={`rounded-full px-4 py-1.5 text-xs font-bold transition-all ${
+                    language === l
+                      ? "bg-primary text-primary-foreground"
+                      : "bg-surface-2 text-muted-foreground hover:bg-border hover:text-foreground"
+                  }`}
+                >
+                  {l}
+                </button>
+              ))}
+            </div>
+          </section>
+
+          {/* Storage & Database */}
+          <section className="glass-panel flex flex-col justify-between rounded-xl p-6">
+            <div>
+              <div className="flex items-center gap-3 mb-4">
+                <span className="text-xl text-yellow-500">💾</span>
+                <h3 className="text-lg font-semibold text-foreground">Storage & Database</h3>
+              </div>
+              {storageStats && (
+                <div className="mt-2">
+                  <div className="mb-2 flex justify-between text-xs font-bold text-muted-foreground">
+                    <span>Workspace Usage</span>
+                    <span className="text-foreground">{storageStats.usage} / {storageStats.quota}</span>
+                  </div>
+                  <div className="h-2 w-full overflow-hidden rounded-full bg-background">
+                    <div
+                      className="h-full rounded-full bg-yellow-500 transition-all"
+                      style={{ width: `${Math.min(storageStats.pctNum, 100)}%` }}
+                    />
+                  </div>
+                </div>
+              )}
+            </div>
+            <div className="mt-6 flex justify-end">
+              <button
+                onClick={handleClearCache}
+                disabled={clearing}
+                className="flex items-center gap-2 rounded-lg px-4 py-2 text-xs font-bold text-destructive transition-all hover:bg-destructive/10 disabled:opacity-50"
+              >
+                🗑️ {clearing ? "Clearing…" : "Clear Cache"}
+              </button>
+            </div>
+          </section>
         </div>
 
-        {/* Output Language */}
-        <section className="mb-8 rounded-lg border border-border bg-surface p-5">
-          <h3 className="font-mono text-[11px] uppercase tracking-[0.2em] text-muted-foreground">
-            output language
-          </h3>
-          <p className="mt-1 text-sm text-foreground/80">
-            Injected into every AI request — the assistant will always respond in this language.
-          </p>
-          <div className="mt-4 flex flex-wrap gap-2">
-            {LANGS.map((l) => (
-              <button
-                key={l}
-                onClick={() => handleLangSelect(l)}
-                className={`rounded-md border px-3 py-1.5 font-mono text-[11px] uppercase tracking-widest transition-colors ${
-                  language === l
-                    ? "border-primary bg-primary/15 text-primary"
-                    : "border-border bg-background text-muted-foreground hover:text-foreground"
-                }`}
-              >
-                {l}
-              </button>
-            ))}
+        {/* Row 2: AI Pipeline Defaults (full width) */}
+        <section className="glass-panel rounded-xl p-6">
+          <div className="mb-6 flex items-center gap-3">
+            <span className="text-xl text-accent">⚡</span>
+            <h3 className="text-lg font-semibold text-foreground">AI Pipeline Defaults</h3>
           </div>
-          <div className="mt-3 flex items-center gap-2">
-            <input
-              value={customLang}
-              onChange={(e) => setCustomLang(e.target.value)}
-              onKeyDown={(e) => e.key === "Enter" && handleCustomLang()}
-              placeholder="Or type any language…"
-              className="flex-1 rounded-md border border-border bg-background px-3 py-1.5 font-mono text-[12px] outline-none focus:border-primary"
-            />
-            <button
-              onClick={handleCustomLang}
-              className="rounded-md border border-border bg-background px-3 py-1.5 font-mono text-[11px] uppercase tracking-widest text-muted-foreground hover:text-foreground"
-            >
-              set
-            </button>
-          </div>
-          <div className="mt-3 font-mono text-[11px] text-muted-foreground">
-            current: <span className="text-primary">{language}</span>
-          </div>
-        </section>
-
-        {/* Pipeline defaults */}
-        <section className="mb-8 rounded-lg border border-border bg-surface p-5">
-          <h3 className="font-mono text-[11px] uppercase tracking-[0.2em] text-muted-foreground">
-            pipeline defaults
-          </h3>
-          <p className="mt-1 text-sm text-foreground/80">
-            Applied to every page unless overridden inline. Per-page overrides always win.
-          </p>
-
-          <div className="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-2">
-            <label className="block">
-              <span className="font-mono text-[10px] uppercase tracking-widest text-muted-foreground">mode</span>
+          <div className="grid grid-cols-1 gap-6 md:grid-cols-3">
+            {/* Default Mode */}
+            <div className="flex flex-col gap-2">
+              <label className="text-xs font-bold uppercase tracking-wide text-muted-foreground">Default Mode</label>
               <select
                 value={mode}
                 onChange={(e) => {
@@ -287,18 +293,19 @@ function SettingsPage() {
                   setModeState(v);
                   saveMode(v);
                 }}
-                className="mt-1 w-full rounded-md border border-border bg-background px-3 py-1.5 font-mono text-[12px] outline-none focus:border-primary"
+                className="w-full cursor-pointer rounded-lg border border-border bg-background px-3 py-2 text-sm outline-none transition-colors focus:border-primary"
               >
                 {Object.entries(MODE_INSTRUCTIONS).map(([k, v]) => (
                   <option key={k} value={k}>{v.label}</option>
                 ))}
               </select>
-            </label>
+            </div>
 
-            <label className="block">
-              <span className="font-mono text-[10px] uppercase tracking-widest text-muted-foreground">
-                explanation style {mode === "translate" ? "(ignored in translate mode)" : ""}
-              </span>
+            {/* Tone Style */}
+            <div className="flex flex-col gap-2">
+              <label className="text-xs font-bold uppercase tracking-wide text-muted-foreground">
+                Tone Style {mode === "translate" ? "(ignored in translate)" : ""}
+              </label>
               <select
                 value={style}
                 disabled={mode === "translate"}
@@ -307,18 +314,20 @@ function SettingsPage() {
                   setStyleState(v);
                   saveStyle(v);
                 }}
-                className="mt-1 w-full rounded-md border border-border bg-background px-3 py-1.5 font-mono text-[12px] outline-none focus:border-primary disabled:opacity-50"
+                className="w-full cursor-pointer rounded-lg border border-border bg-background px-3 py-2 text-sm outline-none transition-colors focus:border-primary disabled:opacity-50"
               >
                 {EXPLANATION_STYLES.map((s) => (
                   <option key={s.id} value={s.id}>{s.label}</option>
                 ))}
               </select>
-            </label>
+            </div>
 
-            <label className="block sm:col-span-2">
-              <span className="font-mono text-[10px] uppercase tracking-widest text-muted-foreground">
-                temperature · <span className="text-primary">{temperature.toFixed(2)}</span>
-              </span>
+            {/* Temperature */}
+            <div className="flex flex-col gap-2">
+              <div className="flex items-center justify-between">
+                <label className="text-xs font-bold uppercase tracking-wide text-muted-foreground">Temperature</label>
+                <span className="text-sm font-semibold text-accent">{temperature.toFixed(1)}</span>
+              </div>
               <input
                 type="range"
                 min={0}
@@ -330,16 +339,20 @@ function SettingsPage() {
                   setTemp(v);
                   setTemperature(v);
                 }}
-                className="mt-2 w-full accent-primary"
+                className="mt-2 w-full"
               />
-              <div className="mt-1 flex justify-between font-mono text-[10px] text-muted-foreground">
-                <span>0 · deterministic</span><span>0.7</span><span>1.5 · creative</span>
+              <div className="flex justify-between text-[10px] uppercase text-muted-foreground">
+                <span>Precise</span>
+                <span>Creative</span>
               </div>
-            </label>
+            </div>
+          </div>
 
-            <label className="flex items-center justify-between rounded-md border border-border bg-background px-3 py-2.5">
+          {/* Memory & Sequential toggles */}
+          <div className="mt-6 grid grid-cols-1 gap-4 sm:grid-cols-2">
+            <label className="flex items-center justify-between rounded-lg border border-border bg-background px-4 py-3">
               <span>
-                <span className="block font-mono text-[10px] uppercase tracking-widest text-muted-foreground">memory</span>
+                <span className="block text-xs font-bold uppercase tracking-wide text-muted-foreground">Memory</span>
                 <span className="text-sm text-foreground/80">Pass trailing excerpt of previous page into next request</span>
               </span>
               <input
@@ -350,9 +363,9 @@ function SettingsPage() {
               />
             </label>
 
-            <label className="flex items-center justify-between rounded-md border border-border bg-background px-3 py-2.5">
+            <label className="flex items-center justify-between rounded-lg border border-border bg-background px-4 py-3">
               <span>
-                <span className="block font-mono text-[10px] uppercase tracking-widest text-muted-foreground">sequential execution</span>
+                <span className="block text-xs font-bold uppercase tracking-wide text-muted-foreground">Sequential Execution</span>
                 <span className="text-sm text-foreground/80">Run All Pages processes one at a time, in order</span>
               </span>
               <input
@@ -365,231 +378,142 @@ function SettingsPage() {
           </div>
         </section>
 
-        {/* TTS */}
-        <section className="mb-8 rounded-lg border border-border bg-surface p-5">
-          <h3 className="font-mono text-[11px] uppercase tracking-[0.2em] text-muted-foreground">
-            text-to-speech
-          </h3>
-          <p className="mt-1 text-sm text-foreground/80">
-            {isTtsSupported()
-              ? "Per-page Play / Pause / Stop reads AI results aloud using your browser's voices."
-              : "Web Speech API is not available in this browser."}
-          </p>
-          {isTtsSupported() && (
-            <div className="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-2">
-              <Link
-                to="/settings/voice"
-                className="block sm:col-span-2 rounded-md border border-border bg-background px-4 py-3 transition-colors hover:border-primary/50"
-              >
-                <div className="flex items-center justify-between gap-3">
-                  <div className="min-w-0">
-                    <div className="font-mono text-[10px] uppercase tracking-widest text-muted-foreground">
-                      voice · {language}
-                    </div>
-                    <div className="mt-0.5 truncate text-sm text-foreground">
-                      {ttsVoice || <span className="text-muted-foreground italic">— browser default —</span>}
-                    </div>
-                    <div className="mt-0.5 font-mono text-[10px] text-muted-foreground">
-                      {voices.length} system voices · per-language selection · favorites
-                    </div>
-                  </div>
-                  <span className="font-mono text-[11px] uppercase tracking-widest text-primary">choose →</span>
-                </div>
-              </Link>
-              <label className="block">
-                <span className="font-mono text-[10px] uppercase tracking-widest text-muted-foreground">
-                  rate · <span className="text-primary">{ttsRate.toFixed(2)}×</span>
-                </span>
-                <input
-                  type="range" min={0.5} max={2} step={0.05}
-                  value={ttsRate}
-                  onChange={(e) => { const v = parseFloat(e.target.value); setTtsRateState(v); setTtsRate(v); }}
-                  className="mt-2 w-full accent-primary"
-                />
-              </label>
-              <label className="block">
-                <span className="font-mono text-[10px] uppercase tracking-widest text-muted-foreground">
-                  pitch · <span className="text-primary">{ttsPitch.toFixed(2)}</span>
-                </span>
-                <input
-                  type="range" min={0} max={2} step={0.05}
-                  value={ttsPitch}
-                  onChange={(e) => { const v = parseFloat(e.target.value); setTtsPitchState(v); setTtsPitch(v); }}
-                  className="mt-2 w-full accent-primary"
-                />
-              </label>
+        {/* Row 3: API Management + Model Selection */}
+        <div className="grid grid-cols-1 gap-6 md:grid-cols-12">
+          {/* API Management */}
+          <section className="glass-panel flex flex-col gap-4 rounded-xl p-6 md:col-span-5">
+            <div className="flex items-center gap-3">
+              <span className="text-xl text-primary">🔑</span>
+              <h3 className="text-lg font-semibold text-foreground">API Management</h3>
             </div>
-          )}
-        </section>
-
-        {/* Storage & Database Management */}
-        <section className="mb-8 rounded-lg border border-border bg-surface p-5">
-          <h3 className="font-mono text-[11px] uppercase tracking-[0.2em] text-muted-foreground">
-            storage & database management
-          </h3>
-          <p className="mt-1 text-sm text-foreground/80">
-            Monitor browser IndexedDB storage utilization and purge transient AI cache entries.
-          </p>
-
-          <div className="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-2">
-            {storageStats && (
-              <div className="rounded-md border border-border bg-background px-4 py-3">
-                <div className="font-mono text-[10px] uppercase tracking-widest text-muted-foreground">
-                  IndexedDB Usage
-                </div>
-                <div className="mt-1 text-lg font-semibold text-primary">
-                  {storageStats.usage} / {storageStats.quota}
-                </div>
-                <div className="mt-0.5 font-mono text-[10px] text-muted-foreground">
-                  {storageStats.percent} of allocated quota used
-                </div>
-              </div>
-            )}
-            <div className="flex flex-col justify-center rounded-md border border-border bg-background px-4 py-3">
-              <div className="font-mono text-[10px] uppercase tracking-widest text-muted-foreground">
-                AI results cache
-              </div>
-              <div className="mt-2 flex items-center justify-between">
+            <p className="text-sm text-muted-foreground">
+              Your OpenRouter credentials for high-performance inference.
+            </p>
+            <div className="flex flex-col gap-3">
+              <label className="text-xs font-bold text-muted-foreground">OpenRouter Key</label>
+              <div className="relative">
+                <input
+                  value={keyInput}
+                  onChange={(e) => {
+                    setKeyInput(e.target.value);
+                    setKeyStatus("unknown");
+                  }}
+                  type={showKey ? "text" : "password"}
+                  placeholder="sk-or-…"
+                  className="w-full rounded-lg border border-border bg-background px-3 py-2 pr-10 font-mono text-sm tracking-widest outline-none transition-colors focus:border-primary"
+                />
                 <button
-                  onClick={handleClearCache}
-                  disabled={clearing}
-                  className="rounded-md border border-destructive/30 bg-destructive/5 px-3 py-1.5 font-mono text-[11px] uppercase tracking-widest text-destructive hover:bg-destructive/10 disabled:opacity-50"
+                  onClick={() => setShowKey(!showKey)}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                  type="button"
                 >
-                  {clearing ? "clearing…" : "clear AI cache"}
+                  {showKey ? "🙈" : "👁"}
                 </button>
               </div>
             </div>
-          </div>
-        </section>
-
-        {/* OpenRouter API key */}
-        <section className="mb-8 rounded-lg border border-border bg-surface p-5">
-          <h3 className="font-mono text-[11px] uppercase tracking-[0.2em] text-muted-foreground">
-            openrouter api key
-          </h3>
-          <p className="mt-1 text-sm text-foreground/80">
-            Stored locally in your browser. Required for AI execution.{" "}
-            <a
-              href="https://openrouter.ai/keys"
-              target="_blank"
-              rel="noreferrer"
-              className="text-primary underline-offset-4 hover:underline"
-            >
-              Get a key →
-            </a>
-          </p>
-          <div className="mt-4 flex items-center gap-2">
-            <input
-              value={keyInput}
-              onChange={(e) => {
-                setKeyInput(e.target.value);
-                setKeyStatus("unknown");
-              }}
-              type="password"
-              placeholder="sk-or-…"
-              className="flex-1 rounded-md border border-border bg-background px-3 py-1.5 font-mono text-[12px] outline-none focus:border-primary"
-            />
             <button
               onClick={handleValidate}
               disabled={!keyInput.trim() || keyStatus === "checking"}
-              className="rounded-md bg-primary px-3 py-1.5 font-mono text-[11px] uppercase tracking-widest text-primary-foreground disabled:opacity-40"
+              className="w-full rounded-lg bg-accent py-2 font-bold text-accent-foreground transition-all hover:opacity-90 disabled:opacity-40"
             >
-              {keyStatus === "checking" ? "validating…" : "validate & save"}
+              {keyStatus === "checking" ? "Validating…" : "Verify Connection"}
             </button>
-          </div>
-          <div className="mt-3 font-mono text-[11px]">
-            {keyStatus === "valid" && <span className="text-primary">✓ key validated and saved</span>}
-            {keyStatus === "invalid" && <span className="text-destructive">✗ invalid key</span>}
-            {keyStatus === "unknown" && <span className="text-muted-foreground">not validated</span>}
-          </div>
-        </section>
+            <div className="text-xs font-semibold">
+              {keyStatus === "valid" && <span className="text-primary">✓ Key validated and saved</span>}
+              {keyStatus === "invalid" && <span className="text-destructive">✗ Invalid key</span>}
+              {keyStatus === "unknown" && <span className="text-muted-foreground">Not validated</span>}
+            </div>
+          </section>
 
-        {/* Model picker */}
-        <section className="rounded-lg border border-border bg-surface p-5">
-          <div className="flex items-center justify-between">
-            <h3 className="font-mono text-[11px] uppercase tracking-[0.2em] text-muted-foreground">
-              model selection
-            </h3>
-            <span className="font-mono text-[11px] text-muted-foreground">
-              {models.length ? `${models.length} models available` : "—"}
-            </span>
-          </div>
-          {!getKey() ? (
-            <p className="mt-3 text-sm text-muted-foreground">Validate an API key to load models.</p>
-          ) : (
-            <>
-              <div className="mt-4 flex flex-wrap items-center gap-2">
-                {(["free", "popular", "all"] as FilterTab[]).map((t) => (
-                  <button
-                    key={t}
-                    onClick={() => setTab(t)}
-                    className={`rounded-md border px-3 py-1 font-mono text-[11px] uppercase tracking-widest ${
-                      tab === t
-                        ? "border-primary bg-primary/15 text-primary"
-                        : "border-border bg-background text-muted-foreground hover:text-foreground"
-                    }`}
-                  >
-                    {t}
-                  </button>
-                ))}
-                <input
-                  value={search}
-                  onChange={(e) => setSearch(e.target.value)}
-                  placeholder="search models…"
-                  className="ml-auto w-64 rounded-md border border-border bg-background px-3 py-1 font-mono text-[12px] outline-none focus:border-primary"
-                />
+          {/* Model Selection */}
+          <section className="glass-panel flex flex-col gap-4 rounded-xl p-6 md:col-span-7">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <span className="text-xl text-yellow-500">🧠</span>
+                <h3 className="text-lg font-semibold text-foreground">Model Selection</h3>
               </div>
+              <input
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                placeholder="Filter models..."
+                className="w-48 rounded-full border border-border bg-background px-4 py-1.5 text-xs outline-none transition-colors focus:border-primary"
+              />
+            </div>
 
-              {loadingModels && (
-                <div className="mt-4 font-mono text-[11px] text-muted-foreground">loading models…</div>
-              )}
-              {modelError && <div className="mt-4 font-mono text-[11px] text-destructive">{modelError}</div>}
+            {!getKey() ? (
+              <p className="text-sm text-muted-foreground">Validate an API key to load models.</p>
+            ) : (
+              <>
+                <div className="flex flex-wrap items-center gap-2">
+                  {(["free", "popular", "all"] as FilterTab[]).map((t) => (
+                    <button
+                      key={t}
+                      onClick={() => setTab(t)}
+                      className={`rounded-md border px-3 py-1 text-xs font-bold uppercase tracking-wide transition-colors ${
+                        tab === t
+                          ? "border-primary bg-primary/15 text-primary"
+                          : "border-border bg-background text-muted-foreground hover:text-foreground"
+                      }`}
+                    >
+                      {t}
+                    </button>
+                  ))}
+                </div>
 
-              <ul className="mt-4 grid max-h-[480px] grid-cols-1 gap-2 overflow-auto pr-1 sm:grid-cols-2">
-                {filtered.map((m) => {
-                  const promptPrice = parseFloat(m.pricing?.prompt ?? "0") * 1_000_000;
-                  const compPrice = parseFloat(m.pricing?.completion ?? "0") * 1_000_000;
-                  const ctx = m.context_length ?? m.top_provider?.context_length ?? 0;
-                  const active = selected === m.id;
-                  return (
-                    <li key={m.id}>
+                {loadingModels && (
+                  <div className="text-xs text-muted-foreground">Loading models…</div>
+                )}
+                {modelError && <div className="text-xs text-destructive">{modelError}</div>}
+
+                <div className="flex max-h-[320px] flex-col gap-2 overflow-y-auto pr-1">
+                  {filtered.map((m) => {
+                    const promptPrice = parseFloat(m.pricing?.prompt ?? "0") * 1_000_000;
+                    const compPrice = parseFloat(m.pricing?.completion ?? "0") * 1_000_000;
+                    const ctx = m.context_length ?? m.top_provider?.context_length ?? 0;
+                    const active = selected === m.id;
+                    return (
                       <button
+                        key={m.id}
                         onClick={() => handleSelectModel(m.id)}
-                        className={`flex w-full flex-col items-start gap-1 rounded-md border px-3 py-2.5 text-left transition-colors ${
+                        className={`flex w-full items-center justify-between rounded-xl border p-3 text-left transition-all ${
                           active
-                            ? "border-primary bg-primary/10"
-                            : "border-border bg-background hover:border-border-strong"
+                            ? "border-primary/30 bg-primary/5 ring-1 ring-primary/50"
+                            : "border-border bg-background hover:bg-surface-2"
                         }`}
                       >
-                        <div className="flex w-full items-center justify-between">
-                          <span className="truncate text-sm font-medium text-foreground">{m.name || m.id}</span>
-                          {active && (
-                            <span className="ml-2 rounded bg-primary/20 px-1.5 py-0.5 font-mono text-[10px] uppercase text-primary">
-                              selected
+                        <div className="flex items-center gap-3 min-w-0">
+                          <div className={`flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-lg border ${
+                            active ? "border-primary bg-primary/20" : "border-border bg-surface-2"
+                          }`}>
+                            <span className={`text-sm ${active ? "text-primary" : "text-muted-foreground"}`}>
+                              {active ? "⭐" : "🔮"}
                             </span>
-                          )}
+                          </div>
+                          <div className="min-w-0">
+                            <div className="truncate text-sm font-bold text-foreground">{m.name || m.id}</div>
+                            <div className="truncate text-[11px] text-muted-foreground">{m.id}</div>
+                          </div>
                         </div>
-                        <span className="truncate font-mono text-[10px] text-muted-foreground">{m.id}</span>
-                        <div className="mt-1 flex w-full items-center justify-between font-mono text-[10px] uppercase tracking-widest text-muted-foreground">
-                          <span>
-                            ctx <span className="text-foreground">{ctx ? ctx.toLocaleString() : "—"}</span>
-                          </span>
-                          <span>
-                            ${promptPrice.toFixed(2)}/${compPrice.toFixed(2)} per M
-                          </span>
+                        <div className="flex-shrink-0 text-right">
+                          <div className="text-xs font-bold text-primary">
+                            {ctx ? `${(ctx / 1000).toFixed(0)}K CTX` : "—"}
+                          </div>
+                          <div className="font-mono text-[10px] text-muted-foreground">
+                            ${promptPrice.toFixed(2)} / 1M
+                          </div>
                         </div>
                       </button>
-                    </li>
-                  );
-                })}
-              </ul>
-              {!loadingModels && filtered.length === 0 && (
-                <div className="mt-4 font-mono text-[11px] text-muted-foreground">no models match</div>
-              )}
-            </>
-          )}
-        </section>
-      </main>
-    </div>
+                    );
+                  })}
+                  {!loadingModels && filtered.length === 0 && (
+                    <div className="py-4 text-center text-xs text-muted-foreground">No models match</div>
+                  )}
+                </div>
+              </>
+            )}
+          </section>
+        </div>
+      </div>
+    </SidebarLayout>
   );
 }

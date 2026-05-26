@@ -1,7 +1,8 @@
-import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
+import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
-import { AppHeader } from "@/components/AppHeader";
+import { SidebarLayout } from "@/components/SidebarLayout";
+import { DocumentCard } from "@/components/DocumentCard";
 import { Dropzone } from "@/components/Dropzone";
 import {
   AlertDialog,
@@ -119,131 +120,109 @@ function DashboardPage() {
   };
 
   return (
-    <div className="flex min-h-screen flex-col bg-background text-foreground">
-      <AppHeader />
-      <main className="mx-auto w-full max-w-7xl flex-1 px-5 py-8">
-        <div className="mb-6 flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
-          <div>
-            <h2 className="text-3xl font-black tracking-tight text-foreground">Intelligence Library</h2>
-            <p className="mt-1 max-w-2xl text-sm text-muted-foreground">
-              Upload PDFs for browser-local extraction, page-level AI processing, and multilingual review.
+    <SidebarLayout
+      pageTitle="Library"
+      onNewDocument={handleFile}
+      topBarRight={
+        <div className="flex items-center gap-3">
+          <span className="rounded-full border border-border bg-surface px-3 py-1.5 font-mono text-[11px] uppercase tracking-widest text-muted-foreground">
+            {loading ? "loading…" : `${docs.length} document${docs.length === 1 ? "" : "s"}`}
+          </span>
+        </div>
+      }
+    >
+      <div className="mx-auto max-w-7xl space-y-8 p-8">
+        {/* Hero Section */}
+        <section>
+          <div className="mb-6">
+            <h3 className="text-4xl font-bold tracking-tight text-foreground">
+              Intelligence Library
+            </h3>
+            <p className="mt-2 max-w-2xl text-base text-muted-foreground">
+              Upload documents for surgical-precision analysis, automated summaries, and multi-language extraction.
             </p>
           </div>
-          <div className="rounded-full border border-border bg-surface px-3 py-1.5 font-mono text-[11px] uppercase tracking-widest text-muted-foreground">
-            {loading ? "loading…" : `${docs.length} document${docs.length === 1 ? "" : "s"}`}
-          </div>
-        </div>
 
-        {keyStatus !== "valid" && (
-          <div
-            className={`mb-6 flex flex-col gap-3 rounded-lg border px-4 py-3 sm:flex-row sm:items-center sm:justify-between ${
-              keyStatus === "invalid"
-                ? "border-destructive/40 bg-destructive/10"
-                : "border-primary/40 bg-primary/5"
-            }`}
-          >
-            <div className="min-w-0">
-              <div
-                className={`font-mono text-[10px] uppercase tracking-[0.2em] ${
-                  keyStatus === "invalid" ? "text-destructive" : "text-primary"
-                }`}
-              >
-                {keyStatus === "invalid" ? "api key invalid" : "get started"}
+          {/* API Key Banner */}
+          {keyStatus !== "valid" && (
+            <div
+              className={`mb-6 flex flex-col gap-3 rounded-lg border px-4 py-3 sm:flex-row sm:items-center sm:justify-between ${
+                keyStatus === "invalid"
+                  ? "border-destructive/40 bg-destructive/10"
+                  : "border-primary/40 bg-primary/5"
+              }`}
+            >
+              <div className="min-w-0">
+                <div
+                  className={`font-mono text-[10px] uppercase tracking-[0.2em] ${
+                    keyStatus === "invalid" ? "text-destructive" : "text-primary"
+                  }`}
+                >
+                  {keyStatus === "invalid" ? "api key invalid" : "get started"}
+                </div>
+                <p className="mt-1 text-sm text-foreground/85">
+                  {keyStatus === "invalid"
+                    ? "Your saved OpenRouter key was rejected. Update it to keep translating."
+                    : "Add your OpenRouter API key to start translating documents."}
+                </p>
               </div>
-              <p className="mt-1 text-sm text-foreground/85">
-                {keyStatus === "invalid"
-                  ? "Your saved OpenRouter key was rejected. Update it to keep translating."
-                  : "Add your OpenRouter API key to start translating documents."}
-              </p>
-            </div>
-            <div className="flex items-center gap-2">
               <button
                 onClick={() => openApiKeyModal()}
                 className="rounded-md bg-primary px-3 py-1.5 font-mono text-[11px] uppercase tracking-widest text-primary-foreground hover:opacity-90"
               >
                 add api key
               </button>
-              <Link
-                to="/settings"
-                className="rounded-md border border-border bg-background px-3 py-1.5 font-mono text-[11px] uppercase tracking-widest text-muted-foreground hover:text-foreground"
-              >
-                settings
-              </Link>
+            </div>
+          )}
+
+          {/* Drag & Drop Zone */}
+          <div className="h-56">
+            <Dropzone onFile={handleFile} />
+          </div>
+        </section>
+
+        {/* Documents Grid Section */}
+        <section>
+          <div className="mb-6 flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <span className="text-primary">☰</span>
+              <span className="text-xs font-bold uppercase tracking-[0.1em] text-muted-foreground">
+                Recent Documents
+              </span>
+            </div>
+            <div className="flex gap-2">
+              <button className="rounded-lg bg-surface-2 p-2 text-muted-foreground hover:text-primary transition-colors" aria-label="Grid view">
+                <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}>
+                  <rect x="3" y="3" width="7" height="7" rx="1" /><rect x="14" y="3" width="7" height="7" rx="1" />
+                  <rect x="3" y="14" width="7" height="7" rx="1" /><rect x="14" y="14" width="7" height="7" rx="1" />
+                </svg>
+              </button>
+              <button className="rounded-lg bg-surface p-2 text-muted-foreground hover:text-primary transition-colors" aria-label="List view">
+                <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}>
+                  <path strokeLinecap="round" d="M3 6h18M3 12h18M3 18h18" />
+                </svg>
+              </button>
             </div>
           </div>
-        )}
 
-
-        <div className="mb-8 h-56">
-          <Dropzone onFile={handleFile} />
-        </div>
-
-        {!loading && docs.length === 0 ? (
-          <div className="rounded-xl border border-dashed border-border bg-surface/70 p-10 text-center">
-            <div className="font-mono text-[11px] uppercase tracking-widest text-muted-foreground">
-              empty library
+          {!loading && docs.length === 0 ? (
+            <div className="glass-panel rounded-xl border-dashed p-10 text-center">
+              <div className="font-mono text-[11px] uppercase tracking-widest text-muted-foreground">
+                empty library
+              </div>
+              <p className="mt-2 text-sm text-foreground/80">
+                Upload a PDF above to get started.
+              </p>
             </div>
-            <p className="mt-2 text-sm text-foreground/80">
-              Upload a PDF above to get started.
-            </p>
-          </div>
-        ) : (
-          <ul className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-            {docs.map((d) => (
-              <li key={d.id}>
-                <Link
-                  to="/doc/$id"
-                  params={{ id: d.id }}
-                  className="group block overflow-hidden rounded-xl border border-border bg-surface/90 p-4 transition-all hover:-translate-y-0.5 hover:border-primary/50 hover:bg-surface-2 hover:shadow-[0_18px_45px_rgba(0,0,0,0.22)]"
-                >
-                  <div className="mb-4 flex h-28 items-center justify-center rounded-lg border border-border bg-background/80">
-                    <div className="flex h-14 w-14 items-center justify-center rounded-lg bg-primary/10 font-mono text-lg font-black text-primary ring-1 ring-primary/20">
-                      PDF
-                    </div>
-                  </div>
-                  <div className="flex items-start justify-between gap-2">
-                    <div className="min-w-0 flex-1">
-                      <div className="truncate text-sm font-medium text-foreground group-hover:text-primary">
-                        {d.fileName}
-                      </div>
-                      <div className="mt-1 font-mono text-[10px] uppercase tracking-widest text-muted-foreground">
-                        {(d.fileSize / 1024).toFixed(1)} KB
-                      </div>
-                    </div>
-                    <button
-                      onClick={(e) => handleDeleteClick(d, e)}
-                      className="rounded border border-border bg-background px-1.5 py-0.5 font-mono text-[10px] uppercase tracking-widest text-muted-foreground opacity-0 transition-opacity hover:text-destructive group-hover:opacity-100"
-                      aria-label="Delete document"
-                    >
-                      del
-                    </button>
-                  </div>
-                  <div className="mt-4 flex items-center justify-between font-mono text-[10px] uppercase tracking-widest text-muted-foreground">
-                    <span>
-                      <span className="text-foreground">{d.pageCount || "—"}</span> pages
-                    </span>
-                    <span className="flex items-center gap-2">
-                      {d.hasExtraction && (
-                        <span className="rounded bg-primary/15 px-1.5 py-0.5 text-primary">
-                          extracted
-                        </span>
-                      )}
-                      {d.aiResultCount > 0 && (
-                        <span className="rounded bg-accent/15 px-1.5 py-0.5 text-accent">
-                          {d.aiResultCount} ai
-                        </span>
-                      )}
-                    </span>
-                  </div>
-                  <div className="mt-2 font-mono text-[10px] uppercase tracking-widest text-muted-foreground">
-                    opened {formatRelative(d.lastOpenedAt)}
-                  </div>
-                </Link>
-              </li>
-            ))}
-          </ul>
-        )}
-      </main>
+          ) : (
+            <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+              {docs.map((d) => (
+                <DocumentCard key={d.id} doc={d} onDelete={handleDeleteClick} />
+              ))}
+            </div>
+          )}
+        </section>
+      </div>
 
       {/* Delete confirmation dialog */}
       <AlertDialog open={!!deleteTarget} onOpenChange={(open) => !open && setDeleteTarget(null)}>
@@ -267,19 +246,6 @@ function DashboardPage() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
-    </div>
+    </SidebarLayout>
   );
-}
-
-function formatRelative(ts: number): string {
-  if (!ts) return "never";
-  const diff = Date.now() - ts;
-  const m = Math.round(diff / 60000);
-  if (m < 1) return "just now";
-  if (m < 60) return `${m}m ago`;
-  const h = Math.round(m / 60);
-  if (h < 24) return `${h}h ago`;
-  const days = Math.round(h / 24);
-  if (days < 30) return `${days}d ago`;
-  return new Date(ts).toLocaleDateString();
 }

@@ -1,7 +1,7 @@
-import { createFileRoute, Link } from "@tanstack/react-router";
+import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
-import { AppHeader } from "@/components/AppHeader";
+import { SidebarLayout } from "@/components/SidebarLayout";
 import { getOutputLanguage, setOutputLanguage } from "@/lib/openrouter";
 import {
   createSmartTtsController,
@@ -316,20 +316,8 @@ function VoicePage() {
   };
 
   return (
-    <div className="flex min-h-screen flex-col bg-background text-foreground">
-      <AppHeader />
-      <main className="mx-auto w-full max-w-3xl flex-1 px-5 py-6">
-        {/* Back button + Title */}
-        <div className="mb-5 flex items-center justify-between">
-          <Link
-            to="/settings"
-            className="flex items-center gap-2 rounded-md border border-border bg-surface px-3 py-1.5 font-mono text-[11px] uppercase tracking-widest text-muted-foreground transition-colors hover:text-foreground"
-          >
-            <span>←</span> back
-          </Link>
-          <h1 className="text-lg font-semibold tracking-tight">Voice Settings</h1>
-          <div className="w-20" /> {/* Spacer */}
-        </div>
+    <SidebarLayout pageTitle="Voices">
+      <div className="mx-auto w-full max-w-4xl px-8 py-6">
 
         {/* Language selector card */}
         <section className="mb-5 rounded-lg border border-border bg-surface p-5">
@@ -575,7 +563,7 @@ function VoicePage() {
           Selection is saved per language. Tap ▶ test to preview without changing your choice.
           Voice availability depends on your browser and operating system.
         </p>
-      </main>
+      </div>
 
       {/* Language picker modal */}
       {showLangPicker && (
@@ -703,7 +691,7 @@ function VoicePage() {
         </div>
       )}
 
-    </div>
+    </SidebarLayout>
   );
 }
 

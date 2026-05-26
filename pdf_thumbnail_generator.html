@@ -1,0 +1,240 @@
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+
+<h2 class="sr-only">PDF thumbnail generator — upload a PDF to preview its first page as a scaled thumbnail</h2>
+
+<style>
+  .drop-zone {
+    border: 1.5px dashed var(--color-border-secondary);
+    border-radius: var(--border-radius-lg);
+    padding: 2.5rem 1rem;
+    text-align: center;
+    cursor: pointer;
+    transition: background 0.15s;
+    background: var(--color-background-secondary);
+  }
+  .drop-zone:hover, .drop-zone.drag-over {
+    background: var(--color-background-tertiary);
+    border-color: var(--color-border-primary);
+  }
+  .thumb-card {
+    background: var(--color-background-primary);
+    border: 0.5px solid var(--color-border-tertiary);
+    border-radius: var(--border-radius-lg);
+    padding: 1.25rem;
+    display: flex;
+    gap: 1.25rem;
+    align-items: flex-start;
+  }
+  .thumb-frame {
+    border: 0.5px solid var(--color-border-tertiary);
+    border-radius: var(--border-radius-md);
+    overflow: hidden;
+    flex-shrink: 0;
+    background: white;
+    box-shadow: 0 1px 4px rgba(0,0,0,0.07);
+  }
+  .thumb-frame img { display: block; }
+  .meta-label { font-size: 12px; color: var(--color-text-secondary); margin-bottom: 2px; }
+  .meta-value { font-size: 14px; color: var(--color-text-primary); margin-bottom: 10px; font-weight: 500; }
+  .badge {
+    display: inline-block;
+    font-size: 11px;
+    padding: 3px 9px;
+    border-radius: var(--border-radius-md);
+    background: var(--color-background-success);
+    color: var(--color-text-success);
+    margin-bottom: 12px;
+  }
+  .download-btn {
+    margin-top: 6px;
+    width: 100%;
+    font-size: 13px;
+    padding: 7px 0;
+    cursor: pointer;
+  }
+  .size-row {
+    display: flex;
+    gap: 8px;
+    margin-bottom: 1rem;
+    align-items: center;
+    flex-wrap: wrap;
+  }
+  .size-btn {
+    font-size: 12px;
+    padding: 4px 12px;
+    cursor: pointer;
+    border-radius: var(--border-radius-md);
+    transition: background 0.1s;
+  }
+  .size-btn.active {
+    background: var(--color-background-tertiary);
+    border-color: var(--color-border-primary);
+  }
+  #progress-wrap {
+    display: none;
+    align-items: center;
+    gap: 10px;
+    margin-top: 0.75rem;
+    font-size: 13px;
+    color: var(--color-text-secondary);
+  }
+  .spinner {
+    width: 16px; height: 16px;
+    border: 2px solid var(--color-border-secondary);
+    border-top-color: var(--color-text-secondary);
+    border-radius: 50%;
+    animation: spin 0.7s linear infinite;
+    flex-shrink: 0;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+</style>
+
+<div style="padding: 1rem 0; max-width: 640px; margin: 0 auto;">
+
+  <div style="margin-bottom: 1rem;">
+    <p style="font-size: 13px; color: var(--color-text-secondary); margin: 0 0 8px;">Thumbnail size</p>
+    <div class="size-row" id="sizeRow">
+      <button class="size-btn" data-w="120" data-h="160">Small (120×160)</button>
+      <button class="size-btn active" data-w="200" data-h="260">Medium (200×260)</button>
+      <button class="size-btn" data-w="300" data-h="390">Large (300×390)</button>
+    </div>
+  </div>
+
+  <div class="drop-zone" id="dropZone" tabindex="0" role="button" aria-label="Click or drag a PDF file here to generate a thumbnail">
+    <i class="ti ti-file-type-pdf" aria-hidden="true" style="font-size: 36px; color: var(--color-text-secondary); display: block; margin-bottom: 10px;"></i>
+    <p style="font-size: 15px; font-weight: 500; margin: 0 0 4px; color: var(--color-text-primary);">Drop a PDF here</p>
+    <p style="font-size: 13px; color: var(--color-text-secondary); margin: 0 0 14px;">or click to choose a file</p>
+    <button onclick="document.getElementById('fileInput').click()" style="font-size: 13px; padding: 7px 20px; cursor: pointer;">
+      <i class="ti ti-upload" aria-hidden="true" style="font-size:14px; vertical-align:-2px; margin-right:5px;"></i>Browse file
+    </button>
+    <input type="file" id="fileInput" accept=".pdf,application/pdf" style="display:none">
+    <div id="progress-wrap">
+      <div class="spinner"></div>
+      <span id="progress-msg">Rendering page…</span>
+    </div>
+  </div>
+
+  <div id="result" style="display:none; margin-top: 1.25rem;"></div>
+</div>
+
+<script>
+  pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+
+  let thumbW = 200, thumbH = 260;
+
+  document.getElementById('sizeRow').addEventListener('click', e => {
+    const btn = e.target.closest('.size-btn');
+    if (!btn) return;
+    document.querySelectorAll('.size-btn').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    thumbW = parseInt(btn.dataset.w);
+    thumbH = parseInt(btn.dataset.h);
+  });
+
+  const dropZone = document.getElementById('dropZone');
+  const fileInput = document.getElementById('fileInput');
+
+  dropZone.addEventListener('dragover', e => { e.preventDefault(); dropZone.classList.add('drag-over'); });
+  dropZone.addEventListener('dragleave', () => dropZone.classList.remove('drag-over'));
+  dropZone.addEventListener('drop', e => {
+    e.preventDefault();
+    dropZone.classList.remove('drag-over');
+    const file = e.dataTransfer.files[0];
+    if (file && file.type === 'application/pdf') handleFile(file);
+  });
+  dropZone.addEventListener('keydown', e => { if (e.key === 'Enter' || e.key === ' ') fileInput.click(); });
+  fileInput.addEventListener('change', e => { if (e.target.files[0]) handleFile(e.target.files[0]); });
+
+  function showProgress(msg) {
+    const pw = document.getElementById('progress-wrap');
+    pw.style.display = 'flex';
+    document.getElementById('progress-msg').textContent = msg;
+  }
+  function hideProgress() {
+    document.getElementById('progress-wrap').style.display = 'none';
+  }
+
+  async function handleFile(file) {
+    showProgress('Reading PDF…');
+    document.getElementById('result').style.display = 'none';
+    try {
+      const arrayBuffer = await file.arrayBuffer();
+      showProgress('Loading document…');
+      const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
+      const totalPages = pdf.numPages;
+
+      showProgress('Rendering first page…');
+      const page = await pdf.getPage(1);
+      const naturalVp = page.getViewport({ scale: 1 });
+
+      const scaleX = thumbW / naturalVp.width;
+      const scaleY = thumbH / naturalVp.height;
+      const scale = Math.min(scaleX, scaleY);
+
+      const vp = page.getViewport({ scale });
+      const canvas = document.createElement('canvas');
+      canvas.width = Math.round(vp.width);
+      canvas.height = Math.round(vp.height);
+      const ctx = canvas.getContext('2d');
+
+      await page.render({ canvasContext: ctx, viewport: vp }).promise;
+
+      const dataUrl = canvas.toDataURL('image/png');
+      const fileSizeKB = Math.round(file.size / 1024);
+
+      hideProgress();
+      renderResult(dataUrl, file.name, totalPages, fileSizeKB, canvas.width, canvas.height);
+    } catch (err) {
+      hideProgress();
+      document.getElementById('result').innerHTML = `<p style="color:var(--color-text-danger); font-size:13px;">Could not render PDF. Make sure it's a valid, unprotected PDF file.</p>`;
+      document.getElementById('result').style.display = 'block';
+    }
+  }
+
+  function renderResult(dataUrl, fileName, pages, sizeKB, w, h) {
+    const result = document.getElementById('result');
+    result.innerHTML = '';
+    result.style.display = 'block';
+
+    const card = document.createElement('div');
+    card.className = 'thumb-card';
+
+    const frame = document.createElement('div');
+    frame.className = 'thumb-frame';
+    const img = document.createElement('img');
+    img.src = dataUrl;
+    img.alt = 'Thumbnail of first PDF page';
+    img.width = w;
+    img.height = h;
+    frame.appendChild(img);
+
+    const meta = document.createElement('div');
+    meta.style.flex = '1';
+    meta.innerHTML = `
+      <span class="badge"><i class="ti ti-check" aria-hidden="true" style="font-size:11px;margin-right:3px;vertical-align:-1px;"></i>Generated client-side</span>
+      <div class="meta-label">File name</div>
+      <div class="meta-value" style="word-break:break-all;">${fileName}</div>
+      <div class="meta-label">Pages</div>
+      <div class="meta-value">${pages} page${pages !== 1 ? 's' : ''}</div>
+      <div class="meta-label">Original size</div>
+      <div class="meta-value">${sizeKB} KB</div>
+      <div class="meta-label">Thumbnail dimensions</div>
+      <div class="meta-value">${w} × ${h} px</div>
+    `;
+
+    const dlBtn = document.createElement('a');
+    dlBtn.href = dataUrl;
+    dlBtn.download = fileName.replace(/\.pdf$/i, '') + '_thumb.png';
+    dlBtn.innerHTML = '<i class="ti ti-download" aria-hidden="true" style="font-size:14px;vertical-align:-2px;margin-right:5px;"></i>Download thumbnail';
+    dlBtn.className = 'download-btn';
+    dlBtn.style.cssText = 'display:block; text-align:center; padding:7px 0; border:0.5px solid var(--color-border-secondary); border-radius:var(--border-radius-md); font-size:13px; color:var(--color-text-primary); text-decoration:none; cursor:pointer;';
+    dlBtn.onmouseover = () => dlBtn.style.background = 'var(--color-background-secondary)';
+    dlBtn.onmouseout = () => dlBtn.style.background = '';
+
+    meta.appendChild(dlBtn);
+    card.appendChild(frame);
+    card.appendChild(meta);
+    result.appendChild(card);
+  }
+</script>

@@ -14,12 +14,13 @@ function uuid(): string {
 }
 
 const DB_NAME = "doclens";
-const DB_VERSION = 7;
+const DB_VERSION = 8;
 const STORE = "documents";
 const BLOBS = "blobs";
 const META = "meta";
 const PAGES = "pageData";
 const VOICE_PACKS = "voicePacks";
+const THUMBNAILS = "thumbnails";
 
 export type AiMode = "translate" | "explain";
 export type PageStatus = "idle" | "ready" | "running" | "done" | "error";
@@ -247,6 +248,9 @@ function db() {
         }
         if (!d.objectStoreNames.contains(VOICE_PACKS)) {
           d.createObjectStore(VOICE_PACKS, { keyPath: "voiceId" });
+        }
+        if (!d.objectStoreNames.contains(THUMBNAILS)) {
+          d.createObjectStore(THUMBNAILS);
         }
 
         // v5→v6: split embedded pages[] and pageAi map into per-page records.
@@ -491,6 +495,7 @@ export async function deleteDoc(id: string) {
   const d = await db();
   await d.delete(STORE, id);
   try { await d.delete(BLOBS, id); } catch { /* ignore */ }
+  try { await d.delete(THUMBNAILS, id); } catch { /* ignore */ }
   // Remove all per-page records.
   try {
     const tx = d.transaction(PAGES, "readwrite");
@@ -642,4 +647,17 @@ export async function clearAllAiResults(): Promise<void> {
     cursorDoc = await cursorDoc.continue();
   }
   await txDoc.done;
+}
+
+/* ---------- Thumbnail cache ---------- */
+
+export async function getThumbnail(docId: string): Promise<string | null> {
+  const d = await db();
+  const v = await d.get(THUMBNAILS, docId);
+  return typeof v === "string" ? v : null;
+}
+
+export async function saveThumbnail(docId: string, dataUrl: string): Promise<void> {
+  const d = await db();
+  await safePut(d, THUMBNAILS, dataUrl, docId);
 }

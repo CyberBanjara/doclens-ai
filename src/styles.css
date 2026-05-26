@@ -170,4 +170,39 @@
   ::-webkit-scrollbar-thumb:hover {
     background: var(--border-strong);
   }
+
+  /* Glassmorphic panel */
+  .glass-panel {
+    backdrop-filter: blur(12px);
+    background: rgba(45, 52, 73, 0.4);
+    border: 1px solid rgba(60, 74, 66, 0.5);
+  }
+
+  /* Custom range slider */
+  input[type="range"] {
+    -webkit-appearance: none;
+    appearance: none;
+    height: 4px;
+    border-radius: 2px;
+    background: var(--surface-2);
+    outline: none;
+  }
+  input[type="range"]::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    height: 16px;
+    width: 16px;
+    border-radius: 50%;
+    background: var(--primary);
+    cursor: pointer;
+    box-shadow: 0 0 10px rgba(78, 222, 163, 0.4);
+  }
+  input[type="range"]::-moz-range-thumb {
+    height: 16px;
+    width: 16px;
+    border-radius: 50%;
+    background: var(--primary);
+    cursor: pointer;
+    border: none;
+    box-shadow: 0 0 10px rgba(78, 222, 163, 0.4);
+  }
 }
