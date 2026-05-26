@@ -2,7 +2,6 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Link } from "@tanstack/react-router";
 import { toast } from "sonner";
 import { useVirtualizer } from "@tanstack/react-virtual";
-import { JsonView } from "./JsonView";
 import { estimateTokens } from "@/lib/models";
 import {
   buildPagePayload,
@@ -57,6 +56,10 @@ const QUICK_LANGS = ["English", "Arabic", "French", "Hindi", "Spanish", "Japanes
 /** Throttle setState to at most once per `ms` while leading-edge fires immediately. */
 const STREAM_FLUSH_MS = 150;
 
+interface RunAllBatch {
+  cancelled: boolean;
+}
+
 interface Globals {
   mode: GlobalMode;
   language: string;
@@ -107,7 +110,7 @@ export function PageWorkstation({ docId, pageCount, aiSummary, onPageAiChange }:
   const [streamBufs, setStreamBufs] = useState<Record<number, string>>({});
 
   const abortMap = useRef<Map<number, AbortController>>(new Map());
-  const runAllRef = useRef<{ cancelled: boolean } | null>(null);
+  const runAllRef = useRef<RunAllBatch | null>(null);
   const [runAllActive, setRunAllActive] = useState(false);
   const [runAllProgress, setRunAllProgress] = useState<{ current: number; total: number; errors: number } | null>(null);
   const mountedRef = useRef(true);
@@ -192,21 +195,24 @@ export function PageWorkstation({ docId, pageCount, aiSummary, onPageAiChange }:
   /* ---------- Per-page execution ---------- */
 
   const runPage = useCallback(
-    async (pageNumber: number, prevExcerpt?: string): Promise<string | undefined> => {
+    async (pageNumber: number, prevExcerpt?: string, batch?: RunAllBatch): Promise<string | undefined> => {
       const key = getKey();
       const currentGlobals = globalsRef.current;
       if (!key) {
         ensureKeyReady();
         return;
       }
+      if (batch?.cancelled) return;
 
 
       // Read fresh page text + state from IDB
       const pageRec = await getPageData(docId, pageNumber);
       if (!pageRec) return;
+      if (batch?.cancelled) return;
       const state: PageAi = pageRec.pageAi ?? { pageNumber, status: "idle" };
       const eff = effective(currentGlobals, state.overrides);
       if (!eff.modelId) return;
+      if (batch?.cancelled) return;
 
       stopAllTts();
 
@@ -242,6 +248,10 @@ export function PageWorkstation({ docId, pageCount, aiSummary, onPageAiChange }:
 
       const ctrl = new AbortController();
       abortMap.current.set(pageNumber, ctrl);
+      if (batch?.cancelled) {
+        abortMap.current.delete(pageNumber);
+        return;
+      }
       if (mountedRef.current) {
         setRunningPages((s) => new Set(s).add(pageNumber));
         setStreamBufs((b) => ({ ...b, [pageNumber]: "" }));
@@ -264,6 +274,10 @@ export function PageWorkstation({ docId, pageCount, aiSummary, onPageAiChange }:
       const flushTimer = setInterval(flushUi, STREAM_FLUSH_MS);
 
       try {
+        if (batch?.cancelled) {
+          ctrl.abort();
+          return;
+        }
         await streamCompletion({
           key,
           payload,
@@ -350,7 +364,8 @@ export function PageWorkstation({ docId, pageCount, aiSummary, onPageAiChange }:
     setGlobals(freshGlobals);
 
 
-    runAllRef.current = { cancelled: false };
+    const batch: RunAllBatch = { cancelled: false };
+    runAllRef.current = batch;
     setRunAllActive(true);
     let prev: string | undefined;
     let errorCount = 0;
@@ -361,8 +376,9 @@ export function PageWorkstation({ docId, pageCount, aiSummary, onPageAiChange }:
 
     if (freshGlobals.sequential) {
       for (let n = 1; n <= pageCount; n++) {
-        if (runAllRef.current?.cancelled) break;
+        if (batch.cancelled) break;
         const pageRec = await getPageData(docId, n);
+        if (batch.cancelled) break;
         if (!pageRec) {
           processedCount++;
           if (mountedRef.current) setRunAllProgress({ current: processedCount, total: totalToProcess, errors: errorCount });
@@ -391,7 +407,8 @@ export function PageWorkstation({ docId, pageCount, aiSummary, onPageAiChange }:
           continue;
         }
         try {
-          const out = await runPage(n, prev);
+          const out = await runPage(n, prev, batch);
+          if (batch.cancelled) break;
           if (out && eff.memory) prev = memoryExcerpt(out);
         } catch {
           errorCount++;
@@ -406,7 +423,9 @@ export function PageWorkstation({ docId, pageCount, aiSummary, onPageAiChange }:
         numbers,
         3,
         async (n) => {
+          if (batch.cancelled) return { status: "fulfilled" as const, value: undefined };
           const pageRec = await getPageData(docId, n);
+          if (batch.cancelled) return { status: "fulfilled" as const, value: undefined };
           if (!pageRec) return { status: "fulfilled" as const, value: undefined };
           const state: PageAi = pageRec.pageAi ?? { pageNumber: n, status: "idle" };
           const currentGlobals = readGlobals();
@@ -424,8 +443,9 @@ export function PageWorkstation({ docId, pageCount, aiSummary, onPageAiChange }:
             if (mountedRef.current) setRunAllProgress({ current: completed, total: totalToProcess, errors: errorCount });
             return { status: "fulfilled" as const, value: undefined };
           }
+          if (batch.cancelled) return { status: "fulfilled" as const, value: undefined };
           try {
-            const result = await runPage(n);
+            const result = await runPage(n, undefined, batch);
             completed++;
             if (mountedRef.current) setRunAllProgress({ current: completed, total: totalToProcess, errors: errorCount });
             return { status: "fulfilled" as const, value: result };
@@ -440,7 +460,7 @@ export function PageWorkstation({ docId, pageCount, aiSummary, onPageAiChange }:
       errorCount = results.filter((r) => r.status === "rejected").length;
     }
 
-    if (runAllRef.current?.cancelled) {
+    if (batch.cancelled) {
       toast.info("Run All cancelled.", { duration: 3000 });
     } else if (errorCount > 0) {
       toast.warning(
@@ -451,16 +471,20 @@ export function PageWorkstation({ docId, pageCount, aiSummary, onPageAiChange }:
       toast.success(`All ${totalToProcess} pages processed successfully.`, { duration: 3000 });
     }
 
-    if (mountedRef.current) {
+    if (mountedRef.current && runAllRef.current === batch) {
       setRunAllActive(false);
       setRunAllProgress(null);
     }
-    runAllRef.current = null;
+    if (runAllRef.current === batch) runAllRef.current = null;
   };
 
   const cancelRunAll = () => {
     if (runAllRef.current) runAllRef.current.cancelled = true;
     abortMap.current.forEach((c) => c.abort());
+    if (mountedRef.current) {
+      setRunAllActive(false);
+      setRunAllProgress(null);
+    }
   };
 
   /* ---------- Empty / setup states ---------- */
@@ -519,14 +543,19 @@ export function PageWorkstation({ docId, pageCount, aiSummary, onPageAiChange }:
 
   return (
     <div className="flex h-full flex-col">
-      <div className="flex items-center justify-between border-b border-border bg-surface-2 px-4 py-2.5">
-        <div className="flex items-center gap-3 font-mono text-[11px] uppercase tracking-[0.18em] text-muted-foreground">
-          <span className="h-1.5 w-1.5 rounded-full bg-primary" />
-          per-page workstation
-          <span className="text-foreground">{doneCount}/{pageCount} done</span>
-          <span className="text-muted-foreground">
-            · {globals.sequential ? "sequential" : "parallel"} · memory {globals.memory ? "on" : "off"}
-          </span>
+      <div className="border-b border-border bg-surface-2 px-4 py-3">
+        <div className="flex items-center justify-between gap-4 rounded-lg border border-border bg-background/50 px-4 py-3">
+          <div className="flex flex-wrap items-center gap-4 font-mono text-[11px] uppercase tracking-[0.18em] text-muted-foreground">
+            <span className="flex items-center gap-2">
+              <span className="h-2 w-2 rounded-full bg-primary shadow-[0_0_8px_rgba(78,222,163,0.6)]" />
+              per-page workstation
+            </span>
+            <span>
+              progress <span className="text-primary">{doneCount}/{pageCount} done</span>
+            </span>
+            <span>
+              {globals.sequential ? "sequential" : "parallel"} · memory {globals.memory ? "on" : "off"}
+            </span>
           {runAllProgress && (
             <span className="text-primary">
               · processing {runAllProgress.current}/{runAllProgress.total}
@@ -535,23 +564,24 @@ export function PageWorkstation({ docId, pageCount, aiSummary, onPageAiChange }:
               )}
             </span>
           )}
-        </div>
-        <div className="flex items-center gap-2">
-          {runAllActive ? (
-            <button
-              onClick={cancelRunAll}
-              className="rounded-md border border-destructive/60 bg-destructive/10 px-3 py-1 font-mono text-[11px] uppercase tracking-widest text-destructive hover:bg-destructive/20"
-            >
-              cancel all
-            </button>
-          ) : (
-            <button
-              onClick={handleRunAll}
-              className="rounded-md bg-primary px-3 py-1 font-mono text-[11px] uppercase tracking-widest text-primary-foreground hover:opacity-90"
-            >
-              ▶ run all pages
-            </button>
-          )}
+          </div>
+          <div className="flex items-center gap-2">
+            {runAllActive ? (
+              <button
+                onClick={cancelRunAll}
+                className="rounded-md border border-destructive/60 bg-destructive/10 px-3 py-1 font-mono text-[11px] uppercase tracking-widest text-destructive hover:bg-destructive/20"
+              >
+                cancel all
+              </button>
+            ) : (
+              <button
+                onClick={handleRunAll}
+                className="rounded-md bg-primary px-4 py-2 font-mono text-[11px] font-black uppercase tracking-widest text-primary-foreground shadow-[0_10px_24px_rgba(78,222,163,0.14)] hover:opacity-90"
+              >
+                ▶ run all pages
+              </button>
+            )}
+          </div>
         </div>
       </div>
 
@@ -786,6 +816,7 @@ function PageCard({
   }, [eff.modelId, eff.mode, eff.language, eff.style, eff.temperature, pageNumber, pageText]);
 
   const previewPayload = state.isCustom && state.customRequest ? state.customRequest : autoPayload;
+  const overrideCount = state.overrides ? Object.keys(state.overrides).length : 0;
 
   const setOverride = (patch: Partial<PageOverrides>) => {
     onUpdate({ overrides: { ...(state.overrides ?? {}), ...patch } });
@@ -888,100 +919,54 @@ function PageCard({
         </div>
       </header>
 
-      {state.result && isTtsSupported() && (
-        <div className="flex items-center gap-2 border-b border-border bg-background/20 px-3 py-1.5 font-mono text-[10px] uppercase tracking-widest text-muted-foreground">
-          <span>tts</span>
-          {ttsState !== "playing" ? (
-            <button
-              onClick={handleTtsPlay}
-              className="rounded border border-border px-2 py-0.5 hover:text-foreground"
-            >
-              {ttsState === "paused" ? "▶ resume" : "▶ play"}
-            </button>
-          ) : (
-            <button
-              onClick={handleTtsPause}
-              className="rounded border border-border px-2 py-0.5 hover:text-foreground"
-            >
-              ❚❚ pause
-            </button>
-          )}
-          <button
-            onClick={handleTtsStop}
-            disabled={ttsState === "idle" || ttsState === "ended"}
-            className="rounded border border-border px-2 py-0.5 hover:text-foreground disabled:opacity-30"
-          >
-            ■ stop
-          </button>
-          <span className="ml-auto normal-case text-muted-foreground">{ttsState}</span>
-        </div>
-      )}
-
-      <details className="border-b border-border bg-background/20 px-3 py-1.5 text-xs">
-        <summary className="cursor-pointer font-mono text-[10px] uppercase tracking-widest text-muted-foreground hover:text-foreground">
-          overrides {state.overrides && Object.keys(state.overrides).length > 0 ? `(${Object.keys(state.overrides).length})` : ""}
-        </summary>
-        <div className="mt-2 grid grid-cols-2 gap-2 sm:grid-cols-3">
-          <SmallSelect
-            label="mode"
-            value={state.overrides?.mode ?? ""}
-            onChange={(v) => setOverride({ mode: (v || undefined) as GlobalMode | undefined })}
-            options={[["", `inherit (${eff.mode})`], ...Object.entries(MODE_INSTRUCTIONS).map(([k, v]) => [k, v.label] as [string, string])]}
-          />
-          <SmallSelect
-            label="language"
-            value={state.overrides?.language ?? ""}
-            onChange={(v) => setOverride({ language: v || undefined })}
-            options={[["", `inherit (${eff.language})`], ...QUICK_LANGS.map((l) => [l, l] as [string, string])]}
-          />
-          <SmallSelect
-            label="style"
-            value={state.overrides?.style ?? ""}
-            onChange={(v) => setOverride({ style: v || undefined })}
-            options={[["", `inherit (${eff.style})`], ...STYLES.map((s) => [s, s] as [string, string])]}
-          />
-          <SmallSelect
-            label="model"
-            value={state.overrides?.modelId ?? ""}
-            onChange={(v) => setOverride({ modelId: v || undefined })}
-            options={[["", `inherit (${(models.find((m) => m.id === eff.modelId)?.name ?? eff.modelId).slice(0, 22)})`], ...models.slice(0, 80).map((m) => [m.id, (m.name ?? m.id).slice(0, 32)] as [string, string])]}
-          />
-          <label className="block">
-            <span className="font-mono text-[10px] uppercase tracking-widest text-muted-foreground">
-              temp · {(state.overrides?.temperature ?? eff.temperature).toFixed(2)}
-              {state.overrides?.temperature === undefined && <span className="ml-1 text-muted-foreground">(inh)</span>}
-            </span>
-            <input
-              type="range" min={0} max={1.5} step={0.05}
-              value={state.overrides?.temperature ?? eff.temperature}
-              onChange={(e) => setOverride({ temperature: parseFloat(e.target.value) })}
-              className="mt-1 w-full accent-primary"
-            />
-          </label>
-          <label className="flex items-center gap-2 self-end font-mono text-[11px] text-muted-foreground">
-            <input
-              type="checkbox"
-              checked={state.overrides?.memory ?? eff.memory}
-              onChange={(e) => setOverride({ memory: e.target.checked })}
-              className="h-3.5 w-3.5 accent-primary"
-            />
-            memory{state.overrides?.memory === undefined && " (inh)"}
-          </label>
-        </div>
-        {state.overrides && Object.keys(state.overrides).length > 0 && (
-          <button
-            onClick={() => onUpdate({ overrides: undefined })}
-            className="mt-2 rounded border border-border px-2 py-0.5 font-mono text-[10px] uppercase tracking-widest text-muted-foreground hover:text-foreground"
-          >
-            clear overrides
-          </button>
-        )}
-      </details>
-
       {view === "request" ? (
-        <div className="px-3 py-3">
-          {editingJson ? (
-            <>
+        <div className="space-y-3 px-3 py-3">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <div className="flex items-center gap-2 font-mono text-[10px] uppercase tracking-widest text-muted-foreground">
+              <span>primary overrides</span>
+              {overrideCount > 0 && (
+                <span className="rounded border border-primary/25 bg-primary/10 px-1.5 py-0.5 text-primary">
+                  {overrideCount} active
+                </span>
+              )}
+              {state.isCustom && (
+                <span className="rounded border border-accent/25 bg-accent/10 px-1.5 py-0.5 text-accent">
+                  custom json
+                </span>
+              )}
+            </div>
+            <div className="flex items-center gap-2">
+              {state.isCustom && (
+                <button
+                  onClick={resetAuto}
+                  className="rounded-md bg-primary px-2.5 py-1 font-mono text-[10px] uppercase tracking-widest text-primary-foreground hover:opacity-90"
+                >
+                  reset to auto
+                </button>
+              )}
+              <button
+                onClick={editingJson ? () => setEditingJson(false) : startEdit}
+                className="rounded-md border border-border bg-background px-2.5 py-1 font-mono text-[10px] uppercase tracking-widest text-muted-foreground hover:border-border-strong hover:text-foreground"
+              >
+                {editingJson ? "hide json" : "advanced: edit json"}
+              </button>
+            </div>
+          </div>
+
+          <OverrideControls
+            eff={eff}
+            models={models}
+            overrides={state.overrides}
+            onSetOverride={setOverride}
+            onClearOverrides={() => onUpdate({ overrides: undefined })}
+            surface="primary"
+          />
+
+          {editingJson && (
+            <div className="rounded-md border border-border bg-background/40 p-3">
+              <div className="mb-2 font-mono text-[10px] uppercase tracking-widest text-muted-foreground">
+                {state.isCustom ? "custom request — sent verbatim" : "auto-generated request"}
+              </div>
               <textarea
                 value={draft}
                 onChange={(e) => setDraft(e.target.value)}
@@ -1003,45 +988,57 @@ function PageCard({
                   cancel
                 </button>
               </div>
-            </>
-          ) : (
-            <>
-              <div className="mb-2 flex items-center justify-between font-mono text-[10px] uppercase tracking-widest text-muted-foreground">
-                <span>
-                  {state.isCustom ? (
-                    <span className="text-accent">custom request — sent verbatim</span>
-                  ) : (
-                    <span>auto-generated · regenerates as settings change</span>
-                  )}
-                </span>
-                <span className="flex items-center gap-1">
-                  <button
-                    onClick={startEdit}
-                    className="rounded border border-border px-2 py-0.5 hover:text-foreground"
-                  >
-                    edit
-                  </button>
-                  {state.isCustom && (
-                    <button
-                      onClick={resetAuto}
-                      className="rounded border border-border px-2 py-0.5 hover:text-foreground"
-                    >
-                      reset to auto
-                    </button>
-                  )}
-                </span>
-              </div>
-              <div className="max-h-[40vh] overflow-auto rounded-md border border-border bg-background/60 p-3">
-                <JsonView value={previewPayload} />
-              </div>
-            </>
+            </div>
+          )}
+
+          {!editingJson && state.isCustom && (
+            <div className="rounded-md border border-accent/20 bg-accent/10 px-3 py-2 font-mono text-[10px] uppercase tracking-widest text-accent">
+              custom JSON is active. Click advanced edit JSON to inspect or change it.
+            </div>
           )}
         </div>
       ) : (
-        <div className="px-3 py-3">
+        <div className="space-y-3 px-3 py-3">
           {state.status === "error" && (
             <div className="mb-2 rounded-md border border-destructive/40 bg-destructive/10 px-3 py-2 font-mono text-[11px] text-destructive">
               {state.error}
+            </div>
+          )}
+          {state.result && isTtsSupported() && (
+            <div className="flex items-center justify-between rounded-md border border-border bg-surface-2 px-3 py-2">
+              <div className="flex items-center gap-2">
+                <span className="font-mono text-[10px] font-black uppercase tracking-widest text-muted-foreground">
+                  TTS
+                </span>
+                {ttsState !== "playing" ? (
+                  <button
+                    onClick={handleTtsPlay}
+                    className="flex h-8 w-8 items-center justify-center rounded-md border border-primary/25 bg-primary/10 text-primary transition-colors hover:bg-primary hover:text-primary-foreground"
+                    title={ttsState === "paused" ? "Resume speech" : "Play speech"}
+                  >
+                    ▶
+                  </button>
+                ) : (
+                  <button
+                    onClick={handleTtsPause}
+                    className="flex h-8 w-8 items-center justify-center rounded-md border border-border bg-background text-foreground transition-colors hover:border-primary hover:text-primary"
+                    title="Pause speech"
+                  >
+                    ❚❚
+                  </button>
+                )}
+                <button
+                  onClick={handleTtsStop}
+                  disabled={ttsState === "idle" || ttsState === "ended"}
+                  className="flex h-8 w-8 items-center justify-center rounded-md border border-border bg-background text-muted-foreground transition-colors hover:border-destructive/60 hover:text-destructive disabled:cursor-not-allowed disabled:opacity-30"
+                  title="Stop speech"
+                >
+                  ■
+                </button>
+              </div>
+              <span className="font-mono text-[10px] font-bold uppercase tracking-widest text-muted-foreground">
+                {ttsState}
+              </span>
             </div>
           )}
           <pre className="max-h-[50vh] overflow-auto whitespace-pre-wrap break-words rounded-md border border-border bg-background/60 p-3 font-mono text-[12.5px] leading-relaxed text-foreground/90">
@@ -1079,5 +1076,98 @@ function SmallSelect({
         ))}
       </select>
     </label>
+  );
+}
+
+function OverrideControls({
+  eff,
+  models,
+  overrides,
+  onSetOverride,
+  onClearOverrides,
+  surface,
+}: {
+  eff: ReturnType<typeof effective>;
+  models: ORModel[];
+  overrides?: PageOverrides;
+  onSetOverride: (patch: Partial<PageOverrides>) => void;
+  onClearOverrides: () => void;
+  surface?: "primary";
+}) {
+  const hasOverrides = !!overrides && Object.keys(overrides).length > 0;
+  const wrapperClass =
+    surface === "primary"
+      ? "rounded-md border border-border bg-background/30 p-3"
+      : "pt-2";
+
+  return (
+    <div className={wrapperClass}>
+      <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
+        <SmallSelect
+          label="mode"
+          value={overrides?.mode ?? ""}
+          onChange={(v) => onSetOverride({ mode: (v || undefined) as GlobalMode | undefined })}
+          options={[
+            ["", MODE_INSTRUCTIONS[eff.mode].label],
+            ...Object.entries(MODE_INSTRUCTIONS).map(([k, v]) => [k, v.label] as [string, string]),
+          ]}
+        />
+        <SmallSelect
+          label="language"
+          value={overrides?.language ?? ""}
+          onChange={(v) => onSetOverride({ language: v || undefined })}
+          options={[["", eff.language], ...QUICK_LANGS.map((l) => [l, l] as [string, string])]}
+        />
+        <SmallSelect
+          label="style"
+          value={overrides?.style ?? ""}
+          onChange={(v) => onSetOverride({ style: v || undefined })}
+          options={[["", eff.style], ...STYLES.map((s) => [s, s] as [string, string])]}
+        />
+        <SmallSelect
+          label="model"
+          value={overrides?.modelId ?? ""}
+          onChange={(v) => onSetOverride({ modelId: v || undefined })}
+          options={[
+            [
+              "",
+              (models.find((m) => m.id === eff.modelId)?.name ?? eff.modelId).slice(0, 32),
+            ],
+            ...models.slice(0, 80).map((m) => [m.id, (m.name ?? m.id).slice(0, 32)] as [string, string]),
+          ]}
+        />
+        <label className="block">
+          <span className="font-mono text-[10px] uppercase tracking-widest text-muted-foreground">
+            temp · {(overrides?.temperature ?? eff.temperature).toFixed(2)}
+          </span>
+          <input
+            type="range"
+            min={0}
+            max={1.5}
+            step={0.05}
+            value={overrides?.temperature ?? eff.temperature}
+            onChange={(e) => onSetOverride({ temperature: parseFloat(e.target.value) })}
+            className="mt-1 w-full accent-primary"
+          />
+        </label>
+        <label className="flex items-center gap-2 self-end font-mono text-[11px] text-muted-foreground">
+          <input
+            type="checkbox"
+            checked={overrides?.memory ?? eff.memory}
+            onChange={(e) => onSetOverride({ memory: e.target.checked })}
+            className="h-3.5 w-3.5 accent-primary"
+          />
+          memory
+        </label>
+      </div>
+      {hasOverrides && (
+        <button
+          onClick={onClearOverrides}
+          className="mt-2 rounded border border-border px-2 py-0.5 font-mono text-[10px] uppercase tracking-widest text-muted-foreground hover:text-foreground"
+        >
+          clear overrides
+        </button>
+      )}
+    </div>
   );
 }

@@ -67,10 +67,14 @@ export function Dropzone({ onFile }: { onFile: (file: File) => void }) {
         handle(e.dataTransfer.files?.[0]);
       }}
       onClick={() => inputRef.current?.click()}
-      className={`group flex h-full cursor-pointer flex-col items-center justify-center rounded-lg border border-dashed bg-grid transition-colors ${
-        hover ? "border-primary bg-primary/5" : "border-border hover:border-border-strong"
+      className={`group relative flex h-full cursor-pointer flex-col items-center justify-center overflow-hidden rounded-xl border border-dashed bg-background transition-all ${
+        hover
+          ? "border-primary bg-primary/10 shadow-[0_0_24px_rgba(78,222,163,0.12)]"
+          : "border-border hover:border-primary/70 hover:bg-primary/5"
       }`}
     >
+      <div className="pointer-events-none absolute inset-0 bg-grid opacity-60" />
+      <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_center,rgba(78,222,163,0.10),transparent_55%)] opacity-0 transition-opacity group-hover:opacity-100" />
       <input
         ref={inputRef}
         type="file"
@@ -82,20 +86,17 @@ export function Dropzone({ onFile }: { onFile: (file: File) => void }) {
           if (inputRef.current) inputRef.current.value = "";
         }}
       />
-      <div className="text-center">
-        <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-md border border-border bg-surface font-mono text-xl text-primary">
-          {"{ }"}
+      <div className="relative z-10 text-center">
+        <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full border border-border bg-surface-2 font-mono text-xl text-primary transition-all group-hover:scale-105 group-hover:border-primary group-hover:bg-primary group-hover:text-primary-foreground">
+          ↑
         </div>
-        <div className="font-mono text-[11px] uppercase tracking-[0.2em] text-muted-foreground">
-          drag pdf here
+        <div className="text-base font-semibold text-foreground transition-colors group-hover:text-primary">
+          Click or drag PDF documents here
         </div>
-        <div className="mt-1 text-sm text-foreground">
-          or <span className="text-primary underline-offset-4 group-hover:underline">browse files</span>
+        <div className="mt-1 text-sm text-muted-foreground">
+          PDF only · max {formatSize(MAX_FILE_SIZE)}
         </div>
-        <div className="mt-2 font-mono text-[10px] uppercase tracking-widest text-muted-foreground/70">
-          max {formatSize(MAX_FILE_SIZE)}
-        </div>
-        <div className="mt-4 font-mono text-[10px] uppercase tracking-widest text-muted-foreground">
+        <div className="mt-4 font-mono text-[10px] uppercase tracking-widest text-muted-foreground/80">
           processed entirely in your browser · nothing uploaded
         </div>
       </div>

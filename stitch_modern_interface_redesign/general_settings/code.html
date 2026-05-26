@@ -1,0 +1,399 @@
+<!DOCTYPE html><html class="dark" lang="en" style=""><head>
+<meta charset="utf-8">
+<meta content="width=device-width, initial-scale=1.0" name="viewport">
+<title>DocLens | Settings</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&amp;display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet">
+<style>
+        .material-symbols-outlined {
+            font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+            display: inline-block;
+            vertical-align: middle;
+        }
+        .glass-panel {
+            background: rgba(30, 41, 59, 0.7);
+            backdrop-filter: blur(12px);
+            border: 1px solid #334155;
+        }
+        input[type="range"]::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            height: 16px;
+            width: 16px;
+            border-radius: 50%;
+            background: #4edea3;
+            cursor: pointer;
+            margin-top: -6px;
+            box-shadow: 0 0 10px rgba(78, 222, 163, 0.4);
+        }
+        input[type="range"]::-webkit-slider-runnable-track {
+            width: 100%;
+            height: 4px;
+            cursor: pointer;
+            background: #334155;
+            border-radius: 2px;
+        }
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #0b1326;
+            color: #dae2fd;
+        }
+    </style>
+<script id="tailwind-config">
+        tailwind.config = {
+          darkMode: "class",
+          theme: {
+            extend: {
+              "colors": {
+                      "inverse-on-surface": "#283044",
+                      "secondary-container": "#3131c0",
+                      "on-primary": "#003824",
+                      "tertiary-fixed-dim": "#ffb95f",
+                      "surface-bright": "#31394d",
+                      "secondary-fixed": "#e1e0ff",
+                      "surface": "#0b1326",
+                      "on-surface": "#dae2fd",
+                      "on-surface-variant": "#bbcabf",
+                      "secondary-fixed-dim": "#c0c1ff",
+                      "tertiary-fixed": "#ffddb8",
+                      "on-secondary-fixed-variant": "#2f2ebe",
+                      "outline-variant": "#3c4a42",
+                      "primary": "#4edea3",
+                      "on-secondary-container": "#b0b2ff",
+                      "outline": "#86948a",
+                      "on-error-container": "#ffdad6",
+                      "surface-variant": "#2d3449",
+                      "secondary": "#c0c1ff",
+                      "primary-container": "#10b981",
+                      "surface-tint": "#4edea3",
+                      "on-secondary-fixed": "#07006c",
+                      "primary-fixed-dim": "#4edea3",
+                      "surface-container-highest": "#2d3449",
+                      "on-secondary": "#1000a9",
+                      "on-tertiary-container": "#523200",
+                      "on-primary-fixed-variant": "#005236",
+                      "tertiary": "#ffb95f",
+                      "primary-fixed": "#6ffbbe",
+                      "inverse-surface": "#dae2fd",
+                      "on-background": "#dae2fd",
+                      "on-primary-container": "#00422b",
+                      "surface-dim": "#0b1326",
+                      "tertiary-container": "#e29100",
+                      "inverse-primary": "#006c49",
+                      "on-error": "#690005",
+                      "error": "#ffb4ab",
+                      "surface-container": "#171f33",
+                      "on-tertiary": "#472a00",
+                      "surface-container-lowest": "#060e20",
+                      "error-container": "#93000a",
+                      "surface-container-low": "#131b2e",
+                      "on-primary-fixed": "#002113",
+                      "surface-container-high": "#222a3d",
+                      "background": "#0b1326",
+                      "on-tertiary-fixed": "#2a1700",
+                      "on-tertiary-fixed-variant": "#653e00"
+              },
+              "borderRadius": {
+                      "DEFAULT": "0.25rem",
+                      "lg": "0.5rem",
+                      "xl": "0.75rem",
+                      "full": "9999px"
+              },
+              "spacing": {
+                      "gutter": "24px",
+                      "margin-mobile": "16px",
+                      "xs": "4px",
+                      "unit": "4px",
+                      "lg": "24px",
+                      "md": "16px",
+                      "sm": "8px",
+                      "margin-desktop": "48px",
+                      "xl": "40px"
+              },
+              "fontFamily": {
+                      "body-sm": ["Inter"],
+                      "status-label": ["Inter"],
+                      "headline-lg-mobile": ["Inter"],
+                      "title-md": ["Inter"],
+                      "headline-xl": ["Inter"],
+                      "body-lg": ["Inter"],
+                      "headline-lg": ["Inter"],
+                      "label-caps": ["Inter"]
+              },
+              "fontSize": {
+                      "body-sm": ["14px", {"lineHeight": "20px", "fontWeight": "400"}],
+                      "status-label": ["13px", {"lineHeight": "18px", "fontWeight": "500"}],
+                      "headline-lg-mobile": ["24px", {"lineHeight": "32px", "fontWeight": "600"}],
+                      "title-md": ["18px", {"lineHeight": "24px", "fontWeight": "600"}],
+                      "headline-xl": ["36px", {"lineHeight": "44px", "letterSpacing": "-0.02em", "fontWeight": "700"}],
+                      "body-lg": ["16px", {"lineHeight": "26px", "fontWeight": "400"}],
+                      "headline-lg": ["28px", {"lineHeight": "36px", "letterSpacing": "-0.01em", "fontWeight": "600"}],
+                      "label-caps": ["12px", {"lineHeight": "16px", "letterSpacing": "0.05em", "fontWeight": "700"}]
+              }
+            },
+          },
+        }
+      </script>
+</head>
+<body class="flex min-h-screen bg-background">
+<!-- SideNavBar -->
+<aside class="flex flex-col h-full border-r border-outline-variant fixed left-0 top-0 w-64 bg-surface z-50">
+<div class="px-lg py-xl flex flex-col gap-sm">
+<div class="flex items-center gap-md mb-lg">
+<div class="w-10 h-10 rounded-lg bg-primary flex items-center justify-center">
+<span class="material-symbols-outlined text-on-primary">lens_blur</span>
+</div>
+<div>
+<h1 class="font-headline-lg text-headline-lg font-bold text-primary">DocLens</h1>
+<p class="font-label-caps text-label-caps text-on-surface-variant">AI Intelligence</p>
+</div>
+</div>
+<nav class="flex flex-col gap-xs">
+<a class="flex items-center gap-md px-md py-sm rounded-lg text-on-surface-variant hover:bg-surface-variant transition-colors duration-200" href="#">
+<span class="material-symbols-outlined" data-icon="folder">folder</span>
+<span class="font-body-sm text-body-sm">Library</span>
+</a>
+
+<a class="flex items-center gap-md px-md py-sm rounded-lg text-primary font-bold border-r-2 border-primary bg-surface-variant/50" href="#">
+<span class="material-symbols-outlined" data-icon="settings" style="font-variation-settings: &quot;FILL&quot; 1;">settings</span>
+<span class="font-body-sm text-body-sm">General Settings</span>
+</a>
+<a class="flex items-center gap-md px-md py-sm rounded-lg" href="#">
+<span class="material-symbols-outlined" data-icon="record_voice_over" style="font-variation-settings: &quot;FILL&quot; 1;">record_voice_over</span>
+<span class="font-body-sm text-body-sm">Voice Settings</span>
+</a>
+</nav>
+<div class="mt-xl">
+<button class="w-full bg-primary-container text-on-primary-container font-bold py-md px-lg rounded-xl flex items-center justify-center gap-sm hover:opacity-90 transition-all active:scale-95 duration-150">
+<span class="material-symbols-outlined">add</span>
+                    New Document
+                </button>
+</div>
+</div>
+<div class="mt-auto px-lg py-xl flex flex-col gap-sm border-t border-outline-variant">
+
+<a class="flex items-center gap-md px-md py-sm rounded-lg text-on-surface-variant hover:bg-surface-variant transition-colors" href="#">
+<span class="material-symbols-outlined" data-icon="help_outline">help_outline</span>
+<span class="font-body-sm text-body-sm">Support</span>
+</a>
+</div>
+</aside>
+<!-- Main Content Canvas -->
+<main class="flex-1 ml-64 p-xl max-w-7xl">
+<!-- Header -->
+<header class="mb-xl flex justify-between items-end">
+<div>
+<h2 class="font-headline-xl text-headline-xl text-on-surface">General Settings</h2>
+<p class="font-body-lg text-body-lg text-on-surface-variant mt-sm">Configure your AI intelligence core and global defaults.</p>
+</div>
+<div class="flex items-center gap-md">
+<span class="bg-primary/10 text-primary px-md py-xs rounded-full font-label-caps text-label-caps border border-primary/20">System Online</span>
+</div>
+</header>
+<!-- Settings Grid -->
+<div class="grid grid-cols-12 gap-xl">
+<!-- Output Language Section -->
+<section class="col-span-12 md:col-span-6 glass-panel rounded-xl p-lg flex flex-col gap-md">
+<div class="flex items-center gap-md mb-xs">
+<span class="material-symbols-outlined text-primary" data-icon="translate">translate</span>
+<h3 class="font-title-md text-title-md text-on-surface">Output Language</h3>
+</div>
+<p class="font-body-sm text-body-sm text-on-surface-variant">Default language for AI-generated summaries and responses.</p>
+<div class="relative mt-sm">
+<input class="w-full bg-surface-container-lowest border border-outline-variant rounded-lg py-sm pl-xl pr-md text-body-sm text-on-surface focus:outline-none focus:border-secondary transition-all" placeholder="Search languages..." type="text">
+<span class="material-symbols-outlined absolute left-md top-1/2 -translate-y-1/2 text-outline" data-icon="search">search</span>
+</div>
+<div class="flex flex-wrap gap-sm mt-sm">
+<button class="bg-primary text-on-primary font-label-caps text-label-caps px-md py-xs rounded-full transition-all">English</button>
+<button class="bg-surface-variant text-on-surface-variant font-label-caps text-label-caps px-md py-xs rounded-full hover:bg-outline-variant transition-all">Hindi</button>
+<button class="bg-surface-variant text-on-surface-variant font-label-caps text-label-caps px-md py-xs rounded-full hover:bg-outline-variant transition-all">Spanish</button>
+<button class="bg-surface-variant text-on-surface-variant font-label-caps text-label-caps px-md py-xs rounded-full hover:bg-outline-variant transition-all">Mandarin</button>
+<button class="bg-surface-variant text-on-surface-variant font-label-caps text-label-caps px-md py-xs rounded-full hover:bg-outline-variant transition-all">French</button>
+<button class="bg-surface-variant text-on-surface-variant font-label-caps text-label-caps px-md py-xs rounded-full hover:bg-outline-variant transition-all">German</button>
+</div>
+</section>
+<!-- Storage & Database -->
+<section class="col-span-12 md:col-span-6 glass-panel rounded-xl p-lg flex flex-col justify-between">
+<div>
+<div class="flex items-center gap-md mb-xs">
+<span class="material-symbols-outlined text-tertiary" data-icon="database">database</span>
+<h3 class="font-title-md text-title-md text-on-surface">Storage &amp; Database</h3>
+</div>
+<div class="mt-md">
+<div class="flex justify-between font-label-caps text-label-caps text-on-surface-variant mb-xs">
+<span class="">Workspace Usage</span>
+<span class="text-on-surface">13.1 MB / 2048 MB</span>
+</div>
+<div class="w-full h-2 bg-surface-container-lowest rounded-full overflow-hidden">
+<div class="h-full bg-tertiary w-[1%]" style="width: 1.5%;"></div>
+</div>
+</div>
+</div>
+<div class="mt-lg flex justify-end">
+<button class="text-error font-label-caps text-label-caps px-md py-sm hover:bg-error-container/20 rounded-lg transition-all flex items-center gap-sm">
+<span class="material-symbols-outlined text-md" data-icon="delete_sweep">delete_sweep</span>
+                        Clear Cache
+                    </button>
+</div>
+</section>
+<!-- AI Pipeline Defaults -->
+<section class="col-span-12 glass-panel rounded-xl p-lg">
+<div class="flex items-center gap-md mb-lg">
+<span class="material-symbols-outlined text-secondary" data-icon="automation">automation</span>
+<h3 class="font-title-md text-title-md text-on-surface">AI Pipeline Defaults</h3>
+</div>
+<div class="grid grid-cols-1 md:grid-cols-3 gap-xl">
+<div class="flex flex-col gap-sm">
+<label class="font-label-caps text-label-caps text-on-surface-variant">Default Mode</label>
+<select class="bg-surface-container-lowest border border-outline-variant rounded-lg p-sm text-body-sm text-on-surface focus:ring-0 focus:border-secondary transition-all cursor-pointer">
+<option>Explain</option>
+<option>Translate</option>
+<option>Summarize</option>
+<option>Key Points Extraction</option>
+</select>
+</div>
+<div class="flex flex-col gap-sm">
+<label class="font-label-caps text-label-caps text-on-surface-variant">Tone Style</label>
+<select class="bg-surface-container-lowest border border-outline-variant rounded-lg p-sm text-body-sm text-on-surface focus:ring-0 focus:border-secondary transition-all cursor-pointer">
+<option>Professional/Legal</option>
+<option>Conversational</option>
+<option>Concise</option>
+<option>Academic</option>
+</select>
+</div>
+<div class="flex flex-col gap-sm">
+<div class="flex justify-between items-center">
+<label class="font-label-caps text-label-caps text-on-surface-variant">Temperature</label>
+<span class="font-status-label text-status-label text-secondary" id="temp-val">0.4</span>
+</div>
+<input class="mt-md appearance-none h-1 w-full bg-surface-container-lowest rounded-full cursor-pointer" max="1" min="0" oninput="document.getElementById('temp-val').innerText = this.value" step="0.1" type="range" value="0.4">
+<div class="flex justify-between font-label-caps text-[10px] text-outline mt-xs uppercase">
+<span class="">Precise</span>
+<span class="">Creative</span>
+</div>
+</div>
+</div>
+</section>
+<!-- API Management -->
+<section class="col-span-12 md:col-span-5 glass-panel rounded-xl p-lg flex flex-col gap-md">
+<div class="flex items-center gap-md mb-xs">
+<span class="material-symbols-outlined text-primary" data-icon="key">key</span>
+<h3 class="font-title-md text-title-md text-on-surface">API Management</h3>
+</div>
+<p class="font-body-sm text-body-sm text-on-surface-variant">Your OpenRouter credentials for high-performance inference.</p>
+<div class="flex flex-col gap-sm mt-sm">
+<label class="font-label-caps text-label-caps text-outline">OpenRouter Key</label>
+<div class="relative">
+<input class="w-full bg-surface-container-lowest border border-outline-variant rounded-lg py-sm px-md text-body-sm text-on-surface font-mono tracking-widest focus:border-primary transition-all" type="password" value="sk-or-v1-xxxxxxxxxxxxxxxxxxxx">
+<button class="absolute right-md top-1/2 -translate-y-1/2 text-outline hover:text-on-surface">
+<span class="material-symbols-outlined text-md">visibility</span>
+</button>
+</div>
+</div>
+<button class="w-full bg-secondary text-on-secondary font-bold py-sm rounded-lg hover:opacity-90 transition-all mt-sm">Verify Connection</button>
+</section>
+<!-- Model Selection -->
+<section class="col-span-12 md:col-span-7 glass-panel rounded-xl p-lg flex flex-col gap-md overflow-hidden">
+<div class="flex justify-between items-center mb-xs">
+<div class="flex items-center gap-md">
+<span class="material-symbols-outlined text-tertiary" data-icon="neurology">neurology</span>
+<h3 class="font-title-md text-title-md text-on-surface">Model Selection</h3>
+</div>
+<div class="relative w-48">
+<input class="w-full bg-surface-container-lowest border border-outline-variant rounded-full py-xs px-md text-[12px] text-on-surface focus:outline-none" placeholder="Filter models..." type="text">
+</div>
+</div>
+<div class="flex flex-col gap-sm max-h-[320px] overflow-y-auto pr-sm custom-scrollbar">
+<!-- Model Item -->
+<div class="bg-surface-container-low border border-outline-variant rounded-xl p-md flex items-center justify-between hover:bg-surface-container-high transition-all cursor-pointer group">
+<div class="flex items-center gap-md">
+<div class="w-10 h-10 rounded-lg bg-surface-container-highest flex items-center justify-center border border-outline-variant">
+<span class="material-symbols-outlined text-primary" data-icon="token">token</span>
+</div>
+<div>
+<h4 class="font-body-sm text-body-sm font-bold text-on-surface">DeepSeek Coder V2</h4>
+<p class="text-[11px] text-outline">Optimized for reasoning and complex parsing</p>
+</div>
+</div>
+<div class="text-right">
+<div class="font-label-caps text-label-caps text-primary">128K CTX</div>
+<div class="text-[10px] text-on-surface-variant font-mono">$0.14 / 1M</div>
+</div>
+</div>
+<!-- Model Item -->
+<div class="bg-primary/5 border border-primary/30 rounded-xl p-md flex items-center justify-between hover:bg-primary/10 transition-all cursor-pointer ring-1 ring-primary/50">
+<div class="flex items-center gap-md">
+<div class="w-10 h-10 rounded-lg bg-primary-container flex items-center justify-center border border-primary">
+<span class="material-symbols-outlined text-on-primary-container" data-icon="star" style="font-variation-settings: &quot;FILL&quot; 1;">star</span>
+</div>
+<div>
+<h4 class="font-body-sm text-body-sm font-bold text-on-surface">Baidu ERNIE 4.0</h4>
+<p class="text-[11px] text-outline">State-of-the-art multilingual accuracy</p>
+</div>
+</div>
+<div class="text-right">
+<div class="font-label-caps text-label-caps text-primary">32K CTX</div>
+<div class="text-[10px] text-on-surface-variant font-mono">$0.25 / 1M</div>
+</div>
+</div>
+<!-- Model Item -->
+<div class="bg-surface-container-low border border-outline-variant rounded-xl p-md flex items-center justify-between hover:bg-surface-container-high transition-all cursor-pointer">
+<div class="flex items-center gap-md">
+<div class="w-10 h-10 rounded-lg bg-surface-container-highest flex items-center justify-center border border-outline-variant">
+<span class="material-symbols-outlined text-on-surface-variant" data-icon="memory">memory</span>
+</div>
+<div>
+<h4 class="font-body-sm text-body-sm font-bold text-on-surface">Mistral Large</h4>
+<p class="text-[11px] text-outline">Balanced performance for long-form Docs</p>
+</div>
+</div>
+<div class="text-right">
+<div class="font-label-caps text-label-caps text-primary">64K CTX</div>
+<div class="text-[10px] text-on-surface-variant font-mono">$0.80 / 1M</div>
+</div>
+</div>
+</div>
+</section>
+</div>
+<!-- Sticky Bottom Bar -->
+<div class="fixed bottom-0 right-0 left-64 h-20 bg-surface/80 backdrop-blur-xl border-t border-outline-variant px-xl flex items-center justify-between z-40">
+<div class="flex items-center gap-sm text-on-surface-variant">
+<span class="material-symbols-outlined text-primary" data-icon="cloud_done">cloud_done</span>
+<span class="font-label-caps text-label-caps">All changes synced to cloud</span>
+</div>
+<div class="flex gap-md">
+<button class="px-lg py-sm rounded-lg font-bold text-on-surface-variant border border-outline-variant hover:bg-surface-variant transition-all">Reset Defaults</button>
+<button class="px-xl py-sm rounded-lg font-bold text-on-primary bg-primary hover:opacity-90 shadow-lg shadow-primary/20 transition-all">Save Global Settings</button>
+</div>
+</div>
+</main>
+<!-- Decorative Background Elements -->
+<div class="fixed top-[-10%] right-[-10%] w-[40%] h-[40%] bg-primary/5 rounded-full blur-[120px] pointer-events-none -z-10"></div>
+<div class="fixed bottom-[-10%] left-[-10%] w-[30%] h-[30%] bg-secondary/5 rounded-full blur-[100px] pointer-events-none -z-10"></div>
+<script>
+        // Simple micro-interaction for model selection
+        const models = document.querySelectorAll('.custom-scrollbar > div');
+        models.forEach(model => {
+            model.addEventListener('click', () => {
+                models.forEach(m => {
+                    m.classList.remove('bg-primary/5', 'border-primary/30', 'ring-1', 'ring-primary/50');
+                    m.classList.add('bg-surface-container-low', 'border-outline-variant');
+                    const star = m.querySelector('[data-icon="star"]');
+                    if(star) {
+                        star.innerText = "star_outline";
+                        star.style.fontVariationSettings = "'FILL' 0";
+                    }
+                });
+                model.classList.remove('bg-surface-container-low', 'border-outline-variant');
+                model.classList.add('bg-primary/5', 'border-primary/30', 'ring-1', 'ring-primary/50');
+            });
+        });
+    </script>
+
+
+
+
+
+
+</body></html>

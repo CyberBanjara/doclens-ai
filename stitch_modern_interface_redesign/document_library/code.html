@@ -1,0 +1,417 @@
+<!DOCTYPE html><html class="dark" lang="en" style=""><head>
+<meta charset="utf-8">
+<meta content="width=device-width, initial-scale=1.0" name="viewport">
+<title>DocLens | Document Library</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&amp;display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet">
+<style>
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #0b1326;
+        }
+        .material-symbols-outlined {
+            font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+        }
+        .glass-panel {
+            backdrop-filter: blur(12px);
+            background: rgba(45, 52, 73, 0.4);
+            border: 1px solid rgba(60, 74, 66, 0.5);
+        }
+        .drag-glow:hover {
+            box-shadow: 0 0 20px rgba(78, 222, 163, 0.15);
+        }
+        ::-webkit-scrollbar {
+            width: 6px;
+        }
+        ::-webkit-scrollbar-track {
+            background: #0b1326;
+        }
+        ::-webkit-scrollbar-thumb {
+            background: #3c4a42;
+            border-radius: 10px;
+        }
+    </style>
+<script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    "colors": {
+                        "inverse-on-surface": "#283044",
+                        "secondary-container": "#3131c0",
+                        "on-primary": "#003824",
+                        "tertiary-fixed-dim": "#ffb95f",
+                        "surface-bright": "#31394d",
+                        "secondary-fixed": "#e1e0ff",
+                        "surface": "#0b1326",
+                        "on-surface": "#dae2fd",
+                        "on-surface-variant": "#bbcabf",
+                        "secondary-fixed-dim": "#c0c1ff",
+                        "tertiary-fixed": "#ffddb8",
+                        "on-secondary-fixed-variant": "#2f2ebe",
+                        "outline-variant": "#3c4a42",
+                        "primary": "#4edea3",
+                        "on-secondary-container": "#b0b2ff",
+                        "outline": "#86948a",
+                        "on-error-container": "#ffdad6",
+                        "surface-variant": "#2d3449",
+                        "secondary": "#c0c1ff",
+                        "primary-container": "#10b981",
+                        "surface-tint": "#4edea3",
+                        "on-secondary-fixed": "#07006c",
+                        "primary-fixed-dim": "#4edea3",
+                        "surface-container-highest": "#2d3449",
+                        "on-secondary": "#1000a9",
+                        "on-tertiary-container": "#523200",
+                        "on-primary-fixed-variant": "#005236",
+                        "tertiary": "#ffb95f",
+                        "primary-fixed": "#6ffbbe",
+                        "inverse-surface": "#dae2fd",
+                        "on-background": "#dae2fd",
+                        "on-primary-container": "#00422b",
+                        "surface-dim": "#0b1326",
+                        "tertiary-container": "#e29100",
+                        "inverse-primary": "#006c49",
+                        "on-error": "#690005",
+                        "error": "#ffb4ab",
+                        "surface-container": "#171f33",
+                        "on-tertiary": "#472a00",
+                        "surface-container-lowest": "#060e20",
+                        "error-container": "#93000a",
+                        "surface-container-low": "#131b2e",
+                        "on-primary-fixed": "#002113",
+                        "surface-container-high": "#222a3d",
+                        "background": "#0b1326",
+                        "on-tertiary-fixed": "#2a1700",
+                        "on-tertiary-fixed-variant": "#653e00"
+                    },
+                    "borderRadius": {
+                        "DEFAULT": "0.25rem",
+                        "lg": "0.5rem",
+                        "xl": "0.75rem",
+                        "full": "9999px"
+                    },
+                    "spacing": {
+                        "gutter": "24px",
+                        "margin-mobile": "16px",
+                        "xs": "4px",
+                        "unit": "4px",
+                        "lg": "24px",
+                        "md": "16px",
+                        "sm": "8px",
+                        "margin-desktop": "48px",
+                        "xl": "40px"
+                    },
+                    "fontFamily": {
+                        "body-sm": ["Inter"],
+                        "status-label": ["Inter"],
+                        "headline-lg-mobile": ["Inter"],
+                        "title-md": ["Inter"],
+                        "headline-xl": ["Inter"],
+                        "body-lg": ["Inter"],
+                        "headline-lg": ["Inter"],
+                        "label-caps": ["Inter"]
+                    },
+                    "fontSize": {
+                        "body-sm": ["14px", {"lineHeight": "20px", "fontWeight": "400"}],
+                        "status-label": ["13px", {"lineHeight": "18px", "fontWeight": "500"}],
+                        "headline-lg-mobile": ["24px", {"lineHeight": "32px", "fontWeight": "600"}],
+                        "title-md": ["18px", {"lineHeight": "24px", "fontWeight": "600"}],
+                        "headline-xl": ["36px", {"lineHeight": "44px", "letterSpacing": "-0.02em", "fontWeight": "700"}],
+                        "body-lg": ["16px", {"lineHeight": "26px", "fontWeight": "400"}],
+                        "headline-lg": ["28px", {"lineHeight": "36px", "letterSpacing": "-0.01em", "fontWeight": "600"}],
+                        "label-caps": ["12px", {"lineHeight": "16px", "letterSpacing": "0.05em", "fontWeight": "700"}]
+                    }
+                },
+            },
+        }
+    </script>
+</head>
+<body class="bg-background text-on-surface overflow-hidden">
+<div class="flex h-screen overflow-hidden">
+<!-- SideNavBar - JSON Predicted -->
+<aside class="flex flex-col h-full border-r border-outline-variant bg-surface docked full-height left-0 w-64 z-40">
+<div class="p-lg flex flex-col gap-xs">
+<div class="flex items-center gap-sm mb-xl">
+<div class="w-10 h-10 bg-primary rounded-lg flex items-center justify-center">
+<span class="material-symbols-outlined text-on-primary" data-icon="auto_stories">auto_stories</span>
+</div>
+<div>
+<h1 class="font-headline-lg text-headline-lg font-bold text-primary">DocLens</h1>
+<p class="font-body-sm text-body-sm text-on-surface-variant opacity-70">AI Intelligence</p>
+</div>
+</div>
+<nav class="flex flex-col gap-sm">
+<!-- Library - Active -->
+<a class="flex items-center gap-md p-md rounded-lg transition-colors duration-200 text-primary font-bold border-r-2 border-primary bg-surface-variant" href="#">
+<span class="material-symbols-outlined" data-icon="folder">folder</span>
+<span class="font-label-caps text-label-caps">Library</span>
+</a>
+<!-- Workspace -->
+
+<!-- Settings -->
+<a class="flex items-center gap-md p-md rounded-lg text-on-surface-variant hover:bg-surface-variant transition-colors duration-200" href="#">
+<span class="material-symbols-outlined" data-icon="settings">settings</span>
+<span class="font-label-caps text-label-caps">General Settings</span>
+</a>
+<a class="flex items-center gap-md p-md rounded-lg text-on-surface-variant hover:bg-surface-variant transition-colors duration-200" href="#">
+<span class="material-symbols-outlined" data-icon="record_voice_over">record_voice_over</span>
+<span class="font-label-caps text-label-caps">Voice Settings</span>
+</a>
+</nav>
+</div>
+<div class="mt-auto p-lg border-t border-outline-variant">
+<button class="w-full py-md px-lg bg-primary text-on-primary rounded-xl font-bold flex items-center justify-center gap-sm hover:opacity-90 active:scale-95 transition-all">
+<span class="material-symbols-outlined" data-icon="add">add</span>
+                    New Document
+                </button>
+<div class="mt-xl flex flex-col gap-sm">
+
+<a class="flex items-center gap-md text-on-surface-variant hover:text-primary transition-all" href="#">
+<span class="material-symbols-outlined" data-icon="help_outline">help_outline</span>
+<span class="font-body-sm text-body-sm">Support</span>
+</a>
+</div>
+</div>
+</aside>
+<!-- Main Content Area -->
+<main class="flex-1 overflow-y-auto relative">
+<!-- TopNavBar - JSON Predicted -->
+<header class="sticky top-0 right-0 left-0 z-50 flex justify-between items-center px-xl h-16 bg-surface/80 backdrop-blur-md border-b border-outline-variant">
+<div class="flex items-center gap-md">
+<h2 class="font-headline-lg text-headline-lg font-black text-primary">Library</h2>
+<span class="px-sm py-xs bg-secondary-container text-on-secondary-container rounded font-label-caps text-[10px] tracking-widest">PRO</span>
+</div>
+<div class="flex items-center gap-xl">
+<div class="relative hidden md:flex items-center">
+<span class="material-symbols-outlined absolute left-3 text-outline text-lg" data-icon="search">search</span>
+<input class="pl-10 pr-4 py-2 bg-surface-container-low border border-outline-variant rounded-full text-body-sm text-on-surface focus:ring-1 focus:ring-primary focus:border-primary w-64 transition-all outline-none" placeholder="Search documents..." type="text">
+</div>
+<div class="flex items-center gap-md">
+<button class="text-on-surface-variant hover:text-primary transition-all">
+<span class="material-symbols-outlined" data-icon="notifications">notifications</span>
+</button>
+<div class="flex items-center gap-sm pl-md border-l border-outline-variant">
+<div class="w-8 h-8 rounded-full overflow-hidden border border-outline-variant">
+<img alt="User Avatar" class="w-full h-full object-cover" src="https://lh3.googleusercontent.com/aida-public/AB6AXuDwUC0m1ZiKNXl32evZb6LdlynMnSdQaQEKiFYnpDLGLr2l1gDUzVitK5EMMGBDDh_GTCGzdfT3zIXHwGSQdiV2-CSyLk2oWbcUGoUZrC0mfHJT75MOBvv6knGc2slMlkexcvytIuLpR7rqkEkgy8z6Cn6ofK1ysynqPO2HbaT_rcvkmETphe8paI7-1YVw1OWUoLynS_BuvWTFJq2BdauiRor2tlMhqVdXaqiEl_JTkdNPYWuyIAXKTYUzNt2NP_Jsrw0iJjQnnr4">
+</div>
+<span class="font-label-caps text-label-caps hidden lg:block text-primary">Connected</span>
+</div>
+</div>
+</div>
+</header>
+<div class="p-xl space-y-xl max-w-7xl mx-auto">
+<!-- Hero / Upload Zone Section -->
+<section>
+<div class="mb-lg">
+<h3 class="font-headline-xl text-headline-xl text-on-surface">Intelligence Library</h3>
+<p class="font-body-lg text-body-lg text-on-surface-variant max-w-2xl">Upload documents for surgical-precision analysis, automated summaries, and multi-language extraction.</p>
+</div>
+<!-- Drag & Drop Zone -->
+<div class="relative group cursor-pointer h-56 border-2 border-dashed border-outline-variant hover:border-primary bg-surface-container-lowest rounded-xl flex flex-col items-center justify-center gap-md transition-all drag-glow overflow-hidden" id="dropzone">
+<div class="absolute inset-0 opacity-10 bg-gradient-to-tr from-primary via-transparent to-secondary group-hover:opacity-20 transition-opacity"></div>
+<div class="w-16 h-16 bg-surface-container-high rounded-full flex items-center justify-center group-hover:scale-110 group-hover:bg-primary transition-all">
+<span class="material-symbols-outlined text-primary group-hover:text-on-primary text-4xl" data-icon="upload_file">upload_file</span>
+</div>
+<div class="text-center z-10">
+<p class="font-title-md text-title-md text-on-surface group-hover:text-primary transition-colors">Click or drag documents here to process</p>
+<p class="font-body-sm text-body-sm text-on-surface-variant mt-sm">PDF, DOCX, TXT (Max 50MB per file)</p>
+</div>
+</div>
+</section>
+<!-- Documents Grid -->
+<section>
+<div class="flex items-center justify-between mb-lg">
+<div class="flex items-center gap-md">
+<span class="material-symbols-outlined text-primary" data-icon="sort">sort</span>
+<span class="font-label-caps text-label-caps uppercase tracking-widest text-on-surface-variant">Recent Documents</span>
+</div>
+<div class="flex gap-sm">
+<button class="p-2 bg-surface-container-high rounded-lg text-on-surface-variant hover:text-primary">
+<span class="material-symbols-outlined" data-icon="grid_view">grid_view</span>
+</button>
+<button class="p-2 bg-surface-container rounded-lg text-on-surface-variant hover:text-primary">
+<span class="material-symbols-outlined" data-icon="view_list">view_list</span>
+</button>
+</div>
+</div>
+<!-- Bento-style Grid -->
+<div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-lg">
+<!-- Document Card 1 -->
+<div class="glass-panel p-md rounded-xl flex flex-col gap-md group hover:-translate-y-1 transition-all duration-300">
+<div class="relative h-40 bg-surface-container-lowest rounded-lg overflow-hidden border border-outline-variant">
+<img class="w-full h-full object-cover opacity-60 group-hover:scale-105 transition-transform duration-500" data-alt="A clean top-down macro shot of a structured academic textbook page with diagrams and high-contrast typography. The image is filtered with a dark, professional navy tint and subtle emerald light leaks to match the DocLens brand identity. The lighting is crisp and surgical, emphasizing text legibility and technical detail." src="https://lh3.googleusercontent.com/aida-public/AB6AXuAYFjqbE1qpfeoGLxBOyrAeuYXepI4YF04Tss1N7VA4YiguHdSVe9ykyja9Kwo7YVNArNvoVzy4GwubEmvTsZ29uUfqEojXo-KGVdZn0qJnWSbW0rby-y6uTl10RZdiQUcVUvp2hMcCweoYjlk5c7S5-A1xmTGFkU_pRfFIHGeAmcnLhNEw8aDhOkWUVmfBBsdXzpQISd-8sEHb-cjoMBQ0I7RcGJW_Or4GA9OqtpRqvalelm-BcB62lvj21fWhGRPjGlulvug_Kao">
+<div class="absolute inset-0 bg-gradient-to-t from-surface to-transparent"></div>
+<div class="absolute top-2 right-2">
+<span class="bg-primary/20 text-primary px-sm py-xs rounded-md font-status-label text-status-label border border-primary/30">Extracted</span>
+</div>
+</div>
+<div class="space-y-sm">
+<h4 class="font-title-md text-title-md text-on-surface truncate">3. Class-VIII Social Science</h4>
+<div class="flex items-center gap-xs">
+<span class="bg-secondary/10 text-secondary px-sm py-xs rounded font-label-caps text-[10px] tracking-wider uppercase">AI Processed</span>
+<span class="bg-tertiary/10 text-tertiary px-sm py-xs rounded font-label-caps text-[10px] tracking-wider uppercase">History</span>
+</div>
+</div>
+<div class="mt-auto pt-md border-t border-outline-variant/30 flex justify-between items-center">
+<div class="flex gap-md">
+<div class="flex items-center gap-xs text-on-surface-variant">
+<span class="material-symbols-outlined text-[14px]" data-icon="description">description</span>
+<span class="font-label-caps text-label-caps">24 Pgs</span>
+</div>
+<div class="flex items-center gap-xs text-on-surface-variant">
+<span class="material-symbols-outlined text-[14px]" data-icon="database">database</span>
+<span class="font-label-caps text-label-caps">4.2 MB</span>
+</div>
+</div>
+<button class="text-on-surface-variant hover:text-primary transition-colors">
+<span class="material-symbols-outlined" data-icon="more_vert">more_vert</span>
+</button>
+</div>
+</div>
+<!-- Document Card 2 -->
+<div class="glass-panel p-md rounded-xl flex flex-col gap-md group hover:-translate-y-1 transition-all duration-300">
+<div class="relative h-40 bg-surface-container-lowest rounded-lg overflow-hidden border border-outline-variant">
+<img class="w-full h-full object-cover opacity-60 group-hover:scale-105 transition-transform duration-500" data-alt="A minimalist architectural shot of a modern office interior with sharp angles and expansive glass walls. The lighting is high-key and atmospheric, with a color palette of deep navy blues and glowing emerald accents. The scene evokes a sense of corporate intelligence and professional calm, mirroring the sophisticated UI design system." src="https://lh3.googleusercontent.com/aida-public/AB6AXuAd6i2Pt_Apzb1EJPZB1JkjXLpDt6H1-urd-nZVyPkzKSDhXsYyTpZry9Z7t2I066eGf-GNx1zAeECoPD3J6acK-UU58ENwQg5-zUFo8l8KkxGi5CZcKFw74kap7WbYFXQ5ttECy3SDM4ZIyHKyXKcXZJ0iAlIPg1Q63s-yI35y18Sw38QduhRk6HcUSpaNaxJkmI_onFNe6eW5xko6RWkuWc_oH7oC65mcvlABdxLtac91omgwDqHtfdqVvZCCktI53fKGOXACiG4">
+<div class="absolute inset-0 bg-gradient-to-t from-surface to-transparent"></div>
+<div class="absolute top-2 right-2">
+<span class="bg-primary/20 text-primary px-sm py-xs rounded-md font-status-label text-status-label border border-primary/30">Extracted</span>
+</div>
+</div>
+<div class="space-y-sm">
+<h4 class="font-title-md text-title-md text-on-surface truncate">Annual Legal Report 2023</h4>
+<div class="flex items-center gap-xs">
+<span class="bg-secondary/10 text-secondary px-sm py-xs rounded font-label-caps text-[10px] tracking-wider uppercase">AI Processed</span>
+<span class="bg-surface-variant text-on-surface-variant px-sm py-xs rounded font-label-caps text-[10px] tracking-wider uppercase">Legal</span>
+</div>
+</div>
+<div class="mt-auto pt-md border-t border-outline-variant/30 flex justify-between items-center">
+<div class="flex gap-md">
+<div class="flex items-center gap-xs text-on-surface-variant">
+<span class="material-symbols-outlined text-[14px]" data-icon="description">description</span>
+<span class="font-label-caps text-label-caps">128 Pgs</span>
+</div>
+<div class="flex items-center gap-xs text-on-surface-variant">
+<span class="material-symbols-outlined text-[14px]" data-icon="database">database</span>
+<span class="font-label-caps text-label-caps">18.5 MB</span>
+</div>
+</div>
+<button class="text-on-surface-variant hover:text-primary transition-colors">
+<span class="material-symbols-outlined" data-icon="more_vert">more_vert</span>
+</button>
+</div>
+</div>
+<!-- Document Card 3 (Processing State) -->
+<div class="glass-panel p-md rounded-xl flex flex-col gap-md group border-primary/40 relative">
+<div class="absolute inset-0 bg-primary/5 rounded-xl animate-pulse"></div>
+<div class="relative h-40 bg-surface-container-high rounded-lg flex flex-col items-center justify-center gap-sm">
+<div class="w-12 h-12 border-2 border-primary border-t-transparent rounded-full animate-spin"></div>
+<p class="font-label-caps text-label-caps text-primary animate-pulse">Analyzing...</p>
+</div>
+<div class="space-y-sm">
+<h4 class="font-title-md text-title-md text-on-surface truncate">Medical_Thesis_Draft_V2</h4>
+<div class="flex items-center gap-xs">
+<span class="bg-primary/10 text-primary px-sm py-xs rounded font-label-caps text-[10px] tracking-wider uppercase">85% Complete</span>
+</div>
+</div>
+<div class="mt-auto pt-md border-t border-outline-variant/30 flex justify-between items-center">
+<div class="flex gap-md">
+<div class="flex items-center gap-xs text-on-surface-variant">
+<span class="material-symbols-outlined text-[14px]" data-icon="description">description</span>
+<span class="font-label-caps text-label-caps">-- Pgs</span>
+</div>
+<div class="flex items-center gap-xs text-on-surface-variant">
+<span class="material-symbols-outlined text-[14px]" data-icon="database">database</span>
+<span class="font-label-caps text-label-caps">2.1 MB</span>
+</div>
+</div>
+</div>
+</div>
+<!-- Document Card 4 -->
+<div class="glass-panel p-md rounded-xl flex flex-col gap-md group hover:-translate-y-1 transition-all duration-300">
+<div class="relative h-40 bg-surface-container-lowest rounded-lg overflow-hidden border border-outline-variant">
+<img class="w-full h-full object-cover opacity-60 group-hover:scale-105 transition-transform duration-500" data-alt="A stylized digital workspace with a sleek laptop and tablet showing complex data visualizations. The background is a deep navy color with glowing emerald and indigo accents, creating a high-tech, intelligent atmosphere. The aesthetic is clean, professional, and corporate, emphasizing surgical accuracy and modern design principles." src="https://lh3.googleusercontent.com/aida-public/AB6AXuC7wHxa65rZnutn0wGJRFkADQQPRDBDxbqyZLnHw5NBiucoJ6wn5UxrO1DIcL29khraVRQ1ay5_s3L_XDD6XHmLUd2INMCl5SN2AjW4tAk0u7XhvlrzujNzPBzaSsn0hFRy7b-b9zSa8Gu2r7yCdiG9lYXWyUN0u4lP8D6KlJJC6G0ACuV3CEu2Fy6MIN25RtCr7kAIa_ju6cylMOaF9M7Vqx1E8s3imu0YnndBl3YqDin76LW47K4VTk6QVsNWidaZicZ8atWOPpg">
+<div class="absolute inset-0 bg-gradient-to-t from-surface to-transparent"></div>
+<div class="absolute top-2 right-2">
+<span class="bg-primary/20 text-primary px-sm py-xs rounded-md font-status-label text-status-label border border-primary/30">Extracted</span>
+</div>
+</div>
+<div class="space-y-sm">
+<h4 class="font-title-md text-title-md text-on-surface truncate">Financial_Quarterly_Charts</h4>
+<div class="flex items-center gap-xs">
+<span class="bg-secondary/10 text-secondary px-sm py-xs rounded font-label-caps text-[10px] tracking-wider uppercase">AI Processed</span>
+<span class="bg-surface-variant text-on-surface-variant px-sm py-xs rounded font-label-caps text-[10px] tracking-wider uppercase">Finance</span>
+</div>
+</div>
+<div class="mt-auto pt-md border-t border-outline-variant/30 flex justify-between items-center">
+<div class="flex gap-md">
+<div class="flex items-center gap-xs text-on-surface-variant">
+<span class="material-symbols-outlined text-[14px]" data-icon="description">description</span>
+<span class="font-label-caps text-label-caps">56 Pgs</span>
+</div>
+<div class="flex items-center gap-xs text-on-surface-variant">
+<span class="material-symbols-outlined text-[14px]" data-icon="database">database</span>
+<span class="font-label-caps text-label-caps">12.0 MB</span>
+</div>
+</div>
+<button class="text-on-surface-variant hover:text-primary transition-colors">
+<span class="material-symbols-outlined" data-icon="more_vert">more_vert</span>
+</button>
+</div>
+</div>
+</div>
+</section>
+</div>
+<!-- Global Floating Status -->
+<div class="fixed bottom-lg right-lg z-50">
+<div class="glass-panel px-lg py-md rounded-full flex items-center gap-md shadow-2xl border-primary/20">
+<div class="w-2 h-2 bg-primary rounded-full animate-ping"></div>
+<span class="font-status-label text-status-label text-on-surface">3 Files processing in background</span>
+<button class="bg-primary/10 text-primary p-1 rounded-full hover:bg-primary/20">
+<span class="material-symbols-outlined text-sm" data-icon="chevron_right">chevron_right</span>
+</button>
+</div>
+</div>
+</main>
+</div>
+<script>
+        // Simple Interaction logic
+        const dropzone = document.getElementById('dropzone');
+        
+        dropzone.addEventListener('dragover', (e) => {
+            e.preventDefault();
+            dropzone.classList.add('border-primary', 'bg-primary/5');
+        });
+
+        dropzone.addEventListener('dragleave', () => {
+            dropzone.classList.remove('border-primary', 'bg-primary/5');
+        });
+
+        dropzone.addEventListener('drop', (e) => {
+            e.preventDefault();
+            dropzone.classList.remove('border-primary', 'bg-primary/5');
+            alert('Document uploaded! DocLens AI is beginning the extraction process.');
+        });
+        
+        // Navigation Active State Logic
+        const navLinks = document.querySelectorAll('nav a');
+        navLinks.forEach(link => {
+            link.addEventListener('click', (e) => {
+                navLinks.forEach(l => {
+                    l.classList.remove('text-primary', 'font-bold', 'border-r-2', 'border-primary', 'bg-surface-variant');
+                    l.classList.add('text-on-surface-variant');
+                });
+                link.classList.remove('text-on-surface-variant');
+                link.classList.add('text-primary', 'font-bold', 'border-r-2', 'border-primary', 'bg-surface-variant');
+            });
+        });
+    </script>
+
+
+
+
+
+
+</body></html>

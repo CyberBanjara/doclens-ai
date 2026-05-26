@@ -121,15 +121,15 @@ function DashboardPage() {
   return (
     <div className="flex min-h-screen flex-col bg-background text-foreground">
       <AppHeader />
-      <main className="mx-auto w-full max-w-6xl flex-1 px-5 py-8">
-        <div className="mb-6 flex items-baseline justify-between">
+      <main className="mx-auto w-full max-w-7xl flex-1 px-5 py-8">
+        <div className="mb-6 flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
           <div>
-            <h2 className="font-mono text-[11px] uppercase tracking-[0.25em] text-muted-foreground">
-              library
-            </h2>
-            <p className="mt-1 text-2xl font-semibold tracking-tight">Your documents</p>
+            <h2 className="text-3xl font-black tracking-tight text-foreground">Intelligence Library</h2>
+            <p className="mt-1 max-w-2xl text-sm text-muted-foreground">
+              Upload PDFs for browser-local extraction, page-level AI processing, and multilingual review.
+            </p>
           </div>
-          <div className="font-mono text-[11px] uppercase tracking-widest text-muted-foreground">
+          <div className="rounded-full border border-border bg-surface px-3 py-1.5 font-mono text-[11px] uppercase tracking-widest text-muted-foreground">
             {loading ? "loading…" : `${docs.length} document${docs.length === 1 ? "" : "s"}`}
           </div>
         </div>
@@ -174,12 +174,12 @@ function DashboardPage() {
         )}
 
 
-        <div className="mb-8 h-44">
+        <div className="mb-8 h-56">
           <Dropzone onFile={handleFile} />
         </div>
 
         {!loading && docs.length === 0 ? (
-          <div className="rounded-lg border border-dashed border-border bg-surface/50 p-10 text-center">
+          <div className="rounded-xl border border-dashed border-border bg-surface/70 p-10 text-center">
             <div className="font-mono text-[11px] uppercase tracking-widest text-muted-foreground">
               empty library
             </div>
@@ -188,14 +188,19 @@ function DashboardPage() {
             </p>
           </div>
         ) : (
-          <ul className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
+          <ul className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
             {docs.map((d) => (
               <li key={d.id}>
                 <Link
                   to="/doc/$id"
                   params={{ id: d.id }}
-                  className="group block rounded-lg border border-border bg-surface p-4 transition-colors hover:border-border-strong hover:bg-surface-2"
+                  className="group block overflow-hidden rounded-xl border border-border bg-surface/90 p-4 transition-all hover:-translate-y-0.5 hover:border-primary/50 hover:bg-surface-2 hover:shadow-[0_18px_45px_rgba(0,0,0,0.22)]"
                 >
+                  <div className="mb-4 flex h-28 items-center justify-center rounded-lg border border-border bg-background/80">
+                    <div className="flex h-14 w-14 items-center justify-center rounded-lg bg-primary/10 font-mono text-lg font-black text-primary ring-1 ring-primary/20">
+                      PDF
+                    </div>
+                  </div>
                   <div className="flex items-start justify-between gap-2">
                     <div className="min-w-0 flex-1">
                       <div className="truncate text-sm font-medium text-foreground group-hover:text-primary">

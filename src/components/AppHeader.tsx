@@ -23,17 +23,17 @@ function useQuotaIndicator(): string | null {
 export function AppHeader({ right }: { right?: React.ReactNode }) {
   const quota = useQuotaIndicator();
   return (
-    <header className="flex items-center justify-between border-b border-border bg-surface px-5 py-3">
+    <header className="flex h-14 items-center justify-between border-b border-border bg-surface px-4 shadow-sm">
       <Link to="/" className="flex items-center gap-3 group">
-        <div className="flex h-7 w-7 items-center justify-center rounded-md bg-primary font-mono text-sm font-bold text-primary-foreground">
+        <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-primary font-mono text-base font-black text-primary-foreground shadow-[0_0_18px_rgba(78,222,163,0.2)]">
           ◐
         </div>
-        <div className="flex items-baseline gap-2">
-          <h1 className="text-base font-semibold tracking-tight group-hover:text-primary transition-colors">
+        <div className="flex items-baseline gap-2 min-w-0">
+          <h1 className="text-lg font-black tracking-tight text-primary transition-colors group-hover:text-foreground">
             DocLens
           </h1>
-          <span className="hidden font-mono text-[10px] uppercase tracking-[0.2em] text-muted-foreground sm:inline">
-            document → ai pipeline inspector
+          <span className="hidden font-mono text-[10px] uppercase tracking-[0.22em] text-muted-foreground sm:inline">
+            AI Intelligence
           </span>
         </div>
       </Link>

@@ -279,6 +279,21 @@ function isRetryable(status: number): boolean {
   return status === 429 || status === 503;
 }
 
+function abortableDelay(ms: number, signal: AbortSignal): Promise<void> {
+  if (signal.aborted) return Promise.reject(new DOMException("Aborted", "AbortError"));
+  return new Promise((resolve, reject) => {
+    const id = globalThis.setTimeout(resolve, ms);
+    signal.addEventListener(
+      "abort",
+      () => {
+        globalThis.clearTimeout(id);
+        reject(new DOMException("Aborted", "AbortError"));
+      },
+      { once: true },
+    );
+  });
+}
+
 export async function streamCompletion(opts: StreamOpts): Promise<void> {
   const signal = combinedSignal(opts.signal, opts.timeoutMs ?? STREAM_TIMEOUT_MS);
   let lastError: Error | null = null;
@@ -289,8 +304,7 @@ export async function streamCompletion(opts: StreamOpts): Promise<void> {
     // Backoff delay on retries
     if (attempt > 0) {
       const delay = RETRY_BASE_MS * Math.pow(2, attempt - 1);
-      await new Promise((r) => setTimeout(r, delay));
-      if (signal.aborted) throw new DOMException("Aborted", "AbortError");
+      await abortableDelay(delay, signal);
     }
 
     const body = { ...opts.payload, stream: true };
@@ -536,4 +550,3 @@ export async function mapLimit<T, R>(
   await Promise.all(promises);
   return results;
 }
-
