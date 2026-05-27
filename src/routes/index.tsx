@@ -139,7 +139,7 @@ function DashboardPage() {
               Intelligence Library
             </h3>
             <p className="mt-2 max-w-2xl text-base text-muted-foreground">
-              Upload documents for surgical-precision analysis, automated summaries, and multi-language extraction.
+              Read it. Hear it. Own it — in the language that owns your heart.
             </p>
           </div>
 
