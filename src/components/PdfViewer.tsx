@@ -7,6 +7,8 @@ import type { PDFDocumentProxy, PDFPageProxy, PageViewport } from "pdfjs-dist";
 interface Props {
   /** Document ID — binary is loaded on-demand from IndexedDB */
   docId: string;
+  activePage: number;
+  setActivePage: (p: number) => void;
 }
 
 const DPR = typeof window !== "undefined" ? window.devicePixelRatio || 1 : 1;
@@ -38,7 +40,7 @@ interface SelectionInfo {
  * copy, translate (via "doclens:translate-selection" event), or speak text.
  * Scanned/image-only pages get no text spans — toolbar simply never appears.
  */
-export function PdfViewer({ docId }: Props) {
+export function PdfViewer({ docId, activePage, setActivePage }: Props) {
   const [doc, setDoc] = useState<PDFDocumentProxy | null>(null);
   const [pageMetas, setPageMetas] = useState<PageMeta[]>([]);
   const [loading, setLoading] = useState(true);
@@ -247,45 +249,22 @@ export function PdfViewer({ docId }: Props) {
     };
   }, [docId]);
 
-  // Scroll to corresponding page on clicking right-side panel items
+  // Scroll to corresponding page when activePage changes from outside (e.g. right-side panel)
   useEffect(() => {
-    const handleGlobalClick = (e: MouseEvent) => {
-      const target = e.target as HTMLElement | null;
-      if (!target) return;
-
-      // 1. Check for 1-based page-scroll target wrap
-      const itemWrap = target.closest(".right-panel-item-wrap");
-      if (itemWrap) {
-        const pageNum = parseInt(itemWrap.getAttribute("data-index") || "", 10);
-        if (pageNum > 0) {
-          const pageEl = scrollRef.current?.querySelector(`[data-page-number="${pageNum}"]`);
-          if (pageEl) {
+    if (activePage > 0) {
+      const pageEl = scrollRef.current?.querySelector(`[data-page-number="${activePage}"]`);
+      if (pageEl) {
+        const rect = pageEl.getBoundingClientRect();
+        const rootRect = scrollRef.current?.getBoundingClientRect();
+        if (rootRect) {
+          const isVisible = rect.top >= rootRect.top - 100 && rect.bottom <= rootRect.bottom + 100;
+          if (!isVisible) {
             pageEl.scrollIntoView({ behavior: "smooth", block: "start" });
           }
         }
-        return;
       }
-
-      // 2. Fallback: check for outer virtualized element with 0-based data-index
-      const indexEl = target.closest("[data-index]");
-      if (indexEl && !scrollRef.current?.contains(indexEl)) {
-        const val = indexEl.getAttribute("data-index");
-        if (val) {
-          const idx = parseInt(val, 10);
-          if (!isNaN(idx) && idx >= 0) {
-            const pageNum = idx + 1;
-            const pageEl = scrollRef.current?.querySelector(`[data-page-number="${pageNum}"]`);
-            if (pageEl) {
-              pageEl.scrollIntoView({ behavior: "smooth", block: "start" });
-            }
-          }
-        }
-      }
-    };
-
-    window.addEventListener("click", handleGlobalClick);
-    return () => window.removeEventListener("click", handleGlobalClick);
-  }, []);
+    }
+  }, [activePage]);
 
   /* ---------- Selection toolbar ---------- */
 
@@ -384,11 +363,7 @@ export function PdfViewer({ docId }: Props) {
     if (pageDiv) {
       const pageNumber = parseInt(pageDiv.getAttribute("data-page-number") || "", 10);
       if (!isNaN(pageNumber) && pageNumber > 0) {
-        window.dispatchEvent(
-          new CustomEvent("doclens:scroll-to-workstation", {
-            detail: { pageNumber },
-          })
-        );
+        setActivePage(pageNumber);
       }
     }
   };

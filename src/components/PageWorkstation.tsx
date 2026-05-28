@@ -1,7 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Link } from "@tanstack/react-router";
 import { toast } from "sonner";
-import { useVirtualizer } from "@tanstack/react-virtual";
 import { estimateTokens } from "@/lib/models";
 import {
   buildPagePayload,
@@ -48,6 +47,8 @@ interface Props {
   pageCount: number;
   aiSummary: Record<number, PageAiSummaryEntry>;
   onPageAiChange: (pageNumber: number, entry: PageAiSummaryEntry | null) => void;
+  activePage: number;
+  setActivePage: (p: number) => void;
 }
 
 const STYLES = EXPLANATION_STYLES.map((s) => s.id);
@@ -102,7 +103,7 @@ function summarize(ai: PageAi): PageAiSummaryEntry {
   };
 }
 
-export function PageWorkstation({ docId, pageCount, aiSummary, onPageAiChange }: Props) {
+export function PageWorkstation({ docId, pageCount, aiSummary, onPageAiChange, activePage, setActivePage }: Props) {
   const [globals, setGlobals] = useState<Globals>(readGlobals);
   const [models, setModels] = useState<ORModel[]>([]);
   const [runningPages, setRunningPages] = useState<Set<number>>(new Set());
@@ -587,95 +588,21 @@ export function PageWorkstation({ docId, pageCount, aiSummary, onPageAiChange }:
         </div>
       </div>
 
-      <VirtualPageList
-        docId={docId}
-        pageCount={pageCount}
-        globals={globals}
-        models={models}
-        aiSummary={aiSummary}
-        runningPages={runningPages}
-        streamBufs={streamBufs}
-        onPageAiChange={onPageAiChange}
-        onRun={(n) => void runPage(n)}
-        onCancel={cancelPage}
-      />
-    </div>
-  );
-}
-
-/* ---------- Virtualized list ---------- */
-
-interface ListProps {
-  docId: string;
-  pageCount: number;
-  globals: Globals;
-  models: ORModel[];
-  aiSummary: Record<number, PageAiSummaryEntry>;
-  runningPages: Set<number>;
-  streamBufs: Record<number, string>;
-  onPageAiChange: (pageNumber: number, entry: PageAiSummaryEntry | null) => void;
-  onRun: (pageNumber: number) => void;
-  onCancel: (pageNumber: number) => void;
-}
-
-function VirtualPageList(props: ListProps) {
-  const parentRef = useRef<HTMLDivElement>(null);
-  const rowVirtualizer = useVirtualizer({
-    count: props.pageCount,
-    getScrollElement: () => parentRef.current,
-    estimateSize: () => 280,
-    overscan: 2,
-    measureElement: (el) => el?.getBoundingClientRect().height ?? 280,
-  });
-
-  useEffect(() => {
-    const handleScroll = (e: Event) => {
-      const ev = e as CustomEvent<{ pageNumber: number }>;
-      const pageNum = ev.detail?.pageNumber;
-      if (typeof pageNum === "number" && pageNum > 0 && pageNum <= props.pageCount) {
-        rowVirtualizer.scrollToIndex(pageNum - 1, { align: "start", behavior: "smooth" });
-      }
-    };
-    window.addEventListener("doclens:scroll-to-workstation", handleScroll);
-    return () => window.removeEventListener("doclens:scroll-to-workstation", handleScroll);
-  }, [props.pageCount, rowVirtualizer]);
-
-  return (
-    <div ref={parentRef} className="flex-1 overflow-auto px-4 py-4">
-      <div style={{ height: rowVirtualizer.getTotalSize(), position: "relative", width: "100%" }}>
-        {rowVirtualizer.getVirtualItems().map((vr) => {
-          const pageNumber = vr.index + 1;
-          return (
-            <div
-              key={vr.key}
-              data-index={vr.index}
-              ref={rowVirtualizer.measureElement}
-              style={{
-                position: "absolute",
-                top: 0,
-                left: 0,
-                width: "100%",
-                transform: `translateY(${vr.start}px)`,
-                paddingBottom: 16,
-              }}
-            >
-              <div data-index={pageNumber} className="right-panel-item-wrap w-full">
-                <PageCardLoader
-                  docId={props.docId}
-                  pageNumber={pageNumber}
-                  globals={props.globals}
-                  models={props.models}
-                  summary={props.aiSummary[pageNumber]}
-                  isRunning={props.runningPages.has(pageNumber)}
-                  streamBuf={props.streamBufs[pageNumber] ?? ""}
-                  onPageAiChange={props.onPageAiChange}
-                  onRun={() => props.onRun(pageNumber)}
-                  onCancel={() => props.onCancel(pageNumber)}
-                />
-              </div>
-            </div>
-          );
-        })}
+      <div className="flex-1 overflow-auto px-4 py-4">
+        <div className="right-panel-item-wrap w-full">
+          <PageCardLoader
+            docId={docId}
+            pageNumber={activePage}
+            globals={globals}
+            models={models}
+            summary={aiSummary[activePage]}
+            isRunning={runningPages.has(activePage)}
+            streamBuf={streamBufs[activePage] ?? ""}
+            onPageAiChange={onPageAiChange}
+            onRun={() => void runPage(activePage)}
+            onCancel={() => cancelPage(activePage)}
+          />
+        </div>
       </div>
     </div>
   );

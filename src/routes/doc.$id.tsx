@@ -43,6 +43,7 @@ function DocPage() {
   const [status, setStatus] = useState("");
   /** Lightweight summary only — full text + result are read on demand per page. */
   const [aiSummary, setAiSummary] = useState<Record<number, PageAiSummaryEntry>>({});
+  const [activePage, setActivePage] = useState<number>(1);
 
   useEffect(() => {
     let cancelled = false;
@@ -196,7 +197,7 @@ function DocPage() {
       >
         <main className="grid flex-1 grid-cols-1 overflow-hidden md:grid-cols-2">
           <section className="relative h-full overflow-hidden border-b border-border md:border-b-0 md:border-r">
-            <PdfViewer docId={id} />
+            <PdfViewer docId={id} activePage={activePage} setActivePage={setActivePage} />
           </section>
           <section className="h-full overflow-hidden">
             <RightPanel
@@ -206,6 +207,8 @@ function DocPage() {
               status={status}
               aiSummary={aiSummary}
               onPageAiChange={handlePageAiChange}
+              activePage={activePage}
+              setActivePage={setActivePage}
             />
           </section>
         </main>

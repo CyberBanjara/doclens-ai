@@ -1,6 +1,5 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
-import { useVirtualizer } from "@tanstack/react-virtual";
 import { estimateTokens } from "@/lib/models";
 import { getAllPages, getPageData, type PageAiSummaryEntry } from "@/lib/storage";
 import { PageWorkstation } from "./PageWorkstation";
@@ -14,6 +13,8 @@ interface Props {
   status: string;
   aiSummary: Record<number, PageAiSummaryEntry>;
   onPageAiChange: (pageNumber: number, entry: PageAiSummaryEntry | null) => void;
+  activePage: number;
+  setActivePage: (p: number) => void;
 }
 
 /* ---------- Export helpers ---------- */
@@ -81,6 +82,8 @@ export function RightPanel({
   status,
   aiSummary,
   onPageAiChange,
+  activePage,
+  setActivePage,
 }: Props) {
   const [tab, setTab] = useState<Tab>("pages");
 
@@ -129,10 +132,50 @@ export function RightPanel({
         </div>
       </div>
 
+      {/* Page Navigation Controls */}
+      {pageCount > 0 && (
+        <div className="flex items-center justify-between border-b border-border bg-surface-2/40 backdrop-blur-md px-4 py-2 font-mono text-xs">
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => setActivePage(Math.max(1, activePage - 1))}
+              disabled={activePage <= 1}
+              className="rounded border border-border bg-background/50 px-2.5 py-1 text-muted-foreground transition-colors hover:text-foreground disabled:cursor-not-allowed disabled:opacity-40"
+            >
+              ← Prev
+            </button>
+            <span className="text-muted-foreground">
+              Page <span className="text-foreground font-bold">{activePage}</span> of {pageCount}
+            </span>
+            <button
+              onClick={() => setActivePage(Math.min(pageCount, activePage + 1))}
+              disabled={activePage >= pageCount}
+              className="rounded border border-border bg-background/50 px-2.5 py-1 text-muted-foreground transition-colors hover:text-foreground disabled:cursor-not-allowed disabled:opacity-40"
+            >
+              Next →
+            </button>
+          </div>
+
+          <div className="flex items-center gap-2">
+            <span className="text-muted-foreground">Go to:</span>
+            <select
+              value={activePage}
+              onChange={(e) => setActivePage(Number(e.target.value))}
+              className="rounded border border-border bg-background/50 px-2 py-1 font-mono text-[11px] text-foreground outline-none focus:border-primary"
+            >
+              {Array.from({ length: pageCount }, (_, i) => i + 1).map((pageNum) => (
+                <option key={pageNum} value={pageNum} className="bg-surface">
+                  Page {pageNum}
+                </option>
+              ))}
+            </select>
+          </div>
+        </div>
+      )}
+
       {/* Body */}
       <div className="flex-1 overflow-hidden">
         {tab === "text" && (
-          <ExtractedTextTab docId={docId} pageCount={pageCount} />
+          <ExtractedTextTab docId={docId} activePage={activePage} />
         )}
 
         {tab === "pages" && (
@@ -141,6 +184,8 @@ export function RightPanel({
             pageCount={pageCount}
             aiSummary={aiSummary}
             onPageAiChange={onPageAiChange}
+            activePage={activePage}
+            setActivePage={setActivePage}
           />
         )}
       </div>
@@ -148,67 +193,23 @@ export function RightPanel({
   );
 }
 
-/* ---------- Extracted text tab — virtualized ---------- */
+/* ---------- Extracted text tab — single active page ---------- */
 
-function ExtractedTextTab({ docId, pageCount }: { docId: string; pageCount: number }) {
-  const parentRef = useRef<HTMLDivElement>(null);
-  const rowVirtualizer = useVirtualizer({
-    count: pageCount,
-    getScrollElement: () => parentRef.current,
-    estimateSize: () => 280,
-    overscan: 3,
-  });
-
-  useEffect(() => {
-    const handleScroll = (e: Event) => {
-      const ev = e as CustomEvent<{ pageNumber: number }>;
-      const pageNum = ev.detail?.pageNumber;
-      if (typeof pageNum === "number" && pageNum > 0 && pageNum <= pageCount) {
-        rowVirtualizer.scrollToIndex(pageNum - 1, { align: "start", behavior: "smooth" });
-      }
-    };
-    window.addEventListener("doclens:scroll-to-workstation", handleScroll);
-    return () => window.removeEventListener("doclens:scroll-to-workstation", handleScroll);
-  }, [pageCount, rowVirtualizer]);
-
-  if (pageCount === 0) {
+function ExtractedTextTab({ docId, activePage }: { docId: string; activePage: number }) {
+  if (activePage <= 0) {
     return (
       <div className="flex h-full items-center justify-center px-5 py-4">
         <div className="max-w-sm text-center text-sm text-muted-foreground">
-          Click <span className="text-primary">Analyze Document</span> to stream extracted text here.
+          Select a page to view its extracted text.
         </div>
       </div>
     );
   }
 
   return (
-    <div ref={parentRef} className="h-full overflow-auto px-5 py-4">
-      <div
-        style={{
-          height: rowVirtualizer.getTotalSize(),
-          width: "100%",
-          position: "relative",
-        }}
-      >
-        {rowVirtualizer.getVirtualItems().map((virtualRow) => (
-          <div
-            key={virtualRow.key}
-            data-index={virtualRow.index}
-            ref={rowVirtualizer.measureElement}
-            style={{
-              position: "absolute",
-              top: 0,
-              left: 0,
-              width: "100%",
-              transform: `translateY(${virtualRow.start}px)`,
-              paddingBottom: 16,
-            }}
-          >
-            <div data-index={virtualRow.index + 1} className="right-panel-item-wrap w-full">
-              <ExtractedPageRow docId={docId} pageNumber={virtualRow.index + 1} />
-            </div>
-          </div>
-        ))}
+    <div className="h-full overflow-auto px-5 py-4">
+      <div className="right-panel-item-wrap w-full">
+        <ExtractedPageRow docId={docId} pageNumber={activePage} />
       </div>
     </div>
   );
