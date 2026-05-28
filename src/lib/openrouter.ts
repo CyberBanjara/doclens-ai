@@ -89,8 +89,8 @@ export function setSelectedModel(id: string) {
 }
 
 export function getOutputLanguage(): string {
-  if (typeof window === "undefined") return "English";
-  return localStorage.getItem(LANG_LS) ?? "English";
+  if (typeof window === "undefined") return "हिंदी";
+  return localStorage.getItem(LANG_LS) ?? "हिंदी";
 }
 export function setOutputLanguage(lang: string) {
   localStorage.setItem(LANG_LS, lang);

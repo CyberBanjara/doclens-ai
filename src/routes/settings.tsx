@@ -36,7 +36,7 @@ export const Route = createFileRoute("/settings")({
   }),
 });
 
-const LANGS = ["English", "Hindi", "Spanish", "Mandarin", "French", "German"];
+const LANGS = ["हिंदी", "বাংলা", "తెలుగు", "മലയാളം", "English", "Spanish", "Mandarin", "French", "German"];
 const STYLES: ExplanationStyle[] = EXPLANATION_STYLES.map((s) => s.id);
 
 type FilterTab = "free" | "popular" | "all";
@@ -70,7 +70,7 @@ function SettingsPage() {
   const [loadingModels, setLoadingModels] = useState(false);
   const [modelError, setModelError] = useState("");
   const [selected, setSelected] = useState("");
-  const [language, setLanguage] = useState("English");
+  const [language, setLanguage] = useState("हिंदी");
   const [customLang, setCustomLang] = useState("");
   const [search, setSearch] = useState("");
   const [tab, setTab] = useState<FilterTab>("free");

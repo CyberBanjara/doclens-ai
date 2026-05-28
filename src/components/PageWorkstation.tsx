@@ -51,7 +51,7 @@ interface Props {
 }
 
 const STYLES = EXPLANATION_STYLES.map((s) => s.id);
-const QUICK_LANGS = ["English", "Arabic", "French", "Hindi", "Spanish", "Japanese"];
+const QUICK_LANGS = ["हिंदी", "বাংলা", "తెలుగు", "മലയാളം", "English", "Spanish", "French", "Japanese"];
 
 /** Throttle setState to at most once per `ms` while leading-edge fires immediately. */
 const STREAM_FLUSH_MS = 150;
