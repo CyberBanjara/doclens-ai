@@ -155,6 +155,13 @@ const api = {
     return blobData;
   },
 
+  async cacheDocBlob(id: string, blobBytes: Uint8Array): Promise<void> {
+    db.exec({
+      sql: `INSERT OR REPLACE INTO blobs (id, data) VALUES (?, ?)`,
+      bind: [id, blobBytes],
+    });
+  },
+
   async createDoc(doc: {
     id: string;
     fileName: string;

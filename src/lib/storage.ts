@@ -2,6 +2,17 @@ import { openDB, type IDBPDatabase } from "idb";
 import type { PageExtraction } from "./pdf";
 import DBWorker from "./storage.worker?worker";
 import * as Comlink from "comlink";
+import { uploadDocToR2, downloadDocFromR2, deleteDocFromR2 } from "./r2";
+
+/** Converts bytes to base64 in chunks to avoid call-stack overflow on large PDFs. */
+function bytesToBase64(bytes: Uint8Array): string {
+  const CHUNK = 0x8000;
+  let binary = "";
+  for (let i = 0; i < bytes.length; i += CHUNK) {
+    binary += String.fromCharCode(...bytes.subarray(i, i + CHUNK));
+  }
+  return btoa(binary);
+}
 
 /** Generate a UUID v4 — works in non-secure contexts (LAN IP over HTTP). */
 function uuid(): string {
@@ -186,6 +197,9 @@ export interface StorageBackend {
   listDocs(): Promise<DocSummary[]>;
   getDoc(id: string): Promise<DocRecord | undefined>;
   getDocBlob(id: string): Promise<Blob | null>;
+  /** Writes a blob directly into local blob storage, bypassing document-record creation.
+   *  Used to re-cache a blob fetched from R2 after a local cache miss. */
+  cacheDocBlob(id: string, blob: Blob): Promise<void>;
   createDoc(file: File, data: ArrayBuffer | Blob): Promise<DocRecord>;
   updateDoc(id: string, patch: Partial<DocRecord>): Promise<void>;
   writePages(id: string, pages: PageExtraction[] | StoredPage[]): Promise<void>;
@@ -236,12 +250,17 @@ class SqliteOpfsBackend implements StorageBackend {
     return new Blob([bytes], { type: "application/pdf" });
   }
 
+  async cacheDocBlob(id: string, blob: Blob): Promise<void> {
+    const buffer = await blob.arrayBuffer();
+    await this.api.cacheDocBlob(id, new Uint8Array(buffer));
+  }
+
   async createDoc(file: File, data: ArrayBuffer | Blob): Promise<DocRecord> {
     const id = uuid();
     const now = Date.now();
     const arrayBuffer = data instanceof Blob ? await data.arrayBuffer() : data;
     const bytes = new Uint8Array(arrayBuffer);
-    
+
     await this.api.createDoc(
       {
         id,
@@ -510,6 +529,11 @@ class IndexedDbBackend implements StorageBackend {
       return new Blob([raw.data], { type: "application/pdf" });
     }
     return null;
+  }
+
+  async cacheDocBlob(id: string, blob: Blob): Promise<void> {
+    const d = await this.getDb();
+    await this.safePut(d, BLOBS, blob, id);
   }
 
   async createDoc(file: File, data: ArrayBuffer | Blob): Promise<DocRecord> {
@@ -813,7 +837,20 @@ export async function getDoc(id: string): Promise<DocRecord | undefined> {
 
 export async function getDocBlob(id: string): Promise<Blob | null> {
   const backend = await getBackend();
-  return backend.getDocBlob(id);
+  const local = await backend.getDocBlob(id);
+  if (local) return local;
+
+  // Local cache miss (e.g. browser storage was cleared) — fall back to the
+  // durable copy in R2 and re-cache it locally for next time.
+  try {
+    const response = await downloadDocFromR2({ data: { docId: id } });
+    if (!response.ok || !response.body) return null;
+    const blob = await response.blob();
+    await backend.cacheDocBlob(id, blob);
+    return blob;
+  } catch {
+    return null;
+  }
 }
 
 export async function getDocBinary(id: string): Promise<ArrayBuffer | null> {
@@ -824,7 +861,18 @@ export async function getDocBinary(id: string): Promise<ArrayBuffer | null> {
 
 export async function createDoc(file: File, data: ArrayBuffer | Blob): Promise<DocRecord> {
   const backend = await getBackend();
-  return backend.createDoc(file, data);
+  const doc = await backend.createDoc(file, data);
+
+  // Persist the durable primary copy to R2. Runs in the background — a slow or
+  // failed upload must not block the user from opening their newly added document.
+  const arrayBuffer = data instanceof Blob ? await data.arrayBuffer() : data;
+  uploadDocToR2({ data: { docId: doc.id, base64: bytesToBase64(new Uint8Array(arrayBuffer)) } }).catch(
+    (e) => {
+      console.warn("[Storage] Failed to back up document to R2:", e);
+    },
+  );
+
+  return doc;
 }
 
 export async function updateDoc(id: string, patch: Partial<DocRecord>): Promise<void> {
@@ -876,7 +924,10 @@ export async function touchDoc(id: string): Promise<void> {
 
 export async function deleteDoc(id: string): Promise<void> {
   const backend = await getBackend();
-  return backend.deleteDoc(id);
+  await backend.deleteDoc(id);
+  deleteDocFromR2({ data: { docId: id } }).catch((e) => {
+    console.warn("[Storage] Failed to delete document from R2:", e);
+  });
 }
 
 export async function appendAiResult(docId: string, result: AiResult): Promise<void> {
