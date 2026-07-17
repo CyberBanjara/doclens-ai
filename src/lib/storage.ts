@@ -1,5 +1,16 @@
 import { openDB, type IDBPDatabase } from "idb";
 import type { PageExtraction } from "./pdf";
+import { uploadDocToR2, downloadDocFromR2, deleteDocFromR2 } from "./r2";
+
+/** Converts bytes to base64 in chunks to avoid call-stack overflow on large PDFs. */
+function bytesToBase64(bytes: Uint8Array): string {
+  const CHUNK = 0x8000;
+  let binary = "";
+  for (let i = 0; i < bytes.length; i += CHUNK) {
+    binary += String.fromCharCode(...bytes.subarray(i, i + CHUNK));
+  }
+  return btoa(binary);
+}
 
 /** Generate a UUID v4 — works in non-secure contexts (LAN IP over HTTP). */
 function uuid(): string {
@@ -358,7 +369,18 @@ export async function getDocBlob(id: string): Promise<Blob | null> {
   if (raw?.data instanceof ArrayBuffer && raw.data.byteLength > 0) {
     return new Blob([raw.data], { type: "application/pdf" });
   }
-  return null;
+
+  // Local cache miss (e.g. browser storage was cleared) — fall back to the
+  // durable copy in R2 and re-cache it locally for next time.
+  try {
+    const response = await downloadDocFromR2({ data: { docId: id } });
+    if (!response.ok || !response.body) return null;
+    const blob = await response.blob();
+    await safePut(d, BLOBS, blob, id);
+    return blob;
+  } catch {
+    return null;
+  }
 }
 
 /** @deprecated prefer getDocBlob — kept for callers that still need ArrayBuffer (extraction). */
@@ -389,6 +411,16 @@ export async function createDoc(file: File, data: ArrayBuffer | Blob): Promise<D
   };
   await safePut(d, STORE, rec);
   await setLastOpened(id);
+
+  // Persist the durable primary copy to R2. Runs in the background — a slow or
+  // failed upload must not block the user from opening their newly added document.
+  const arrayBuffer = await blob.arrayBuffer();
+  uploadDocToR2({ data: { docId: id, base64: bytesToBase64(new Uint8Array(arrayBuffer)) } }).catch(
+    (e) => {
+      console.warn("[Storage] Failed to back up document to R2:", e);
+    },
+  );
+
   return rec;
 }
 
@@ -542,6 +574,10 @@ export async function deleteDoc(id: string) {
   }
   const last = await getLastOpened();
   if (last === id) await setLastOpened(null);
+
+  deleteDocFromR2({ data: { docId: id } }).catch((e) => {
+    console.warn("[Storage] Failed to delete document from R2:", e);
+  });
 }
 
 export async function appendAiResult(docId: string, result: AiResult) {
