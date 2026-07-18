@@ -190,7 +190,7 @@ async function safePut(d: IDBPDatabase, store: string, value: unknown, key?: IDB
 
 /* ---------- Page key helpers ---------- */
 
-function pageKey(docId: string, n: number): string {
+export function pageKey(docId: string, n: number): string {
   return `${docId}:${String(n).padStart(6, "0")}`;
 }
 
@@ -229,7 +229,7 @@ function normalizeDoc(raw: any): DocRecord | undefined {
 /* ---------- Database ---------- */
 
 let dbPromise: Promise<IDBPDatabase> | null = null;
-function db() {
+export function db() {
   if (!dbPromise) {
     dbPromise = openDB(DB_NAME, DB_VERSION, {
       upgrade(d, oldVersion, _newVersion, tx) {

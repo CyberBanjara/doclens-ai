@@ -41,6 +41,7 @@ import {
 
 import { HighlightableText } from "./HighlightableText";
 import { LoadingLogo } from "@/components/LoadingLogo";
+import { syncToSupabase } from "@/lib/sync";
 
 interface Props {
   docId: string;
@@ -351,6 +352,7 @@ export function PageWorkstation({
             settingsHash: hash,
           }),
         );
+        void syncToSupabase(docId);
         return result;
       } catch (e) {
         if ((e as Error).name === "AbortError") {

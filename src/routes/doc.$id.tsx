@@ -17,6 +17,7 @@ import {
   type DocRecord,
   type PageAiSummaryEntry,
 } from "@/lib/storage";
+import { syncFromSupabase, syncToSupabase } from "@/lib/sync";
 
 const extractPdfPagesClient = createClientOnlyFn(
   async (
@@ -132,11 +133,28 @@ function DocPage() {
         setMissing(true);
         return;
       }
+
+      let currentRec = rec;
+      let pc = currentRec.pageCount ?? 0;
+
+      // Check if we need to sync from Supabase first (if page count is 0)
+      if (pc === 0) {
+        setStatus("checking cloud cache…");
+        const synced = await syncFromSupabase(id, currentRec.fileName);
+        if (synced && !cancelled) {
+          const updatedRec = await getDoc(id);
+          if (updatedRec) {
+            currentRec = updatedRec;
+            pc = currentRec.pageCount ?? 0;
+            toast.success("Loaded page text and translations from shared cloud vault!");
+          }
+        }
+      }
+
       const sum = await getPageAiSummary(id);
       if (cancelled) return;
       setAiSummary(sum);
-      setDoc(rec);
-      const pc = rec.pageCount ?? 0;
+      setDoc(currentRec);
       setPageCount(pc);
       // Clamp activePage if the URL had a page beyond the document's range
       if (pc > 0 && activePage > pc) setActivePageRaw(pc);
@@ -150,8 +168,8 @@ function DocPage() {
       }
 
       // If no page was passed in the URL search params, and there's a saved last read page:
-      if (!urlPage && rec.lastReadPage) {
-        const targetPage = Math.min(pc > 0 ? pc : Infinity, rec.lastReadPage);
+      if (!urlPage && currentRec.lastReadPage) {
+        const targetPage = Math.min(pc > 0 ? pc : Infinity, currentRec.lastReadPage);
         setActivePage(targetPage);
       }
     })();
@@ -202,6 +220,7 @@ function DocPage() {
         await refreshSummary();
         setStatus(`done · ${collected.length} pages`);
         toast.success(`Extracted ${collected.length} pages successfully.`);
+        void syncToSupabase(id);
       } catch (e) {
         console.error("Failed to save extracted pages:", e);
         if (e instanceof StorageError && e.code === "QUOTA_EXCEEDED") {
@@ -233,6 +252,7 @@ function DocPage() {
           },
         );
         setStatus(`done · ${collected.length} pages`);
+        void syncToSupabase(id);
       } catch (ocrErr) {
         console.warn("OCR fallback failed:", ocrErr);
         toast.error(
@@ -298,6 +318,28 @@ function DocPage() {
       toast.error(e?.message || "Failed to upload document to R2.", { id: toastId });
     } finally {
       setUploading(false);
+    }
+  };
+
+  const [syncingSupabase, setSyncingSupabase] = useState(false);
+
+  const handleSyncToSupabase = async () => {
+    if (syncingSupabase || !doc) return;
+    setSyncingSupabase(true);
+    const toastId = toast.loading("Syncing pages and translations to Supabase...");
+    try {
+      await syncToSupabase(id);
+      toast.success("Successfully synced pages and translations to Supabase!", { id: toastId });
+    } catch (e: any) {
+      console.error(e);
+      const msg = e?.message || String(e);
+      if (msg.includes("relation") && msg.includes("does not exist")) {
+        toast.error("Table pdf_extractions does not exist in Supabase. Please run the SQL schema migration.", { id: toastId, duration: 8000 });
+      } else {
+        toast.error(msg, { id: toastId });
+      }
+    } finally {
+      setSyncingSupabase(false);
     }
   };
 
@@ -461,6 +503,20 @@ function DocPage() {
                 <span className="inline-block h-3.5 w-3.5 rounded-full border-2 border-primary border-t-transparent spin-slow" />
               ) : (
                 <span className="text-sm">☁️</span>
+              )}
+            </button>
+          )}
+          {pageCount > 0 && (
+            <button
+              onClick={handleSyncToSupabase}
+              disabled={syncingSupabase}
+              className="flex h-8 w-8 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-surface-2 hover:text-foreground disabled:opacity-40"
+              title={syncingSupabase ? "Syncing to Supabase..." : "Sync to Supabase"}
+            >
+              {syncingSupabase ? (
+                <span className="inline-block h-3.5 w-3.5 rounded-full border-2 border-primary border-t-transparent spin-slow" />
+              ) : (
+                <span className="text-sm">⚡</span>
               )}
             </button>
           )}
