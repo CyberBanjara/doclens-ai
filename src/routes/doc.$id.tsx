@@ -251,6 +251,56 @@ function DocPage() {
     }
   };
 
+  const [uploading, setUploading] = useState(false);
+
+  const handleUploadToR2 = async () => {
+    if (uploading || !doc) return;
+    setUploading(true);
+    const toastId = toast.loading("Preparing document for R2 upload...");
+    try {
+      const blob = await getDocBlob(id);
+      if (!blob) {
+        toast.error("Document binary not found in storage.", { id: toastId });
+        setUploading(false);
+        return;
+      }
+
+      toast.loading("Uploading to Cloudflare R2...", { id: toastId });
+
+      const reader = new FileReader();
+      const base64Promise = new Promise<string>((resolve, reject) => {
+        reader.onloadend = () => {
+          const result = reader.result as string;
+          const base64 = result.split(",")[1];
+          resolve(base64);
+        };
+        reader.onerror = reject;
+      });
+      reader.readAsDataURL(blob);
+      const base64Data = await base64Promise;
+
+      const { uploadToR2 } = await import("@/lib/r2");
+      const res = await uploadToR2({
+        data: {
+          fileName: doc.fileName,
+          contentType: blob.type || "application/pdf",
+          base64Data,
+        },
+      });
+
+      if (res.alreadyExists) {
+        toast.warning("This document is already uploaded in the Global Library.", { id: toastId });
+      } else {
+        toast.success("Document uploaded to Global Library successfully!", { id: toastId });
+      }
+    } catch (e: any) {
+      console.error(e);
+      toast.error(e?.message || "Failed to upload document to R2.", { id: toastId });
+    } finally {
+      setUploading(false);
+    }
+  };
+
   const autoAnalyzedRef = useRef<Record<string, boolean>>({});
 
   // Auto-trigger text analysis on document load if not yet extracted
@@ -397,6 +447,20 @@ function DocPage() {
                 <span className="inline-block h-3.5 w-3.5 rounded-full border-2 border-primary border-t-transparent spin-slow" />
               ) : (
                 <span className="text-sm">↻</span>
+              )}
+            </button>
+          )}
+          {pageCount > 0 && (
+            <button
+              onClick={handleUploadToR2}
+              disabled={uploading}
+              className="flex h-8 w-8 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-surface-2 hover:text-foreground disabled:opacity-40"
+              title={uploading ? "Uploading to R2..." : "Upload to Cloudflare R2"}
+            >
+              {uploading ? (
+                <span className="inline-block h-3.5 w-3.5 rounded-full border-2 border-primary border-t-transparent spin-slow" />
+              ) : (
+                <span className="text-sm">☁️</span>
               )}
             </button>
           )}

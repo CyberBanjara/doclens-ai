@@ -10,6 +10,7 @@
 
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as SettingsRouteImport } from './routes/settings'
+import { Route as GlobalLibraryRouteImport } from './routes/global-library'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as SettingsAppearanceRouteImport } from './routes/settings_.appearance'
 import { Route as DocIdRouteImport } from './routes/doc.$id'
@@ -17,6 +18,11 @@ import { Route as DocIdRouteImport } from './routes/doc.$id'
 const SettingsRoute = SettingsRouteImport.update({
   id: '/settings',
   path: '/settings',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const GlobalLibraryRoute = GlobalLibraryRouteImport.update({
+  id: '/global-library',
+  path: '/global-library',
   getParentRoute: () => rootRouteImport,
 } as any)
 const IndexRoute = IndexRouteImport.update({
@@ -37,12 +43,14 @@ const DocIdRoute = DocIdRouteImport.update({
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
+  '/global-library': typeof GlobalLibraryRoute
   '/settings': typeof SettingsRoute
   '/doc/$id': typeof DocIdRoute
   '/settings/appearance': typeof SettingsAppearanceRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
+  '/global-library': typeof GlobalLibraryRoute
   '/settings': typeof SettingsRoute
   '/doc/$id': typeof DocIdRoute
   '/settings/appearance': typeof SettingsAppearanceRoute
@@ -50,20 +58,38 @@ export interface FileRoutesByTo {
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
+  '/global-library': typeof GlobalLibraryRoute
   '/settings': typeof SettingsRoute
   '/doc/$id': typeof DocIdRoute
   '/settings_/appearance': typeof SettingsAppearanceRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/' | '/settings' | '/doc/$id' | '/settings/appearance'
+  fullPaths:
+    | '/'
+    | '/global-library'
+    | '/settings'
+    | '/doc/$id'
+    | '/settings/appearance'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/settings' | '/doc/$id' | '/settings/appearance'
-  id: '__root__' | '/' | '/settings' | '/doc/$id' | '/settings_/appearance'
+  to:
+    | '/'
+    | '/global-library'
+    | '/settings'
+    | '/doc/$id'
+    | '/settings/appearance'
+  id:
+    | '__root__'
+    | '/'
+    | '/global-library'
+    | '/settings'
+    | '/doc/$id'
+    | '/settings_/appearance'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
+  GlobalLibraryRoute: typeof GlobalLibraryRoute
   SettingsRoute: typeof SettingsRoute
   DocIdRoute: typeof DocIdRoute
   SettingsAppearanceRoute: typeof SettingsAppearanceRoute
@@ -76,6 +102,13 @@ declare module '@tanstack/react-router' {
       path: '/settings'
       fullPath: '/settings'
       preLoaderRoute: typeof SettingsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/global-library': {
+      id: '/global-library'
+      path: '/global-library'
+      fullPath: '/global-library'
+      preLoaderRoute: typeof GlobalLibraryRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/': {
@@ -104,6 +137,7 @@ declare module '@tanstack/react-router' {
 
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
+  GlobalLibraryRoute: GlobalLibraryRoute,
   SettingsRoute: SettingsRoute,
   DocIdRoute: DocIdRoute,
   SettingsAppearanceRoute: SettingsAppearanceRoute,

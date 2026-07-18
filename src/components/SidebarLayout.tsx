@@ -15,6 +15,7 @@ interface SidebarLayoutProps {
 
 const NAV_ITEMS = [
   { to: "/", label: "Library", icon: "📁" },
+  { to: "/global-library", label: "Global Library", icon: "🌐" },
   { to: "/settings/appearance", label: "Appearance", icon: "🎨" },
   { to: "/settings", label: "General Settings", icon: "⚙" },
 ] as const;
