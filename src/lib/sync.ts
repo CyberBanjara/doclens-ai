@@ -58,34 +58,66 @@ export async function syncFromSupabase(docId: string, fileName: string): Promise
     }
 
     if (pagesData.length > 0) {
+      const { getAllPages } = await import("./storage");
+      const localPages = await getAllPages(docId);
+      const localPagesMap = new Map(localPages.map((p) => [p.pageNumber, p]));
+
       const d = await db();
       const PAGES = "pageData";
       
       const tx = d.transaction(PAGES, "readwrite");
       
-      // Clear old pages for this docId
-      let cur = await tx.store.openCursor(IDBKeyRange.bound(`${docId}:`, `${docId}:\uffff`));
-      while (cur) {
-        await cur.delete();
-        cur = await cur.continue();
-      }
-
+      let updatedAny = false;
       let aiDoneCount = 0;
       for (const p of pagesData) {
         const isDone = p.pageAi?.status === "done";
         if (isDone) aiDoneCount++;
 
-        const rec = {
-          key: pageKey(docId, p.pageNumber),
-          docId,
-          pageNumber: p.pageNumber,
-          text: p.text,
-          columns: p.columns || 1,
-          garbageRatio: p.garbageRatio || 0,
-          ocrRun: p.ocrRun || false,
-          pageAi: p.pageAi || undefined,
-        };
-        await tx.store.put(rec);
+        const localPage = localPagesMap.get(p.pageNumber);
+        
+        let shouldUpdate = false;
+        if (!localPage) {
+          shouldUpdate = true;
+        } else {
+          // Check if text or OCR status is different
+          if (localPage.text !== p.text ||
+              localPage.columns !== (p.columns || 1) ||
+              localPage.garbageRatio !== (p.garbageRatio || 0) ||
+              localPage.ocrRun !== (p.ocrRun || false)) {
+            shouldUpdate = true;
+          }
+          // Check if AI status / result is updated
+          const localAi = localPage.pageAi;
+          const remoteAi = p.pageAi;
+          if (remoteAi) {
+            if (!localAi) {
+              shouldUpdate = true;
+            } else if (remoteAi.status === "done" && localAi.status !== "done") {
+              shouldUpdate = true;
+            } else if (remoteAi.status === "done" && localAi.status === "done") {
+              if ((remoteAi.updatedAt || 0) > (localAi.updatedAt || 0) || remoteAi.result !== localAi.result) {
+                shouldUpdate = true;
+              }
+            } else if (remoteAi.status !== localAi.status || remoteAi.result !== localAi.result) {
+              shouldUpdate = true;
+            }
+          }
+        }
+
+        if (shouldUpdate) {
+          updatedAny = true;
+          const rec = {
+            key: pageKey(docId, p.pageNumber),
+            docId,
+            pageNumber: p.pageNumber,
+            text: p.text,
+            columns: p.columns || 1,
+            garbageRatio: p.garbageRatio || 0,
+            ocrRun: p.ocrRun || false,
+            pageAi: p.pageAi || undefined,
+          };
+          await tx.store.put(rec);
+        }
       }
       await tx.done;
 
@@ -94,7 +126,7 @@ export async function syncFromSupabase(docId: string, fileName: string): Promise
         aiDoneCount,
       });
 
-      return true;
+      return updatedAny;
     }
   } catch (e) {
     console.error("Failed to sync from Supabase:", e);

@@ -130,8 +130,10 @@ function DocPage() {
   useEffect(() => {
     let cancelled = false;
     (async () => {
+      let configEnabled = false;
       try {
         const config = await getSyncConfig();
+        configEnabled = config.enabled;
         if (!cancelled) {
           setSyncEnabled(config.enabled);
         }
@@ -161,6 +163,26 @@ function DocPage() {
             toast.success("Loaded page text and translations from shared cloud vault!");
           }
         }
+      } else if (configEnabled) {
+        // If we already have the pages locally, check Supabase for updates in the background
+        void (async () => {
+          try {
+            const updated = await syncFromSupabase(id, currentRec.fileName);
+            if (updated && !cancelled) {
+              const updatedRec = await getDoc(id);
+              if (updatedRec) {
+                setDoc(updatedRec);
+                const sum = await getPageAiSummary(id);
+                if (!cancelled) {
+                  setAiSummary(sum);
+                  toast.success("Sync: updated translations fetched from cloud!");
+                }
+              }
+            }
+          } catch (e) {
+            console.error("Background sync check failed:", e);
+          }
+        })();
       }
 
       // Compute isScannedPdf if not set on existing document
