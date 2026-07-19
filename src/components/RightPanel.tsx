@@ -401,6 +401,14 @@ function ExtractedPageRow({
 }) {
   const [data, setData] = useState<{ text: string; columns: number } | null>(null);
   const [ocrRunning, setOcrRunning] = useState(false);
+  const isMountedRef = useRef(true);
+
+  useEffect(() => {
+    isMountedRef.current = true;
+    return () => {
+      isMountedRef.current = false;
+    };
+  }, []);
 
   useEffect(() => {
     let cancelled = false;
@@ -437,13 +445,17 @@ function ExtractedPageRow({
         ocrRun: true,
       });
 
-      setData({ text: ocrText, columns: data?.columns ?? 1 });
+      if (isMountedRef.current) {
+        setData({ text: ocrText, columns: data?.columns ?? 1 });
+      }
       toast.success("Page text updated successfully using OCR!", { id: tid });
     } catch (e) {
       console.error(e);
       toast.error(e instanceof Error ? e.message : "OCR failed.", { id: tid });
     } finally {
-      setOcrRunning(false);
+      if (isMountedRef.current) {
+        setOcrRunning(false);
+      }
     }
   };
 

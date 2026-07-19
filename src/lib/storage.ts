@@ -118,6 +118,7 @@ export interface DocRecord {
   /** Cached count of pages with status === "done". */
   aiDoneCount?: number;
   lastReadPage?: number;
+  isScannedPdf?: boolean;
 }
 
 export interface DocSummary {
@@ -130,6 +131,7 @@ export interface DocSummary {
   hasExtraction: boolean;
   aiResultCount: number;
   lastReadPage?: number;
+  isScannedPdf?: boolean;
 }
 
 /* ---------- Storage Error ---------- */
@@ -223,6 +225,7 @@ function normalizeDoc(raw: any): DocRecord | undefined {
     aiResults: Array.isArray(raw.aiResults) ? raw.aiResults : [],
     aiDoneCount: typeof raw.aiDoneCount === "number" ? raw.aiDoneCount : 0,
     lastReadPage: typeof raw.lastReadPage === "number" ? raw.lastReadPage : undefined,
+    isScannedPdf: typeof raw.isScannedPdf === "boolean" ? raw.isScannedPdf : undefined,
   };
 }
 
@@ -336,6 +339,7 @@ export async function listDocs(): Promise<DocSummary[]> {
       hasExtraction: (r.pageCount ?? 0) > 0,
       aiResultCount: (r.aiResults?.length ?? 0) + (r.aiDoneCount ?? 0),
       lastReadPage: r.lastReadPage,
+      isScannedPdf: r.isScannedPdf,
     }))
     .sort((a, b) => b.lastOpenedAt - a.lastOpenedAt);
 }

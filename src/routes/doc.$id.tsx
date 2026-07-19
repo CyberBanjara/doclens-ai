@@ -13,11 +13,13 @@ import {
   updateDoc,
   writePages,
   updatePageData,
+  getAllPages,
   StorageError,
   type DocRecord,
   type PageAiSummaryEntry,
 } from "@/lib/storage";
 import { syncFromSupabase, syncToSupabase, getSyncConfig } from "@/lib/sync";
+import { checkTextQuality } from "@/lib/pdf";
 
 const extractPdfPagesClient = createClientOnlyFn(
   async (
@@ -161,6 +163,15 @@ function DocPage() {
         }
       }
 
+      // Compute isScannedPdf if not set on existing document
+      if (currentRec.isScannedPdf === undefined && pc > 0) {
+        const pages = await getAllPages(id);
+        const scannedCount = pages.filter((p) => checkTextQuality(p.text).isScanned).length;
+        const isScannedPdf = pages.length > 0 && scannedCount / pages.length >= 0.5;
+        await updateDoc(id, { isScannedPdf });
+        currentRec.isScannedPdf = isScannedPdf;
+      }
+
       const sum = await getPageAiSummary(id);
       if (cancelled) return;
       setAiSummary(sum);
@@ -224,8 +235,12 @@ function DocPage() {
         setStatus(`page ${page.pageNumber}/${total}`);
       });
       try {
+        const scannedCount = collected.filter((p) => checkTextQuality(p.text).isScanned).length;
+        const isScannedPdf = collected.length > 0 && scannedCount / collected.length >= 0.5;
+
         await writePages(id, collected);
-        await updateDoc(id, { pageCount: collected.length });
+        await updateDoc(id, { pageCount: collected.length, isScannedPdf });
+        setDoc((prev) => (prev ? { ...prev, pageCount: collected.length, isScannedPdf } : null));
         setPageCount(collected.length || lastTotal);
         await refreshSummary();
         setStatus(`done · ${collected.length} pages`);
@@ -448,14 +463,17 @@ function DocPage() {
                 value={activePage}
                 onChange={(e) => setActivePage(Number(e.target.value))}
                 className="cursor-pointer bg-transparent pl-1 pr-6 text-center text-xs font-medium tabular-nums text-foreground outline-none"
-                style={{ minWidth: `${Math.max(3.75, String(pageCount).length + 3)}rem` }}
+                style={{ minWidth: `${Math.max(4.25, String(pageCount).length + 3.5)}rem` }}
                 aria-label="Select page"
               >
-                {Array.from({ length: pageCount }, (_, i) => i + 1).map((n) => (
-                  <option key={n} value={n} className="bg-surface">
-                    {n}
-                  </option>
-                ))}
+                {Array.from({ length: pageCount }, (_, i) => i + 1).map((n) => {
+                  const hasAi = aiSummary[n]?.status === "done";
+                  return (
+                    <option key={n} value={n} className="bg-surface">
+                      {n} {hasAi ? "🔵" : ""}
+                    </option>
+                  );
+                })}
               </select>
               <span className="whitespace-nowrap text-xs tabular-nums text-muted-foreground">
                 / {pageCount}

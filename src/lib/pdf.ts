@@ -978,7 +978,7 @@ export async function runOcrOnGarbledPages(
       onProgress(pageData.pageNumber, total);
 
       const quality = checkTextQuality(pageData.text);
-      if (quality.isGarbled) {
+      if (quality.isGarbled || quality.isScanned) {
         const page = await pdf.getPage(pageData.pageNumber);
         try {
           const ocrText = await ocrPdfPage(page, pageData.columns);
