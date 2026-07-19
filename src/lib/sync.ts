@@ -1,5 +1,20 @@
+import { createServerFn } from "@tanstack/react-start";
 import { fetchSupabaseExtraction, saveSupabaseExtraction } from "./supabase";
 import { getDoc, updateDoc, db, pageKey } from "./storage";
+
+export const getSyncConfig = createServerFn({ method: "GET" })
+  .handler(async () => {
+    "use server";
+    const enabled =
+      process.env.ENABLE_GLOBAL_SYNC === "true" ||
+      process.env.VITE_ENABLE_GLOBAL_SYNC === "true" ||
+      (import.meta as any).env?.ENABLE_GLOBAL_SYNC === "true" ||
+      (import.meta as any).env?.VITE_ENABLE_GLOBAL_SYNC === "true";
+    console.log(`[Server] resolved ENABLE_GLOBAL_SYNC to: ${enabled}`);
+    return {
+      enabled,
+    };
+  });
 
 export async function syncFromSupabase(docId: string, fileName: string): Promise<boolean> {
   try {

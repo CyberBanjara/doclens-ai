@@ -17,7 +17,7 @@ import {
   type DocRecord,
   type PageAiSummaryEntry,
 } from "@/lib/storage";
-import { syncFromSupabase, syncToSupabase } from "@/lib/sync";
+import { syncFromSupabase, syncToSupabase, getSyncConfig } from "@/lib/sync";
 
 const extractPdfPagesClient = createClientOnlyFn(
   async (
@@ -77,6 +77,7 @@ function DocPage() {
   /** Lightweight summary only — full text + result are read on demand per page. */
   const [aiSummary, setAiSummary] = useState<Record<number, PageAiSummaryEntry>>({});
   const [activePage, setActivePageRaw] = useState<number>(urlPage ?? 1);
+  const [syncEnabled, setSyncEnabled] = useState(true);
 
   /** Sync page changes to the URL query param (?page=N) */
   const setActivePage = useCallback(
@@ -127,6 +128,15 @@ function DocPage() {
   useEffect(() => {
     let cancelled = false;
     (async () => {
+      try {
+        const config = await getSyncConfig();
+        if (!cancelled) {
+          setSyncEnabled(config.enabled);
+        }
+      } catch (e) {
+        console.error("Failed to fetch global sync config:", e);
+      }
+
       const rec = await getDoc(id);
       if (cancelled) return;
       if (!rec) {
@@ -220,7 +230,9 @@ function DocPage() {
         await refreshSummary();
         setStatus(`done · ${collected.length} pages`);
         toast.success(`Extracted ${collected.length} pages successfully.`);
-        void syncToSupabase(id);
+        if (syncEnabled) {
+          void syncToSupabase(id);
+        }
       } catch (e) {
         console.error("Failed to save extracted pages:", e);
         if (e instanceof StorageError && e.code === "QUOTA_EXCEEDED") {
@@ -252,7 +264,9 @@ function DocPage() {
           },
         );
         setStatus(`done · ${collected.length} pages`);
-        void syncToSupabase(id);
+        if (syncEnabled) {
+          void syncToSupabase(id);
+        }
       } catch (ocrErr) {
         console.warn("OCR fallback failed:", ocrErr);
         toast.error(
@@ -492,7 +506,7 @@ function DocPage() {
               )}
             </button>
           )}
-          {pageCount > 0 && (
+          {pageCount > 0 && syncEnabled && (
             <button
               onClick={handleUploadToR2}
               disabled={uploading}
@@ -506,7 +520,7 @@ function DocPage() {
               )}
             </button>
           )}
-          {pageCount > 0 && (
+          {pageCount > 0 && syncEnabled && (
             <button
               onClick={handleSyncToSupabase}
               disabled={syncingSupabase}

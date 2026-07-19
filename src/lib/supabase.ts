@@ -84,6 +84,14 @@ export const saveSupabaseExtraction = createServerFn({ method: "POST" })
   )
   .handler(async ({ data }) => {
     "use server";
+    const isSyncEnabled =
+      process.env.ENABLE_GLOBAL_SYNC === "true" ||
+      process.env.VITE_ENABLE_GLOBAL_SYNC === "true" ||
+      (import.meta as any).env?.ENABLE_GLOBAL_SYNC === "true" ||
+      (import.meta as any).env?.VITE_ENABLE_GLOBAL_SYNC === "true";
+    if (!isSyncEnabled) {
+      throw new Error("Global sync (Supabase writes) is disabled in this environment.");
+    }
     try {
       const supabase = await getSupabaseClient();
       if (!supabase) {

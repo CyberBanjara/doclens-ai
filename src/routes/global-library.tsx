@@ -5,6 +5,7 @@ import { SidebarLayout } from "@/components/SidebarLayout";
 import { listR2Files, deleteFromR2, downloadFromR2 } from "@/lib/r2";
 import { createDoc } from "@/lib/storage";
 import { LoadingLogo } from "@/components/LoadingLogo";
+import { getSyncConfig } from "@/lib/sync";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -75,6 +76,7 @@ function GlobalLibraryPage() {
   const [importingKey, setImportingKey] = useState<string | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<R2File | null>(null);
   const [deletingKey, setDeletingKey] = useState<string | null>(null);
+  const [syncEnabled, setSyncEnabled] = useState(true);
 
   const fetchFiles = async (silent = false) => {
     if (!silent) setLoading(true);
@@ -91,7 +93,23 @@ function GlobalLibraryPage() {
   };
 
   useEffect(() => {
-    void fetchFiles();
+    let cancelled = false;
+    (async () => {
+      try {
+        const config = await getSyncConfig();
+        if (!cancelled) {
+          setSyncEnabled(config.enabled);
+        }
+      } catch (e) {
+        console.error("Failed to fetch global sync config:", e);
+      }
+      if (!cancelled) {
+        void fetchFiles();
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   const handleImport = async (file: R2File) => {
@@ -236,13 +254,15 @@ function GlobalLibraryPage() {
                               >
                                 {isImporting ? "Importing…" : "Import"}
                               </button>
-                              <button
-                                onClick={() => setDeleteTarget(file)}
-                                disabled={!!importingKey || !!deletingKey}
-                                className="rounded-lg border border-destructive/20 px-3 py-1.5 text-xs font-medium text-destructive transition-all hover:bg-destructive/10 active:scale-95 disabled:opacity-50 cursor-pointer"
-                              >
-                                {isDeleting ? "Deleting…" : "Delete"}
-                              </button>
+                              {syncEnabled && (
+                                <button
+                                  onClick={() => setDeleteTarget(file)}
+                                  disabled={!!importingKey || !!deletingKey}
+                                  className="rounded-lg border border-destructive/20 px-3 py-1.5 text-xs font-medium text-destructive transition-all hover:bg-destructive/10 active:scale-95 disabled:opacity-50 cursor-pointer"
+                                >
+                                  {isDeleting ? "Deleting…" : "Delete"}
+                                </button>
+                              )}
                             </div>
                           </td>
                         </tr>

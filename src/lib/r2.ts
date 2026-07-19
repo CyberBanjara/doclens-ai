@@ -57,6 +57,14 @@ export const uploadToR2 = createServerFn({ method: "POST" })
   .validator((input: { fileName: string; contentType: string; base64Data: string }) => input)
   .handler(async ({ data }) => {
     "use server";
+    const isSyncEnabled =
+      process.env.ENABLE_GLOBAL_SYNC === "true" ||
+      process.env.VITE_ENABLE_GLOBAL_SYNC === "true" ||
+      (import.meta as any).env?.ENABLE_GLOBAL_SYNC === "true" ||
+      (import.meta as any).env?.VITE_ENABLE_GLOBAL_SYNC === "true";
+    if (!isSyncEnabled) {
+      throw new Error("Global sync (R2 uploads) is disabled in this environment.");
+    }
     try {
       const { s3, bucketName, publicBaseUrl, sdk } = await getS3Client();
       const buffer = Buffer.from(data.base64Data, "base64");
@@ -144,6 +152,14 @@ export const deleteFromR2 = createServerFn({ method: "POST" })
   .validator((input: { key: string }) => input)
   .handler(async ({ data }) => {
     "use server";
+    const isSyncEnabled =
+      process.env.ENABLE_GLOBAL_SYNC === "true" ||
+      process.env.VITE_ENABLE_GLOBAL_SYNC === "true" ||
+      (import.meta as any).env?.ENABLE_GLOBAL_SYNC === "true" ||
+      (import.meta as any).env?.VITE_ENABLE_GLOBAL_SYNC === "true";
+    if (!isSyncEnabled) {
+      throw new Error("Global sync (R2 deletions) is disabled in this environment.");
+    }
     try {
       const { s3, bucketName, sdk } = await getS3Client();
       await s3.send(
