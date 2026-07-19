@@ -11,6 +11,28 @@ export type TtsSource = "original" | "ai";
 const TTS_VOICE_URI_LS = "doclens:tts-voice-uri";
 const TTS_ONBOARDED_LS = "doclens:tts-onboarded";
 
+// Global cache to hold reference to active ONNX InferenceSession instances
+const ONNX_SESSION_CACHE = new Map<string, any>();
+
+/**
+ * Iterates over all cached ONNX sessions, releases them to reclaim WASM heap memory,
+ * and clears the cache.
+ */
+export async function clearTtsSessionCache() {
+  for (const [key, session] of ONNX_SESSION_CACHE.entries()) {
+    try {
+      if (session && typeof session.release === "function") {
+        await session.release();
+        console.log(`[TTS] Released ONNX InferenceSession for: ${key}`);
+      }
+    } catch (e) {
+      console.warn("[TTS] Failed to release ONNX InferenceSession:", e);
+    }
+  }
+  ONNX_SESSION_CACHE.clear();
+}
+
+
 /**
  * Explicit flag set once the user has picked a language/voice through the
  * onboarding dialog or settings. Kept separate from TTS_VOICE_URI_LS because
@@ -273,15 +295,14 @@ export function TtsProvider({ children }: { children: React.ReactNode }) {
 
         if (!ort.InferenceSession.originalCreate) {
           ort.InferenceSession.originalCreate = ort.InferenceSession.create;
-          const sessionCache = new Map<string, any>();
 
           ort.InferenceSession.create = async function (model: any, options?: any) {
             const cacheKey = model instanceof ArrayBuffer
               ? `${model.byteLength}-${new Uint8Array(model.slice(0, 100)).join(",")}`
               : String(model);
 
-            if (sessionCache.has(cacheKey)) {
-              return sessionCache.get(cacheKey);
+            if (ONNX_SESSION_CACHE.has(cacheKey)) {
+              return ONNX_SESSION_CACHE.get(cacheKey);
             }
 
             // vits-web's predict() resets numThreads to navigator.hardwareConcurrency
@@ -292,7 +313,7 @@ export function TtsProvider({ children }: { children: React.ReactNode }) {
             ort.env.wasm.numThreads = 1;
 
             const session = await ort.InferenceSession.originalCreate(model, options);
-            sessionCache.set(cacheKey, session);
+            ONNX_SESSION_CACHE.set(cacheKey, session);
             return session;
           };
         }
@@ -790,6 +811,8 @@ export function TtsProvider({ children }: { children: React.ReactNode }) {
     if (typeof window !== "undefined" && window.speechSynthesis) {
       window.speechSynthesis.pause();
     }
+    // Reclaim WASM memory on pause by releasing ONNX sessions
+    void clearTtsSessionCache();
   }, [setIsPaused]);
 
   const resume = useCallback(() => {
@@ -809,6 +832,8 @@ export function TtsProvider({ children }: { children: React.ReactNode }) {
     if (typeof window !== "undefined" && window.speechSynthesis) {
       window.speechSynthesis.cancel();
     }
+    // Release ONNX sessions to immediately reclaim WASM memory when playback is stopped
+    void clearTtsSessionCache();
     setIsPlaying(false);
     setIsPaused(false);
     setSentences([]);
@@ -861,6 +886,8 @@ export function TtsProvider({ children }: { children: React.ReactNode }) {
       if (typeof window !== "undefined" && window.speechSynthesis) {
         window.speechSynthesis.cancel();
       }
+      // Release ONNX sessions to reclaim memory when the component is unmounted
+      void clearTtsSessionCache();
     };
   }, [cleanupAudio]);
 
@@ -872,6 +899,9 @@ export function TtsProvider({ children }: { children: React.ReactNode }) {
     if (selectedVoiceUri !== lastVoiceUriRef.current) {
       const oldVoice = lastVoiceUriRef.current;
       lastVoiceUriRef.current = selectedVoiceUri;
+
+      // Release cached ONNX sessions when selected voice changes to prevent holding multiple voices in memory
+      void clearTtsSessionCache();
 
       if (isPlayingRef.current && oldVoice && selectedVoiceUri) {
         // Pause/Cancel the current playing engine
