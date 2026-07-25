@@ -4,6 +4,11 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 import { PdfViewer } from "@/components/PdfViewer";
 import { RightPanel } from "@/components/RightPanel";
+import { useIsMobile } from "@/hooks/use-mobile";
+import { MobileTopBar } from "@/components/mobile/MobileTopBar";
+import { MobileBottomBar } from "@/components/mobile/MobileBottomBar";
+import { MobileOverflowSheet } from "@/components/mobile/MobileOverflowSheet";
+import { MobilePageJumpSheet } from "@/components/mobile/MobilePageJumpSheet";
 import {
   getDoc,
   getDocBlob,
@@ -20,6 +25,7 @@ import {
 } from "@/lib/storage";
 import { syncFromSupabase, syncToSupabase, getSyncConfig } from "@/lib/sync";
 import { checkTextQuality } from "@/lib/pdf";
+import { ChevronLeft, ChevronRight, Cloud, RefreshCw, Settings, Zap } from "lucide-react";
 import {
   Dialog,
   DialogContent,
@@ -28,6 +34,14 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import {
+  Drawer,
+  DrawerContent,
+  DrawerDescription,
+  DrawerFooter,
+  DrawerHeader,
+  DrawerTitle,
+} from "@/components/ui/drawer";
 
 const extractPdfPagesClient = createClientOnlyFn(
   async (
@@ -79,6 +93,23 @@ function DocPage() {
   const { id } = Route.useParams();
   const { page: urlPage } = Route.useSearch();
   const navigate = useNavigate();
+  const isMobile = useIsMobile();
+  const [readerOpen, setReaderOpen] = useState(false);
+  const [pageJumpOpen, setPageJumpOpen] = useState(false);
+  const [overflowOpen, setOverflowOpen] = useState(false);
+  const [chromeVisible, setChromeVisible] = useState(true);
+  const lastScrollTopRef = useRef(0);
+  const handlePdfScroll = useCallback((e: React.UIEvent<HTMLDivElement>) => {
+    const top = e.currentTarget.scrollTop;
+    const delta = top - lastScrollTopRef.current;
+    lastScrollTopRef.current = top;
+    if (top < 40) {
+      setChromeVisible(true);
+      return;
+    }
+    if (delta > 4) setChromeVisible(false);
+    else if (delta < -4) setChromeVisible(true);
+  }, []);
   const [doc, setDoc] = useState<DocRecord | null>(null);
   const [missing, setMissing] = useState(false);
   const [pageCount, setPageCount] = useState(0);
@@ -468,7 +499,8 @@ function DocPage() {
 
   return (
     <div className="flex h-screen flex-col bg-background text-foreground">
-      {/* ─── Slim Document Header ─── */}
+      {/* ─── Slim Document Header (desktop only — mobile uses the floating MobileTopBar overlay) ─── */}
+      {!isMobile && (
       <header className="flex h-12 flex-shrink-0 items-center justify-between border-b border-border bg-surface/80 backdrop-blur-md px-4">
         {/* Left: Back + Title */}
         <div className="flex items-center gap-3 min-w-0">
@@ -494,10 +526,10 @@ function DocPage() {
             <button
               onClick={() => setActivePage(Math.max(1, activePage - 1))}
               disabled={activePage <= 1}
-              className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-md text-base text-muted-foreground transition-colors hover:bg-surface-2 hover:text-foreground disabled:opacity-30"
+              className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-surface-2 hover:text-foreground disabled:opacity-30"
               aria-label="Previous page"
             >
-              ‹
+              <ChevronLeft className="h-4 w-4" />
             </button>
             <div className="flex h-8 items-center gap-2 rounded-md bg-surface-2/60 px-3">
               <select
@@ -523,10 +555,10 @@ function DocPage() {
             <button
               onClick={() => setActivePage(Math.min(pageCount, activePage + 1))}
               disabled={activePage >= pageCount}
-              className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-md text-base text-muted-foreground transition-colors hover:bg-surface-2 hover:text-foreground disabled:opacity-30"
+              className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-surface-2 hover:text-foreground disabled:opacity-30"
               aria-label="Next page"
             >
-              ›
+              <ChevronRight className="h-4 w-4" />
             </button>
             {doneCount > 0 && (
               <button
@@ -561,7 +593,7 @@ function DocPage() {
               {analyzing ? (
                 <span className="inline-block h-3.5 w-3.5 rounded-full border-2 border-primary border-t-transparent spin-slow" />
               ) : (
-                <span className="text-sm">↻</span>
+                <RefreshCw className="h-3.5 w-3.5" />
               )}
             </button>
           )}
@@ -575,7 +607,7 @@ function DocPage() {
               {uploading ? (
                 <span className="inline-block h-3.5 w-3.5 rounded-full border-2 border-primary border-t-transparent spin-slow" />
               ) : (
-                <span className="text-sm">☁️</span>
+                <Cloud className="h-3.5 w-3.5" />
               )}
             </button>
           )}
@@ -589,7 +621,7 @@ function DocPage() {
               {syncingSupabase ? (
                 <span className="inline-block h-3.5 w-3.5 rounded-full border-2 border-primary border-t-transparent spin-slow" />
               ) : (
-                <span className="text-sm">⚡</span>
+                <Zap className="h-3.5 w-3.5" />
               )}
             </button>
           )}
@@ -598,10 +630,11 @@ function DocPage() {
             className="flex h-8 w-8 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-surface-2 hover:text-foreground"
             title="Settings"
           >
-            <span className="text-sm">⚙</span>
+            <Settings className="h-3.5 w-3.5" />
           </Link>
         </div>
       </header>
+      )}
 
       {/* ─── Main Content ─── */}
       <ClientOnly
@@ -614,11 +647,25 @@ function DocPage() {
           </main>
         }
       >
-        <main className="grid flex-1 grid-cols-1 overflow-hidden md:grid-cols-2">
-          <section className="relative h-full overflow-hidden">
-            <PdfViewer docId={id} activePage={activePage} setActivePage={setActivePage} />
-          </section>
-          <section className="h-full overflow-hidden border-t border-border md:border-t-0 md:border-l">
+        {isMobile ? (
+          <div className="relative flex-1 overflow-hidden">
+            <PdfViewer
+              docId={id}
+              activePage={activePage}
+              setActivePage={setActivePage}
+              onScroll={handlePdfScroll}
+            />
+            <MobileTopBar
+              docName={docName}
+              activePage={activePage}
+              pageCount={pageCount}
+              visible={chromeVisible}
+              onOpenPageJump={() => setPageJumpOpen(true)}
+            />
+            <MobileBottomBar
+              onOpenReader={() => setReaderOpen(true)}
+              onOpenOverflow={() => setOverflowOpen(true)}
+            />
             <RightPanel
               docId={id}
               pageCount={pageCount}
@@ -628,12 +675,119 @@ function DocPage() {
               onPageAiChange={handlePageAiChange}
               activePage={activePage}
               setActivePage={setActivePage}
+              mobileReaderOpen={readerOpen}
+              onMobileReaderOpenChange={setReaderOpen}
             />
-          </section>
-        </main>
+            <MobilePageJumpSheet
+              open={pageJumpOpen}
+              onOpenChange={setPageJumpOpen}
+              pageCount={pageCount}
+              activePage={activePage}
+              aiSummary={aiSummary}
+              onJump={setActivePage}
+            />
+            <MobileOverflowSheet
+              open={overflowOpen}
+              onOpenChange={setOverflowOpen}
+              docId={id}
+              pageCount={pageCount}
+              analyzing={analyzing}
+              status={status}
+              uploading={uploading}
+              syncingSupabase={syncingSupabase}
+              syncEnabled={syncEnabled}
+              onAnalyze={handleAnalyze}
+              onUploadToR2={handleUploadToR2}
+              onSyncToSupabase={handleSyncToSupabase}
+            />
+          </div>
+        ) : (
+          <main className="grid flex-1 grid-cols-1 overflow-hidden md:grid-cols-2">
+            <section className="relative h-full overflow-hidden">
+              <PdfViewer docId={id} activePage={activePage} setActivePage={setActivePage} />
+            </section>
+            <section className="h-full overflow-hidden border-t border-border md:border-t-0 md:border-l">
+              <RightPanel
+                docId={id}
+                pageCount={pageCount}
+                analyzing={analyzing}
+                status={status}
+                aiSummary={aiSummary}
+                onPageAiChange={handlePageAiChange}
+                activePage={activePage}
+                setActivePage={setActivePage}
+              />
+            </section>
+          </main>
+        )}
       </ClientOnly>
 
       {/* Category Selection Modal for R2 Upload */}
+      {isMobile ? (
+        <Drawer open={showUploadCategoryModal} onOpenChange={setShowUploadCategoryModal}>
+          <DrawerContent>
+            <DrawerHeader>
+              <DrawerTitle>Select R2 Category Folder</DrawerTitle>
+              <DrawerDescription>
+                Choose a category folder prefix to store this PDF in the shared Cloudflare R2 bucket.
+              </DrawerDescription>
+            </DrawerHeader>
+            <div className="space-y-4 overflow-y-auto px-6 pb-2">
+              <div className="grid grid-cols-2 gap-2">
+                {[
+                  { id: "history", label: "📜 History", desc: "history/" },
+                  { id: "economics", label: "📈 Economics", desc: "economics/" },
+                  { id: "geography", label: "🌍 Geography", desc: "geography/" },
+                  { id: "civics", label: "🏛️ Civics", desc: "civics/" },
+                  { id: "science", label: "🔬 Science", desc: "science/" },
+                  { id: "custom", label: "✏️ Custom", desc: "Custom prefix" },
+                ].map((cat) => (
+                  <button
+                    key={cat.id}
+                    type="button"
+                    onClick={() => setCategoryChoice(cat.id)}
+                    className={`flex flex-col items-start rounded-lg border p-3 text-left transition-all ${
+                      categoryChoice === cat.id
+                        ? "border-primary bg-primary/10 text-foreground ring-1 ring-primary"
+                        : "border-border bg-surface hover:bg-surface-2 text-muted-foreground"
+                    }`}
+                  >
+                    <span className="font-semibold text-sm">{cat.label}</span>
+                    <span className="text-[11px] font-mono text-muted-foreground">{cat.desc}</span>
+                  </button>
+                ))}
+              </div>
+              {categoryChoice === "custom" && (
+                <div className="space-y-1">
+                  <label className="text-xs font-medium text-foreground">Custom Category Name</label>
+                  <input
+                    type="text"
+                    placeholder="e.g. mathematics, philosophy"
+                    value={customCategoryInput}
+                    onChange={(e) => setCustomCategoryInput(e.target.value)}
+                    className="w-full rounded-md border border-border bg-surface px-3 py-2 text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-primary"
+                  />
+                </div>
+              )}
+            </div>
+            <DrawerFooter>
+              <button
+                onClick={() => setShowUploadCategoryModal(false)}
+                className="rounded-lg border border-border px-4 py-2 text-xs font-semibold text-muted-foreground hover:bg-surface-2 transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={confirmCategoryUpload}
+                disabled={categoryChoice === "custom" && !customCategoryInput.trim()}
+                className="rounded-lg bg-primary px-4 py-2 text-xs font-semibold text-primary-foreground hover:opacity-90 disabled:opacity-50 transition-opacity"
+              >
+                Upload to Category
+              </button>
+            </DrawerFooter>
+          </DrawerContent>
+        </Drawer>
+      ) : (
       <Dialog open={showUploadCategoryModal} onOpenChange={setShowUploadCategoryModal}>
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
@@ -697,6 +851,7 @@ function DocPage() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+      )}
     </div>
   );
 }

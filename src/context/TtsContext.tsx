@@ -811,8 +811,11 @@ export function TtsProvider({ children }: { children: React.ReactNode }) {
     if (typeof window !== "undefined" && window.speechSynthesis) {
       window.speechSynthesis.pause();
     }
-    // Reclaim WASM memory on pause by releasing ONNX sessions
-    void clearTtsSessionCache();
+    // Note: intentionally NOT releasing the ONNX session cache here (unlike
+    // stop()/unmount/voice-change) — pause is expected to be followed by a
+    // resume, and releasing the session forces a full WASM model reload
+    // (multi-second stall) the next time a sentence needs synthesizing,
+    // which reads as "unresponsive" play/pause/skip controls.
   }, [setIsPaused]);
 
   const resume = useCallback(() => {

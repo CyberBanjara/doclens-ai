@@ -327,6 +327,15 @@
   .selection-toolbar button.primary-action:hover {
     background: rgba(78, 222, 163, 0.12);
   }
+  .selection-toolbar-mobile {
+    gap: 4px;
+    padding: 6px;
+  }
+  .selection-toolbar-mobile button {
+    width: 40px;
+    height: 40px;
+    font-size: 16px;
+  }
 
   /* ─── Page enter animation ─── */
   .page-card-enter {

@@ -27,6 +27,7 @@
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "firebase": "^12.15.0",
+    "framer-motion": "^12.42.2",
     "idb": "^8.0.3",
     "lucide-react": "^0.575.0",
     "nitro": "3.0.260429-beta",
@@ -39,6 +40,7 @@
     "tailwindcss": "^4.2.1",
     "tesseract.js": "^7.0.0",
     "tw-animate-css": "^1.3.4",
+    "vaul": "^1.1.2",
     "vite-tsconfig-paths": "^6.0.2",
     "ws": "^8.21.1"
   },

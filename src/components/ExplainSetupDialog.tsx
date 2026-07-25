@@ -6,7 +6,16 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import {
+  Drawer,
+  DrawerContent,
+  DrawerDescription,
+  DrawerFooter,
+  DrawerHeader,
+  DrawerTitle,
+} from "@/components/ui/drawer";
 import { EXPLANATION_STYLES, type ExplanationStyle } from "@/lib/openrouter";
+import { useIsMobile } from "@/hooks/use-mobile";
 
 interface Props {
   open: boolean;
@@ -28,6 +37,7 @@ const QUICK_LANGS = [
 ];
 
 export function ExplainSetupDialog({ open, language, style, onOpenChange, onConfirm }: Props) {
+  const isMobile = useIsMobile();
   const [selectedLanguage, setSelectedLanguage] = useState(language || "English");
   const [customLanguage, setCustomLanguage] = useState("");
   const [selectedStyle, setSelectedStyle] = useState<ExplanationStyle>(style || "Standard");
@@ -39,6 +49,95 @@ export function ExplainSetupDialog({ open, language, style, onOpenChange, onConf
   const confirm = () => {
     onConfirm({ language: finalLanguage, style: selectedStyle });
   };
+
+  const body = (
+    <>
+      <div className="space-y-3">
+        <div className="font-mono text-[10px] uppercase tracking-widest text-muted-foreground">
+          explanation language
+        </div>
+        <div className="flex flex-wrap gap-2">
+          {QUICK_LANGS.map((lang) => (
+            <button
+              key={lang}
+              onClick={() => {
+                setSelectedLanguage(lang);
+                setCustomLanguage("");
+              }}
+              className={`rounded-md border px-3 py-1.5 text-sm transition-colors ${
+                !customLanguage.trim() && selectedLanguage === lang
+                  ? "border-primary bg-primary/15 text-primary"
+                  : "border-border bg-background text-muted-foreground hover:text-foreground"
+              }`}
+            >
+              {lang}
+            </button>
+          ))}
+        </div>
+        <input
+          value={customLanguage}
+          onChange={(e) => setCustomLanguage(e.target.value)}
+          placeholder="Custom language..."
+          className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm outline-none focus:border-primary"
+        />
+      </div>
+
+      <div className="mt-5 space-y-3">
+        <div className="font-mono text-[10px] uppercase tracking-widest text-muted-foreground">
+          explanation style
+        </div>
+        <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+          {EXPLANATION_STYLES.map((item) => (
+            <button
+              key={item.id}
+              onClick={() => setSelectedStyle(item.id)}
+              className={`rounded-md border px-3 py-2 text-left transition-colors ${
+                selectedStyle === item.id
+                  ? "border-primary bg-primary/10 text-primary"
+                  : "border-border bg-background text-foreground hover:bg-surface-2"
+              }`}
+            >
+              <div className="text-sm font-semibold">{item.label}</div>
+              <div className="mt-1 line-clamp-2 text-xs text-muted-foreground">
+                {item.instruction}
+              </div>
+            </button>
+          ))}
+        </div>
+      </div>
+    </>
+  );
+
+  if (isMobile) {
+    return (
+      <Drawer open={open} onOpenChange={onOpenChange}>
+        <DrawerContent>
+          <DrawerHeader>
+            <DrawerTitle>Set explanation preferences</DrawerTitle>
+            <DrawerDescription>
+              Choose the language and explanation style for this document.
+            </DrawerDescription>
+          </DrawerHeader>
+          <div className="overflow-y-auto px-6 pb-2">{body}</div>
+          <DrawerFooter>
+            <button
+              onClick={() => onOpenChange(false)}
+              className="flex-1 rounded-md border border-border bg-background px-3 py-2 text-sm text-muted-foreground hover:text-foreground"
+            >
+              Cancel
+            </button>
+            <button
+              onClick={confirm}
+              disabled={!finalLanguage}
+              className="flex-1 rounded-md bg-primary px-3 py-2 text-sm font-semibold text-primary-foreground disabled:opacity-40"
+            >
+              Continue
+            </button>
+          </DrawerFooter>
+        </DrawerContent>
+      </Drawer>
+    );
+  }
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -67,61 +166,7 @@ export function ExplainSetupDialog({ open, language, style, onOpenChange, onConf
           </div>
         </div>
 
-        <div className="max-h-[calc(88vh-88px)] overflow-auto px-6 py-5">
-          <section className="space-y-3">
-            <div className="font-mono text-[10px] uppercase tracking-widest text-muted-foreground">
-              explanation language
-            </div>
-            <div className="flex flex-wrap gap-2">
-              {QUICK_LANGS.map((lang) => (
-                <button
-                  key={lang}
-                  onClick={() => {
-                    setSelectedLanguage(lang);
-                    setCustomLanguage("");
-                  }}
-                  className={`rounded-md border px-3 py-1.5 text-sm transition-colors ${
-                    !customLanguage.trim() && selectedLanguage === lang
-                      ? "border-primary bg-primary/15 text-primary"
-                      : "border-border bg-background text-muted-foreground hover:text-foreground"
-                  }`}
-                >
-                  {lang}
-                </button>
-              ))}
-            </div>
-            <input
-              value={customLanguage}
-              onChange={(e) => setCustomLanguage(e.target.value)}
-              placeholder="Custom language..."
-              className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm outline-none focus:border-primary"
-            />
-          </section>
-
-          <section className="mt-5 space-y-3">
-            <div className="font-mono text-[10px] uppercase tracking-widest text-muted-foreground">
-              explanation style
-            </div>
-            <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
-              {EXPLANATION_STYLES.map((item) => (
-                <button
-                  key={item.id}
-                  onClick={() => setSelectedStyle(item.id)}
-                  className={`rounded-md border px-3 py-2 text-left transition-colors ${
-                    selectedStyle === item.id
-                      ? "border-primary bg-primary/10 text-primary"
-                      : "border-border bg-background text-foreground hover:bg-surface-2"
-                  }`}
-                >
-                  <div className="text-sm font-semibold">{item.label}</div>
-                  <div className="mt-1 line-clamp-2 text-xs text-muted-foreground">
-                    {item.instruction}
-                  </div>
-                </button>
-              ))}
-            </div>
-          </section>
-        </div>
+        <div className="max-h-[calc(88vh-88px)] overflow-auto px-6 py-5">{body}</div>
       </DialogContent>
     </Dialog>
   );

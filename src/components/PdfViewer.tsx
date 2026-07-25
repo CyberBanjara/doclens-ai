@@ -3,12 +3,17 @@ import { loadPdfDocument } from "@/lib/pdf";
 import { getDocBlob } from "@/lib/storage";
 import type { PDFDocumentProxy, PDFPageProxy, PageViewport } from "pdfjs-dist";
 import { LoadingLogo } from "@/components/LoadingLogo";
+import { useIsMobile } from "@/hooks/use-mobile";
 
 interface Props {
   /** Document ID — binary is loaded on-demand from IndexedDB */
   docId: string;
   activePage: number;
   setActivePage: (p: number) => void;
+  /** Forwarded to the scroll container — lets the mobile shell drive its
+   * auto-hiding chrome off scroll direction. Purely presentational, no
+   * effect on rendering/cleanup logic below. */
+  onScroll?: (e: React.UIEvent<HTMLDivElement>) => void;
 }
 
 const DPR = typeof window !== "undefined" ? Math.min(window.devicePixelRatio || 1, 2) : 1;
@@ -40,7 +45,8 @@ interface SelectionInfo {
  * copy, translate (via "doclens:translate-selection" event), or speak text.
  * Scanned/image-only pages get no text spans — toolbar simply never appears.
  */
-export function PdfViewer({ docId, activePage, setActivePage }: Props) {
+export function PdfViewer({ docId, activePage, setActivePage, onScroll }: Props) {
+  const isMobile = useIsMobile();
   const [doc, setDoc] = useState<PDFDocumentProxy | null>(null);
   const [pageMetas, setPageMetas] = useState<PageMeta[]>([]);
   const [loading, setLoading] = useState(true);
@@ -442,8 +448,15 @@ export function PdfViewer({ docId, activePage, setActivePage }: Props) {
 
   return (
     <>
-      <div ref={scrollRef} className="relative h-full overflow-auto pdf-viewer-bg">
-        <div className="flex flex-col items-center gap-4 py-6 px-4" onClick={handlePageClick}>
+      <div
+        ref={scrollRef}
+        onScroll={onScroll}
+        className="relative h-full overflow-auto pdf-viewer-bg"
+      >
+        <div
+          className={`flex flex-col items-center gap-4 ${isMobile ? "py-4 px-0" : "py-6 px-4"}`}
+          onClick={handlePageClick}
+        >
           {pageMetas.map((meta) => (
             <div
               key={meta.pageNumber}
@@ -488,7 +501,8 @@ export function PdfViewer({ docId, activePage, setActivePage }: Props) {
                   lineHeight: 1,
                 }}
               />
-              <div className="pdf-page-badge">{meta.pageNumber}</div>
+              {/* Redundant with MobileTopBar's floating page indicator on mobile */}
+              {!isMobile && <div className="pdf-page-badge">{meta.pageNumber}</div>}
             </div>
           ))}
         </div>
@@ -500,7 +514,7 @@ export function PdfViewer({ docId, activePage, setActivePage }: Props) {
             style={{ left: selection.x, top: selection.y - 8 }}
             onMouseDown={(e) => e.preventDefault()}
           >
-            <div className="selection-toolbar">
+            <div className={isMobile ? "selection-toolbar selection-toolbar-mobile" : "selection-toolbar"}>
               <button onClick={handleCopy} title="Copy">
                 📋
               </button>
