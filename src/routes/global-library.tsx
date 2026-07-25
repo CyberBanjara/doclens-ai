@@ -1,8 +1,8 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 import { SidebarLayout } from "@/components/SidebarLayout";
-import { listR2Files, deleteFromR2, downloadFromR2 } from "@/lib/r2";
+import { listR2Files, deleteFromR2, downloadFromR2, uploadToR2, reorganizeR2Files } from "@/lib/r2";
 import { createDoc } from "@/lib/storage";
 import { LoadingLogo } from "@/components/LoadingLogo";
 import { getSyncConfig } from "@/lib/sync";
@@ -16,6 +16,14 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 
 export const Route = createFileRoute("/global-library")({
   component: GlobalLibraryPage,
@@ -30,6 +38,20 @@ interface R2File {
   lastModified?: string;
   url?: string;
 }
+
+interface ParsedR2File extends R2File {
+  category: string;
+  displayName: string;
+}
+
+const STANDARD_CATEGORIES: Record<string, { label: string; icon: string; desc: string }> = {
+  history: { label: "History", icon: "📜", desc: "history/" },
+  economics: { label: "Economics", icon: "📈", desc: "economics/" },
+  geography: { label: "Geography", icon: "🌍", desc: "geography/" },
+  civics: { label: "Civics", icon: "🏛️", desc: "civics/" },
+  science: { label: "Science", icon: "🔬", desc: "science/" },
+  uncategorized: { label: "Uncategorized", icon: "📂", desc: "uncategorized/" },
+};
 
 function formatBytes(bytes: number, decimals = 2) {
   if (!bytes) return "0 Bytes";
@@ -68,6 +90,16 @@ function base64ToBlob(base64: string, mimeType = "application/pdf") {
   return new Blob(byteArrays, { type: mimeType });
 }
 
+function parseFileCategory(file: R2File): ParsedR2File {
+  const parts = file.key.split("/");
+  if (parts.length > 1 && parts[0].trim().length > 0) {
+    const category = parts[0].trim().toLowerCase();
+    const displayName = parts.slice(1).join("/");
+    return { ...file, category, displayName };
+  }
+  return { ...file, category: "uncategorized", displayName: file.key };
+}
+
 function GlobalLibraryPage() {
   const navigate = useNavigate();
   const [files, setFiles] = useState<R2File[]>([]);
@@ -77,6 +109,20 @@ function GlobalLibraryPage() {
   const [deleteTarget, setDeleteTarget] = useState<R2File | null>(null);
   const [deletingKey, setDeletingKey] = useState<string | null>(null);
   const [syncEnabled, setSyncEnabled] = useState(true);
+
+  // Category navigation & search
+  const [activeCategory, setActiveCategory] = useState<string>("all");
+  const [searchQuery, setSearchQuery] = useState("");
+
+  // Direct Upload modal states
+  const [showUploadModal, setShowUploadModal] = useState(false);
+  const [uploadFile, setUploadFile] = useState<File | null>(null);
+  const [uploadCategory, setUploadCategory] = useState("history");
+  const [customUploadCategory, setCustomUploadCategory] = useState("");
+  const [uploadingDirect, setUploadingDirect] = useState(false);
+
+  // Reorganize state
+  const [reorganizing, setReorganizing] = useState(false);
 
   const fetchFiles = async (silent = false) => {
     if (!silent) setLoading(true);
@@ -112,6 +158,39 @@ function GlobalLibraryPage() {
     };
   }, []);
 
+  const parsedFiles: ParsedR2File[] = useMemo(() => {
+    return files.map(parseFileCategory);
+  }, [files]);
+
+  // Aggregate Category counts & size
+  const categoryStats = useMemo(() => {
+    const map: Record<string, { count: number; totalSize: number }> = {};
+    for (const f of parsedFiles) {
+      if (!map[f.category]) {
+        map[f.category] = { count: 0, totalSize: 0 };
+      }
+      map[f.category].count += 1;
+      map[f.category].totalSize += f.size;
+    }
+    return map;
+  }, [parsedFiles]);
+
+  const categoriesList = useMemo(() => {
+    const keys = new Set([...Object.keys(STANDARD_CATEGORIES), ...Object.keys(categoryStats)]);
+    return Array.from(keys);
+  }, [categoryStats]);
+
+  const filteredFiles = useMemo(() => {
+    return parsedFiles.filter((f) => {
+      const matchesCat = activeCategory === "all" || f.category === activeCategory;
+      const matchesSearch =
+        !searchQuery.trim() ||
+        f.displayName.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        f.key.toLowerCase().includes(searchQuery.toLowerCase());
+      return matchesCat && matchesSearch;
+    });
+  }, [parsedFiles, activeCategory, searchQuery]);
+
   const handleImport = async (file: R2File) => {
     if (importingKey) return;
     setImportingKey(file.key);
@@ -121,11 +200,12 @@ function GlobalLibraryPage() {
       toast.loading("Saving to local Library...", { id: toastId });
 
       const blob = base64ToBlob(res.base64Data, res.contentType);
-      const docFile = new File([blob], file.key, { type: res.contentType });
+      const cleanName = file.key.split("/").pop() || file.key;
+      const docFile = new File([blob], cleanName, { type: res.contentType });
       const arrayBuffer = await docFile.arrayBuffer();
 
       const docRec = await createDoc(docFile, arrayBuffer);
-      toast.success(`Successfully imported "${file.key}" to your local library!`, { id: toastId });
+      toast.success(`Successfully imported "${cleanName}" to your local library!`, { id: toastId });
 
       navigate({ to: "/doc/$id", params: { id: docRec.id } });
     } catch (e: any) {
@@ -154,14 +234,89 @@ function GlobalLibraryPage() {
     }
   };
 
+  const handleReorganize = async () => {
+    if (reorganizing) return;
+    setReorganizing(true);
+    const toastId = toast.loading("Organising files in R2 bucket into subject virtual folders...");
+    try {
+      const res = await reorganizeR2Files();
+      if (res.movedCount > 0) {
+        toast.success(`Successfully reorganised ${res.movedCount} files into category virtual folders!`, { id: toastId });
+      } else {
+        toast.info("All files are already organised into category virtual folders.", { id: toastId });
+      }
+      await fetchFiles(true);
+    } catch (e: any) {
+      console.error(e);
+      toast.error(e?.message || "Failed to reorganise R2 bucket.", { id: toastId });
+    } finally {
+      setReorganizing(false);
+    }
+  };
+
+  const handleDirectUploadSubmit = async () => {
+    if (!uploadFile || uploadingDirect) return;
+    const targetCat = uploadCategory === "custom" ? customUploadCategory.trim() : uploadCategory;
+    setUploadingDirect(true);
+    const toastId = toast.loading(`Uploading "${uploadFile.name}" to R2 (${targetCat || "uncategorized"})...`);
+
+    try {
+      const arrayBuf = await uploadFile.arrayBuffer();
+      const base64Data = Buffer.from(arrayBuf).toString("base64");
+
+      const res = await uploadToR2({
+        data: {
+          fileName: uploadFile.name,
+          contentType: uploadFile.type || "application/pdf",
+          base64Data,
+          category: targetCat,
+        },
+      });
+
+      if (res.alreadyExists) {
+        toast.warning(`File is already uploaded under key "${res.key}".`, { id: toastId });
+      } else {
+        toast.success(`Uploaded successfully under folder prefix "${res.category}/"!`, { id: toastId });
+      }
+
+      setShowUploadModal(false);
+      setUploadFile(null);
+      await fetchFiles(true);
+    } catch (e: any) {
+      console.error(e);
+      toast.error(e?.message || "Failed to upload file to Cloudflare R2.", { id: toastId });
+    } finally {
+      setUploadingDirect(false);
+    }
+  };
+
   return (
     <SidebarLayout
       pageTitle="Global Library"
       topBarRight={
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-2">
+          {syncEnabled && (
+            <button
+              onClick={() => setShowUploadModal(true)}
+              disabled={loading || reorganizing}
+              className="rounded-lg bg-primary px-3 py-1.5 font-mono text-[11px] uppercase tracking-wider text-primary-foreground transition-all hover:opacity-90 active:scale-95 disabled:opacity-50 flex items-center gap-1.5 shadow-sm"
+            >
+              <span>+</span> Upload PDF
+            </button>
+          )}
+          {syncEnabled && (
+            <button
+              onClick={handleReorganize}
+              disabled={loading || reorganizing}
+              className="rounded-lg border border-primary/30 bg-primary/10 px-3 py-1.5 font-mono text-[11px] uppercase tracking-wider text-primary transition-all hover:bg-primary/20 active:scale-95 disabled:opacity-50 flex items-center gap-1.5"
+              title="Automatically rename and move flat files into subject folder prefixes (history/, economics/, etc.)"
+            >
+              <span>⚡</span> {reorganizing ? "Organising…" : "Organise Bucket"}
+            </button>
+          )}
           <button
             onClick={() => void fetchFiles()}
-            disabled={loading || !!importingKey || !!deletingKey}
+            disabled={loading || !!importingKey || !!deletingKey || reorganizing}
             className="rounded-lg border border-border bg-surface px-3 py-1.5 font-mono text-[11px] uppercase tracking-widest text-muted-foreground transition-colors hover:text-foreground hover:bg-surface-2 disabled:opacity-50"
           >
             {loading ? "refreshing…" : "refresh"}
@@ -170,14 +325,17 @@ function GlobalLibraryPage() {
       }
     >
       <div className="mx-auto max-w-7xl space-y-8 p-8">
+        {/* Header Banner */}
         <section>
-          <div className="mb-6">
-            <h1 className="text-4xl font-bold tracking-tight text-foreground">
-              Cloudflare R2 Shared Space
-            </h1>
-            <p className="mt-2 max-w-2xl text-base text-muted-foreground">
-              A shared cloud vault powered by Cloudflare R2. Upload local documents from the Workstation, view what's shared in the cloud, and import shared documents to translate offline.
-            </p>
+          <div className="mb-6 flex flex-col justify-between gap-4 md:flex-row md:items-end">
+            <div>
+              <h1 className="text-4xl font-bold tracking-tight text-foreground">
+                Cloudflare R2 Global Library
+              </h1>
+              <p className="mt-2 max-w-2xl text-base text-muted-foreground">
+                Organised into category-based virtual folders using key prefixes. Upload files with subject tags, browse folders, or auto-organise existing documents.
+              </p>
+            </div>
           </div>
 
           {errorMsg ? (
@@ -200,81 +358,295 @@ function GlobalLibraryPage() {
             <div className="flex h-64 flex-col items-center justify-center rounded-xl border border-border bg-surface/30">
               <LoadingLogo size={72} label="Listing Cloudflare R2 files..." />
             </div>
-          ) : files.length === 0 ? (
-            <div className="glass-panel rounded-xl border-dashed p-10 text-center">
-              <div className="font-mono text-[11px] uppercase tracking-widest text-muted-foreground">
-                empty cloud vault
-              </div>
-              <p className="mt-2 text-sm text-foreground/80">
-                There are no shared PDFs in the R2 bucket. Upload a document from the Workstation to see it here.
-              </p>
-            </div>
           ) : (
-            <div className="overflow-hidden rounded-xl border border-border bg-surface/30 backdrop-blur-md">
-              <div className="overflow-x-auto">
-                <table className="w-full border-collapse text-left text-sm">
-                  <thead>
-                    <tr className="border-b border-border bg-surface-2/40 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-                      <th className="px-6 py-4">File Name</th>
-                      <th className="px-6 py-4">Size</th>
-                      <th className="px-6 py-4">Uploaded On</th>
-                      <th className="px-6 py-4 text-right">Actions</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-border/40">
-                    {files.map((file) => {
-                      const isImporting = importingKey === file.key;
-                      const isDeleting = deletingKey === file.key;
+            <div className="space-y-6">
+              {/* Virtual Category Folder Grid */}
+              <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-7">
+                {/* All Files card */}
+                <button
+                  type="button"
+                  onClick={() => setActiveCategory("all")}
+                  className={`flex flex-col justify-between rounded-xl border p-4 text-left transition-all hover:scale-[1.02] cursor-pointer ${
+                    activeCategory === "all"
+                      ? "border-primary bg-primary/10 ring-1 ring-primary"
+                      : "border-border bg-surface/50 hover:bg-surface-2"
+                  }`}
+                >
+                  <div className="flex items-center justify-between">
+                    <span className="text-2xl">📚</span>
+                    <span className="rounded-full bg-surface-2 px-2 py-0.5 font-mono text-[10px] font-semibold text-muted-foreground">
+                      {files.length}
+                    </span>
+                  </div>
+                  <div className="mt-3">
+                    <div className="font-semibold text-sm text-foreground truncate">All Files</div>
+                    <div className="text-[11px] text-muted-foreground">Full Bucket</div>
+                  </div>
+                </button>
 
-                      return (
-                        <tr
-                          key={file.key}
-                          className="group transition-colors hover:bg-surface-2/20"
-                        >
-                          <td className="px-6 py-4 font-medium text-foreground">
-                            <div className="flex items-center gap-3">
-                              <span className="text-xl">📄</span>
-                              <span className="truncate max-w-md block" title={file.key}>
-                                {file.key}
-                              </span>
-                            </div>
-                          </td>
-                          <td className="px-6 py-4 text-muted-foreground">
-                            {formatBytes(file.size)}
-                          </td>
-                          <td className="px-6 py-4 text-muted-foreground">
-                            {formatDate(file.lastModified)}
-                          </td>
-                          <td className="px-6 py-4 text-right">
-                            <div className="flex items-center justify-end gap-3">
-                              <button
-                                onClick={() => handleImport(file)}
-                                disabled={!!importingKey || !!deletingKey}
-                                className="rounded-lg bg-primary/10 px-3 py-1.5 text-xs font-semibold text-primary transition-all hover:bg-primary/20 active:scale-95 disabled:opacity-50 cursor-pointer"
-                              >
-                                {isImporting ? "Importing…" : "Import"}
-                              </button>
-                              {syncEnabled && (
-                                <button
-                                  onClick={() => setDeleteTarget(file)}
-                                  disabled={!!importingKey || !!deletingKey}
-                                  className="rounded-lg border border-destructive/20 px-3 py-1.5 text-xs font-medium text-destructive transition-all hover:bg-destructive/10 active:scale-95 disabled:opacity-50 cursor-pointer"
-                                >
-                                  {isDeleting ? "Deleting…" : "Delete"}
-                                </button>
-                              )}
-                            </div>
-                          </td>
-                        </tr>
-                      );
-                    })}
-                  </tbody>
-                </table>
+                {categoriesList.map((catKey) => {
+                  const meta = STANDARD_CATEGORIES[catKey] || {
+                    label: catKey.charAt(0).toUpperCase() + catKey.slice(1),
+                    icon: "📂",
+                    desc: `${catKey}/`,
+                  };
+                  const stats = categoryStats[catKey] || { count: 0, totalSize: 0 };
+                  const isActive = activeCategory === catKey;
+
+                  return (
+                    <button
+                      key={catKey}
+                      type="button"
+                      onClick={() => setActiveCategory(catKey)}
+                      className={`flex flex-col justify-between rounded-xl border p-4 text-left transition-all hover:scale-[1.02] cursor-pointer ${
+                        isActive
+                          ? "border-primary bg-primary/10 ring-1 ring-primary"
+                          : "border-border bg-surface/50 hover:bg-surface-2"
+                      }`}
+                    >
+                      <div className="flex items-center justify-between">
+                        <span className="text-2xl">{meta.icon}</span>
+                        <span className="rounded-full bg-surface-2 px-2 py-0.5 font-mono text-[10px] font-semibold text-muted-foreground">
+                          {stats.count}
+                        </span>
+                      </div>
+                      <div className="mt-3">
+                        <div className="font-semibold text-sm text-foreground truncate" title={meta.label}>
+                          {meta.label}
+                        </div>
+                        <div className="text-[11px] font-mono text-muted-foreground truncate">
+                          {meta.desc}
+                        </div>
+                      </div>
+                    </button>
+                  );
+                })}
               </div>
+
+              {/* Toolbar & Search Bar */}
+              <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between rounded-xl border border-border bg-surface/40 p-4">
+                <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                  <span className="font-semibold text-foreground">
+                    {activeCategory === "all"
+                      ? "📁 Global Library (All Folders)"
+                      : `📁 ${activeCategory}/ Folder`}
+                  </span>
+                  <span className="text-xs">({filteredFiles.length} items)</span>
+                </div>
+                <div className="relative max-w-xs w-full">
+                  <input
+                    type="text"
+                    placeholder="Search PDFs in folder..."
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                    className="w-full rounded-lg border border-border bg-surface px-3 py-1.5 text-xs text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-primary"
+                  />
+                  {searchQuery && (
+                    <button
+                      onClick={() => setSearchQuery("")}
+                      className="absolute right-2 top-1.5 text-xs text-muted-foreground hover:text-foreground"
+                    >
+                      ✕
+                    </button>
+                  )}
+                </div>
+              </div>
+
+              {/* Files Table / Empty state */}
+              {filteredFiles.length === 0 ? (
+                <div className="glass-panel rounded-xl border-dashed p-10 text-center">
+                  <div className="font-mono text-[11px] uppercase tracking-widest text-muted-foreground">
+                    folder empty
+                  </div>
+                  <p className="mt-2 text-sm text-foreground/80">
+                    No documents found in{" "}
+                    <span className="font-semibold">{activeCategory}</span> folder prefix.
+                  </p>
+                  {syncEnabled && (
+                    <button
+                      onClick={() => {
+                        if (activeCategory !== "all" && activeCategory !== "uncategorized") {
+                          setUploadCategory(activeCategory);
+                        }
+                        setShowUploadModal(true);
+                      }}
+                      className="mt-4 inline-flex items-center gap-2 rounded-lg bg-primary px-4 py-2 text-xs font-semibold text-primary-foreground hover:opacity-90 transition-opacity"
+                    >
+                      + Upload to {activeCategory}
+                    </button>
+                  )}
+                </div>
+              ) : (
+                <div className="overflow-hidden rounded-xl border border-border bg-surface/30 backdrop-blur-md">
+                  <div className="overflow-x-auto">
+                    <table className="w-full border-collapse text-left text-sm">
+                      <thead>
+                        <tr className="border-b border-border bg-surface-2/40 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                          <th className="px-6 py-4">Document Name</th>
+                          <th className="px-6 py-4">Category Folder</th>
+                          <th className="px-6 py-4">Size</th>
+                          <th className="px-6 py-4">Uploaded On</th>
+                          <th className="px-6 py-4 text-right">Actions</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-border/40">
+                        {filteredFiles.map((file) => {
+                          const isImporting = importingKey === file.key;
+                          const isDeleting = deletingKey === file.key;
+                          const catMeta = STANDARD_CATEGORIES[file.category] || {
+                            label: file.category,
+                            icon: "📂",
+                          };
+
+                          return (
+                            <tr
+                              key={file.key}
+                              className="group transition-colors hover:bg-surface-2/20"
+                            >
+                              <td className="px-6 py-4 font-medium text-foreground">
+                                <div className="flex items-center gap-3">
+                                  <span className="text-xl">📄</span>
+                                  <div className="min-w-0">
+                                    <span className="truncate max-w-md block font-medium" title={file.key}>
+                                      {file.displayName}
+                                    </span>
+                                    <span className="font-mono text-[10px] text-muted-foreground block truncate">
+                                      key: {file.key}
+                                    </span>
+                                  </div>
+                                </div>
+                              </td>
+                              <td className="px-6 py-4">
+                                <span className="inline-flex items-center gap-1.5 rounded-full border border-border bg-surface-2/60 px-2.5 py-1 text-xs font-medium text-foreground">
+                                  <span>{catMeta.icon}</span>
+                                  <span>{catMeta.label}</span>
+                                </span>
+                              </td>
+                              <td className="px-6 py-4 text-muted-foreground">
+                                {formatBytes(file.size)}
+                              </td>
+                              <td className="px-6 py-4 text-muted-foreground">
+                                {formatDate(file.lastModified)}
+                              </td>
+                              <td className="px-6 py-4 text-right">
+                                <div className="flex items-center justify-end gap-3">
+                                  <button
+                                    onClick={() => handleImport(file)}
+                                    disabled={!!importingKey || !!deletingKey}
+                                    className="rounded-lg bg-primary/10 px-3 py-1.5 text-xs font-semibold text-primary transition-all hover:bg-primary/20 active:scale-95 disabled:opacity-50 cursor-pointer"
+                                  >
+                                    {isImporting ? "Importing…" : "Import"}
+                                  </button>
+                                  {syncEnabled && (
+                                    <button
+                                      onClick={() => setDeleteTarget(file)}
+                                      disabled={!!importingKey || !!deletingKey}
+                                      className="rounded-lg border border-destructive/20 px-3 py-1.5 text-xs font-medium text-destructive transition-all hover:bg-destructive/10 active:scale-95 disabled:opacity-50 cursor-pointer"
+                                    >
+                                      {isDeleting ? "Deleting…" : "Delete"}
+                                    </button>
+                                  )}
+                                </div>
+                              </td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              )}
             </div>
           )}
         </section>
       </div>
+
+      {/* Direct R2 Upload Modal */}
+      <Dialog open={showUploadModal} onOpenChange={setShowUploadModal}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Upload PDF to Global Vault</DialogTitle>
+            <DialogDescription>
+              Select a PDF document and assign a category folder prefix for Cloudflare R2 storage.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-4 py-3">
+            {/* File selection input */}
+            <div className="space-y-1">
+              <label className="text-xs font-medium text-foreground">PDF Document</label>
+              <input
+                type="file"
+                accept="application/pdf,.pdf"
+                onChange={(e) => {
+                  if (e.target.files && e.target.files[0]) {
+                    setUploadFile(e.target.files[0]);
+                  }
+                }}
+                className="w-full rounded-md border border-border bg-surface p-2 text-xs text-foreground file:mr-3 file:rounded-md file:border-0 file:bg-primary/10 file:px-3 file:py-1 file:text-xs file:font-semibold file:text-primary hover:file:bg-primary/20 cursor-pointer"
+              />
+            </div>
+
+            {/* Category choices */}
+            <div className="space-y-2">
+              <label className="text-xs font-medium text-foreground">Select Category Folder</label>
+              <div className="grid grid-cols-2 gap-2">
+                {[
+                  { id: "history", label: "📜 History", desc: "history/" },
+                  { id: "economics", label: "📈 Economics", desc: "economics/" },
+                  { id: "geography", label: "🌍 Geography", desc: "geography/" },
+                  { id: "civics", label: "🏛️ Civics", desc: "civics/" },
+                  { id: "science", label: "🔬 Science", desc: "science/" },
+                  { id: "custom", label: "✏️ Custom", desc: "Custom prefix" },
+                ].map((cat) => (
+                  <button
+                    key={cat.id}
+                    type="button"
+                    onClick={() => setUploadCategory(cat.id)}
+                    className={`flex flex-col items-start rounded-lg border p-3 text-left transition-all ${
+                      uploadCategory === cat.id
+                        ? "border-primary bg-primary/10 text-foreground ring-1 ring-primary"
+                        : "border-border bg-surface hover:bg-surface-2 text-muted-foreground"
+                    }`}
+                  >
+                    <span className="font-semibold text-sm">{cat.label}</span>
+                    <span className="text-[11px] font-mono text-muted-foreground">{cat.desc}</span>
+                  </button>
+                ))}
+              </div>
+
+              {uploadCategory === "custom" && (
+                <div className="mt-2 space-y-1">
+                  <label className="text-xs font-medium text-foreground">Custom Category Name</label>
+                  <input
+                    type="text"
+                    placeholder="e.g. mathematics, literature"
+                    value={customUploadCategory}
+                    onChange={(e) => setCustomUploadCategory(e.target.value)}
+                    className="w-full rounded-md border border-border bg-surface px-3 py-2 text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-primary"
+                  />
+                </div>
+              )}
+            </div>
+          </div>
+
+          <DialogFooter>
+            <button
+              onClick={() => setShowUploadModal(false)}
+              className="rounded-lg border border-border px-4 py-2 text-xs font-semibold text-muted-foreground hover:bg-surface-2 transition-colors"
+            >
+              Cancel
+            </button>
+            <button
+              onClick={handleDirectUploadSubmit}
+              disabled={!uploadFile || uploadingDirect || (uploadCategory === "custom" && !customUploadCategory.trim())}
+              className="rounded-lg bg-primary px-4 py-2 text-xs font-semibold text-primary-foreground hover:opacity-90 disabled:opacity-50 transition-opacity"
+            >
+              {uploadingDirect ? "Uploading…" : "Upload File"}
+            </button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {/* Delete confirmation dialog */}
       <AlertDialog open={!!deleteTarget} onOpenChange={(open) => !open && setDeleteTarget(null)}>

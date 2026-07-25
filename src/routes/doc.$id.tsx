@@ -20,6 +20,14 @@ import {
 } from "@/lib/storage";
 import { syncFromSupabase, syncToSupabase, getSyncConfig } from "@/lib/sync";
 import { checkTextQuality } from "@/lib/pdf";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 
 const extractPdfPagesClient = createClientOnlyFn(
   async (
@@ -323,9 +331,19 @@ function DocPage() {
   };
 
   const [uploading, setUploading] = useState(false);
+  const [showUploadCategoryModal, setShowUploadCategoryModal] = useState(false);
+  const [categoryChoice, setCategoryChoice] = useState("history");
+  const [customCategoryInput, setCustomCategoryInput] = useState("");
 
-  const handleUploadToR2 = async () => {
+  const handleUploadToR2 = () => {
     if (uploading || !doc) return;
+    setShowUploadCategoryModal(true);
+  };
+
+  const confirmCategoryUpload = async () => {
+    if (uploading || !doc) return;
+    const finalCategory = categoryChoice === "custom" ? customCategoryInput.trim() : categoryChoice;
+    setShowUploadCategoryModal(false);
     setUploading(true);
     const toastId = toast.loading("Preparing document for R2 upload...");
     try {
@@ -336,7 +354,7 @@ function DocPage() {
         return;
       }
 
-      toast.loading("Uploading to Cloudflare R2...", { id: toastId });
+      toast.loading(`Uploading to Cloudflare R2 (${finalCategory || "uncategorized"})...`, { id: toastId });
 
       const reader = new FileReader();
       const base64Promise = new Promise<string>((resolve, reject) => {
@@ -356,13 +374,14 @@ function DocPage() {
           fileName: doc.fileName,
           contentType: blob.type || "application/pdf",
           base64Data,
+          category: finalCategory,
         },
       });
 
       if (res.alreadyExists) {
-        toast.warning("This document is already uploaded in the Global Library.", { id: toastId });
+        toast.warning(`Document is already uploaded in "${res.key}".`, { id: toastId });
       } else {
-        toast.success("Document uploaded to Global Library successfully!", { id: toastId });
+        toast.success(`Uploaded successfully under folder prefix "${res.category}/"!`, { id: toastId });
       }
     } catch (e: any) {
       console.error(e);
@@ -613,6 +632,71 @@ function DocPage() {
           </section>
         </main>
       </ClientOnly>
+
+      {/* Category Selection Modal for R2 Upload */}
+      <Dialog open={showUploadCategoryModal} onOpenChange={setShowUploadCategoryModal}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Select R2 Category Folder</DialogTitle>
+            <DialogDescription>
+              Choose a category folder prefix to store this PDF in the shared Cloudflare R2 bucket.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 py-3">
+            <div className="grid grid-cols-2 gap-2">
+              {[
+                { id: "history", label: "📜 History", desc: "history/" },
+                { id: "economics", label: "📈 Economics", desc: "economics/" },
+                { id: "geography", label: "🌍 Geography", desc: "geography/" },
+                { id: "civics", label: "🏛️ Civics", desc: "civics/" },
+                { id: "science", label: "🔬 Science", desc: "science/" },
+                { id: "custom", label: "✏️ Custom", desc: "Custom prefix" },
+              ].map((cat) => (
+                <button
+                  key={cat.id}
+                  type="button"
+                  onClick={() => setCategoryChoice(cat.id)}
+                  className={`flex flex-col items-start rounded-lg border p-3 text-left transition-all ${
+                    categoryChoice === cat.id
+                      ? "border-primary bg-primary/10 text-foreground ring-1 ring-primary"
+                      : "border-border bg-surface hover:bg-surface-2 text-muted-foreground"
+                  }`}
+                >
+                  <span className="font-semibold text-sm">{cat.label}</span>
+                  <span className="text-[11px] font-mono text-muted-foreground">{cat.desc}</span>
+                </button>
+              ))}
+            </div>
+            {categoryChoice === "custom" && (
+              <div className="space-y-1">
+                <label className="text-xs font-medium text-foreground">Custom Category Name</label>
+                <input
+                  type="text"
+                  placeholder="e.g. mathematics, philosophy"
+                  value={customCategoryInput}
+                  onChange={(e) => setCustomCategoryInput(e.target.value)}
+                  className="w-full rounded-md border border-border bg-surface px-3 py-2 text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-primary"
+                />
+              </div>
+            )}
+          </div>
+          <DialogFooter>
+            <button
+              onClick={() => setShowUploadCategoryModal(false)}
+              className="rounded-lg border border-border px-4 py-2 text-xs font-semibold text-muted-foreground hover:bg-surface-2 transition-colors"
+            >
+              Cancel
+            </button>
+            <button
+              onClick={confirmCategoryUpload}
+              disabled={categoryChoice === "custom" && !customCategoryInput.trim()}
+              className="rounded-lg bg-primary px-4 py-2 text-xs font-semibold text-primary-foreground hover:opacity-90 disabled:opacity-50 transition-opacity"
+            >
+              Upload to Category
+            </button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

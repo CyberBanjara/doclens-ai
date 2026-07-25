@@ -53,8 +53,33 @@ async function getS3Client() {
   };
 }
 
+export function sanitizeCategory(cat?: string): string {
+  if (!cat) return "uncategorized";
+  const clean = cat
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9_-]/g, "-")
+    .replace(/-+/g, "-")
+    .replace(/^-|-$/g, "");
+  return clean || "uncategorized";
+}
+
+export function inferCategoryFromKey(key: string): string {
+  const parts = key.split("/");
+  if (parts.length > 1 && parts[0].trim().length > 0) {
+    return sanitizeCategory(parts[0]);
+  }
+  const lower = key.toLowerCase();
+  if (lower.includes("hist")) return "history";
+  if (lower.includes("econ") || lower.includes("finan")) return "economics";
+  if (lower.includes("geo")) return "geography";
+  if (lower.includes("civ") || lower.includes("pol") || lower.includes("gov")) return "civics";
+  if (lower.includes("sci") || lower.includes("bio") || lower.includes("chem") || lower.includes("phys")) return "science";
+  return "uncategorized";
+}
+
 export const uploadToR2 = createServerFn({ method: "POST" })
-  .validator((input: { fileName: string; contentType: string; base64Data: string }) => input)
+  .validator((input: { fileName: string; contentType: string; base64Data: string; category?: string }) => input)
   .handler(async ({ data }) => {
     "use server";
     const isSyncEnabled =
@@ -70,9 +95,16 @@ export const uploadToR2 = createServerFn({ method: "POST" })
       const buffer = Buffer.from(data.base64Data, "base64");
       const digest = crypto.createHash("md5").update(buffer).digest("hex");
 
+      const cleanFileName = data.fileName.includes("/")
+        ? data.fileName.split("/").pop() || data.fileName
+        : data.fileName;
+
+      const category = sanitizeCategory(data.category || inferCategoryFromKey(data.fileName));
+      const targetKey = `${category}/${cleanFileName}`;
+
       const cmd = new sdk.PutObjectCommand({
         Bucket: bucketName,
-        Key: data.fileName,
+        Key: targetKey,
         Body: buffer,
         ContentLength: buffer.length,
         ContentType: data.contentType || "application/octet-stream",
@@ -94,17 +126,24 @@ export const uploadToR2 = createServerFn({ method: "POST" })
 
       return {
         success: true,
-        key: data.fileName,
-        url: publicBaseUrl ? `${publicBaseUrl}/${data.fileName}` : undefined,
+        key: targetKey,
+        category,
+        url: publicBaseUrl ? `${publicBaseUrl}/${targetKey}` : undefined,
       };
     } catch (err: any) {
       if (err?.$metadata?.httpStatusCode === 412) {
         const { publicBaseUrl } = await getS3Client();
+        const cleanFileName = data.fileName.includes("/")
+          ? data.fileName.split("/").pop() || data.fileName
+          : data.fileName;
+        const category = sanitizeCategory(data.category || inferCategoryFromKey(data.fileName));
+        const targetKey = `${category}/${cleanFileName}`;
         return {
           success: true,
           alreadyExists: true,
-          key: data.fileName,
-          url: publicBaseUrl ? `${publicBaseUrl}/${data.fileName}` : undefined,
+          key: targetKey,
+          category,
+          url: publicBaseUrl ? `${publicBaseUrl}/${targetKey}` : undefined,
         };
       }
       console.error("R2 Upload error:", err);
@@ -233,3 +272,65 @@ export const downloadFromR2 = createServerFn({ method: "POST" })
       throw new Error(err?.message || `Failed to download file "${data.key}" from R2.`);
     }
   });
+
+export const reorganizeR2Files = createServerFn({ method: "POST" }).handler(async () => {
+  "use server";
+  try {
+    const { s3, bucketName, sdk } = await getS3Client();
+    let continuationToken: string | undefined;
+    const movedFiles: { oldKey: string; newKey: string; category: string }[] = [];
+
+    do {
+      const data = await s3.send(
+        new sdk.ListObjectsV2Command({
+          Bucket: bucketName,
+          ContinuationToken: continuationToken,
+        })
+      );
+
+      for (const obj of data.Contents || []) {
+        if (!obj.Key) continue;
+        const oldKey = obj.Key;
+
+        // If file is already categorized (has prefix followed by filename)
+        const parts = oldKey.split("/");
+        if (parts.length > 1 && parts[0].trim().length > 0 && parts[1].trim().length > 0) {
+          continue; // Already organized in virtual folder
+        }
+
+        const fileName = parts.pop() || oldKey;
+        const category = inferCategoryFromKey(fileName);
+        const newKey = `${category}/${fileName}`;
+
+        if (newKey !== oldKey) {
+          await s3.send(
+            new sdk.CopyObjectCommand({
+              Bucket: bucketName,
+              CopySource: encodeURI(`${bucketName}/${oldKey}`),
+              Key: newKey,
+            })
+          );
+          await s3.send(
+            new sdk.DeleteObjectCommand({
+              Bucket: bucketName,
+              Key: oldKey,
+            })
+          );
+          movedFiles.push({ oldKey, newKey, category });
+        }
+      }
+
+      continuationToken = data.IsTruncated ? data.NextContinuationToken : undefined;
+    } while (continuationToken);
+
+    return {
+      success: true,
+      movedCount: movedFiles.length,
+      movedFiles,
+    };
+  } catch (err: any) {
+    console.error("R2 Reorganize error:", err);
+    throw new Error(err?.message || "Failed to reorganize R2 bucket files.");
+  }
+});
+
