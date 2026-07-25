@@ -205,6 +205,37 @@ function GlobalLibraryPage() {
       const arrayBuffer = await docFile.arrayBuffer();
 
       const docRec = await createDoc(docFile, arrayBuffer);
+
+      // Retrieve saved translation config from Supabase or active settings & sync
+      try {
+        const { fetchSupabaseExtraction } = await import("@/lib/supabase");
+        const { applyTranslationConfig, getTranslationConfig } = await import("@/lib/openrouter");
+        const { syncFromSupabase } = await import("@/lib/sync");
+
+        const supaRes = await fetchSupabaseExtraction({ data: { key: file.key } });
+        if (supaRes && supaRes.found && supaRes.record?.text) {
+          try {
+            const parsed = JSON.parse(supaRes.record.text);
+            if (parsed && typeof parsed === "object" && parsed.translationConfig) {
+              applyTranslationConfig(parsed.translationConfig, docRec.id);
+            } else {
+              applyTranslationConfig(getTranslationConfig(), docRec.id);
+            }
+          } catch {
+            applyTranslationConfig(getTranslationConfig(), docRec.id);
+          }
+        } else {
+          applyTranslationConfig(getTranslationConfig(), docRec.id);
+        }
+
+        // Sync pages & AI outputs from Supabase
+        await syncFromSupabase(docRec.id, file.key);
+      } catch (syncErr) {
+        console.warn("Error loading translation settings from Supabase:", syncErr);
+        const { applyTranslationConfig, getTranslationConfig } = await import("@/lib/openrouter");
+        applyTranslationConfig(getTranslationConfig(), docRec.id);
+      }
+
       toast.success(`Successfully imported "${cleanName}" to your local library!`, { id: toastId });
 
       navigate({ to: "/doc/$id", params: { id: docRec.id } });
@@ -272,6 +303,27 @@ function GlobalLibraryPage() {
           category: targetCat,
         },
       });
+
+      if (syncEnabled) {
+        try {
+          const { saveSupabaseExtraction } = await import("@/lib/supabase");
+          const { getTranslationConfig } = await import("@/lib/openrouter");
+          const translationConfig = getTranslationConfig();
+          await saveSupabaseExtraction({
+            data: {
+              key: res.key,
+              size: uploadFile.size,
+              lastModified: new Date().toISOString(),
+              numPages: 0,
+              text: JSON.stringify({ version: 1, pages: [], translationConfig }),
+              usedOcr: false,
+              translationConfig,
+            },
+          });
+        } catch (supaErr) {
+          console.warn("Failed to initialize Supabase metadata for upload:", supaErr);
+        }
+      }
 
       if (res.alreadyExists) {
         toast.warning(`File is already uploaded under key "${res.key}".`, { id: toastId });

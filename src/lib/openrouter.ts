@@ -178,6 +178,48 @@ export function setTemperature(t: number) {
   localStorage.setItem(TEMP_LS, String(t));
 }
 
+export interface TranslationConfig {
+  language: string;
+  mode: GlobalMode;
+  modelId: string;
+  style: ExplanationStyle;
+  temperature: number;
+}
+
+export function getTranslationConfig(): TranslationConfig {
+  return {
+    language: getOutputLanguage(),
+    mode: getMode(),
+    modelId: getSelectedModel(),
+    style: getStyle(),
+    temperature: getTemperature(),
+  };
+}
+
+export function applyTranslationConfig(config: Partial<TranslationConfig>, docId?: string): void {
+  if (typeof window === "undefined") return;
+
+  if (config.language) {
+    setOutputLanguage(config.language);
+  }
+  if (config.mode) {
+    setMode(config.mode);
+  }
+  if (config.modelId) {
+    setSelectedModel(config.modelId);
+  }
+  if (config.style) {
+    setStyle(config.style);
+  }
+  if (typeof config.temperature === "number" && !isNaN(config.temperature)) {
+    setTemperature(config.temperature);
+  }
+
+  if (docId) {
+    localStorage.setItem(`doclens.explain.setup.${docId}`, "1");
+  }
+}
+
 const HEADERS_BASE = {
   "HTTP-Referer": "https://doclens.app",
   "X-Title": "DocLens",

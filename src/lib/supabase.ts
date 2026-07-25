@@ -80,6 +80,13 @@ export const saveSupabaseExtraction = createServerFn({ method: "POST" })
       numPages: number;
       text: string;
       usedOcr: boolean;
+      translationConfig?: {
+        language?: string;
+        mode?: string;
+        modelId?: string;
+        style?: string;
+        temperature?: number;
+      };
     }) => input
   )
   .handler(async ({ data }) => {
@@ -98,6 +105,27 @@ export const saveSupabaseExtraction = createServerFn({ method: "POST" })
         return { success: false, error: "Supabase URL or Key is missing from environment variables." };
       }
 
+      let finalText = data.text;
+      if (data.translationConfig) {
+        try {
+          const parsed = JSON.parse(finalText);
+          if (parsed && typeof parsed === "object") {
+            parsed.translationConfig = {
+              ...(parsed.translationConfig || {}),
+              ...data.translationConfig,
+            };
+            finalText = JSON.stringify(parsed);
+          }
+        } catch {
+          finalText = JSON.stringify({
+            version: 1,
+            text: data.text,
+            pages: [],
+            translationConfig: data.translationConfig,
+          });
+        }
+      }
+
       const { error } = await supabase
         .from("pdf_extractions")
         .upsert(
@@ -107,7 +135,7 @@ export const saveSupabaseExtraction = createServerFn({ method: "POST" })
             size: data.size,
             last_modified: data.lastModified || "",
             num_pages: data.numPages,
-            text: data.text,
+            text: finalText,
             used_ocr: data.usedOcr,
             extracted_at: new Date().toISOString(),
           },

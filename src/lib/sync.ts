@@ -37,8 +37,14 @@ export async function syncFromSupabase(docId: string, fileName: string): Promise
 
     try {
       const parsed = JSON.parse(text);
-      if (parsed && parsed.version === 1 && Array.isArray(parsed.pages)) {
-        pagesData = parsed.pages;
+      if (parsed && typeof parsed === "object") {
+        if (parsed.translationConfig) {
+          const { applyTranslationConfig } = await import("./openrouter");
+          applyTranslationConfig(parsed.translationConfig, docId);
+        }
+        if (parsed.version === 1 && Array.isArray(parsed.pages)) {
+          pagesData = parsed.pages;
+        }
       }
     } catch {
       // Not JSON, fallback to plain text
@@ -143,8 +149,12 @@ export async function syncToSupabase(docId: string): Promise<void> {
     const pages = await getAllPages(docId);
     if (pages.length === 0) return;
 
+    const { getTranslationConfig } = await import("./openrouter");
+    const translationConfig = getTranslationConfig();
+
     const payload = {
       version: 1,
+      translationConfig,
       pages: pages.map((p) => ({
         pageNumber: p.pageNumber,
         text: p.text,
@@ -166,6 +176,7 @@ export async function syncToSupabase(docId: string): Promise<void> {
         numPages: docRec.pageCount || pages.length,
         text: serializedText,
         usedOcr,
+        translationConfig,
       },
     });
   } catch (e) {
