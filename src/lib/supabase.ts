@@ -37,6 +37,7 @@ export const fetchSupabaseExtraction = createServerFn({ method: "POST" })
         return { found: false, error: "Supabase URL or Key is missing from environment variables." };
       }
 
+      console.log(`[Supabase] -> SELECT pdf_extractions WHERE id="${data.key}"`);
       const { data: record, error } = await supabase
         .from("pdf_extractions")
         .select("*")
@@ -126,6 +127,7 @@ export const saveSupabaseExtraction = createServerFn({ method: "POST" })
         }
       }
 
+      console.log(`[Supabase] -> UPSERT pdf_extractions id="${data.key}"`);
       const { error } = await supabase
         .from("pdf_extractions")
         .upsert(

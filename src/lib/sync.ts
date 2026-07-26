@@ -10,7 +10,6 @@ export const getSyncConfig = createServerFn({ method: "GET" })
       process.env.VITE_ENABLE_GLOBAL_SYNC === "true" ||
       (import.meta as any).env?.ENABLE_GLOBAL_SYNC === "true" ||
       (import.meta as any).env?.VITE_ENABLE_GLOBAL_SYNC === "true";
-    console.log(`[Server] resolved ENABLE_GLOBAL_SYNC to: ${enabled}`);
     return {
       enabled,
     };

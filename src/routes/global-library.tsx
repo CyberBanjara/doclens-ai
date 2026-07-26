@@ -1,5 +1,5 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 import {
   Download,
@@ -14,7 +14,8 @@ import {
   Zap,
 } from "lucide-react";
 import { SidebarLayout } from "@/components/SidebarLayout";
-import { listR2Files, deleteFromR2, downloadFromR2, uploadToR2, reorganizeR2Files } from "@/lib/r2";
+import { deleteFromR2, downloadFromR2, uploadToR2, reorganizeR2Files } from "@/lib/r2";
+import { getCachedR2Files, setCachedR2Files } from "@/lib/r2-cache";
 import { createDoc } from "@/lib/storage";
 import { LoadingLogo } from "@/components/LoadingLogo";
 import { getSyncConfig } from "@/lib/sync";
@@ -124,6 +125,94 @@ function parseFileCategory(file: R2File): ParsedR2File {
   return { ...file, category: "uncategorized", displayName: file.key };
 }
 
+interface CategoryMarqueeItem {
+  key: string;
+  label: string;
+  icon?: string;
+  active: boolean;
+  onClick: () => void;
+}
+
+/**
+ * Slow, continuously auto-scrolling category row for the mobile Global Library.
+ * The list is duplicated so the loop can wrap seamlessly, and auto-scroll pauses
+ * while the user is actively touching/dragging so manual swipes and taps still work.
+ */
+function CategoryMarqueeRow({ items }: { items: CategoryMarqueeItem[] }) {
+  const containerRef = useRef<HTMLDivElement>(null);
+  const pausedRef = useRef(false);
+  const resumeTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => {
+    const el = containerRef.current;
+    if (!el) return;
+    if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+
+    const speed = 0.35; // px/frame — slow, continuous drift
+    let frameId: number;
+    // Track position as a float ourselves: reading `el.scrollLeft` back rounds to
+    // an integer each frame, so accumulating via `el.scrollLeft += speed` would
+    // never progress past 0 for a sub-1px-per-frame speed.
+    let pos = el.scrollLeft;
+
+    const step = () => {
+      if (!pausedRef.current) {
+        const halfWidth = el.scrollWidth / 2;
+        pos += speed;
+        if (halfWidth > 0 && pos >= halfWidth) {
+          pos -= halfWidth;
+        }
+        el.scrollLeft = pos;
+      } else {
+        // Stay in sync with any manual scrolling the user did while paused.
+        pos = el.scrollLeft;
+      }
+      frameId = requestAnimationFrame(step);
+    };
+    frameId = requestAnimationFrame(step);
+
+    return () => cancelAnimationFrame(frameId);
+  }, []);
+
+  const pause = () => {
+    pausedRef.current = true;
+    if (resumeTimeoutRef.current) clearTimeout(resumeTimeoutRef.current);
+  };
+  const scheduleResume = () => {
+    if (resumeTimeoutRef.current) clearTimeout(resumeTimeoutRef.current);
+    resumeTimeoutRef.current = setTimeout(() => {
+      pausedRef.current = false;
+    }, 2000);
+  };
+
+  return (
+    <div
+      ref={containerRef}
+      onPointerDown={pause}
+      onPointerUp={scheduleResume}
+      onPointerLeave={scheduleResume}
+      onTouchStart={pause}
+      onTouchEnd={scheduleResume}
+      className="-mx-4 flex gap-2 overflow-x-auto px-4 pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+    >
+      {[...items, ...items].map((item, idx) => (
+        <button
+          key={`${item.key}-${idx}`}
+          onClick={item.onClick}
+          className={`flex-shrink-0 rounded-full px-4 py-1.5 text-xs font-medium transition-colors ${
+            item.active
+              ? "bg-primary text-primary-foreground"
+              : "bg-surface-2 text-muted-foreground"
+          }`}
+        >
+          {item.icon ? `${item.icon} ` : ""}
+          {item.label}
+        </button>
+      ))}
+    </div>
+  );
+}
+
 function GlobalLibraryPage() {
   const isMobile = useIsMobile();
   const navigate = useNavigate();
@@ -149,11 +238,11 @@ function GlobalLibraryPage() {
   // Reorganize state
   const [reorganizing, setReorganizing] = useState(false);
 
-  const fetchFiles = async (silent = false) => {
+  const fetchFiles = async (silent = false, forceRefresh = false) => {
     if (!silent) setLoading(true);
     setErrorMsg(null);
     try {
-      const res = await listR2Files();
+      const res = await getCachedR2Files({ forceRefresh });
       setFiles(res.files || []);
     } catch (e: any) {
       console.error(e);
@@ -281,7 +370,11 @@ function GlobalLibraryPage() {
     try {
       await deleteFromR2({ data: { key: target.key } });
       toast.success(`"${target.key}" deleted from Cloudflare R2.`, { id: toastId });
-      setFiles((prev) => prev.filter((f) => f.key !== target.key));
+      setFiles((prev) => {
+        const next = prev.filter((f) => f.key !== target.key);
+        setCachedR2Files(next);
+        return next;
+      });
     } catch (e: any) {
       console.error(e);
       toast.error(e?.message || "Failed to delete file from R2.", { id: toastId });
@@ -306,7 +399,7 @@ function GlobalLibraryPage() {
           id: toastId,
         });
       }
-      await fetchFiles(true);
+      await fetchFiles(true, true);
     } catch (e: any) {
       console.error(e);
       toast.error(e?.message || "Failed to reorganise R2 bucket.", { id: toastId });
@@ -367,7 +460,7 @@ function GlobalLibraryPage() {
 
       setShowUploadModal(false);
       setUploadFile(null);
-      await fetchFiles(true);
+      await fetchFiles(true, true);
     } catch (e: any) {
       console.error(e);
       toast.error(e?.message || "Failed to upload file to Cloudflare R2.", { id: toastId });
@@ -401,7 +494,7 @@ function GlobalLibraryPage() {
             </button>
           )}
           <button
-            onClick={() => void fetchFiles()}
+            onClick={() => void fetchFiles(false, true)}
             disabled={loading || !!importingKey || !!deletingKey || reorganizing}
             className="flex h-8 w-8 items-center justify-center rounded-lg border border-border bg-surface text-muted-foreground transition-colors hover:bg-surface-2 hover:text-foreground disabled:opacity-50"
             aria-label="Refresh"
@@ -418,7 +511,7 @@ function GlobalLibraryPage() {
             <div className="rounded-2xl border border-destructive/40 bg-destructive/10 p-5 text-center">
               <p className="text-sm text-foreground/90">{errorMsg}</p>
               <button
-                onClick={() => void fetchFiles()}
+                onClick={() => void fetchFiles(false, true)}
                 className="mt-3 rounded-full bg-primary px-4 py-1.5 text-xs font-semibold text-primary-foreground transition-transform active:scale-95"
               >
                 Retry
@@ -440,7 +533,7 @@ function GlobalLibraryPage() {
                     <Zap className="h-3.5 w-3.5" /> {reorganizing ? "Organising…" : "Organise"}
                   </button>
                   <button
-                    onClick={() => void fetchFiles()}
+                    onClick={() => void fetchFiles(false, true)}
                     disabled={loading}
                     className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-xl border border-border bg-surface text-muted-foreground transition-transform active:scale-95 disabled:opacity-50"
                     aria-label="Refresh"
@@ -470,39 +563,30 @@ function GlobalLibraryPage() {
                 )}
               </div>
 
-              <div className="-mx-4 flex gap-2 overflow-x-auto px-4 pb-1">
-                <button
-                  onClick={() => setActiveCategory("all")}
-                  className={`flex-shrink-0 rounded-full px-4 py-1.5 text-xs font-medium transition-colors ${
-                    activeCategory === "all"
-                      ? "bg-primary text-primary-foreground"
-                      : "bg-surface-2 text-muted-foreground"
-                  }`}
-                >
-                  All ({files.length})
-                </button>
-                {categoriesList.map((catKey) => {
-                  const meta = STANDARD_CATEGORIES[catKey] || {
-                    label: catKey.charAt(0).toUpperCase() + catKey.slice(1),
-                    icon: "📂",
-                  };
-                  const stats = categoryStats[catKey] || { count: 0, totalSize: 0 };
-                  const isActive = activeCategory === catKey;
-                  return (
-                    <button
-                      key={catKey}
-                      onClick={() => setActiveCategory(catKey)}
-                      className={`flex-shrink-0 rounded-full px-4 py-1.5 text-xs font-medium transition-colors ${
-                        isActive
-                          ? "bg-primary text-primary-foreground"
-                          : "bg-surface-2 text-muted-foreground"
-                      }`}
-                    >
-                      {meta.icon} {meta.label} ({stats.count})
-                    </button>
-                  );
-                })}
-              </div>
+              <CategoryMarqueeRow
+                items={[
+                  {
+                    key: "all",
+                    label: `All (${files.length})`,
+                    active: activeCategory === "all",
+                    onClick: () => setActiveCategory("all"),
+                  },
+                  ...categoriesList.map((catKey) => {
+                    const meta = STANDARD_CATEGORIES[catKey] || {
+                      label: catKey.charAt(0).toUpperCase() + catKey.slice(1),
+                      icon: "📂",
+                    };
+                    const stats = categoryStats[catKey] || { count: 0, totalSize: 0 };
+                    return {
+                      key: catKey,
+                      label: `${meta.label} (${stats.count})`,
+                      icon: meta.icon,
+                      active: activeCategory === catKey,
+                      onClick: () => setActiveCategory(catKey),
+                    };
+                  }),
+                ]}
+              />
 
               {filteredFiles.length === 0 ? (
                 <div className="flex flex-col items-center gap-2 rounded-3xl border border-dashed border-border py-16 text-center">
@@ -592,7 +676,7 @@ function GlobalLibraryPage() {
                   `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY`, `R2_BUCKET_NAME`) in your `.env` file.
                 </p>
                 <button
-                  onClick={() => void fetchFiles()}
+                  onClick={() => void fetchFiles(false, true)}
                   className="mt-4 rounded-full bg-primary px-4 py-1.5 font-mono text-[11px] uppercase tracking-widest text-primary-foreground hover:opacity-90 active:scale-95 transition-all shadow-sm"
                 >
                   Retry

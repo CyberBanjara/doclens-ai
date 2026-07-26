@@ -122,6 +122,7 @@ export const uploadToR2 = createServerFn({ method: "POST" })
         }
       );
 
+      console.log(`[R2] -> PutObject "${targetKey}"`);
       await s3.send(cmd);
 
       return {
@@ -160,6 +161,7 @@ export const listR2Files = createServerFn({ method: "GET" })
       let continuationToken: string | undefined;
 
       do {
+        console.log("[R2] -> ListObjectsV2", continuationToken ? `(continuation)` : "");
         const data = await s3.send(
           new sdk.ListObjectsV2Command({
             Bucket: bucketName,
@@ -201,6 +203,7 @@ export const deleteFromR2 = createServerFn({ method: "POST" })
     }
     try {
       const { s3, bucketName, sdk } = await getS3Client();
+      console.log(`[R2] -> DeleteObject "${data.key}"`);
       await s3.send(
         new sdk.DeleteObjectCommand({
           Bucket: bucketName,
@@ -220,6 +223,7 @@ export const downloadFromR2 = createServerFn({ method: "POST" })
     "use server";
     try {
       const { s3, bucketName, sdk } = await getS3Client();
+      console.log(`[R2] -> GetObject "${data.key}"`);
       const response = await s3.send(
         new sdk.GetObjectCommand({
           Bucket: bucketName,
@@ -281,6 +285,7 @@ export const reorganizeR2Files = createServerFn({ method: "POST" }).handler(asyn
     const movedFiles: { oldKey: string; newKey: string; category: string }[] = [];
 
     do {
+      console.log("[R2] -> ListObjectsV2", continuationToken ? `(continuation)` : "");
       const data = await s3.send(
         new sdk.ListObjectsV2Command({
           Bucket: bucketName,
@@ -303,6 +308,7 @@ export const reorganizeR2Files = createServerFn({ method: "POST" }).handler(asyn
         const newKey = `${category}/${fileName}`;
 
         if (newKey !== oldKey) {
+          console.log(`[R2] -> CopyObject "${oldKey}" -> "${newKey}"`);
           await s3.send(
             new sdk.CopyObjectCommand({
               Bucket: bucketName,
@@ -310,6 +316,7 @@ export const reorganizeR2Files = createServerFn({ method: "POST" }).handler(asyn
               Key: newKey,
             })
           );
+          console.log(`[R2] -> DeleteObject "${oldKey}"`);
           await s3.send(
             new sdk.DeleteObjectCommand({
               Bucket: bucketName,
