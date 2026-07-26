@@ -1,5 +1,7 @@
 import { Link } from "@tanstack/react-router";
+import { FileText, HardDrive, Trash2 } from "lucide-react";
 import { useThumbnail } from "@/hooks/useThumbnail";
+import { useIsMobile } from "@/hooks/use-mobile";
 import type { DocSummary } from "@/lib/storage";
 
 interface DocumentCardProps {
@@ -8,6 +10,7 @@ interface DocumentCardProps {
 }
 
 export function DocumentCard({ doc, onDelete }: DocumentCardProps) {
+  const isMobile = useIsMobile();
   const { thumbnailUrl, loading } = useThumbnail(doc.id);
 
   return (
@@ -71,11 +74,11 @@ export function DocumentCard({ doc, onDelete }: DocumentCardProps) {
       <div className="mt-auto flex items-center justify-between border-t border-border/30 pt-3">
         <div className="flex gap-4">
           <div className="flex items-center gap-1 text-muted-foreground">
-            <span className="text-xs">📄</span>
+            <FileText className="h-3.5 w-3.5" />
             <span className="text-[11px] font-bold">{doc.pageCount || "—"} Pgs</span>
           </div>
           <div className="flex items-center gap-1 text-muted-foreground">
-            <span className="text-xs">💾</span>
+            <HardDrive className="h-3.5 w-3.5" />
             <span className="text-[11px] font-bold">
               {doc.fileSize >= 1024 * 1024
                 ? `${(doc.fileSize / (1024 * 1024)).toFixed(1)} MB`
@@ -83,25 +86,16 @@ export function DocumentCard({ doc, onDelete }: DocumentCardProps) {
             </span>
           </div>
         </div>
+        {/* Hover-reveal works on desktop; on touch devices there's no hover, so
+            the delete affordance must stay visible there instead. */}
         <button
           onClick={(e) => onDelete(doc, e)}
-          className="rounded p-1 text-muted-foreground opacity-0 transition-all hover:text-destructive group-hover:opacity-100"
+          className={`rounded p-1 text-muted-foreground transition-all hover:text-destructive ${
+            isMobile ? "opacity-100" : "opacity-0 group-hover:opacity-100"
+          }`}
           aria-label="Delete document"
         >
-          <svg
-            xmlns="http://www.w3.org/2000/svg"
-            className="h-4 w-4"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth={2}
-          >
-            <path
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              d="M12 6.75a.75.75 0 110-1.5.75.75 0 010 1.5zM12 12.75a.75.75 0 110-1.5.75.75 0 010 1.5zM12 18.75a.75.75 0 110-1.5.75.75 0 010 1.5z"
-            />
-          </svg>
+          <Trash2 className="h-4 w-4" />
         </button>
       </div>
     </Link>

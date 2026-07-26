@@ -30,12 +30,12 @@ export function AppHeader({ right }: { right?: React.ReactNode }) {
       <Link to="/" className="flex items-center gap-3 group">
         <img
           src="/light_13746323.png"
-          alt="DocLens Logo"
+          alt="Anuwad Logo"
           className="h-9 w-9 object-contain rounded-lg shadow-[0_0_18px_rgba(78,222,163,0.2)]"
         />
         <div className="flex items-baseline gap-2 min-w-0">
           <h1 className="text-lg font-black tracking-tight text-primary transition-colors group-hover:text-foreground">
-            DocLens
+            Anuwad
           </h1>
           <span className="hidden font-mono text-[10px] uppercase tracking-[0.22em] text-muted-foreground sm:inline">
             AI Intelligence

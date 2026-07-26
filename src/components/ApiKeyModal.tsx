@@ -81,7 +81,7 @@ export function ApiKeyModal() {
         <DialogHeader>
           <DialogTitle>OpenRouter API Key Setup</DialogTitle>
           <DialogDescription>
-            DocLens can use the server-wide environment key or you can supply your own custom key
+            Anuwad can use the server-wide environment key or you can supply your own custom key
             (saved locally in your browser).
           </DialogDescription>
         </DialogHeader>

@@ -1,5 +1,5 @@
 /**
- * Theme engine for DocLens AI.
+ * Theme engine for Anuwad.
  *
  * Provides 12 built-in themes (6 light, 6 dark) + a "system" auto mode.
  * Persists the user's choice in localStorage and applies CSS custom-property

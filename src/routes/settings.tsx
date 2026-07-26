@@ -1,5 +1,20 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useEffect, useMemo, useState } from "react";
+import {
+  Brain,
+  CircleCheck,
+  Cpu,
+  FolderOpen,
+  KeyRound,
+  Languages,
+  Loader2,
+  Search,
+  Sparkles,
+  Star,
+  Trash2,
+  VolumeX,
+  Zap,
+} from "lucide-react";
 import { SidebarLayout } from "@/components/SidebarLayout";
 import {
   fetchModels,
@@ -26,10 +41,7 @@ import {
 } from "@/lib/openrouter";
 import { estimateStorage, clearAllAiResults, createDoc, StorageError } from "@/lib/storage";
 import { toast } from "sonner";
-import {
-  clearAllVoiceCache,
-  isOpfsSupported,
-} from "@/lib/voiceCache";
+import { clearAllVoiceCache, isOpfsSupported } from "@/lib/voiceCache";
 import { filterVoicesByLanguage, getLanguageEnglishName, LANGUAGES } from "@/lib/voiceLanguageMap";
 import { markTtsVoiceSetupComplete, useTts } from "@/context/TtsContext";
 import { getFriendlyErrorMessage } from "@/lib/network";
@@ -37,7 +49,22 @@ import { getFriendlyErrorMessage } from "@/lib/network";
 export const Route = createFileRoute("/settings")({
   component: SettingsPage,
   head: () => ({
-    meta: [{ title: "Anuwad — General Settings" }],
+    meta: [
+      { title: "Anuwad — General Settings" },
+      {
+        name: "description",
+        content:
+          "Configure Anuwad's AI translation model, output language, explanation style, and API key — all stored locally in your browser.",
+      },
+      { property: "og:title", content: "Anuwad — General Settings" },
+      {
+        property: "og:description",
+        content: "Configure Anuwad's AI translation model, output language, and API key.",
+      },
+      { property: "og:url", content: "https://www.anuwad.com/settings" },
+      { property: "og:type", content: "website" },
+    ],
+    links: [{ rel: "canonical", href: "https://www.anuwad.com/settings" }],
   }),
 });
 
@@ -135,7 +162,12 @@ function SettingsPage() {
   };
 
   const handleClearVoiceCache = async () => {
-    if (!confirm("Are you sure you want to delete all cached neural voice packs? This will require re-downloading them next time they are used.")) return;
+    if (
+      !confirm(
+        "Are you sure you want to delete all cached neural voice packs? This will require re-downloading them next time they are used.",
+      )
+    )
+      return;
     try {
       await clearAllVoiceCache();
       toast.success("Voice cache cleared successfully!");
@@ -287,9 +319,9 @@ function SettingsPage() {
         </span>
       }
     >
-      <div className="mx-auto max-w-7xl space-y-8 p-8 pb-28">
-        {/* Page Header */}
-        <header>
+      <div className="mx-auto max-w-7xl space-y-6 p-4 pb-28 md:space-y-8 md:p-8">
+        {/* Page Header — hidden on mobile, the top bar already shows "General Settings" */}
+        <header className="hidden md:block">
           <h3 className="text-4xl font-bold tracking-tight text-foreground">General Settings</h3>
           <p className="mt-2 text-base text-muted-foreground">
             Configure your AI intelligence core and global defaults.
@@ -297,9 +329,9 @@ function SettingsPage() {
         </header>
 
         {/* Row 1: AI Pipeline Defaults (full width) at the top */}
-        <section className="glass-panel rounded-[18px] p-6">
+        <section className="glass-panel rounded-[18px] p-4 md:p-6">
           <div className="mb-6 flex items-center gap-3">
-            <span className="text-xl text-accent">⚡</span>
+            <Zap className="h-5 w-5 text-accent" />
             <h3 className="text-lg font-semibold text-foreground">AI Pipeline Defaults</h3>
           </div>
           <div className="grid grid-cols-1 gap-6 md:grid-cols-3">
@@ -380,9 +412,9 @@ function SettingsPage() {
         {/* Row 2: Two-column layout (Output Language on left, Natural Voice Cache Manager on right) */}
         <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
           {/* Output Language */}
-          <section className="glass-panel flex flex-col gap-4 rounded-[18px] p-6">
+          <section className="glass-panel flex flex-col gap-4 rounded-[18px] p-4 md:p-6">
             <div className="flex items-center gap-3">
-              <span className="text-xl text-primary">🌐</span>
+              <Languages className="h-5 w-5 text-primary" />
               <h3 className="text-lg font-semibold text-foreground">Output Language</h3>
             </div>
             <p className="text-sm text-muted-foreground">
@@ -396,94 +428,111 @@ function SettingsPage() {
                 placeholder="Search or type a custom language..."
                 className="w-full rounded-[10px] border border-border bg-background py-2 pl-10 pr-4 text-sm outline-none transition-colors focus:border-primary"
               />
-              <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground">
-                🔍
-              </span>
+              <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
             </div>
             {/* Language Cards Grid */}
-            <div className="grid gap-3 overflow-y-auto max-h-[480px] pr-1" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(130px, 1fr))' }}>
-              {LANGUAGES
-                .filter((l) => {
-                  if (!customLang.trim()) return true;
-                  const q = customLang.trim().toLowerCase();
-                  return (
-                    l.native.toLowerCase().includes(q) ||
-                    l.english.toLowerCase().includes(q) ||
-                    l.id.toLowerCase().includes(q)
-                  );
-                })
-                .map((l) => {
-                  const isSelected = language === l.id;
-                  return (
-                    <button
-                      key={l.id}
-                      onClick={() => handleLangSelect(l.id)}
-                      className={`group relative flex flex-col items-center justify-center gap-1 rounded-[16px] border px-3 py-4 text-center transition-all duration-300 active:scale-[0.97] hover:shadow-lg ${
-                        isSelected
-                          ? "border-primary/50 bg-primary/10 ring-1 ring-primary/30 shadow-[0_0_20px_-4px] shadow-primary/25"
-                          : "border-border bg-surface/30 hover:border-border-strong hover:bg-surface/60"
+            <div
+              className="grid gap-3 md:max-h-[480px] md:overflow-y-auto md:pr-1"
+              style={{ gridTemplateColumns: "repeat(auto-fill, minmax(130px, 1fr))" }}
+            >
+              {LANGUAGES.filter((l) => {
+                if (!customLang.trim()) return true;
+                const q = customLang.trim().toLowerCase();
+                return (
+                  l.native.toLowerCase().includes(q) ||
+                  l.english.toLowerCase().includes(q) ||
+                  l.id.toLowerCase().includes(q)
+                );
+              }).map((l) => {
+                const isSelected = language === l.id;
+                return (
+                  <button
+                    key={l.id}
+                    onClick={() => handleLangSelect(l.id)}
+                    className={`group relative flex flex-col items-center justify-center gap-1 rounded-[16px] border px-3 py-4 text-center transition-all duration-300 active:scale-[0.97] hover:shadow-lg ${
+                      isSelected
+                        ? "border-primary/50 bg-primary/10 ring-1 ring-primary/30 shadow-[0_0_20px_-4px] shadow-primary/25"
+                        : "border-border bg-surface/30 hover:border-border-strong hover:bg-surface/60"
+                    }`}
+                  >
+                    <span
+                      className={`text-lg font-bold leading-tight transition-transform duration-300 group-hover:scale-105 ${
+                        isSelected ? "text-primary" : "text-foreground"
                       }`}
                     >
-                      <span
-                        className={`text-lg font-bold leading-tight transition-transform duration-300 group-hover:scale-105 ${
-                          isSelected ? "text-primary" : "text-foreground"
-                        }`}
-                      >
-                        {l.native}
+                      {l.native}
+                    </span>
+                    <span
+                      className={`text-[10px] font-semibold uppercase tracking-wider transition-colors duration-300 ${
+                        isSelected
+                          ? "text-primary/80"
+                          : "text-muted-foreground group-hover:text-foreground/75"
+                      }`}
+                    >
+                      {l.english}
+                    </span>
+                    {isSelected && (
+                      <span className="absolute -top-1 -right-1 flex h-4.5 w-4.5 items-center justify-center rounded-full bg-primary text-[10px] text-primary-foreground shadow-md font-bold">
+                        ✓
                       </span>
-                      <span
-                        className={`text-[10px] font-semibold uppercase tracking-wider transition-colors duration-300 ${
-                          isSelected ? "text-primary/80" : "text-muted-foreground group-hover:text-foreground/75"
-                        }`}
-                      >
-                        {l.english}
-                      </span>
-                      {isSelected && (
-                        <span className="absolute -top-1 -right-1 flex h-4.5 w-4.5 items-center justify-center rounded-full bg-primary text-[10px] text-primary-foreground shadow-md font-bold">✓</span>
-                      )}
-                    </button>
-                  );
-                })}
+                    )}
+                  </button>
+                );
+              })}
             </div>
           </section>
 
           {/* Natural Voice Cache Manager — Language-Aware */}
-          <section className="glass-panel flex flex-col rounded-[18px] p-6">
+          <section className="glass-panel flex flex-col rounded-[18px] p-4 md:p-6">
             <div className="mb-6 flex flex-wrap items-center justify-between gap-4">
               <div className="flex items-center gap-3">
-                <span className="text-xl text-primary">✨</span>
+                <Sparkles className="h-5 w-5 flex-shrink-0 text-primary" />
                 <div>
-                  <h3 className="text-lg font-semibold text-foreground">Natural Voice Cache Manager</h3>
+                  <h3 className="text-lg font-semibold text-foreground">
+                    Natural Voice Cache Manager
+                  </h3>
                   <p className="text-xs text-muted-foreground">
-                    Showing voices for <span className="font-semibold text-primary">{getLanguageEnglishName(language)}</span>. Pre-download and manage neural speech models for instant offline playback.
+                    Showing voices for{" "}
+                    <span className="font-semibold text-primary">
+                      {getLanguageEnglishName(language)}
+                    </span>
+                    . Pre-download and manage neural speech models for instant offline playback.
                   </p>
                 </div>
               </div>
               <div className="flex items-center gap-4">
-                <span className={`rounded-full px-3 py-1 text-xs font-bold ${isOpfs ? "bg-primary/10 text-primary" : "bg-yellow-500/10 text-yellow-500"}`}>
-                  📁 Storage: {isOpfs ? "OPFS (Primary)" : "IndexedDB (Fallback)"}
+                <span
+                  className={`flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-bold ${isOpfs ? "bg-primary/10 text-primary" : "bg-yellow-500/10 text-yellow-500"}`}
+                >
+                  <FolderOpen className="h-3.5 w-3.5" />
+                  {isOpfs ? "OPFS (Primary)" : "IndexedDB (Fallback)"}
                 </span>
                 <button
                   onClick={handleClearVoiceCache}
-                  className="flex items-center gap-2 rounded-full px-4 py-2 text-xs font-bold text-destructive transition-all hover:bg-destructive/10 active:scale-95"
+                  className="flex items-center gap-1.5 rounded-full px-4 py-2 text-xs font-bold text-destructive transition-all hover:bg-destructive/10 active:scale-95"
                 >
-                  🗑️ Clear All Voices
+                  <Trash2 className="h-3.5 w-3.5" /> Clear All Voices
                 </button>
               </div>
             </div>
 
             {languageFilteredNeuralVoices.length === 0 ? (
-              <div className="flex flex-col items-center justify-center rounded-xl border border-dashed border-border bg-surface/30 px-6 py-10 text-center my-auto">
-                <span className="text-3xl mb-3">🔇</span>
+              <div className="my-auto flex flex-col items-center justify-center rounded-xl border border-dashed border-border bg-surface/30 px-6 py-10 text-center">
+                <VolumeX className="mb-3 h-7 w-7 text-muted-foreground" />
                 <p className="text-sm font-medium text-muted-foreground">
-                  No neural voices available for <span className="text-foreground font-semibold">{getLanguageEnglishName(language)}</span>.
+                  No neural voices available for{" "}
+                  <span className="text-foreground font-semibold">
+                    {getLanguageEnglishName(language)}
+                  </span>
+                  .
                 </p>
                 <p className="mt-1 text-xs text-muted-foreground">
-                  Neural TTS voices are available for languages like Hindi, English, French, German, Spanish, and many more.
+                  Neural TTS voices are available for languages like Hindi, English, French, German,
+                  Spanish, and many more.
                 </p>
               </div>
             ) : (
-              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 overflow-y-auto max-h-[480px] pr-1">
+              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 md:max-h-[480px] md:overflow-y-auto md:pr-1">
                 {languageFilteredNeuralVoices.map((voice) => {
                   const voiceId = voice.voiceURI;
                   const isCached = voice.isDownloaded;
@@ -494,16 +543,16 @@ function SettingsPage() {
                     <div
                       key={voiceId}
                       className={`flex flex-col justify-between rounded-xl border p-4 transition-all ${
-                        isCached
-                          ? "border-primary/20 bg-primary/5"
-                          : "border-border bg-background"
+                        isCached ? "border-primary/20 bg-primary/5" : "border-border bg-background"
                       }`}
                     >
                       <div>
                         <div className="flex items-center justify-between mb-1">
-                          <span className="text-sm font-bold text-foreground">{voice.name.replace(/^✨ Neural /, '')}</span>
+                          <span className="text-sm font-bold text-foreground">
+                            {voice.name.replace(/^✨ Neural /, "")}
+                          </span>
                           <span className="rounded-full bg-surface-2 px-2 py-0.5 text-[10px] font-bold text-muted-foreground uppercase">
-                             {voice.lang}
+                            {voice.lang}
                           </span>
                         </div>
                         <span className="block font-mono text-[10px] text-muted-foreground truncate mb-3">
@@ -514,15 +563,15 @@ function SettingsPage() {
                       <div className="flex items-center justify-between gap-4 mt-auto">
                         <span className="text-xs font-semibold">
                           {isDownloading ? (
-                            <span className="text-primary font-bold">
-                              ⏳ Downloading {progress}%
+                            <span className="flex items-center gap-1 font-bold text-primary">
+                              <Loader2 className="h-3 w-3 animate-spin" /> Downloading {progress}%
                             </span>
                           ) : isCached ? (
-                            <span className="text-primary flex items-center gap-1">
-                              🟢 Cached
+                            <span className="flex items-center gap-1 text-primary">
+                              <CircleCheck className="h-3 w-3" /> Cached
                             </span>
                           ) : (
-                            <span className="text-muted-foreground">⚪ Not Cached</span>
+                            <span className="text-muted-foreground">Not cached</span>
                           )}
                         </span>
 
@@ -563,13 +612,13 @@ function SettingsPage() {
         {/* Row 3: API Key Management + Model Selection */}
         <div className="grid grid-cols-1 gap-6 md:grid-cols-12">
           {/* API Key Management */}
-          <section className="glass-panel flex flex-col gap-4 rounded-[18px] p-6 md:col-span-5">
+          <section className="glass-panel flex flex-col gap-4 rounded-[18px] p-4 md:col-span-5 md:p-6">
             <div className="flex items-center gap-3">
-              <span className="text-xl text-primary">🔑</span>
+              <KeyRound className="h-5 w-5 text-primary" />
               <h3 className="text-lg font-semibold text-foreground">API Key Management</h3>
             </div>
             <p className="text-sm text-muted-foreground">
-              DocLens uses the server-managed key by default, but you can enter your own key here to
+              Anuwad uses the server-managed key by default, but you can enter your own key here to
               override it.
             </p>
 
@@ -630,17 +679,17 @@ function SettingsPage() {
           </section>
 
           {/* Model Selection */}
-          <section className="glass-panel flex flex-col gap-4 rounded-[18px] p-6 md:col-span-7">
-            <div className="flex items-center justify-between">
+          <section className="glass-panel flex flex-col gap-4 rounded-[18px] p-4 md:col-span-7 md:p-6">
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
               <div className="flex items-center gap-3">
-                <span className="text-xl text-yellow-500">🧠</span>
+                <Brain className="h-5 w-5 text-yellow-500" />
                 <h3 className="text-lg font-semibold text-foreground">Model Selection</h3>
               </div>
               <input
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
                 placeholder="Filter models..."
-                className="w-48 rounded-full border border-border bg-background px-4 py-1.5 text-xs outline-none transition-colors focus:border-primary"
+                className="w-full rounded-full border border-border bg-background px-4 py-1.5 text-xs outline-none transition-colors focus:border-primary sm:w-48"
               />
             </div>
 
@@ -671,7 +720,7 @@ function SettingsPage() {
                 )}
                 {modelError && <div className="text-xs text-destructive">{modelError}</div>}
 
-                <div className="flex max-h-[320px] flex-col gap-2 overflow-y-auto pr-1">
+                <div className="flex flex-col gap-2 md:max-h-[320px] md:overflow-y-auto md:pr-1">
                   {filtered.map((m) => {
                     const promptPrice = parseFloat(m.pricing?.prompt ?? "0") * 1_000_000;
                     const compPrice = parseFloat(m.pricing?.completion ?? "0") * 1_000_000;
@@ -693,11 +742,11 @@ function SettingsPage() {
                               active ? "border-primary bg-primary/20" : "border-border bg-surface-2"
                             }`}
                           >
-                            <span
-                              className={`text-sm ${active ? "text-primary" : "text-muted-foreground"}`}
-                            >
-                              {active ? "⭐" : "🔮"}
-                            </span>
+                            {active ? (
+                              <Star className="h-4 w-4 fill-current text-primary" />
+                            ) : (
+                              <Cpu className="h-4 w-4 text-muted-foreground" />
+                            )}
                           </div>
                           <div className="min-w-0">
                             <div className="truncate text-sm font-bold text-foreground">

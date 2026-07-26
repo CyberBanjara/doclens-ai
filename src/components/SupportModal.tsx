@@ -72,8 +72,8 @@ export function SupportModal({ open, onOpenChange }: SupportModalProps) {
         key: "rzp_test_YOUR_KEY_HERE",
         amount: amount * 100, // paise
         currency: "INR",
-        name: "DocLens AI",
-        description: "Support DocLens AI Development",
+        name: "Anuwad",
+        description: "Support Anuwad Development",
         image: window.location.origin + "/light_13746323.png",
         handler: function (response: any) {
           toast.success(
@@ -82,8 +82,8 @@ export function SupportModal({ open, onOpenChange }: SupportModalProps) {
           onOpenChange(false);
         },
         prefill: {
-          name: "DocLens Sponsor",
-          email: "sponsor@doclens.ai",
+          name: "Anuwad Sponsor",
+          email: "sponsor@anuwad.com",
         },
         theme: {
           color: "#0066cc", // Action Blue
@@ -130,7 +130,7 @@ export function SupportModal({ open, onOpenChange }: SupportModalProps) {
               📋 1. Take Our Survey
             </h4>
             <p className="mt-1 text-xs text-muted-foreground">
-              Your feedback shapes the future of DocLens. Take our quick 2-minute Google Forms
+              Your feedback shapes the future of Anuwad. Take our quick 2-minute Google Forms
               survey.
             </p>
             <a
@@ -150,7 +150,7 @@ export function SupportModal({ open, onOpenChange }: SupportModalProps) {
               💻 2. Contribute to this Project
             </h4>
             <p className="mt-1 text-xs text-muted-foreground">
-              DocLens is open source. You can view the code, raise issues, or submit PRs on GitHub.
+              Anuwad is open source. You can view the code, raise issues, or submit PRs on GitHub.
             </p>
             <a
               href="https://github.com/CyberBanjara/doclens-ai"

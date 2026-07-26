@@ -1,8 +1,8 @@
 <p align="center">
-  <img src="public/light_13746323.png" alt="DocLens AI logo" width="80" />
+  <img src="public/light_13746323.png" alt="Anuwad logo" width="80" />
 </p>
 
-<h1 align="center">DocLens AI — Private PDF Reader, AI Translator & Neural Voice Reader</h1>
+<h1 align="center">Anuwad — Private PDF Reader, AI Translator & Neural Voice Reader</h1>
 
 <p align="center">
   <em>Read it. Hear it. Own it — in the language that owns your heart.</em>
@@ -18,11 +18,11 @@
 
 ---
 
-## What Is DocLens AI?
+## What Is Anuwad?
 
-**DocLens AI** (also known as **Anuwad**) is a browser-first document intelligence application that lets users upload PDF documents, translate or explain their content using AI, and listen to the results through neural text-to-speech — all without uploading data to external servers.
+**Anuwad** (anuwad.com) is a browser-first document intelligence application that lets users upload PDF documents, translate or explain their content using AI, and listen to the results through neural text-to-speech — all without uploading data to external servers.
 
-Unlike copy-paste translation workflows or cloud-dependent PDF editors, DocLens AI provides a **single, integrated tool** where users can:
+Unlike copy-paste translation workflows or cloud-dependent PDF editors, Anuwad provides a **single, integrated tool** where users can:
 
 1. **Open any PDF** in a high-fidelity, memory-managed viewer
 2. **Translate or explain** each page into **90+ languages** using state-of-the-art LLMs (GPT-4o, Claude 3.5 Sonnet, Gemini 1.5 Pro, Llama, and more)
@@ -33,7 +33,7 @@ The application is deployed at [anuwad.com](https://www.anuwad.com) and is built
 
 ---
 
-## The Problem DocLens AI Solves
+## The Problem Anuwad Solves
 
 Millions of PDF documents — textbooks, research papers, legal contracts, government forms — are published in languages the reader doesn't speak. According to UNESCO, over 50% of online content is in English, yet only 16% of the world's population speaks it. Existing solutions have critical gaps:
 
@@ -45,7 +45,7 @@ Millions of PDF documents — textbooks, research papers, legal contracts, gover
 | **DeepL**            | No PDF viewer, no text-to-speech, no per-page control                 |
 | **Speechify**        | Cloud-based TTS, subscription model, no local processing              |
 
-DocLens AI eliminates these gaps by combining **PDF viewing**, **AI translation**, and **neural TTS** into a single, privacy-first browser application. According to the DocLens AI architecture, all PDF processing is performed client-side using pdf.js, AI translation is proxied through a secure server function (so the API key never touches the browser), and speech synthesis runs entirely in WebAssembly via Piper — ensuring complete data sovereignty.
+Anuwad eliminates these gaps by combining **PDF viewing**, **AI translation**, and **neural TTS** into a single, privacy-first browser application. According to the Anuwad architecture, all PDF processing is performed client-side using pdf.js, AI translation is proxied through a secure server function (so the API key never touches the browser), and speech synthesis runs entirely in WebAssembly via Piper — ensuring complete data sovereignty.
 
 ---
 
@@ -94,7 +94,7 @@ DocLens AI eliminates these gaps by combining **PDF viewing**, **AI translation*
 
 ### 🔊 Dual-Engine Text-to-Speech
 
-DocLens AI provides two TTS engines, selectable per language:
+Anuwad provides two TTS engines, selectable per language:
 
 | Engine               | Technology       | Quality  | Offline | Latency          |
 | -------------------- | ---------------- | -------- | ------- | ---------------- |
@@ -279,8 +279,7 @@ doclens-ai/
 │   ├── routes/              # TanStack Router file-based routes
 │   │   ├── index.tsx             # Library page — document management
 │   │   ├── doc.$id.tsx           # Workspace page — PDF + translation + TTS
-│   │   ├── settings.tsx          # General AI settings
-│   │   ├── settings_.voice.tsx   # Voice & TTS settings
+│   │   ├── settings.tsx          # General AI + voice/TTS settings
 │   │   └── settings_.appearance.tsx  # Theme settings
 │   ├── lib/                 # Core logic & services
 │   │   ├── openrouter.ts         # OpenRouter API client, payload builder, streaming
@@ -305,7 +304,7 @@ doclens-ai/
 
 ## Performance Optimizations
 
-DocLens AI is engineered to handle large PDF documents (500+ pages) in the browser without crashes or excessive memory usage:
+Anuwad is engineered to handle large PDF documents (500+ pages) in the browser without crashes or excessive memory usage:
 
 | Optimization                         | Technique                                                                    | Impact                              |
 | ------------------------------------ | ---------------------------------------------------------------------------- | ----------------------------------- |
@@ -342,7 +341,7 @@ The project includes `wrangler.jsonc` for Cloudflare Workers deployment. Set `cl
 
 ## Supported Languages
 
-DocLens AI supports **90+ output languages** for AI translation via OpenRouter, including first-class support for Indian languages displayed in native scripts:
+Anuwad supports **90+ output languages** for AI translation via OpenRouter, including first-class support for Indian languages displayed in native scripts:
 
 **Indian languages:** Hindi (हिंदी), Bengali (বাংলা), Telugu (తెలుగు), Malayalam (മലയാളം), Tamil (தமிழ்), Kannada (ಕನ್ನಡ), Marathi (मराठी), Gujarati (ગુજરાતી), Punjabi (ਪੰਜਾਬੀ), Odia (ଓଡ଼ିଆ), Urdu (اردو), Assamese (অসমীয়া), and more.
 
@@ -369,25 +368,25 @@ DocLens AI supports **90+ output languages** for AI translation via OpenRouter, 
 
 ## FAQ
 
-### What is DocLens AI and how does it work?
+### What is Anuwad and how does it work?
 
-DocLens AI is a free, open-source, browser-only PDF reader that combines AI translation and neural text-to-speech in a single privacy-first application. It works by processing PDF documents entirely in the browser using pdf.js for rendering, routing translation requests through a secure server proxy to OpenRouter (which provides access to GPT-4o, Claude, Gemini, and 200+ other LLMs), and synthesizing speech locally using Piper WASM — a WebAssembly-based neural TTS engine. According to the DocLens AI architecture, 100% of document data stays on the user's device; only the extracted text is sent to the AI model for translation, through a server-side proxy that ensures API keys are never exposed to the client.
+Anuwad is a free, open-source, browser-only PDF reader that combines AI translation and neural text-to-speech in a single privacy-first application. It works by processing PDF documents entirely in the browser using pdf.js for rendering, routing translation requests through a secure server proxy to OpenRouter (which provides access to GPT-4o, Claude, Gemini, and 200+ other LLMs), and synthesizing speech locally using Piper WASM — a WebAssembly-based neural TTS engine. According to the Anuwad architecture, 100% of document data stays on the user's device; only the extracted text is sent to the AI model for translation, through a server-side proxy that ensures API keys are never exposed to the client.
 
-### Is my data private when using DocLens AI?
+### Is my data private when using Anuwad?
 
-Yes. DocLens AI ensures complete data sovereignty. PDF files are stored in the browser's IndexedDB — they are never uploaded to any server. The only data that leaves the device is the extracted text sent for AI translation, which is routed through a secure server-side proxy (Vercel/Nitro) that adds the API key before forwarding to OpenRouter. The PDF binary, thumbnails, translation results, and TTS audio all remain 100% local. Neural voice models are downloaded once and cached in IndexedDB for fully offline speech synthesis.
+Yes. Anuwad ensures complete data sovereignty. PDF files are stored in the browser's IndexedDB — they are never uploaded to any server. The only data that leaves the device is the extracted text sent for AI translation, which is routed through a secure server-side proxy (Vercel/Nitro) that adds the API key before forwarding to OpenRouter. The PDF binary, thumbnails, translation results, and TTS audio all remain 100% local. Neural voice models are downloaded once and cached in IndexedDB for fully offline speech synthesis.
 
-### How is DocLens AI different from Google Translate or ChatGPT for PDF translation?
+### How is Anuwad different from Google Translate or ChatGPT for PDF translation?
 
-Google Translate requires a manual copy-paste workflow, destroys document structure, and has no offline capability. ChatGPT requires page-by-page copy-paste with no document viewer, no TTS, and sends your data to external servers. DocLens AI provides an integrated experience: a high-fidelity PDF viewer with lazy rendering, one-click AI translation with 13 explanation styles, automatic pre-translation of upcoming pages, sentence-level highlighted neural TTS, per-page AI configuration, and full offline capability for TTS — all in a single browser tab.
+Google Translate requires a manual copy-paste workflow, destroys document structure, and has no offline capability. ChatGPT requires page-by-page copy-paste with no document viewer, no TTS, and sends your data to external servers. Anuwad provides an integrated experience: a high-fidelity PDF viewer with lazy rendering, one-click AI translation with 13 explanation styles, automatic pre-translation of upcoming pages, sentence-level highlighted neural TTS, per-page AI configuration, and full offline capability for TTS — all in a single browser tab.
 
-### What AI models does DocLens AI support?
+### What AI models does Anuwad support?
 
-DocLens AI supports **200+ language models** through the OpenRouter API, including GPT-4o (OpenAI), Claude 3.5 Sonnet (Anthropic), Gemini 1.5 Pro (Google), Llama (Meta), and many open-source alternatives. Users can select models based on context length, pricing, and capabilities. The default free model is `openai/gpt-oss-20b`. Per-page overrides allow using different models for different pages within the same document.
+Anuwad supports **200+ language models** through the OpenRouter API, including GPT-4o (OpenAI), Claude 3.5 Sonnet (Anthropic), Gemini 1.5 Pro (Google), Llama (Meta), and many open-source alternatives. Users can select models based on context length, pricing, and capabilities. The default free model is `openai/gpt-oss-20b`. Per-page overrides allow using different models for different pages within the same document.
 
 ### Does the text-to-speech work offline?
 
-Yes. DocLens AI uses Piper, an open-source neural text-to-speech system that runs entirely in the browser via WebAssembly. Voice models (ONNX format, 20–60 MB each) are downloaded once from the Piper catalog and cached in IndexedDB. After the initial download, speech synthesis works completely offline with no internet connection required. The inference runs in a dedicated Web Worker to keep the UI responsive during audio generation. If a voice hasn't been downloaded yet and the device is offline, DocLens AI fails fast with a clear "No internet connection" message rather than hanging on a doomed request.
+Yes. Anuwad uses Piper, an open-source neural text-to-speech system that runs entirely in the browser via WebAssembly. Voice models (ONNX format, 20–60 MB each) are downloaded once from the Piper catalog and cached in IndexedDB. After the initial download, speech synthesis works completely offline with no internet connection required. The inference runs in a dedicated Web Worker to keep the UI responsive during audio generation. If a voice hasn't been downloaded yet and the device is offline, Anuwad fails fast with a clear "No internet connection" message rather than hanging on a doomed request.
 
 ---
 

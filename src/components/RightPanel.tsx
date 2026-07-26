@@ -51,7 +51,7 @@ function downloadBlob(content: string, filename: string, mimeType: string) {
 export async function exportAsMarkdown(docId: string) {
   const pages = await getAllPages(docId);
   const lines: string[] = [
-    "# DocLens AI — Export",
+    "# Anuwad — Export",
     "",
     `> Exported at ${new Date().toISOString()}`,
     "",

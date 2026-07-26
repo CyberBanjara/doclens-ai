@@ -15,7 +15,22 @@ import {
 export const Route = createFileRoute("/settings_/appearance")({
   component: AppearanceSettingsPage,
   head: () => ({
-    meta: [{ title: "Anuwad — Appearance & Theme" }],
+    meta: [
+      { title: "Anuwad — Appearance & Theme" },
+      {
+        name: "description",
+        content:
+          "Customize Anuwad's look and feel with light and dark themes, including the Deep Ocean design system.",
+      },
+      { property: "og:title", content: "Anuwad — Appearance & Theme" },
+      {
+        property: "og:description",
+        content: "Customize Anuwad's look and feel with light and dark themes.",
+      },
+      { property: "og:url", content: "https://www.anuwad.com/settings/appearance" },
+      { property: "og:type", content: "website" },
+    ],
+    links: [{ rel: "canonical", href: "https://www.anuwad.com/settings/appearance" }],
   }),
 });
 
@@ -75,7 +90,7 @@ function AppearanceSettingsPage() {
         <header>
           <h3 className="text-4xl font-bold tracking-tight text-foreground">Appearance Settings</h3>
           <p className="mt-2 text-base text-muted-foreground">
-            Customize the look and feel of your DocLens workspace.
+            Customize the look and feel of your Anuwad workspace.
           </p>
         </header>
 

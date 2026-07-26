@@ -85,7 +85,10 @@ export const Route = createFileRoute("/doc/$id")({
     return { page: p > 0 && Number.isFinite(p) ? Math.floor(p) : undefined };
   },
   head: () => ({
-    meta: [{ title: "Anuwad — Document Reader" }],
+    meta: [
+      { title: "Anuwad — Document Reader" },
+      { name: "robots", content: "noindex, nofollow" },
+    ],
   }),
 });
 
@@ -498,7 +501,7 @@ function DocPage() {
           >
             <img
               src="/light_13746323.png"
-              alt="DocLens Logo"
+              alt="Anuwad Logo"
               className="h-7 w-7 object-contain rounded-md"
             />
           </Link>

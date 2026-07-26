@@ -54,7 +54,7 @@ export const Route = createRootRoute({
       {
         name: "keywords",
         content:
-          "Anuwad, DocLens AI, private PDF reader, browser PDF translator, PDF pipeline inspector, offline PDF reader, AI document reader",
+          "Anuwad, Anuwad.com, private PDF reader, browser PDF translator, PDF pipeline inspector, offline PDF reader, AI document reader, AI PDF translator",
       },
       { name: "author", content: "Anuwad" },
       { property: "og:site_name", content: "Anuwad" },

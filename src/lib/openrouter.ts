@@ -221,8 +221,8 @@ export function applyTranslationConfig(config: Partial<TranslationConfig>, docId
 }
 
 const HEADERS_BASE = {
-  "HTTP-Referer": "https://doclens.app",
-  "X-Title": "DocLens",
+  "HTTP-Referer": "https://www.anuwad.com",
+  "X-Title": "Anuwad",
 };
 
 function getServerOpenRouterKey(): string {

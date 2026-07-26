@@ -1,7 +1,10 @@
 import { Link, useMatchRoute } from "@tanstack/react-router";
-import { useEffect, useRef, useState } from "react";
+import { useRef, useState } from "react";
+import { HelpCircle, Plus } from "lucide-react";
 import { ApiKeyStatusBadge } from "@/components/ApiKeyStatusBadge";
 import { SupportModal } from "@/components/SupportModal";
+import { MobileTabBar } from "@/components/mobile/MobileTabBar";
+import { useIsMobile } from "@/hooks/use-mobile";
 
 interface SidebarLayoutProps {
   children: React.ReactNode;
@@ -26,27 +29,10 @@ export function SidebarLayout({
   topBarRight,
   onNewDocument,
 }: SidebarLayoutProps) {
+  const isMobile = useIsMobile();
   const matchRoute = useMatchRoute();
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const [mobileOpen, setMobileOpen] = useState(false);
   const [supportOpen, setSupportOpen] = useState(false);
-
-  // Close mobile sidebar on route change
-  useEffect(() => {
-    setMobileOpen(false);
-  }, [pageTitle]);
-
-  // Lock body scroll when mobile sidebar is open
-  useEffect(() => {
-    if (mobileOpen) {
-      document.body.style.overflow = "hidden";
-    } else {
-      document.body.style.overflow = "";
-    }
-    return () => {
-      document.body.style.overflow = "";
-    };
-  }, [mobileOpen]);
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -54,164 +40,135 @@ export function SidebarLayout({
     if (fileInputRef.current) fileInputRef.current.value = "";
   };
 
-  const handleNavClick = () => {
-    setMobileOpen(false);
-  };
-
-  /* ── Shared sidebar content (used in both desktop & mobile) ── */
-  const sidebarContent = (
-    <>
-      {/* Logo */}
-      <div className="px-6 pt-8 pb-6">
-        <Link to="/" className="flex items-center gap-3 group" onClick={handleNavClick}>
-          <img
-            src="/light_13746323.png"
-            alt="DocLens Logo"
-            className="h-10 w-10 object-contain rounded-lg shadow-sm"
-          />
-          <div>
-            <h1 className="text-lg font-bold tracking-tight text-foreground transition-colors group-hover:text-primary">
-              DocLens
-            </h1>
-            <p className="text-[11px] font-medium tracking-wide text-muted-foreground">
-              AI Intelligence
-            </p>
-          </div>
-        </Link>
-      </div>
-
-      {/* Navigation */}
-      <nav className="flex flex-col gap-1 px-4">
-        {NAV_ITEMS.map((item) => {
-          const isActive =
-            item.to === "/"
-              ? !!matchRoute({ to: "/", fuzzy: false })
-              : !!matchRoute({ to: item.to, fuzzy: true });
-
-          return (
-            <Link
-              key={item.to}
-              to={item.to}
-              onClick={handleNavClick}
-              className={`flex items-center gap-3 rounded-lg px-4 py-2.5 text-sm font-semibold transition-all duration-200 ${
-                isActive
-                  ? "bg-primary/10 text-primary"
-                  : "text-muted-foreground hover:bg-surface-2/60 hover:text-foreground"
-              }`}
-            >
-              <span className="text-base">{item.icon}</span>
-              <span>{item.label}</span>
-            </Link>
-          );
-        })}
-      </nav>
-
-      {/* Spacer */}
-      <div className="flex-1" />
-
-      {/* New Document Button */}
-      <div className="px-4 pb-4">
-        <input
-          ref={fileInputRef}
-          type="file"
-          accept="application/pdf,.pdf"
-          className="hidden"
-          onChange={handleFileChange}
-        />
-        <button
-          onClick={() => {
-            fileInputRef.current?.click();
-            setMobileOpen(false);
-          }}
-          className="flex w-full items-center justify-center gap-2 rounded-full bg-primary py-3 px-4 text-sm font-semibold text-primary-foreground transition-all hover:opacity-90 active:scale-95 shadow-sm"
-        >
-          <span className="text-lg leading-none">+</span>
-          New Document
-        </button>
-      </div>
-
-      {/* Support Link */}
-      <div className="border-t border-border px-4 py-4">
-        <button
-          onClick={() => {
-            setSupportOpen(true);
-            setMobileOpen(false);
-          }}
-          className="flex w-full items-center gap-3 rounded-lg px-4 py-2 text-sm text-muted-foreground transition-colors hover:text-primary"
-        >
-          <span className="text-base">❓</span>
-          <span>Support & Feedback</span>
-        </button>
-      </div>
-    </>
+  const fileInput = (
+    <input
+      ref={fileInputRef}
+      type="file"
+      accept="application/pdf,.pdf"
+      className="hidden"
+      onChange={handleFileChange}
+    />
   );
 
-  return (
-    <div className="flex h-screen overflow-hidden bg-background text-foreground">
-      {/* ──── Desktop Sidebar (hidden on mobile) ──── */}
-      <aside className="hidden md:flex w-64 flex-shrink-0 flex-col border-r border-border bg-background">
-        {sidebarContent}
-      </aside>
+  if (isMobile) {
+    return (
+      <div className="flex h-dvh flex-col bg-background text-foreground">
+        <header className="flex h-12 flex-shrink-0 items-center gap-2 border-b border-border bg-background/80 px-4 backdrop-blur-md">
+          <div className="w-9 flex-shrink-0" />
+          <h2 className="flex-1 truncate text-center text-base font-semibold tracking-tight text-foreground">
+            {pageTitle}
+          </h2>
+          <button
+            onClick={() => setSupportOpen(true)}
+            className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-full text-muted-foreground transition-colors hover:text-foreground"
+            aria-label="Support & Feedback"
+          >
+            <HelpCircle className="h-5 w-5" />
+          </button>
+        </header>
 
-      {/* ──── Mobile Sidebar Overlay ──── */}
-      {mobileOpen && (
-        <div className="fixed inset-0 z-50 md:hidden" aria-modal="true" role="dialog">
-          {/* Backdrop */}
-          <div
-            className="absolute inset-0 bg-black/60 backdrop-blur-sm"
-            onClick={() => setMobileOpen(false)}
-          />
-          {/* Drawer */}
-          <aside className="absolute inset-y-0 left-0 flex w-72 flex-col bg-background shadow-2xl animate-in slide-in-from-left duration-200">
-            {/* Close button */}
+        <main className="flex-1 overflow-y-auto pb-24">{children}</main>
+
+        {onNewDocument && (
+          <>
+            {fileInput}
             <button
-              onClick={() => setMobileOpen(false)}
-              className="absolute right-3 top-4 z-10 rounded-md p-1.5 text-muted-foreground transition-colors hover:text-foreground"
-              aria-label="Close menu"
+              onClick={() => fileInputRef.current?.click()}
+              className="fixed bottom-[calc(4.25rem+env(safe-area-inset-bottom))] right-4 z-40 flex h-14 w-14 items-center justify-center rounded-full bg-primary text-primary-foreground shadow-xl transition-transform active:scale-95"
+              aria-label="Add document"
             >
-              <svg
-                xmlns="http://www.w3.org/2000/svg"
-                className="h-5 w-5"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth={2}
-              >
-                <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
-              </svg>
+              <Plus className="h-6 w-6" />
             </button>
-            {sidebarContent}
-          </aside>
+          </>
+        )}
+
+        <MobileTabBar />
+        <SupportModal open={supportOpen} onOpenChange={setSupportOpen} />
+      </div>
+    );
+  }
+
+  return (
+    <div className="flex h-dvh overflow-hidden bg-background text-foreground">
+      {/* ──── Desktop Sidebar ──── */}
+      <aside className="flex w-64 flex-shrink-0 flex-col border-r border-border bg-background">
+        {/* Logo */}
+        <div className="px-6 pt-8 pb-6">
+          <Link to="/" className="flex items-center gap-3 group">
+            <img
+              src="/light_13746323.png"
+              alt="Anuwad Logo"
+              className="h-10 w-10 object-contain rounded-lg shadow-sm"
+            />
+            <div>
+              <h1 className="text-lg font-bold tracking-tight text-foreground transition-colors group-hover:text-primary">
+                Anuwad
+              </h1>
+              <p className="text-[11px] font-medium tracking-wide text-muted-foreground">
+                AI Intelligence
+              </p>
+            </div>
+          </Link>
         </div>
-      )}
+
+        {/* Navigation */}
+        <nav className="flex flex-col gap-1 px-4">
+          {NAV_ITEMS.map((item) => {
+            const isActive =
+              item.to === "/"
+                ? !!matchRoute({ to: "/", fuzzy: false })
+                : !!matchRoute({ to: item.to, fuzzy: true });
+
+            return (
+              <Link
+                key={item.to}
+                to={item.to}
+                className={`flex items-center gap-3 rounded-lg px-4 py-2.5 text-sm font-semibold transition-all duration-200 ${
+                  isActive
+                    ? "bg-primary/10 text-primary"
+                    : "text-muted-foreground hover:bg-surface-2/60 hover:text-foreground"
+                }`}
+              >
+                <span className="text-base">{item.icon}</span>
+                <span>{item.label}</span>
+              </Link>
+            );
+          })}
+        </nav>
+
+        {/* Spacer */}
+        <div className="flex-1" />
+
+        {/* New Document Button */}
+        <div className="px-4 pb-4">
+          {fileInput}
+          <button
+            onClick={() => fileInputRef.current?.click()}
+            className="flex w-full items-center justify-center gap-2 rounded-full bg-primary py-3 px-4 text-sm font-semibold text-primary-foreground transition-all hover:opacity-90 active:scale-95 shadow-sm"
+          >
+            <span className="text-lg leading-none">+</span>
+            New Document
+          </button>
+        </div>
+
+        {/* Support Link */}
+        <div className="border-t border-border px-4 py-4">
+          <button
+            onClick={() => setSupportOpen(true)}
+            className="flex w-full items-center gap-3 rounded-lg px-4 py-2 text-sm text-muted-foreground transition-colors hover:text-primary"
+          >
+            <span className="text-base">❓</span>
+            <span>Support & Feedback</span>
+          </button>
+        </div>
+      </aside>
 
       {/* ──── Main Content Area ──── */}
       <div className="flex flex-1 flex-col overflow-hidden">
         {/* Top Bar */}
-        <header className="flex h-14 md:h-16 flex-shrink-0 items-center justify-between border-b border-border bg-background/80 px-4 md:px-8 backdrop-blur-md">
-          <div className="flex items-center gap-3">
-            {/* Hamburger — mobile only */}
-            <button
-              onClick={() => setMobileOpen(true)}
-              className="md:hidden rounded-md p-1.5 text-muted-foreground transition-colors hover:text-foreground"
-              aria-label="Open menu"
-            >
-              <svg
-                xmlns="http://www.w3.org/2000/svg"
-                className="h-5 w-5"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth={2}
-              >
-                <path strokeLinecap="round" d="M4 6h16M4 12h16M4 18h16" />
-              </svg>
-            </button>
-            <h2 className="text-xl md:text-2xl font-bold tracking-tight text-foreground">
-              {pageTitle}
-            </h2>
-          </div>
-          <div className="flex items-center gap-2 md:gap-4">
+        <header className="flex h-16 flex-shrink-0 items-center justify-between border-b border-border bg-background/80 px-8 backdrop-blur-md">
+          <h2 className="text-2xl font-bold tracking-tight text-foreground">{pageTitle}</h2>
+          <div className="flex items-center gap-4">
             {topBarRight}
             <ApiKeyStatusBadge />
           </div>

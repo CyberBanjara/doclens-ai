@@ -1,9 +1,11 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
+import { FilePlus2 } from "lucide-react";
 import { SidebarLayout } from "@/components/SidebarLayout";
 import { DocumentCard } from "@/components/DocumentCard";
 import { Dropzone } from "@/components/Dropzone";
+import { useIsMobile } from "@/hooks/use-mobile";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -27,13 +29,13 @@ export const Route = createFileRoute("/")({
   component: DashboardPage,
   head: () => ({
     meta: [
-      { title: "Anuwad (DocLens AI) — Private PDF Library & AI Reader" },
+      { title: "Anuwad — Private PDF Library & AI Reader" },
       {
         name: "description",
         content:
           "Your private, browser-only PDF library and reader. Upload, inspect document pipelines, and auto-translate without leaving your device.",
       },
-      { property: "og:title", content: "Anuwad (DocLens AI) — Private PDF Library & AI Reader" },
+      { property: "og:title", content: "Anuwad — Private PDF Library & AI Reader" },
       {
         property: "og:description",
         content:
@@ -42,7 +44,7 @@ export const Route = createFileRoute("/")({
       { property: "og:url", content: "https://www.anuwad.com/" },
       { property: "og:type", content: "website" },
       { name: "twitter:card", content: "summary_large_image" },
-      { name: "twitter:title", content: "Anuwad (DocLens AI) — Private PDF Library & AI Reader" },
+      { name: "twitter:title", content: "Anuwad — Private PDF Library & AI Reader" },
       {
         name: "twitter:description",
         content:
@@ -53,6 +55,7 @@ export const Route = createFileRoute("/")({
 });
 
 function DashboardPage() {
+  const isMobile = useIsMobile();
   const navigate = useNavigate();
   const [docs, setDocs] = useState<DocSummary[]>([]);
   const [loading, setLoading] = useState(true);
@@ -136,7 +139,6 @@ function DashboardPage() {
                 "@id": "https://www.anuwad.com/#website",
                 url: "https://www.anuwad.com/",
                 name: "Anuwad",
-                alternateName: "DocLens AI",
                 description: "Free, private, browser-only PDF reader with AI translation.",
               },
               {
@@ -148,7 +150,7 @@ function DashboardPage() {
                 description:
                   "Your private, browser-only PDF library and reader. Upload, inspect document pipelines, and auto-translate — nothing leaves your device.",
                 inLanguage: "en",
-                dateModified: "2026-06-05",
+                dateModified: "2026-07-26",
                 speakable: {
                   "@type": "SpeakableSpecification",
                   cssSelector: ["h1", ".hero-description"],
@@ -158,7 +160,6 @@ function DashboardPage() {
                 "@type": "SoftwareApplication",
                 "@id": "https://www.anuwad.com/#software",
                 name: "Anuwad",
-                alternateName: "DocLens AI",
                 applicationCategory: "UtilitiesApplication",
                 operatingSystem: "Web (any modern browser)",
                 url: "https://www.anuwad.com/",
@@ -183,7 +184,8 @@ function DashboardPage() {
                 "@id": "https://www.anuwad.com/#organization",
                 name: "Anuwad",
                 url: "https://www.anuwad.com/",
-                sameAs: [],
+                logo: "https://www.anuwad.com/light_13746323.png",
+                sameAs: ["https://github.com/CyberBanjara/doclens-ai"],
               },
               {
                 "@type": "FAQPage",
@@ -235,23 +237,58 @@ function DashboardPage() {
           }),
         }}
       />
-      <div className="mx-auto max-w-7xl space-y-8 p-8">
-        {/* Hero Section */}
-        <section>
-          <div className="mb-6">
-            <h1 className="text-4xl font-bold tracking-tight text-foreground">
-              Anuwad — Private PDF Reader & AI Translator
-            </h1>
-            <p className="hero-description mt-2 max-w-2xl text-base text-muted-foreground">
-              Read it. Own it — in the language that owns your heart. A free, browser-only PDF
-              library with AI translation.
-            </p>
-          </div>
+      {/* Kept for SEO/accessibility (H1 + the JSON-LD speakable selector above
+          target these) without cluttering the visible library UI. */}
+      <h1 className="sr-only">Anuwad — Private PDF Reader & AI Translator</h1>
+      <p className="hero-description sr-only">
+        Read it. Own it — in the language that owns your heart. A free, browser-only PDF library
+        with AI translation.
+      </p>
+      {isMobile ? (
+        <div className="space-y-5 px-4 pb-8 pt-4">
+          {keyStatus !== "valid" && (
+            <div
+              className={`flex items-center justify-between gap-3 rounded-2xl border px-4 py-3 ${
+                keyStatus === "invalid"
+                  ? "border-destructive/40 bg-destructive/10"
+                  : "border-primary/40 bg-primary/5"
+              }`}
+            >
+              <p
+                className={`text-xs leading-snug ${keyStatus === "invalid" ? "text-destructive" : "text-foreground/85"}`}
+              >
+                {keyStatus === "invalid"
+                  ? "API key was rejected."
+                  : "Set up your API key to translate."}
+              </p>
+              <button
+                onClick={() => openApiKeyModal()}
+                className="shrink-0 rounded-full bg-primary px-3 py-1.5 text-xs font-semibold text-primary-foreground transition-transform active:scale-95"
+              >
+                Fix
+              </button>
+            </div>
+          )}
 
+          {!loading && docs.length === 0 ? (
+            <div className="flex flex-col items-center gap-3 rounded-3xl border border-dashed border-border py-20 text-center">
+              <FilePlus2 className="h-8 w-8 text-muted-foreground" />
+              <p className="text-sm text-muted-foreground">Tap + to add your first PDF</p>
+            </div>
+          ) : (
+            <div className="grid grid-cols-2 gap-3">
+              {docs.map((d) => (
+                <DocumentCard key={d.id} doc={d} onDelete={handleDeleteClick} />
+              ))}
+            </div>
+          )}
+        </div>
+      ) : (
+        <div className="mx-auto max-w-7xl space-y-6 p-8">
           {/* API Key Banner */}
           {keyStatus !== "valid" && (
             <div
-              className={`mb-6 flex flex-col gap-3 rounded-[18px] border px-4 py-3 sm:flex-row sm:items-center sm:justify-between ${
+              className={`flex flex-col gap-3 rounded-[18px] border px-4 py-3 sm:flex-row sm:items-center sm:justify-between ${
                 keyStatus === "invalid"
                   ? "border-destructive/40 bg-destructive/10"
                   : "border-primary/40 bg-primary/5"
@@ -280,74 +317,22 @@ function DashboardPage() {
             </div>
           )}
 
-          {/* Drag & Drop Zone */}
-          <div className="h-56">
-            <Dropzone onFile={handleFile} />
-          </div>
-        </section>
-
-        {/* Documents Grid Section */}
-        <section>
-          <div className="mb-6 flex items-center justify-between">
-            <div className="flex items-center gap-3">
-              <span className="text-primary">☰</span>
-              <span className="text-xs font-bold uppercase tracking-[0.1em] text-muted-foreground">
-                Recent Documents
-              </span>
-            </div>
-            <div className="flex gap-2">
-              <button
-                className="rounded-lg bg-surface-2 p-2 text-muted-foreground hover:text-primary transition-colors"
-                aria-label="Grid view"
-              >
-                <svg
-                  xmlns="http://www.w3.org/2000/svg"
-                  className="h-4 w-4"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth={2}
-                >
-                  <rect x="3" y="3" width="7" height="7" rx="1" />
-                  <rect x="14" y="3" width="7" height="7" rx="1" />
-                  <rect x="3" y="14" width="7" height="7" rx="1" />
-                  <rect x="14" y="14" width="7" height="7" rx="1" />
-                </svg>
-              </button>
-              <button
-                className="rounded-lg bg-surface p-2 text-muted-foreground hover:text-primary transition-colors"
-                aria-label="List view"
-              >
-                <svg
-                  xmlns="http://www.w3.org/2000/svg"
-                  className="h-4 w-4"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth={2}
-                >
-                  <path strokeLinecap="round" d="M3 6h18M3 12h18M3 18h18" />
-                </svg>
-              </button>
-            </div>
-          </div>
-
           {!loading && docs.length === 0 ? (
-            <div className="glass-panel rounded-xl border-dashed p-10 text-center">
-              <div className="font-mono text-[11px] uppercase tracking-widest text-muted-foreground">
-                empty library
-              </div>
-              <p className="mt-2 text-sm text-foreground/80">Upload a PDF above to get started.</p>
+            <div className="h-56">
+              <Dropzone onFile={handleFile} />
             </div>
           ) : (
-            <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-              {docs.map((d) => (
-                <DocumentCard key={d.id} doc={d} onDelete={handleDeleteClick} />
-              ))}
-            </div>
+            <>
+              <Dropzone onFile={handleFile} compact />
+              <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+                {docs.map((d) => (
+                  <DocumentCard key={d.id} doc={d} onDelete={handleDeleteClick} />
+                ))}
+              </div>
+            </>
           )}
-        </section>
-      </div>
+        </div>
+      )}
 
       {/* Delete confirmation dialog */}
       <AlertDialog open={!!deleteTarget} onOpenChange={(open) => !open && setDeleteTarget(null)}>
