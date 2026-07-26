@@ -32,6 +32,36 @@ export async function clearTtsSessionCache() {
   ONNX_SESSION_CACHE.clear();
 }
 
+/**
+ * A previously-cached voice model (OPFS/IndexedDB) can end up mismatched with its
+ * config — e.g. downloaded mid-update from the upstream Piper voices repo — which
+ * surfaces as an ONNX Gather/index-out-of-bounds error at inference time. Since the
+ * bad pair is cached indefinitely, the user would otherwise be stuck forever. Detect
+ * that failure signature, wipe the cached copy of just that voice, and retry once
+ * with a fresh download.
+ */
+async function predictWithRecovery(
+  tts: any,
+  params: { text: string; voiceId: string | null },
+  onProgress?: (progress: any) => void
+): Promise<Blob> {
+  try {
+    return await tts.predict(params, onProgress);
+  } catch (err: any) {
+    const message = String(err?.message || err || "");
+    const looksLikeCorruptedModel = /Gather|out of data bounds|OrtRun|ERROR_CODE/i.test(message);
+    if (!looksLikeCorruptedModel) throw err;
+
+    console.warn(
+      `[TTS] Voice model "${params.voiceId}" failed inference (likely a corrupted/stale cached copy) — clearing cache and retrying:`,
+      message
+    );
+    await clearTtsSessionCache();
+    if (params.voiceId) await deleteCachedVoice(params.voiceId);
+    return await tts.predict(params, onProgress);
+  }
+}
+
 
 /**
  * Explicit flag set once the user has picked a language/voice through the
@@ -436,7 +466,7 @@ export function TtsProvider({ children }: { children: React.ReactNode }) {
     // Set the index to indicate background compilation in progress
     nextAudioIndexRef.current = nextIndex;
 
-    const promise: Promise<Blob> = ttsRef.current.predict({
+    const promise: Promise<Blob> = predictWithRecovery(ttsRef.current, {
       text: nextSentenceText,
       voiceId: selectedVoiceUri
     });
@@ -700,7 +730,7 @@ export function TtsProvider({ children }: { children: React.ReactNode }) {
 
         let toastId: string | number | undefined;
 
-        ttsRef.current.predict({
+        predictWithRecovery(ttsRef.current, {
           text: sentenceText,
           voiceId: selectedVoiceUri
         }, (progress: any) => {
