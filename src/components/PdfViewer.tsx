@@ -51,6 +51,14 @@ export function PdfViewer({ docId, activePage, setActivePage }: Props) {
   /** Pages whose canvas has finished rendering — drives the per-page loading overlay. */
   const [loadedPageNumbers, setLoadedPageNumbers] = useState<Set<number>>(new Set());
 
+  /** Ratio of actually-available page width to TARGET_WIDTH; drives the text-layer
+   *  scale transform so selectable spans (positioned in raw TARGET_WIDTH-space px by
+   *  pdf.js) stay aligned with the canvas image once it's shrunk to fit narrow
+   *  viewports. The canvas/container themselves need no such transform — CSS
+   *  aspect-ratio keeps their box proportional to the page at any width. */
+  const [displayScale, setDisplayScale] = useState(1);
+  const pagesColumnRef = useRef<HTMLDivElement>(null);
+
   const scrollRef = useRef<HTMLDivElement>(null);
   const canvasRefs = useRef<Map<number, HTMLCanvasElement>>(new Map());
   const textLayerRefs = useRef<Map<number, HTMLDivElement>>(new Map());
@@ -174,8 +182,11 @@ export function PdfViewer({ docId, activePage, setActivePage }: Props) {
 
         canvas.width = Math.max(1, Math.ceil(viewport.width));
         canvas.height = Math.max(1, Math.ceil(viewport.height));
-        canvas.style.width = `${meta.cssWidth}px`;
-        canvas.style.height = `${meta.cssHeight}px`;
+        // 100% of the container, which is itself clamped to the page's true
+        // aspect ratio via CSS — keeps the bitmap from being stretched when
+        // the container is narrower than TARGET_WIDTH (e.g. mobile).
+        canvas.style.width = "100%";
+        canvas.style.height = "100%";
         canvas.style.display = "block";
 
         const ctx = canvas.getContext("2d");
@@ -239,6 +250,19 @@ export function PdfViewer({ docId, activePage, setActivePage }: Props) {
     },
     [doc, pageMetas, releasePage],
   );
+
+  // Track available page width so the text layer can be scaled to match the
+  // aspect-ratio-clamped canvas on viewports narrower than TARGET_WIDTH.
+  useEffect(() => {
+    const el = pagesColumnRef.current;
+    if (!el) return;
+    const ro = new ResizeObserver((entries) => {
+      const width = entries[0]?.contentRect.width;
+      if (width) setDisplayScale(Math.min(1, width / TARGET_WIDTH));
+    });
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
 
   // IntersectionObserver: render on enter, release on leave.
   useEffect(() => {
@@ -446,6 +470,7 @@ export function PdfViewer({ docId, activePage, setActivePage }: Props) {
     <>
       <div ref={scrollRef} className="relative h-full overflow-auto pdf-viewer-bg">
         <div
+          ref={pagesColumnRef}
           className={`flex flex-col items-center gap-4 ${isMobile ? "py-4 px-0" : "py-6 px-4"}`}
           onClick={handlePageClick}
         >
@@ -456,7 +481,11 @@ export function PdfViewer({ docId, activePage, setActivePage }: Props) {
               ref={(el) => {
                 if (el && observerRef.current) observerRef.current.observe(el);
               }}
-              style={{ width: meta.cssWidth, height: meta.cssHeight, maxWidth: "100%" }}
+              style={{
+                width: meta.cssWidth,
+                maxWidth: "100%",
+                aspectRatio: `${meta.cssWidth} / ${meta.cssHeight}`,
+              }}
               className={`relative flex-shrink-0 pdf-page-container ${activePage === meta.pageNumber ? "pdf-page-active" : ""}`}
             >
               {!loadedPageNumbers.has(meta.pageNumber) && (
@@ -471,9 +500,8 @@ export function PdfViewer({ docId, activePage, setActivePage }: Props) {
                   else canvasRefs.current.delete(meta.pageNumber);
                 }}
                 style={{
-                  width: meta.cssWidth,
-                  height: meta.cssHeight,
-                  maxWidth: "100%",
+                  width: "100%",
+                  height: "100%",
                   display: "block",
                   background: "#fff",
                 }}
@@ -489,6 +517,8 @@ export function PdfViewer({ docId, activePage, setActivePage }: Props) {
                 style={{
                   width: meta.cssWidth,
                   height: meta.cssHeight,
+                  transform: `scale(${displayScale})`,
+                  transformOrigin: "top left",
                   opacity: 1,
                   lineHeight: 1,
                 }}
