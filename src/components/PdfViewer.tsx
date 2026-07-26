@@ -10,10 +10,6 @@ interface Props {
   docId: string;
   activePage: number;
   setActivePage: (p: number) => void;
-  /** Forwarded to the scroll container — lets the mobile shell drive its
-   * auto-hiding chrome off scroll direction. Purely presentational, no
-   * effect on rendering/cleanup logic below. */
-  onScroll?: (e: React.UIEvent<HTMLDivElement>) => void;
 }
 
 const DPR = typeof window !== "undefined" ? Math.min(window.devicePixelRatio || 1, 2) : 1;
@@ -45,7 +41,7 @@ interface SelectionInfo {
  * copy, translate (via "doclens:translate-selection" event), or speak text.
  * Scanned/image-only pages get no text spans — toolbar simply never appears.
  */
-export function PdfViewer({ docId, activePage, setActivePage, onScroll }: Props) {
+export function PdfViewer({ docId, activePage, setActivePage }: Props) {
   const isMobile = useIsMobile();
   const [doc, setDoc] = useState<PDFDocumentProxy | null>(null);
   const [pageMetas, setPageMetas] = useState<PageMeta[]>([]);
@@ -448,11 +444,7 @@ export function PdfViewer({ docId, activePage, setActivePage, onScroll }: Props)
 
   return (
     <>
-      <div
-        ref={scrollRef}
-        onScroll={onScroll}
-        className="relative h-full overflow-auto pdf-viewer-bg"
-      >
+      <div ref={scrollRef} className="relative h-full overflow-auto pdf-viewer-bg">
         <div
           className={`flex flex-col items-center gap-4 ${isMobile ? "py-4 px-0" : "py-6 px-4"}`}
           onClick={handlePageClick}

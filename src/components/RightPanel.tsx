@@ -333,7 +333,7 @@ export function RightPanel({
           onDragEnd={(_e, info) => {
             if (info.offset.y > 120 || info.velocity.y > 500) onMobileReaderOpenChange?.(false);
           }}
-          className="fixed inset-x-0 bottom-0 z-50 flex h-[86vh] flex-col rounded-t-3xl border border-border bg-surface shadow-2xl"
+          className="fixed inset-x-0 bottom-0 z-50 flex h-[86dvh] flex-col rounded-t-3xl border border-border bg-surface shadow-2xl"
           aria-hidden={!mobileReaderOpen}
         >
           {/* Drag surface confined to this handle (dragListener=false above) —

@@ -97,19 +97,6 @@ function DocPage() {
   const [readerOpen, setReaderOpen] = useState(false);
   const [pageJumpOpen, setPageJumpOpen] = useState(false);
   const [overflowOpen, setOverflowOpen] = useState(false);
-  const [chromeVisible, setChromeVisible] = useState(true);
-  const lastScrollTopRef = useRef(0);
-  const handlePdfScroll = useCallback((e: React.UIEvent<HTMLDivElement>) => {
-    const top = e.currentTarget.scrollTop;
-    const delta = top - lastScrollTopRef.current;
-    lastScrollTopRef.current = top;
-    if (top < 40) {
-      setChromeVisible(true);
-      return;
-    }
-    if (delta > 4) setChromeVisible(false);
-    else if (delta < -4) setChromeVisible(true);
-  }, []);
   const [doc, setDoc] = useState<DocRecord | null>(null);
   const [missing, setMissing] = useState(false);
   const [pageCount, setPageCount] = useState(0);
@@ -498,7 +485,7 @@ function DocPage() {
   const doneCount = Object.values(aiSummary).filter((e) => e.status === "done").length;
 
   return (
-    <div className="flex h-screen flex-col bg-background text-foreground">
+    <div className="flex h-dvh flex-col bg-background text-foreground">
       {/* ─── Slim Document Header (desktop only — mobile uses the floating MobileTopBar overlay) ─── */}
       {!isMobile && (
       <header className="flex h-12 flex-shrink-0 items-center justify-between border-b border-border bg-surface/80 backdrop-blur-md px-4">
@@ -649,17 +636,11 @@ function DocPage() {
       >
         {isMobile ? (
           <div className="relative flex-1 overflow-hidden">
-            <PdfViewer
-              docId={id}
-              activePage={activePage}
-              setActivePage={setActivePage}
-              onScroll={handlePdfScroll}
-            />
+            <PdfViewer docId={id} activePage={activePage} setActivePage={setActivePage} />
             <MobileTopBar
               docName={docName}
               activePage={activePage}
               pageCount={pageCount}
-              visible={chromeVisible}
               onOpenPageJump={() => setPageJumpOpen(true)}
             />
             <MobileBottomBar
