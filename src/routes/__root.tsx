@@ -16,6 +16,7 @@ import { logPageView } from "@/lib/firebase";
 
 import appCss from "../styles.css?url";
 import { TtsProvider } from "@/context/TtsContext";
+import { AuthProvider } from "@/context/AuthContext";
 
 
 function NotFoundComponent() {
@@ -282,12 +283,14 @@ function RootComponent() {
   }, [location.pathname]);
 
   return (
-    <TtsProvider>
-      <Outlet />
-      <ApiKeyModal />
-      <Analytics />
-      <SpeedInsights />
-      <Toaster position="bottom-right" richColors closeButton />
-    </TtsProvider>
+    <AuthProvider>
+      <TtsProvider>
+        <Outlet />
+        <ApiKeyModal />
+        <Analytics />
+        <SpeedInsights />
+        <Toaster position="bottom-right" richColors closeButton />
+      </TtsProvider>
+    </AuthProvider>
   );
 }

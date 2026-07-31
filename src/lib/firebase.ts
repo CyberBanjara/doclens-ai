@@ -1,18 +1,33 @@
 import { initializeApp, getApp, getApps } from "firebase/app";
-import { getAnalytics, logEvent, isSupported, Analytics } from "firebase/analytics";
+import {
+  getAuth,
+  GoogleAuthProvider,
+  signInWithPopup,
+  signOut,
+  onAuthStateChanged,
+  type User,
+} from "firebase/auth";
+import { getFirestore, collection, addDoc, serverTimestamp } from "firebase/firestore";
+import { getAnalytics, logEvent, isSupported, type Analytics } from "firebase/analytics";
 
 const firebaseConfig = {
-  apiKey: "AIzaSyBwfBcQ5HM_jbHrwwMa415fTg5NHoYuL6g",
-  authDomain: "anuwad-789a9.firebaseapp.com",
-  projectId: "anuwad-789a9",
-  storageBucket: "anuwad-789a9.firebasestorage.app",
-  messagingSenderId: "157515258017",
-  appId: "1:157515258017:web:9d1608bbe9fb715f5ef8e0",
-  measurementId: "G-71BDQV3HG5",
+  apiKey: import.meta.env.VITE_FIREBASE_API_KEY,
+  authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN,
+  projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID,
+  storageBucket: import.meta.env.VITE_FIREBASE_STORAGE_BUCKET,
+  messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID,
+  appId: import.meta.env.VITE_FIREBASE_APP_ID,
+  measurementId: import.meta.env.VITE_FIREBASE_MEASUREMENT_ID,
 };
 
 // Initialize Firebase App
 const app = getApps().length === 0 ? initializeApp(firebaseConfig) : getApp();
+
+export const auth = getAuth(app);
+export const googleProvider = new GoogleAuthProvider();
+googleProvider.setCustomParameters({ prompt: "select_account" });
+
+export const db = getFirestore(app);
 
 let analytics: Analytics | null = null;
 
@@ -50,4 +65,28 @@ export function logPageView(pagePath: string) {
   }
 }
 
-export { app, analytics };
+export async function signInWithGoogle() {
+  return await signInWithPopup(auth, googleProvider);
+}
+
+export async function logOut() {
+  return await signOut(auth);
+}
+
+export async function submitReviewToFirestore(rating: number, comment: string) {
+  const user = auth.currentUser;
+  if (!user) throw new Error("Must be signed in to submit a review");
+
+  return await addDoc(collection(db, "reviews"), {
+    uid: user.uid,
+    displayName: user.displayName || "Anonymous",
+    email: user.email || "",
+    photoURL: user.photoURL || "",
+    rating,
+    comment,
+    createdAt: serverTimestamp(),
+  });
+}
+
+export { app, analytics, onAuthStateChanged, type User };
+

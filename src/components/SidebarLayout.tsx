@@ -4,6 +4,7 @@ import { HelpCircle, Plus } from "lucide-react";
 import { ApiKeyStatusBadge } from "@/components/ApiKeyStatusBadge";
 import { SupportModal } from "@/components/SupportModal";
 import { MobileTabBar } from "@/components/mobile/MobileTabBar";
+import { ProfileDropdown } from "@/components/ProfileDropdown";
 import { useIsMobile } from "@/hooks/use-mobile";
 
 interface SidebarLayoutProps {
@@ -58,13 +59,7 @@ export function SidebarLayout({
           <h2 className="flex-1 truncate text-center text-base font-semibold tracking-tight text-foreground">
             {pageTitle}
           </h2>
-          <button
-            onClick={() => setSupportOpen(true)}
-            className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-full text-muted-foreground transition-colors hover:text-foreground"
-            aria-label="Support & Feedback"
-          >
-            <HelpCircle className="h-5 w-5" />
-          </button>
+          <ProfileDropdown />
         </header>
 
         <main className="flex-1 overflow-y-auto pb-24">{children}</main>
@@ -171,6 +166,7 @@ export function SidebarLayout({
           <div className="flex items-center gap-4">
             {topBarRight}
             <ApiKeyStatusBadge />
+            <ProfileDropdown />
           </div>
         </header>
 

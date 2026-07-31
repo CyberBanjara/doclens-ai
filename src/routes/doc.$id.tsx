@@ -7,6 +7,7 @@ import { RightPanel } from "@/components/RightPanel";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { MobileTopBar } from "@/components/mobile/MobileTopBar";
 import { MobileBottomBar } from "@/components/mobile/MobileBottomBar";
+import { ProfileDropdown } from "@/components/ProfileDropdown";
 import { MobileOverflowSheet } from "@/components/mobile/MobileOverflowSheet";
 import { MobilePageJumpSheet } from "@/components/mobile/MobilePageJumpSheet";
 import {
@@ -622,6 +623,7 @@ function DocPage() {
           >
             <Settings className="h-3.5 w-3.5" />
           </Link>
+          <ProfileDropdown />
         </div>
       </header>
       )}
