@@ -1,6 +1,0 @@
-tts on karte hii paragraph structure khatm ho jata hai  --> DOne
-agar nth page me tts sun rahe the aur next page(n+1)th pehle se translated hai to autometic next page(n+1)th par chale jao aura wha se padhna countinue kr do ek bar nth page ka tts khatm hone ke baad --> Done
-tts kavi kavi atak jata hai to page reload karna parta hai --> Piper synthesis timed out (60s) --> Done
-
-reverse all tts treading ditribution  logic --> Done (Reverted COOP/COEP headers to disable SharedArrayBuffer WASM threading) --> Done
-I just want that it should countinue reading .. like a ebook reader .. it doesnot get intrupted until next page is not have --> Done (Automatically triggers translation of next page and resumes reading once finished) --> Done
