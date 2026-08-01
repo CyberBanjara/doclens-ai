@@ -1,6 +1,6 @@
 import { useCallback, useRef, useState } from "react";
 import { toast } from "sonner";
-import { Upload } from "lucide-react";
+import { Upload, Plus } from "lucide-react";
 
 /** Maximum allowed file size in bytes (50 MB). */
 const MAX_FILE_SIZE = 50 * 1024 * 1024;
@@ -15,13 +15,13 @@ function formatSize(bytes: number): string {
 
 interface DropzoneProps {
   onFile: (file: File) => void;
-  /** Slim horizontal bar instead of the full onboarding hero — used once the
-   * library already has documents, so returning users aren't shown a big
-   * empty-state prompt every time. Drag/drop and validation are unchanged. */
+  /** Slim horizontal bar mode */
   compact?: boolean;
+  /** Card item mode for rendering inside document grid */
+  gridCard?: boolean;
 }
 
-export function Dropzone({ onFile, compact = false }: DropzoneProps) {
+export function Dropzone({ onFile, compact = false, gridCard = false }: DropzoneProps) {
   const [hover, setHover] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
 
@@ -88,6 +88,31 @@ export function Dropzone({ onFile, compact = false }: DropzoneProps) {
       handle(e.dataTransfer.files?.[0]);
     },
   };
+
+  if (gridCard) {
+    return (
+      <div
+        {...dragHandlers}
+        onClick={() => inputRef.current?.click()}
+        className={`group relative flex flex-col items-center justify-center min-h-[250px] h-full cursor-pointer rounded-[18px] border-2 border-dashed p-6 text-center transition-all duration-300 ${
+          hover
+            ? "border-primary bg-primary/10 scale-[1.02] shadow-lg"
+            : "border-primary/40 bg-surface/40 hover:border-primary hover:bg-primary/5 hover:scale-[1.01]"
+        }`}
+      >
+        {fileInput}
+        <div className="mx-auto mb-3 flex h-14 w-14 items-center justify-center rounded-full bg-primary/10 text-primary shadow-sm transition-transform duration-300 group-hover:scale-110 group-hover:bg-primary group-hover:text-primary-foreground">
+          <Plus className="h-7 w-7" />
+        </div>
+        <h3 className="text-base font-bold text-foreground group-hover:text-primary transition-colors">
+          Add a PDF
+        </h3>
+        <p className="mt-1.5 text-xs text-muted-foreground">
+          Drag & drop or click to upload
+        </p>
+      </div>
+    );
+  }
 
   if (compact) {
     return (

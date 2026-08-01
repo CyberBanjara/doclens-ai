@@ -237,43 +237,40 @@ function DashboardPage() {
           }),
         }}
       />
-      {/* Visible Hero Header explaining App Purpose for Users & Google OAuth Verification */}
-      <div className="border-b border-border bg-surface-2/30 px-4 py-8 sm:px-8">
+      {/* App Purpose Hero Header — Minimal on Mobile, Elegant on Desktop */}
+      <div className="border-b border-border bg-surface-2/20 px-4 py-4 sm:px-8 sm:py-6">
         <div className="mx-auto max-w-7xl">
-          <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-6">
-            <div className="space-y-3 max-w-3xl">
-              <div className="inline-flex items-center gap-2 rounded-full border border-primary/30 bg-primary/10 px-3 py-1 text-xs font-semibold text-primary">
-                <span className="h-2 w-2 rounded-full bg-primary animate-pulse" />
+          <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
+            <div className="space-y-2 max-w-3xl">
+              <div className="inline-flex items-center gap-2 rounded-full border border-primary/30 bg-primary/10 px-3 py-0.5 text-[11px] font-semibold text-primary">
+                <span className="h-1.5 w-1.5 rounded-full bg-primary animate-pulse" />
                 <span>AI Document Reader & Translator</span>
               </div>
-              <h1 className="text-2xl sm:text-3xl lg:text-4xl font-extrabold tracking-tight text-foreground">
+              <h1 className="text-xl sm:text-2xl lg:text-3xl font-extrabold tracking-tight text-foreground">
                 Read, Translate & Listen to Documents with <span className="text-primary">Anuwad</span>
               </h1>
-              <p className="hero-description text-sm sm:text-base text-foreground/80 leading-relaxed">
-                Anuwad is a free, privacy-first document platform. Render PDFs locally in your browser, translate pages into over 90 languages using state-of-the-art AI, and convert text into natural speech. Sign in with Google to synchronize your saved document library and feedback securely across devices.
+              <p className="hero-description text-xs sm:text-sm text-foreground/80 leading-relaxed max-w-2xl">
+                Anuwad is a free, privacy-first document platform. Render PDFs locally in your browser, translate pages into over 90 languages using AI, and convert text to speech. Sign in with Google to sync your saved document library and feedback securely across devices.
               </p>
             </div>
 
-            <div className="grid grid-cols-2 gap-3 sm:gap-4 shrink-0">
-              <div className="rounded-xl border border-border bg-card p-3 text-left">
-                <div className="text-base mb-1">🔒</div>
-                <div className="text-xs font-bold text-foreground">100% Private</div>
-                <div className="text-[11px] text-muted-foreground">Local browser PDF processing</div>
+            {/* Feature Badges — Desktop Only to keep Mobile ultra-minimal */}
+            <div className="hidden lg:grid grid-cols-2 gap-2.5 shrink-0">
+              <div className="rounded-xl border border-border/70 bg-card/80 p-2.5 text-left">
+                <div className="text-xs font-bold text-foreground">🔒 100% Private</div>
+                <div className="text-[10px] text-muted-foreground">Local browser PDF rendering</div>
               </div>
-              <div className="rounded-xl border border-border bg-card p-3 text-left">
-                <div className="text-base mb-1">🌐</div>
-                <div className="text-xs font-bold text-foreground">90+ Languages</div>
-                <div className="text-[11px] text-muted-foreground">AI page-by-page translation</div>
+              <div className="rounded-xl border border-border/70 bg-card/80 p-2.5 text-left">
+                <div className="text-xs font-bold text-foreground">🌐 90+ Languages</div>
+                <div className="text-[10px] text-muted-foreground">AI page translation</div>
               </div>
-              <div className="rounded-xl border border-border bg-card p-3 text-left">
-                <div className="text-base mb-1">🔊</div>
-                <div className="text-xs font-bold text-foreground">Neural TTS</div>
-                <div className="text-[11px] text-muted-foreground">Read documents out loud</div>
+              <div className="rounded-xl border border-border/70 bg-card/80 p-2.5 text-left">
+                <div className="text-xs font-bold text-foreground">🔊 Neural TTS</div>
+                <div className="text-[10px] text-muted-foreground">Read documents out loud</div>
               </div>
-              <div className="rounded-xl border border-border bg-card p-3 text-left">
-                <div className="text-base mb-1">🔑</div>
-                <div className="text-xs font-bold text-foreground">Google OAuth</div>
-                <div className="text-[11px] text-muted-foreground">Sync profile & preferences</div>
+              <div className="rounded-xl border border-border/70 bg-card/80 p-2.5 text-left">
+                <div className="text-xs font-bold text-foreground">🔑 Google OAuth</div>
+                <div className="text-[10px] text-muted-foreground">Sync profile & saved docs</div>
               </div>
             </div>
           </div>
@@ -281,10 +278,10 @@ function DashboardPage() {
       </div>
 
       {isMobile ? (
-        <div className="space-y-5 px-4 pb-8 pt-4">
+        <div className="space-y-4 px-4 pb-8 pt-3">
           {keyStatus !== "valid" && (
             <div
-              className={`flex items-center justify-between gap-3 rounded-2xl border px-4 py-3 ${
+              className={`flex items-center justify-between gap-3 rounded-xl border px-3.5 py-2.5 ${
                 keyStatus === "invalid"
                   ? "border-destructive/40 bg-destructive/10"
                   : "border-primary/40 bg-primary/5"
@@ -299,7 +296,7 @@ function DashboardPage() {
               </p>
               <button
                 onClick={() => openApiKeyModal()}
-                className="shrink-0 rounded-full bg-primary px-3 py-1.5 text-xs font-semibold text-primary-foreground transition-transform active:scale-95"
+                className="shrink-0 rounded-full bg-primary px-3 py-1 text-xs font-semibold text-primary-foreground transition-transform active:scale-95"
               >
                 Fix
               </button>
@@ -307,21 +304,21 @@ function DashboardPage() {
           )}
 
           {!loading && docs.length === 0 ? (
-            <div className="flex flex-col items-center gap-3 rounded-3xl border border-dashed border-border py-20 text-center">
-              <FilePlus2 className="h-8 w-8 text-muted-foreground" />
-              <p className="text-sm text-muted-foreground">Tap + to add your first PDF</p>
+            <div className="py-8">
+              <Dropzone onFile={handleFile} gridCard />
             </div>
           ) : (
             <div className="grid grid-cols-2 gap-3">
+              <Dropzone onFile={handleFile} gridCard />
               {docs.map((d) => (
                 <DocumentCard key={d.id} doc={d} onDelete={handleDeleteClick} />
               ))}
             </div>
           )}
 
-          {/* Footer for Mobile */}
-          <footer className="mt-8 border-t border-border pt-6 text-center text-xs text-muted-foreground space-y-2">
-            <div className="flex justify-center gap-4">
+          {/* Minimal Mobile Footer */}
+          <footer className="mt-6 border-t border-border/50 pt-4 text-center text-[11px] text-muted-foreground space-y-1.5">
+            <div className="flex justify-center gap-4 font-medium">
               <a href="/privacy" className="hover:text-primary transition-colors">
                 Privacy Policy
               </a>
@@ -330,7 +327,7 @@ function DashboardPage() {
                 Terms of Service
               </a>
             </div>
-            <p>© {new Date().getFullYear()} Anuwad.com — All rights reserved.</p>
+            <p>© {new Date().getFullYear()} Anuwad.com</p>
           </footer>
         </div>
       ) : (
@@ -368,18 +365,16 @@ function DashboardPage() {
           )}
 
           {!loading && docs.length === 0 ? (
-            <div className="h-56">
+            <div className="h-64 max-w-xl mx-auto">
               <Dropzone onFile={handleFile} />
             </div>
           ) : (
-            <>
-              <Dropzone onFile={handleFile} compact />
-              <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-                {docs.map((d) => (
-                  <DocumentCard key={d.id} doc={d} onDelete={handleDeleteClick} />
-                ))}
-              </div>
-            </>
+            <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+              <Dropzone onFile={handleFile} gridCard />
+              {docs.map((d) => (
+                <DocumentCard key={d.id} doc={d} onDelete={handleDeleteClick} />
+              ))}
+            </div>
           )}
 
           {/* Footer for Desktop */}

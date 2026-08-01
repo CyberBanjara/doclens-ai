@@ -135,14 +135,15 @@ export function SidebarLayout({
         <div className="flex-1" />
 
         {/* New Document Button */}
-        <div className="px-4 pb-4">
+        <div className="px-4 pb-4 flex items-center justify-center">
           {fileInput}
           <button
             onClick={() => fileInputRef.current?.click()}
-            className="flex w-full items-center justify-center gap-2 rounded-full bg-primary py-3 px-4 text-sm font-semibold text-primary-foreground transition-all hover:opacity-90 active:scale-95 shadow-sm"
+            className="flex h-12 w-12 items-center justify-center rounded-full bg-primary text-primary-foreground shadow-lg transition-transform hover:scale-110 active:scale-95 shadow-primary/30"
+            aria-label="Add new document"
+            title="Add new PDF document"
           >
-            <span className="text-lg leading-none">+</span>
-            New Document
+            <Plus className="h-6 w-6" />
           </button>
         </div>
 
