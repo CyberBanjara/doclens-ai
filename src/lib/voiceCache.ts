@@ -83,7 +83,6 @@ export async function saveCachedFile(filename: string, blob: Blob): Promise<void
       await writable.write(blob);
       await writable.close();
       savedToOpfs = true;
-      console.log(`[VoiceCache] Saved ${filename} to OPFS`);
     } catch (err) {
       console.warn("[VoiceCache] Failed to save to OPFS, falling back to IndexedDB:", err);
     }
@@ -94,7 +93,6 @@ export async function saveCachedFile(filename: string, blob: Blob): Promise<void
     try {
       const db = await getDB();
       await db.put(STORE_NAME, blob, filename);
-      console.log(`[VoiceCache] Saved ${filename} to IndexedDB`);
     } catch (err) {
       console.error("[VoiceCache] Failed to save to IndexedDB:", err);
     }
@@ -146,7 +144,6 @@ export async function deleteCachedVoice(voiceId: string): Promise<void> {
       const dir = await root.getDirectoryHandle("piper", { create: false });
       await dir.removeEntry(onnxFile).catch(() => {});
       await dir.removeEntry(jsonFile).catch(() => {});
-      console.log(`[VoiceCache] Deleted ${voiceId} from OPFS`);
     } catch (err) {
       // Ignored
     }
@@ -157,7 +154,6 @@ export async function deleteCachedVoice(voiceId: string): Promise<void> {
     const db = await getDB();
     await db.delete(STORE_NAME, onnxFile);
     await db.delete(STORE_NAME, jsonFile);
-    console.log(`[VoiceCache] Deleted ${voiceId} from IndexedDB`);
   } catch (err) {
     console.error("[VoiceCache] Failed to delete from IndexedDB:", err);
   }
@@ -170,7 +166,6 @@ export async function clearAllVoiceCache(): Promise<void> {
       const root = await navigator.storage.getDirectory();
       const dir = await root.getDirectoryHandle("piper", { create: false });
       await (dir as any).remove({ recursive: true });
-      console.log("[VoiceCache] Cleared all OPFS files");
     } catch (err) {
       // Ignored
     }
@@ -180,7 +175,6 @@ export async function clearAllVoiceCache(): Promise<void> {
   try {
     const db = await getDB();
     await db.clear(STORE_NAME);
-    console.log("[VoiceCache] Cleared all IndexedDB files");
   } catch (err) {
     console.error("[VoiceCache] Failed to clear IndexedDB:", err);
   }
@@ -238,7 +232,6 @@ export function initVoiceCache() {
         // Try serving from cache
         const cachedBlob = await getCachedFile(filename);
         if (cachedBlob) {
-          console.log(`[VoiceCache] Cache HIT for ${filename}`);
           return new Response(cachedBlob, {
             status: 200,
             statusText: "OK",
@@ -250,7 +243,6 @@ export function initVoiceCache() {
         }
 
         // Cache MISS -> download, write to cache synchronously, then return Response
-        console.log(`[VoiceCache] Cache MISS for ${filename}. Fetching & caching...`);
         try {
           const blob = await fetchAndCache(filename, targetUrl, init);
           return new Response(blob, {
@@ -271,7 +263,6 @@ export function initVoiceCache() {
     return originalFetch!(input, init);
   };
 
-  console.log("[VoiceCache] Global fetch interceptor initialized successfully.");
 }
 
 export async function downloadVoice(

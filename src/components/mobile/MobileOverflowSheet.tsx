@@ -7,7 +7,7 @@ import {
   DrawerTitle,
   DrawerDescription,
 } from "@/components/ui/drawer";
-import { exportAsMarkdown, exportAsJson } from "@/components/RightPanel";
+import { exportAsMarkdown, exportAsJson } from "@/lib/export";
 
 interface MobileOverflowSheetProps {
   open: boolean;

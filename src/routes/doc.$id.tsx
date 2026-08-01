@@ -25,7 +25,8 @@ import {
   type PageAiSummaryEntry,
 } from "@/lib/storage";
 import { syncFromSupabase, syncToSupabase, getSyncConfig } from "@/lib/sync";
-import { checkTextQuality } from "@/lib/pdf";
+import { checkTextQuality } from "@/lib/textCleaning";
+import { UPLOAD_CATEGORIES } from "@/lib/uploadCategories";
 import { ChevronLeft, ChevronRight, Cloud, RefreshCw, Settings, Zap } from "lucide-react";
 import {
   Dialog,
@@ -74,7 +75,7 @@ const runOcrOnGarbledPagesClient = createClientOnlyFn(
       garbageRatio: number,
     ) => Promise<void> | void,
   ) => {
-    const { runOcrOnGarbledPages } = await import("@/lib/pdf");
+    const { runOcrOnGarbledPages } = await import("@/lib/pdfOcr");
     return runOcrOnGarbledPages(blob, pages, onProgress, onPageOcrComplete);
   },
 );
@@ -720,14 +721,7 @@ function DocPage() {
             </DrawerHeader>
             <div className="space-y-4 overflow-y-auto px-6 pb-2">
               <div className="grid grid-cols-2 gap-2">
-                {[
-                  { id: "history", label: "📜 History", desc: "history/" },
-                  { id: "economics", label: "📈 Economics", desc: "economics/" },
-                  { id: "geography", label: "🌍 Geography", desc: "geography/" },
-                  { id: "civics", label: "🏛️ Civics", desc: "civics/" },
-                  { id: "science", label: "🔬 Science", desc: "science/" },
-                  { id: "custom", label: "✏️ Custom", desc: "Custom prefix" },
-                ].map((cat) => (
+                {UPLOAD_CATEGORIES.map((cat) => (
                   <button
                     key={cat.id}
                     type="button"
@@ -784,14 +778,7 @@ function DocPage() {
           </DialogHeader>
           <div className="space-y-4 py-3">
             <div className="grid grid-cols-2 gap-2">
-              {[
-                { id: "history", label: "📜 History", desc: "history/" },
-                { id: "economics", label: "📈 Economics", desc: "economics/" },
-                { id: "geography", label: "🌍 Geography", desc: "geography/" },
-                { id: "civics", label: "🏛️ Civics", desc: "civics/" },
-                { id: "science", label: "🔬 Science", desc: "science/" },
-                { id: "custom", label: "✏️ Custom", desc: "Custom prefix" },
-              ].map((cat) => (
+              {UPLOAD_CATEGORIES.map((cat) => (
                 <button
                   key={cat.id}
                   type="button"

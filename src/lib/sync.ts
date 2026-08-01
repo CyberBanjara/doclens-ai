@@ -1,17 +1,13 @@
 import { createServerFn } from "@tanstack/react-start";
 import { fetchSupabaseExtraction, saveSupabaseExtraction } from "./supabase";
-import { getDoc, updateDoc, db, pageKey } from "./storage";
+import { getDoc, updateDoc, db, pageKey, getAllPages, withDocLock } from "./storage";
+import { isGlobalSyncEnabled } from "./env";
 
 export const getSyncConfig = createServerFn({ method: "GET" })
   .handler(async () => {
     "use server";
-    const enabled =
-      process.env.ENABLE_GLOBAL_SYNC === "true" ||
-      process.env.VITE_ENABLE_GLOBAL_SYNC === "true" ||
-      (import.meta as any).env?.ENABLE_GLOBAL_SYNC === "true" ||
-      (import.meta as any).env?.VITE_ENABLE_GLOBAL_SYNC === "true";
     return {
-      enabled,
+      enabled: isGlobalSyncEnabled(),
     };
   });
 
@@ -63,69 +59,75 @@ export async function syncFromSupabase(docId: string, fileName: string): Promise
     }
 
     if (pagesData.length > 0) {
-      const { getAllPages } = await import("./storage");
       const localPages = await getAllPages(docId);
       const localPagesMap = new Map(localPages.map((p) => [p.pageNumber, p]));
 
-      const d = await db();
-      const PAGES = "pageData";
-      
-      const tx = d.transaction(PAGES, "readwrite");
-      
       let updatedAny = false;
       let aiDoneCount = 0;
-      for (const p of pagesData) {
-        const isDone = p.pageAi?.status === "done";
-        if (isDone) aiDoneCount++;
 
-        const localPage = localPagesMap.get(p.pageNumber);
-        
-        let shouldUpdate = false;
-        if (!localPage) {
-          shouldUpdate = true;
-        } else {
-          // Check if text or OCR status is different
-          if (localPage.text !== p.text ||
-              localPage.columns !== (p.columns || 1) ||
-              localPage.garbageRatio !== (p.garbageRatio || 0) ||
-              localPage.ocrRun !== (p.ocrRun || false)) {
+      // Writes go through the same withDocLock mutex every other writer (translation
+      // streaming via upsertPageAi, writePages, updateDoc) uses, so a background sync
+      // can't race an in-flight write to the same document's page records.
+      await withDocLock(docId, async () => {
+        const d = await db();
+        const PAGES = "pageData";
+        const tx = d.transaction(PAGES, "readwrite");
+
+        for (const p of pagesData) {
+          const isDone = p.pageAi?.status === "done";
+          if (isDone) aiDoneCount++;
+
+          const localPage = localPagesMap.get(p.pageNumber);
+
+          let shouldUpdate = false;
+          if (!localPage) {
             shouldUpdate = true;
-          }
-          // Check if AI status / result is updated
-          const localAi = localPage.pageAi;
-          const remoteAi = p.pageAi;
-          if (remoteAi) {
-            if (!localAi) {
-              shouldUpdate = true;
-            } else if (remoteAi.status === "done" && localAi.status !== "done") {
-              shouldUpdate = true;
-            } else if (remoteAi.status === "done" && localAi.status === "done") {
-              if ((remoteAi.updatedAt || 0) > (localAi.updatedAt || 0) || remoteAi.result !== localAi.result) {
-                shouldUpdate = true;
-              }
-            } else if (remoteAi.status !== localAi.status || remoteAi.result !== localAi.result) {
+          } else {
+            // Check if text or OCR status is different
+            if (localPage.text !== p.text ||
+                localPage.columns !== (p.columns || 1) ||
+                localPage.garbageRatio !== (p.garbageRatio || 0) ||
+                localPage.ocrRun !== (p.ocrRun || false)) {
               shouldUpdate = true;
             }
+            // Check if AI status / result is updated
+            const localAi = localPage.pageAi;
+            const remoteAi = p.pageAi;
+            if (remoteAi) {
+              if (!localAi) {
+                shouldUpdate = true;
+              } else if (remoteAi.status === "done" && localAi.status !== "done") {
+                shouldUpdate = true;
+              } else if (remoteAi.status === "done" && localAi.status === "done") {
+                if ((remoteAi.updatedAt || 0) > (localAi.updatedAt || 0) || remoteAi.result !== localAi.result) {
+                  shouldUpdate = true;
+                }
+              } else if (remoteAi.status !== localAi.status || remoteAi.result !== localAi.result) {
+                shouldUpdate = true;
+              }
+            }
+          }
+
+          if (shouldUpdate) {
+            updatedAny = true;
+            const rec = {
+              key: pageKey(docId, p.pageNumber),
+              docId,
+              pageNumber: p.pageNumber,
+              text: p.text,
+              columns: p.columns || 1,
+              garbageRatio: p.garbageRatio || 0,
+              ocrRun: p.ocrRun || false,
+              pageAi: p.pageAi || undefined,
+            };
+            await tx.store.put(rec);
           }
         }
+        await tx.done;
+      });
 
-        if (shouldUpdate) {
-          updatedAny = true;
-          const rec = {
-            key: pageKey(docId, p.pageNumber),
-            docId,
-            pageNumber: p.pageNumber,
-            text: p.text,
-            columns: p.columns || 1,
-            garbageRatio: p.garbageRatio || 0,
-            ocrRun: p.ocrRun || false,
-            pageAi: p.pageAi || undefined,
-          };
-          await tx.store.put(rec);
-        }
-      }
-      await tx.done;
-
+      // A separate (non-nested) lock acquisition — updateDoc acquires withDocLock
+      // itself, so it must run after the block above releases it.
       await updateDoc(docId, {
         pageCount: pagesData.length,
         aiDoneCount,
@@ -144,7 +146,6 @@ export async function syncToSupabase(docId: string): Promise<void> {
     const docRec = await getDoc(docId);
     if (!docRec) return;
 
-    const { getAllPages } = await import("./storage");
     const pages = await getAllPages(docId);
     if (pages.length === 0) return;
 

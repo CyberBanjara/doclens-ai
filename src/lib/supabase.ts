@@ -1,5 +1,6 @@
 import { createClient } from "@supabase/supabase-js";
 import { createServerFn } from "@tanstack/react-start";
+import { isGlobalSyncEnabled } from "./env";
 
 async function getSupabaseClient() {
   const url = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL;
@@ -37,7 +38,6 @@ export const fetchSupabaseExtraction = createServerFn({ method: "POST" })
         return { found: false, error: "Supabase URL or Key is missing from environment variables." };
       }
 
-      console.log(`[Supabase] -> SELECT pdf_extractions WHERE id="${data.key}"`);
       const { data: record, error } = await supabase
         .from("pdf_extractions")
         .select("*")
@@ -92,11 +92,7 @@ export const saveSupabaseExtraction = createServerFn({ method: "POST" })
   )
   .handler(async ({ data }) => {
     "use server";
-    const isSyncEnabled =
-      process.env.ENABLE_GLOBAL_SYNC === "true" ||
-      process.env.VITE_ENABLE_GLOBAL_SYNC === "true" ||
-      (import.meta as any).env?.ENABLE_GLOBAL_SYNC === "true" ||
-      (import.meta as any).env?.VITE_ENABLE_GLOBAL_SYNC === "true";
+    const isSyncEnabled = isGlobalSyncEnabled();
     if (!isSyncEnabled) {
       throw new Error("Global sync (Supabase writes) is disabled in this environment.");
     }
@@ -127,7 +123,6 @@ export const saveSupabaseExtraction = createServerFn({ method: "POST" })
         }
       }
 
-      console.log(`[Supabase] -> UPSERT pdf_extractions id="${data.key}"`);
       const { error } = await supabase
         .from("pdf_extractions")
         .upsert(

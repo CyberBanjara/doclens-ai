@@ -508,7 +508,7 @@ export const DARK_THEMES: ThemeDefinition[] = [
   },
 ];
 
-export const ALL_THEMES: ThemeDefinition[] = [...LIGHT_THEMES, ...DARK_THEMES];
+const ALL_THEMES: ThemeDefinition[] = [...LIGHT_THEMES, ...DARK_THEMES];
 
 // ── Helpers ────────────────────────────────────────────────────────────────
 
@@ -531,7 +531,7 @@ export function setTheme(id: string): void {
 }
 
 /** Find a theme definition by id. Returns undefined for "system". */
-export function findTheme(id: string): ThemeDefinition | undefined {
+function findTheme(id: string): ThemeDefinition | undefined {
   return ALL_THEMES.find((t) => t.id === id);
 }
 
@@ -541,7 +541,7 @@ const DAY_START_HOUR = 6;
 const DAY_END_HOUR = 18;
 
 /** True if the system clock's current local hour falls within the daytime window. */
-export function isDaytimeNow(): boolean {
+function isDaytimeNow(): boolean {
   const hour = new Date().getHours();
   return hour >= DAY_START_HOUR && hour < DAY_END_HOUR;
 }
@@ -551,7 +551,7 @@ export function isDaytimeNow(): boolean {
  * If "system", picks light mode during the day and dark mode in the evening/night,
  * based on the device's current system clock time (not the OS dark-mode setting).
  */
-export function resolveTheme(id: string): ThemeDefinition {
+function resolveTheme(id: string): ThemeDefinition {
   if (id !== "system") {
     const t = findTheme(id);
     if (t) return t;

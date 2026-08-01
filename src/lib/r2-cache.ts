@@ -56,8 +56,3 @@ export function setCachedR2Files(files: R2File[]) {
   cachedFiles = files;
   cachedAt = Date.now();
 }
-
-export function invalidateR2FilesCache() {
-  cachedFiles = null;
-  cachedAt = 0;
-}

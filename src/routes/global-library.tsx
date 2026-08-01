@@ -1,5 +1,5 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 import {
   Download,
@@ -20,32 +20,10 @@ import { createDoc } from "@/lib/storage";
 import { LoadingLogo } from "@/components/LoadingLogo";
 import { getSyncConfig } from "@/lib/sync";
 import { useIsMobile } from "@/hooks/use-mobile";
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-} from "@/components/ui/alert-dialog";
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
-import {
-  Drawer,
-  DrawerContent,
-  DrawerDescription,
-  DrawerFooter,
-  DrawerHeader,
-  DrawerTitle,
-} from "@/components/ui/drawer";
+import { formatBytes, formatDate, base64ToBlob, parseFileCategory, type R2File, type ParsedR2File } from "@/lib/file-utils";
+import { CategoryMarqueeRow } from "@/components/CategoryMarqueeRow";
+import { R2UploadDialog } from "@/components/R2UploadDialog";
+import { DeleteFileDialog } from "@/components/DeleteFileDialog";
 
 export const Route = createFileRoute("/global-library")({
   component: GlobalLibraryPage,
@@ -57,18 +35,6 @@ export const Route = createFileRoute("/global-library")({
   }),
 });
 
-interface R2File {
-  key: string;
-  size: number;
-  lastModified?: string;
-  url?: string;
-}
-
-interface ParsedR2File extends R2File {
-  category: string;
-  displayName: string;
-}
-
 const STANDARD_CATEGORIES: Record<string, { label: string; icon: string; desc: string }> = {
   history: { label: "History", icon: "📜", desc: "history/" },
   economics: { label: "Economics", icon: "📈", desc: "economics/" },
@@ -77,141 +43,6 @@ const STANDARD_CATEGORIES: Record<string, { label: string; icon: string; desc: s
   science: { label: "Science", icon: "🔬", desc: "science/" },
   uncategorized: { label: "Uncategorized", icon: "📂", desc: "uncategorized/" },
 };
-
-function formatBytes(bytes: number, decimals = 2) {
-  if (!bytes) return "0 Bytes";
-  const k = 1024;
-  const dm = decimals < 0 ? 0 : decimals;
-  const sizes = ["Bytes", "KB", "MB", "GB", "TB"];
-  const i = Math.floor(Math.log(bytes) / Math.log(k));
-  return `${parseFloat((bytes / Math.pow(k, i)).toFixed(dm))} ${sizes[i]}`;
-}
-
-function formatDate(dateStr?: string) {
-  if (!dateStr) return "Unknown";
-  try {
-    const d = new Date(dateStr);
-    return d.toLocaleString(undefined, {
-      dateStyle: "medium",
-      timeStyle: "short",
-    });
-  } catch (e) {
-    return dateStr;
-  }
-}
-
-function base64ToBlob(base64: string, mimeType = "application/pdf") {
-  const byteCharacters = atob(base64);
-  const byteArrays = [];
-  for (let offset = 0; offset < byteCharacters.length; offset += 512) {
-    const slice = byteCharacters.slice(offset, offset + 512);
-    const byteNumbers = new Array(slice.length);
-    for (let i = 0; i < slice.length; i++) {
-      byteNumbers[i] = slice.charCodeAt(i);
-    }
-    const byteArray = new Uint8Array(byteNumbers);
-    byteArrays.push(byteArray);
-  }
-  return new Blob(byteArrays, { type: mimeType });
-}
-
-function parseFileCategory(file: R2File): ParsedR2File {
-  const parts = file.key.split("/");
-  if (parts.length > 1 && parts[0].trim().length > 0) {
-    const category = parts[0].trim().toLowerCase();
-    const displayName = parts.slice(1).join("/");
-    return { ...file, category, displayName };
-  }
-  return { ...file, category: "uncategorized", displayName: file.key };
-}
-
-interface CategoryMarqueeItem {
-  key: string;
-  label: string;
-  icon?: string;
-  active: boolean;
-  onClick: () => void;
-}
-
-/**
- * Slow, continuously auto-scrolling category row for the mobile Global Library.
- * The list is duplicated so the loop can wrap seamlessly, and auto-scroll pauses
- * while the user is actively touching/dragging so manual swipes and taps still work.
- */
-function CategoryMarqueeRow({ items }: { items: CategoryMarqueeItem[] }) {
-  const containerRef = useRef<HTMLDivElement>(null);
-  const pausedRef = useRef(false);
-  const resumeTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-
-  useEffect(() => {
-    const el = containerRef.current;
-    if (!el) return;
-    if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
-
-    const speed = 0.35; // px/frame — slow, continuous drift
-    let frameId: number;
-    // Track position as a float ourselves: reading `el.scrollLeft` back rounds to
-    // an integer each frame, so accumulating via `el.scrollLeft += speed` would
-    // never progress past 0 for a sub-1px-per-frame speed.
-    let pos = el.scrollLeft;
-
-    const step = () => {
-      if (!pausedRef.current) {
-        const halfWidth = el.scrollWidth / 2;
-        pos += speed;
-        if (halfWidth > 0 && pos >= halfWidth) {
-          pos -= halfWidth;
-        }
-        el.scrollLeft = pos;
-      } else {
-        // Stay in sync with any manual scrolling the user did while paused.
-        pos = el.scrollLeft;
-      }
-      frameId = requestAnimationFrame(step);
-    };
-    frameId = requestAnimationFrame(step);
-
-    return () => cancelAnimationFrame(frameId);
-  }, []);
-
-  const pause = () => {
-    pausedRef.current = true;
-    if (resumeTimeoutRef.current) clearTimeout(resumeTimeoutRef.current);
-  };
-  const scheduleResume = () => {
-    if (resumeTimeoutRef.current) clearTimeout(resumeTimeoutRef.current);
-    resumeTimeoutRef.current = setTimeout(() => {
-      pausedRef.current = false;
-    }, 2000);
-  };
-
-  return (
-    <div
-      ref={containerRef}
-      onPointerDown={pause}
-      onPointerUp={scheduleResume}
-      onPointerLeave={scheduleResume}
-      onTouchStart={pause}
-      onTouchEnd={scheduleResume}
-      className="-mx-4 flex gap-2 overflow-x-auto px-4 pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
-    >
-      {[...items, ...items].map((item, idx) => (
-        <button
-          key={`${item.key}-${idx}`}
-          onClick={item.onClick}
-          className={`flex-shrink-0 rounded-full px-4 py-1.5 text-xs font-medium transition-colors ${
-            item.active
-              ? "bg-primary text-primary-foreground"
-              : "bg-surface-2 text-muted-foreground"
-          }`}
-        >
-          {item.icon ? `${item.icon} ` : ""}
-          {item.label}
-        </button>
-      ))}
-    </div>
-  );
-}
 
 function GlobalLibraryPage() {
   const isMobile = useIsMobile();
@@ -888,147 +719,26 @@ function GlobalLibraryPage() {
       )}
 
       {/* Direct R2 Upload Modal */}
-      {(() => {
-        const uploadBody = (
-          <>
-            <div className="space-y-1">
-              <label className="text-xs font-medium text-foreground">PDF Document</label>
-              <input
-                type="file"
-                accept="application/pdf,.pdf"
-                onChange={(e) => {
-                  if (e.target.files && e.target.files[0]) {
-                    setUploadFile(e.target.files[0]);
-                  }
-                }}
-                className="w-full rounded-md border border-border bg-surface p-2 text-xs text-foreground file:mr-3 file:rounded-md file:border-0 file:bg-primary/10 file:px-3 file:py-1 file:text-xs file:font-semibold file:text-primary hover:file:bg-primary/20 cursor-pointer"
-              />
-            </div>
-
-            <div className="mt-4 space-y-2">
-              <label className="text-xs font-medium text-foreground">Select Category Folder</label>
-              <div className="grid grid-cols-2 gap-2">
-                {[
-                  { id: "history", label: "📜 History", desc: "history/" },
-                  { id: "economics", label: "📈 Economics", desc: "economics/" },
-                  { id: "geography", label: "🌍 Geography", desc: "geography/" },
-                  { id: "civics", label: "🏛️ Civics", desc: "civics/" },
-                  { id: "science", label: "🔬 Science", desc: "science/" },
-                  { id: "custom", label: "✏️ Custom", desc: "Custom prefix" },
-                ].map((cat) => (
-                  <button
-                    key={cat.id}
-                    type="button"
-                    onClick={() => setUploadCategory(cat.id)}
-                    className={`flex flex-col items-start rounded-lg border p-3 text-left transition-all ${
-                      uploadCategory === cat.id
-                        ? "border-primary bg-primary/10 text-foreground ring-1 ring-primary"
-                        : "border-border bg-surface hover:bg-surface-2 text-muted-foreground"
-                    }`}
-                  >
-                    <span className="font-semibold text-sm">{cat.label}</span>
-                    <span className="text-[11px] font-mono text-muted-foreground">{cat.desc}</span>
-                  </button>
-                ))}
-              </div>
-
-              {uploadCategory === "custom" && (
-                <div className="mt-2 space-y-1">
-                  <label className="text-xs font-medium text-foreground">
-                    Custom Category Name
-                  </label>
-                  <input
-                    type="text"
-                    placeholder="e.g. mathematics, literature"
-                    value={customUploadCategory}
-                    onChange={(e) => setCustomUploadCategory(e.target.value)}
-                    className="w-full rounded-md border border-border bg-surface px-3 py-2 text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-primary"
-                  />
-                </div>
-              )}
-            </div>
-          </>
-        );
-
-        const uploadFooter = (
-          <>
-            <button
-              onClick={() => setShowUploadModal(false)}
-              className="rounded-lg border border-border px-4 py-2 text-xs font-semibold text-muted-foreground hover:bg-surface-2 transition-colors"
-            >
-              Cancel
-            </button>
-            <button
-              onClick={handleDirectUploadSubmit}
-              disabled={
-                !uploadFile ||
-                uploadingDirect ||
-                (uploadCategory === "custom" && !customUploadCategory.trim())
-              }
-              className="rounded-lg bg-primary px-4 py-2 text-xs font-semibold text-primary-foreground hover:opacity-90 disabled:opacity-50 transition-opacity"
-            >
-              {uploadingDirect ? "Uploading…" : "Upload File"}
-            </button>
-          </>
-        );
-
-        if (isMobile) {
-          return (
-            <Drawer open={showUploadModal} onOpenChange={setShowUploadModal}>
-              <DrawerContent>
-                <DrawerHeader>
-                  <DrawerTitle>Upload PDF to Global Vault</DrawerTitle>
-                  <DrawerDescription>
-                    Select a PDF and assign a category folder for Cloudflare R2 storage.
-                  </DrawerDescription>
-                </DrawerHeader>
-                <div className="overflow-y-auto px-6 pb-2">{uploadBody}</div>
-                <DrawerFooter>{uploadFooter}</DrawerFooter>
-              </DrawerContent>
-            </Drawer>
-          );
-        }
-
-        return (
-          <Dialog open={showUploadModal} onOpenChange={setShowUploadModal}>
-            <DialogContent className="sm:max-w-md">
-              <DialogHeader>
-                <DialogTitle>Upload PDF to Global Vault</DialogTitle>
-                <DialogDescription>
-                  Select a PDF document and assign a category folder prefix for Cloudflare R2
-                  storage.
-                </DialogDescription>
-              </DialogHeader>
-              <div className="py-3">{uploadBody}</div>
-              <DialogFooter>{uploadFooter}</DialogFooter>
-            </DialogContent>
-          </Dialog>
-        );
-      })()}
+      <R2UploadDialog
+        isMobile={isMobile}
+        open={showUploadModal}
+        onOpenChange={setShowUploadModal}
+        uploadFile={uploadFile}
+        onFileChange={setUploadFile}
+        uploadCategory={uploadCategory}
+        onCategoryChange={setUploadCategory}
+        customUploadCategory={customUploadCategory}
+        onCustomCategoryChange={setCustomUploadCategory}
+        uploadingDirect={uploadingDirect}
+        onSubmit={handleDirectUploadSubmit}
+      />
 
       {/* Delete confirmation dialog */}
-      <AlertDialog open={!!deleteTarget} onOpenChange={(open) => !open && setDeleteTarget(null)}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>Delete from cloud?</AlertDialogTitle>
-            <AlertDialogDescription>
-              This will permanently delete{" "}
-              <span className="font-medium text-foreground">{deleteTarget?.key}</span> from the
-              shared Cloudflare R2 bucket. Your local copy (if imported) will not be affected. This
-              action cannot be undone.
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel>Cancel</AlertDialogCancel>
-            <AlertDialogAction
-              onClick={handleDeleteConfirm}
-              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-            >
-              Delete
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
+      <DeleteFileDialog
+        fileKey={deleteTarget?.key ?? null}
+        onOpenChange={(open) => !open && setDeleteTarget(null)}
+        onConfirm={handleDeleteConfirm}
+      />
     </SidebarLayout>
   );
 }

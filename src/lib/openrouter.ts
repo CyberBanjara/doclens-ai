@@ -2,6 +2,12 @@ import { createServerFn } from "@tanstack/react-start";
 import { getRequest } from "@tanstack/react-start/server";
 import { isNetworkError, OFFLINE_MESSAGE } from "./network";
 
+/** Rough heuristic: 1 token ≈ 4 characters of English text. */
+export function estimateTokens(text: string): number {
+  if (!text) return 0;
+  return Math.ceil(text.length / 4);
+}
+
 export interface ORModel {
   id: string;
   name: string;
@@ -48,17 +54,6 @@ export function setCustomKey(k: string) {
 
 export function getKey(): string {
   return getCustomKey() || SERVER_KEY_SENTINEL;
-}
-
-export function setKey(k: string) {
-  setCustomKey(k);
-}
-
-export function clearKey() {
-  if (typeof window === "undefined") return;
-  localStorage.removeItem(CUSTOM_KEY_LS);
-  localStorage.removeItem(KEY_STATUS_LS);
-  emitKeyChange();
 }
 
 export function getKeyStatus(): KeyStatus {
@@ -176,6 +171,34 @@ export function getTemperature(): number {
 }
 export function setTemperature(t: number) {
   localStorage.setItem(TEMP_LS, String(t));
+}
+
+/** The user's global AI defaults, as persisted in localStorage. */
+export interface Globals {
+  mode: GlobalMode;
+  language: string;
+  modelId: string;
+  style: string;
+  temperature: number;
+}
+
+export function readGlobals(): Globals {
+  return {
+    mode: getMode(),
+    language: getOutputLanguage(),
+    modelId: getSelectedModel(),
+    style: getStyle(),
+    temperature: getTemperature(),
+  };
+}
+
+/** Same as readGlobals(), but resolves an empty modelId to the server default. */
+export async function readEffectiveGlobals(): Promise<Globals> {
+  const globals = readGlobals();
+  return {
+    ...globals,
+    modelId: globals.modelId || (await getEffectiveSelectedModel()),
+  };
 }
 
 export interface TranslationConfig {
@@ -759,59 +782,3 @@ export function buildPagePayload(i: BuildPagePayloadInput): Record<string, unkno
   };
 }
 
-export function chunkForContext(
-  text: string,
-  contextTokens: number,
-  reserveOutput = 1500,
-): string[] {
-  // ~4 chars per token. Leave room for system + user instruction overhead + output.
-  const usableTokens = Math.max(1000, contextTokens - reserveOutput - 500);
-  const charsPerChunk = usableTokens * 4;
-  if (text.length <= charsPerChunk) return [text];
-  const chunks: string[] = [];
-  // Try to split on paragraph boundaries
-  const paragraphs = text.split(/\n\n+/);
-  let buf = "";
-  for (const p of paragraphs) {
-    if (buf.length + p.length + 2 > charsPerChunk) {
-      if (buf) chunks.push(buf);
-      if (p.length > charsPerChunk) {
-        for (let i = 0; i < p.length; i += charsPerChunk) {
-          chunks.push(p.slice(i, i + charsPerChunk));
-        }
-        buf = "";
-      } else {
-        buf = p;
-      }
-    } else {
-      buf = buf ? buf + "\n\n" + p : p;
-    }
-  }
-  if (buf) chunks.push(buf);
-  return chunks;
-}
-
-export async function mapLimit<T, R>(
-  items: T[],
-  limit: number,
-  fn: (item: T) => Promise<R>,
-): Promise<R[]> {
-  const results: R[] = [];
-  const promises: Promise<void>[] = [];
-  let index = 0;
-
-  async function worker() {
-    while (index < items.length) {
-      const curIndex = index++;
-      if (curIndex >= items.length) break;
-      results[curIndex] = await fn(items[curIndex]);
-    }
-  }
-
-  for (let i = 0; i < Math.min(limit, items.length); i++) {
-    promises.push(worker());
-  }
-
-  await Promise.all(promises);
-  return results;
-}
