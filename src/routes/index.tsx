@@ -237,13 +237,49 @@ function DashboardPage() {
           }),
         }}
       />
-      {/* Kept for SEO/accessibility (H1 + the JSON-LD speakable selector above
-          target these) without cluttering the visible library UI. */}
-      <h1 className="sr-only">Anuwad — Private PDF Reader & AI Translator</h1>
-      <p className="hero-description sr-only">
-        Read it. Own it — in the language that owns your heart. A free, browser-only PDF library
-        with AI translation.
-      </p>
+      {/* Visible Hero Header explaining App Purpose for Users & Google OAuth Verification */}
+      <div className="border-b border-border bg-surface-2/30 px-4 py-8 sm:px-8">
+        <div className="mx-auto max-w-7xl">
+          <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-6">
+            <div className="space-y-3 max-w-3xl">
+              <div className="inline-flex items-center gap-2 rounded-full border border-primary/30 bg-primary/10 px-3 py-1 text-xs font-semibold text-primary">
+                <span className="h-2 w-2 rounded-full bg-primary animate-pulse" />
+                <span>AI Document Reader & Translator</span>
+              </div>
+              <h1 className="text-2xl sm:text-3xl lg:text-4xl font-extrabold tracking-tight text-foreground">
+                Read, Translate & Listen to Documents with <span className="text-primary">Anuwad</span>
+              </h1>
+              <p className="hero-description text-sm sm:text-base text-foreground/80 leading-relaxed">
+                Anuwad is a free, privacy-first document platform. Render PDFs locally in your browser, translate pages into over 90 languages using state-of-the-art AI, and convert text into natural speech. Sign in with Google to synchronize your saved document library and feedback securely across devices.
+              </p>
+            </div>
+
+            <div className="grid grid-cols-2 gap-3 sm:gap-4 shrink-0">
+              <div className="rounded-xl border border-border bg-card p-3 text-left">
+                <div className="text-base mb-1">🔒</div>
+                <div className="text-xs font-bold text-foreground">100% Private</div>
+                <div className="text-[11px] text-muted-foreground">Local browser PDF processing</div>
+              </div>
+              <div className="rounded-xl border border-border bg-card p-3 text-left">
+                <div className="text-base mb-1">🌐</div>
+                <div className="text-xs font-bold text-foreground">90+ Languages</div>
+                <div className="text-[11px] text-muted-foreground">AI page-by-page translation</div>
+              </div>
+              <div className="rounded-xl border border-border bg-card p-3 text-left">
+                <div className="text-base mb-1">🔊</div>
+                <div className="text-xs font-bold text-foreground">Neural TTS</div>
+                <div className="text-[11px] text-muted-foreground">Read documents out loud</div>
+              </div>
+              <div className="rounded-xl border border-border bg-card p-3 text-left">
+                <div className="text-base mb-1">🔑</div>
+                <div className="text-xs font-bold text-foreground">Google OAuth</div>
+                <div className="text-[11px] text-muted-foreground">Sync profile & preferences</div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
       {isMobile ? (
         <div className="space-y-5 px-4 pb-8 pt-4">
           {keyStatus !== "valid" && (
@@ -282,6 +318,20 @@ function DashboardPage() {
               ))}
             </div>
           )}
+
+          {/* Footer for Mobile */}
+          <footer className="mt-8 border-t border-border pt-6 text-center text-xs text-muted-foreground space-y-2">
+            <div className="flex justify-center gap-4">
+              <a href="/privacy" className="hover:text-primary transition-colors">
+                Privacy Policy
+              </a>
+              <span>•</span>
+              <a href="/terms" className="hover:text-primary transition-colors">
+                Terms of Service
+              </a>
+            </div>
+            <p>© {new Date().getFullYear()} Anuwad.com — All rights reserved.</p>
+          </footer>
         </div>
       ) : (
         <div className="mx-auto max-w-7xl space-y-6 p-8">
@@ -331,6 +381,20 @@ function DashboardPage() {
               </div>
             </>
           )}
+
+          {/* Footer for Desktop */}
+          <footer className="mt-12 border-t border-border pt-6 text-center text-xs text-muted-foreground space-y-2">
+            <div className="flex justify-center gap-6">
+              <a href="/privacy" className="hover:text-primary transition-colors">
+                Privacy Policy
+              </a>
+              <span>•</span>
+              <a href="/terms" className="hover:text-primary transition-colors">
+                Terms of Service
+              </a>
+            </div>
+            <p>© {new Date().getFullYear()} Anuwad.com — Private AI Document Reader & Translator</p>
+          </footer>
         </div>
       )}
 
