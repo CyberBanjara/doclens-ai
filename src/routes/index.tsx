@@ -246,11 +246,11 @@ function DashboardPage() {
                 <span className="h-1.5 w-1.5 rounded-full bg-primary animate-pulse" />
                 <span>AI Document Reader & Translator</span>
               </div>
-              <h1 className="text-xl sm:text-2xl lg:text-3xl font-extrabold tracking-tight text-foreground">
-                Read, Translate & Listen to Documents with <span className="text-primary">Anuwad</span>
+              <h1 className="text-2xl sm:text-3xl lg:text-4xl font-extrabold tracking-tight text-foreground">
+                Anuwad <span className="text-primary">— AI Document Reader & Translator</span>
               </h1>
               <p className="hero-description text-xs sm:text-sm text-foreground/80 leading-relaxed max-w-2xl">
-                Anuwad is a free, privacy-first document platform. Render PDFs locally in your browser, translate pages into over 90 languages using AI, and convert text to speech. Sign in with Google to sync your saved document library and feedback securely across devices.
+                Anuwad is a free, privacy-first document platform. Render PDFs locally in your browser, translate pages into over 90 languages using state-of-the-art AI, and convert text to speech. Sign in with Google to sync your saved document library and feedback securely across devices.
               </p>
             </div>
 
