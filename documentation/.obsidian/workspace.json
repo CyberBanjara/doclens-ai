@@ -228,6 +228,7 @@
   },
   "active": "105493eb34a835af",
   "lastOpenFiles": [
+    "Product/Folder Structure.md.tmp.75128.f260c0dcd71e",
     "Product/MOC — Product.md",
     "00 — Index.md",
     "Product/Development Guidelines.md",
@@ -252,7 +253,6 @@
     "Product/Why Anuwad Exists.md",
     "Features/AI Translation.md",
     "APIs/OpenRouter API.md",
-    "APIs/Web Speech API.md",
-    "Features/Piper Neural TTS.md"
+    "APIs/Web Speech API.md"
   ]
 }

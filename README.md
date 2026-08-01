@@ -289,15 +289,14 @@ doclens-ai/
 │   ├── lib/                 # Core logic & services
 │   │   ├── openrouter.ts         # OpenRouter API client, payload builder, SSE streaming
 │   │   ├── pdf.ts                # PDF text extraction, column detection, OCR fallback
-│   │   ├── tts.ts                # Sentence splitting, browser voice listing
-│   │   ├── storage.ts            # IndexedDB schema, CRUD operations
+│   │   ├── tts.ts / ttsEngine.ts # Sentence splitting, browser voices, ONNX session cache
+│   │   ├── storage/              # IndexedDB schema, CRUD operations (barrel module)
 │   │   ├── theme.ts              # Theme system (Deep Ocean + custom themes)
 │   │   ├── network.ts            # Online/offline detection, friendly error messages
 │   │   ├── voiceCache.ts         # OPFS/IndexedDB neural voice model caching
 │   │   ├── firebase.ts           # Firebase Auth + Firestore client
 │   │   ├── r2.ts / r2-cache.ts   # Cloudflare R2 server functions + listing cache
-│   │   ├── supabase.ts / sync.ts # Shared extraction cache + IndexedDB sync
-│   │   └── models.ts             # `estimateTokens()` — token estimation helper
+│   │   └── supabase.ts / sync.ts # Shared extraction cache + IndexedDB sync
 │   └── hooks/               # Custom React hooks (`use-mobile`, `useThumbnail`)
 ├── public/                  # Static assets, ONNX runtime, Piper/Tesseract workers
 ├── documentation/           # Obsidian knowledge base — see [[Architecture]], [[Folder Structure]]
