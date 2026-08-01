@@ -1,6 +1,7 @@
 # Translation Pipeline
 
-> The second stage of the document processing pipeline. Translates or explains extracted page text.
+> The second stage of the document processing pipeline. Translates or explains extracted page text via an LLM.
+> **Source:** `src/lib/openrouter.ts`, `src/components/PageWorkstation.tsx`
 
 ---
 
@@ -8,60 +9,45 @@
 
 ```mermaid
 flowchart LR
-    A[extraction_output.json] --> B[Segment Text]
-    B --> C[Check Cache]
-    C -->|Miss| D[Translate via LLM]
-    C -->|Hit| E[Use Cache]
-    D --> F[Terminology Check]
-    E --> G[translation_output.json]
-    F --> G
+    A[PageExtraction text] --> B["buildPagePayload() — system prompt + page text"]
+    B --> C{settingsHash cached & unchanged?}
+    C -->|Yes| D[Use cached PageAi result]
+    C -->|No| E["streamCompletion() — SSE via OpenRouter"]
+    E --> F[Stream tokens into UI]
+    F --> G[Store PageAi + settingsHash in pageData]
+    D --> G
 ```
 
 ---
 
 ## Detailed Steps
 
-### 1. NLP Text Segmentation
+### 1. Payload Construction
 
-- Receives the clean layout structure.
-- Splits text blocks into sentence segments to prepare for translation.
-- Preserves structure tags like headings, bullet lists, and formatting markers.
-- Team responsible: [[NLP Translation Engineers]].
+- `buildPagePayload()` (`src/lib/openrouter.ts`) assembles the request: mode-specific system instructions (`MODE_INSTRUCTIONS` — `translate` or `explain`), an explanation style (`EXPLANATION_STYLES`, only used in `explain` mode), target language, temperature, and the extracted page text.
+- There is no separate NLP sentence-segmentation step here — the whole page's extracted text is sent as one payload; sentence-level splitting happens later, at TTS playback time (see [[TTS Pipeline]]).
 
-### 2. Translation & Summarization
+### 2. Cache Check via Settings Hash
 
-- Automatically detects the source language.
-- Calls the [[OpenRouter API]] to translate or explain content into the target language.
-- Applies contextual reference parameters, passing trailing summaries of the previous page for context.
-- Team responsible: [[NLP Translation Engineers]].
+- `PageWorkstation.tsx` computes a `computeSettingsHash({ modelId, mode, language, style, temperature })` (`src/lib/storage.ts`) and compares it against the page's stored hash. If unchanged, the existing cached `PageAi.result` is reused instead of re-calling the LLM.
 
-### 3. Terminology & Glossary Matching
+### 3. Streaming Completion
 
-- Checks translated text against customized terminology lists and style rules.
-- Integrates client glossaries and handles translation memory lookups.
-- Team responsible: [[Terminology Management]].
+- On a cache miss, `streamCompletion()` calls `completeWithServerOpenRouter()` — a TanStack Start server function that proxies OpenRouter's chat-completions endpoint as a live Server-Sent Events (SSE) stream, so the API key is never exposed to the client.
+- Tokens are parsed from `data:` lines and appended to the UI incrementally as they arrive, with retry/backoff on transient failures.
 
-### 4. Quality Review Check
+### 4. Result Storage
 
-- Runs automated quality metrics (BLEU, COMET) on translations.
-- Identifies low-scoring translations and routes them for human review.
-- Team responsible: [[Language QA]].
+- The completed result, its `AiMode`/`AiStatus`, and the settings hash used to produce it are written to the page's `PageAi` record in the `pageData` IndexedDB store (see [[IndexedDB Storage]]).
 
----
-
-## Output Contract
-
-Generates `translation_output.json`:
-
-- Contains source segments, target translations, terminology tags, page IDs, and model hashes.
-- Pushed to the [[TTS Pipeline]] input queue.
+There is no glossary/terminology-matching step and no automated translation-quality scoring (e.g. BLEU/COMET) in the current pipeline — result quality depends entirely on the selected LLM.
 
 ---
 
 ## Relationships
 
-- **Team Owner:** [[Squad B — Translation]].
 - **Core Technology:** [[OpenRouter API]].
+- **Consumer:** [[TTS Pipeline]] reads the stored `PageAi.result` text.
 
 ---
 

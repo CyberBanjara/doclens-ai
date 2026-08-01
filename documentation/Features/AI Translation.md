@@ -34,7 +34,6 @@
 ## Relationships
 
 - **Component:** [[PageWorkstation]].
-- **Team Owner:** [[Squad B — Translation]].
 - **Dependencies:** [[OpenRouter API]].
 
 ---

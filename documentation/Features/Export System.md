@@ -24,7 +24,6 @@
 ## Relationships
 
 - **Component:** [[RightPanel]].
-- **Team Owner:** [[Squad B — Translation]].
 
 ---
 

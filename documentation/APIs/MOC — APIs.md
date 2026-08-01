@@ -1,6 +1,6 @@
 # 🔌 MOC — APIs
 
-> External APIs, libraries, and browser interfaces integrated into DocLens AI.
+> External APIs, libraries, and browser interfaces integrated into Anuwad.
 
 ---
 

@@ -3,13 +3,13 @@
 > **Route:** `/settings`  
 > **Source File:** `settings.tsx`  
 > **Layout:** [[SidebarLayout]]  
-> **SEO Title:** `DocLens — General Settings`
+> **SEO Title:** `Anuwad — General Settings`
 
 ---
 
 ## Purpose
 
-The **General Settings Page** is the unified configuration hub for the DocLens AI application. It combines AI pipeline configuration, output language selection, neural voice management, API connectivity, and model browsing into a single streamlined interface.
+The **General Settings Page** is the unified configuration hub for the Anuwad application. It combines AI pipeline configuration, output language selection, neural voice management, API connectivity, and model browsing into a single streamlined interface.
 
 ---
 
@@ -20,7 +20,7 @@ Uses a `max-w-7xl` layout organized into three rows with a clean visual hierarch
 ```
 ┌─── Row 1 (Full Width) ────────────────────┐
 │ ⚡ AI Pipeline Defaults                     │
-│ (Mode, Style, Temperature, Memory, Seq.)   │
+│ (Mode, Style, Temperature)                 │
 ├─── Row 2 (Two Columns) ──────────────────┤
 │ 🌐 Output Language  │ 🎙️ Natural Voice   │
 │                      │    Cache Manager   │
@@ -34,7 +34,7 @@ Uses a `max-w-7xl` layout organized into three rows with a clean visual hierarch
 ## UI Components & Interactive Elements
 
 1. **AI Pipeline Defaults (Row 1 — Full Width):**
-   - Configures default parameters: Mode (Translate, Explain, Summarize, Custom), Tone Style (Standard, Academic, Simplified), LLM Temperature (Precise to Creative), Memory toggle, and Sequential execution.
+   - Configures default parameters: Mode (`translate` or `explain`), Tone Style (used only in `explain` mode), and LLM Temperature.
    - Positioned at the top for quick access since it's the most frequently adjusted section.
 
 2. **Output Language (Row 2 — Left Column):**
@@ -69,7 +69,6 @@ The following sections were **removed** from the settings page UI to reduce clut
 ## Relationships
 
 - **Workflow:** Sets the configuration variables used by the [[PDF to Translation Workflow]].
-- **Team Ownership:** Core layout by [[Squad B — Translation]]; Voice Cache managed by [[Squad C — TTS]].
 
 ---
 

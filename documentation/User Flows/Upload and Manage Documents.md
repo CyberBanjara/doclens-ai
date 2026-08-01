@@ -1,6 +1,6 @@
 # Upload and Manage Documents
 
-> How users get PDF documents into DocLens and manage their library.
+> How users get PDF documents into Anuwad and manage their library.
 
 ---
 

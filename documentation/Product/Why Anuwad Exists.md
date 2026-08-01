@@ -1,6 +1,6 @@
-# Why DocLens Exists
+# Why Anuwad Exists
 
-> The vision and problem statement behind DocLens AI.
+> The vision and problem statement behind Anuwad.
 
 ---
 
@@ -48,9 +48,9 @@ A **single tool** where users can:
 
 ## Related
 
-- [[What is DocLens AI]] — Product overview
+- [[What is Anuwad]] — Product overview
 - [[End-to-End Pipeline]] — How the vision is realized technically
-- [[MOC — Teams]] — Who builds it
+- [[Architecture]] — How the system is built
 - [[Design System]] — Visual expression of the brand
 
 ---

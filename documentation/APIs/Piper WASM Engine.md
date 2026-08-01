@@ -33,7 +33,6 @@
 - **Page integration:** [[General Settings Page]] (Natural Voice Cache Manager).
 - **Feature powered:** [[Piper Neural TTS]], [[Text-to-Speech]].
 - **Caching:** [[Voice Cache Layer]].
-- **Team Owner:** [[Squad C — TTS]].
 
 ---
 

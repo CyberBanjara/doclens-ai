@@ -1,12 +1,12 @@
 # First Time Setup
 
-> The onboarding flow a new user follows to get DocLens AI operational.
+> The onboarding flow a new user follows to get Anuwad operational.
 
 ---
 
 ## Prerequisites
 
-- A running DocLens instance with `OPENROUTER_API_KEY` set as an environment variable on the server
+- A running Anuwad instance with `OPENROUTER_API_KEY` set as an environment variable on the server
 
 ---
 
@@ -55,7 +55,7 @@
 
 ```mermaid
 flowchart TD
-    A[Open DocLens] --> B{API key valid?}
+    A[Open Anuwad] --> B{API key valid?}
     B -->|No| C[API Key Banner shown]
     C --> D[Click 'check key']
     D --> E[Key validated ✓]

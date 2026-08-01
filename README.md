@@ -73,24 +73,16 @@ Anuwad eliminates these gaps by combining **PDF viewing**, **AI translation**, a
 - **GPU memory management** — maximum 5 concurrent canvas layers; oldest canvases are evicted automatically to prevent browser crashes on 500+ page documents
 - **Transparent text selection layer** over structural canvases with a floating contextual toolbar (Copy, Translate, Speak)
 - **Dimension virtualization** — PDF layout parameters are loaded on mount, creating virtual page placeholders without rendering every page upfront
-- Documents are stored in **IndexedDB** — no server uploads, no cloud storage
+- Documents are stored locally in **IndexedDB** by default — no server uploads, no cloud storage. (The optional [[Global Library]] feature, off by default, uploads PDFs to Cloudflare R2 and syncs extraction data via Supabase when explicitly enabled — see [Is my data private?](#is-my-data-private-when-using-anuwad))
 
 ### 🌍 AI Translation & Explanation (90+ Languages)
 
 - **Translate mode** — direct language-to-language translation preserving document structure, headings, lists, and hierarchy
 - **Explain mode** — AI-powered conceptual explanations with **13 explanation styles**: Standard, ELI5, Storytelling, Socratic, Step-by-Step, Visual Thinking, Analogical, Practical, Expert Deep-Dive, Debate, Historical Context, Motivational, and Critical Thinking
-- **Per-page overrides** — configure model, mode, tone, temperature, and memory context individually per page without changing global defaults
+- **Per-page overrides** — configure model, mode, tone, and temperature individually per page without changing global defaults
 - **JSON payload editor** — developers can directly modify the raw API payload sent to the LLM
-- **Sequential memory** — each page receives a trailing excerpt from the previous page's result for context continuity, creating a coherent reading experience
 - **Smart caching** — translations are stored in IndexedDB with a settings hash (model + mode + language + style + temperature); cache is invalidated only when settings change
 - Powered by **OpenRouter API** with access to GPT-4o, Claude 3.5 Sonnet, Gemini 1.5 Pro, Llama, and 200+ other models
-
-### 🔄 Auto-Translate (Ebook-Like Reading)
-
-- **Background pre-translation** of the next 3 pages ahead of the current reading position
-- Automatically skips already-translated pages
-- **Floating progress pill** shows real-time background progress (e.g., "Pre-translating 2/3") with a cancel button
-- When combined with TTS, creates an **uninterrupted ebook-like reading flow** — the system automatically advances to the next page and resumes reading once the current page finishes
 
 ### 🔊 Dual-Engine Text-to-Speech
 
@@ -131,6 +123,11 @@ Anuwad provides two TTS engines, selectable per language:
 - **JSON export** — structured payloads with translation settings, token counts, and page data
 - One-click browser download via temporary object URLs
 
+### 👤 Optional Google Sign-In
+
+- Sign in with Google (Firebase Auth) to leave a star rating + comment review — entirely optional, the app is fully usable signed out
+- No document content or translation data is tied to your account; sign-in is only used for the review flow and analytics
+
 ### 🎨 Deep Ocean Design System
 
 The UI uses a custom **"Deep Ocean"** dark theme built with glassmorphism and micro-animations:
@@ -142,7 +139,6 @@ The UI uses a custom **"Deep Ocean"** dark theme built with glassmorphism and mi
 
 ### 🔧 Developer & Power User Features
 
-- **Memory diagnostics panel** — real-time heap usage, canvas count, localStorage size, and IndexedDB footprint
 - **Per-page JSON editor** — edit the exact API payload sent to OpenRouter for full control
 - **API key management** — use a server-managed key (default) or bring your own OpenRouter key
 - **Model selection** — choose from 200+ LLMs via OpenRouter with context length and pricing info
@@ -153,35 +149,39 @@ The UI uses a custom **"Deep Ocean"** dark theme built with glassmorphism and mi
 ## Architecture
 
 ```
-Browser (Client-Side — 100% Private)
+Browser (Client-Side)
 ├── React 19 SPA (Vite 7 + TanStack Router)
-│   ├── PDF.js v5 ──── Canvas rendering + text extraction
-│   ├── Piper WASM ─── Neural TTS in Web Worker (ONNX Runtime)
-│   ├── IndexedDB ──── Documents, AI results, voice models, thumbnails
-│   └── localStorage ── User preferences, voice settings, per-doc state
+│   ├── PDF.js v5 + tesseract.js ── Canvas rendering, text extraction, OCR fallback
+│   ├── Piper WASM ──────────────── Neural TTS in Web Worker (ONNX Runtime)
+│   ├── Firebase Auth SDK ───────── Google Sign-In (optional)
+│   ├── IndexedDB ───────────────── Documents, AI results, voice models, thumbnails
+│   └── localStorage ────────────── User preferences, voice settings, per-doc state
 │
-Server Functions (Vercel / Nitro)
+Server Functions (Vercel / Nitro, via TanStack Start `createServerFn`)
 ├── OpenRouter API proxy ── API key secured server-side, never exposed to client
-└── Model list endpoint ── Filtered LLM catalog
+├── Model list endpoint ─── Filtered LLM catalog
+└── Global Library (optional, opt-in via ENABLE_GLOBAL_SYNC)
+    ├── Cloudflare R2 ── shared PDF vault (upload/list/delete)
+    └── Supabase ─────── shared extraction/translation cache
 ```
 
 ### Data Flow: PDF → Translation → Speech
 
 ```
-┌──────────────┐     ┌─────────────────────┐     ┌───────────────────────┐
-│  PDF Upload   │────▶│  Text Extraction     │────▶│  AI Translation       │
-│  (IndexedDB)  │     │  (pdf.js per-page)   │     │  (OpenRouter stream)  │
-└──────────────┘     │  Column detection     │     │  Settings hash cache  │
-                      │  Garbage filtering    │     │  Memory context       │
-                      └─────────────────────┘     └───────┬───────────────┘
-                                                           │
-                                                           ▼
-                                                  ┌───────────────────────┐
-                                                  │  Text-to-Speech       │
-                                                  │  Sentence splitting   │
-                                                  │  Piper WASM / Web API │
-                                                  │  Audio + highlighting │
-                                                  └───────────────────────┘
+┌──────────────┐     ┌───────────────────────┐     ┌───────────────────────┐
+│  PDF Upload   │────▶│  Text Extraction      │────▶│  AI Translation       │
+│  (IndexedDB)  │     │  (pdf.js per-page)    │     │  (OpenRouter stream)  │
+└──────────────┘     │  Column detection      │     │  Settings hash cache  │
+                      │  OCR fallback          │     └───────┬───────────────┘
+                      └───────────────────────┘             │
+                                                              │
+                                                              ▼
+                                                     ┌───────────────────────┐
+                                                     │  Text-to-Speech       │
+                                                     │  Sentence splitting   │
+                                                     │  Piper WASM / Web API │
+                                                     │  Audio + highlighting │
+                                                     └───────────────────────┘
 ```
 
 ### Tech Stack
@@ -196,12 +196,13 @@ Server Functions (Vercel / Nitro)
 | **AI Gateway**     | OpenRouter API                      | Unified access to GPT-4o, Claude, Gemini, Llama        |
 | **Neural TTS**     | Piper TTS (piper-tts-web)           | Offline WASM speech synthesis with ONNX models         |
 | **Browser TTS**    | Web Speech API                      | Native browser speech synthesis fallback               |
-| **Storage**        | IndexedDB (idb) + localStorage      | Document persistence, model caching, preferences       |
-| **Deployment**     | Vercel + Nitro                      | Server functions for API proxying                      |
-| **Analytics**      | Vercel Analytics + Speed Insights   | Performance monitoring                                 |
-| **UI Components**  | Radix UI + shadcn/ui + Lucide Icons | Accessible dialogs, dropdowns, tooltips, etc.          |
-| **Forms**          | React Hook Form + Zod               | Type-safe form validation                              |
-| **Virtualization** | TanStack Virtual                    | Efficient rendering of large lists                     |
+| **OCR**             | tesseract.js                        | Client-side OCR fallback for scanned/garbled pages      |
+| **Storage**        | IndexedDB (idb) + localStorage      | Document persistence, model caching, preferences        |
+| **Auth**           | Firebase Auth + Firestore           | Optional Google Sign-In and user review storage          |
+| **Global Library**  | Cloudflare R2 (`@aws-sdk/client-s3`) + Supabase | Optional shared document vault + cross-device cache |
+| **Deployment**     | Vercel + Nitro                      | Server functions for API proxying                       |
+| **Analytics**      | Vercel Analytics + Speed Insights   | Performance monitoring                                  |
+| **UI Components**  | Radix UI + shadcn/ui + Lucide Icons | Accessible dialogs, dropdowns, tooltips, etc.            |
 
 ---
 
@@ -270,35 +271,42 @@ doclens-ai/
 │   ├── components/          # React components
 │   │   ├── PageWorkstation.tsx   # Core workspace — translation, TTS, per-page overrides
 │   │   ├── PdfViewer.tsx         # PDF rendering engine with lazy loading
-│   │   ├── SidebarLayout.tsx     # Document sidebar navigation
-│   │   ├── RightPanel.tsx        # Translation output & export panel
+│   │   ├── SidebarLayout.tsx     # Primary app shell — desktop sidebar / mobile tab bar
+│   │   ├── RightPanel.tsx        # Translation output, extracted text, export actions
 │   │   ├── Dropzone.tsx          # PDF file upload area
 │   │   ├── DocumentCard.tsx      # Library document thumbnails
+│   │   ├── ProfileDropdown.tsx / ReviewModal.tsx  # Google Sign-In + reviews
 │   │   ├── VoiceOnboardingDialog.tsx  # First-time language/voice picker before auto-read
+│   │   ├── mobile/                # Mobile-only chrome (tab bar, sheets, mini player)
 │   │   └── ui/                   # shadcn/ui primitives
 │   ├── routes/              # TanStack Router file-based routes
 │   │   ├── index.tsx             # Library page — document management
 │   │   ├── doc.$id.tsx           # Workspace page — PDF + translation + TTS
+│   │   ├── global-library.tsx    # Optional shared R2-backed document vault
 │   │   ├── settings.tsx          # General AI + voice/TTS settings
 │   │   └── settings_.appearance.tsx  # Theme settings
+│   ├── context/              # AuthContext (Firebase), TtsContext (playback engine)
 │   ├── lib/                 # Core logic & services
-│   │   ├── openrouter.ts         # OpenRouter API client, payload builder, streaming
-│   │   ├── pdf.ts                # PDF text extraction, column detection
-│   │   ├── piper-reader.ts       # Piper TTS orchestration, audio caching
-│   │   ├── tts.ts                # TTS engine abstraction (Piper + Web Speech)
+│   │   ├── openrouter.ts         # OpenRouter API client, payload builder, SSE streaming
+│   │   ├── pdf.ts                # PDF text extraction, column detection, OCR fallback
+│   │   ├── tts.ts                # Sentence splitting, browser voice listing
 │   │   ├── storage.ts            # IndexedDB schema, CRUD operations
 │   │   ├── theme.ts              # Theme system (Deep Ocean + custom themes)
-│   │   ├── models.ts             # LLM model specs, token budgeting, chunking
 │   │   ├── network.ts            # Online/offline detection, friendly error messages
-│   │   └── neural-tts/           # Piper WASM engine, voice catalog
-│   ├── hooks/               # Custom React hooks
-│   └── types/               # TypeScript type definitions
-├── public/                  # Static assets, ONNX runtime, Piper workers
-├── documentation/           # Obsidian knowledge base (product, features, APIs, pipelines)
+│   │   ├── voiceCache.ts         # OPFS/IndexedDB neural voice model caching
+│   │   ├── firebase.ts           # Firebase Auth + Firestore client
+│   │   ├── r2.ts / r2-cache.ts   # Cloudflare R2 server functions + listing cache
+│   │   ├── supabase.ts / sync.ts # Shared extraction cache + IndexedDB sync
+│   │   └── models.ts             # `estimateTokens()` — token estimation helper
+│   └── hooks/               # Custom React hooks (`use-mobile`, `useThumbnail`)
+├── public/                  # Static assets, ONNX runtime, Piper/Tesseract workers
+├── documentation/           # Obsidian knowledge base — see [[Architecture]], [[Folder Structure]]
 ├── vite.config.ts           # Vite + TanStack Start + Tailwind + Nitro
 ├── nitro.config.ts          # Nitro server configuration
 └── wrangler.jsonc           # Cloudflare Workers config (alternative deployment)
 ```
+
+See [documentation/Product/Folder Structure.md](<documentation/Product/Folder Structure.md>) for the fully annotated version.
 
 ---
 
@@ -328,7 +336,7 @@ Anuwad is engineered to handle large PDF documents (500+ pages) in the browser w
 The application is configured for Vercel deployment with Nitro server functions:
 
 1. Connect the repository to Vercel
-2. Set environment variables: `OPENROUTER_API_KEY`, `OPENROUTER_DEFAULT_MODEL`
+2. Set environment variables: `OPENROUTER_API_KEY`, `OPENROUTER_DEFAULT_MODEL`, and optionally the Firebase (`VITE_FIREBASE_*`), R2, and Supabase variables from `.env.example` if enabling sign-in / Global Library
 3. Build command: `npm run build`
 4. Output directory: auto-detected by the Nitro adapter
 5. Node.js runtime: 22.x
@@ -353,10 +361,7 @@ Anuwad supports **90+ output languages** for AI translation via OpenRouter, incl
 
 ## Roadmap
 
-- [ ] **OCR pipeline** — Image-only PDF pages processed via Tesseract / Google Vision for text extraction
 - [ ] **Terminology glossaries** — Custom glossary matching and translation memory for domain-specific documents
-- [ ] **Quality metrics** — Automated BLEU / COMET scoring on translations with human review routing
-- [ ] **Streaming translation** — Real-time token-by-token streaming to the UI (currently batched via server function)
 - [ ] **OG image generation** — Dynamic Open Graph images for social sharing
 - [ ] **Content clusters** — Blog / documentation pages for topical authority and SEO
 - [ ] **Mobile-optimized workspace** — Enhanced responsive layout for tablet and phone reading
@@ -374,11 +379,13 @@ Anuwad is a free, open-source, browser-only PDF reader that combines AI translat
 
 ### Is my data private when using Anuwad?
 
-Yes. Anuwad ensures complete data sovereignty. PDF files are stored in the browser's IndexedDB — they are never uploaded to any server. The only data that leaves the device is the extracted text sent for AI translation, which is routed through a secure server-side proxy (Vercel/Nitro) that adds the API key before forwarding to OpenRouter. The PDF binary, thumbnails, translation results, and TTS audio all remain 100% local. Neural voice models are downloaded once and cached in IndexedDB for fully offline speech synthesis.
+By default, yes. PDF files are stored in the browser's IndexedDB — they are never uploaded to any server. The only data that leaves the device is the extracted text sent for AI translation, which is routed through a secure server-side proxy (Vercel/Nitro) that adds the API key before forwarding to OpenRouter. The PDF binary, thumbnails, translation results, and TTS audio all remain 100% local. Neural voice models are downloaded once and cached in IndexedDB for fully offline speech synthesis.
+
+The one exception is the **optional Global Library** feature (off unless explicitly enabled via `ENABLE_GLOBAL_SYNC`), which lets you upload PDFs to a shared Cloudflare R2 vault and sync extracted text/translations to Supabase for cross-device access. If you don't use Global Library, none of your documents or translations ever leave your device. Signing in with Google is also entirely optional and only used for the review flow.
 
 ### How is Anuwad different from Google Translate or ChatGPT for PDF translation?
 
-Google Translate requires a manual copy-paste workflow, destroys document structure, and has no offline capability. ChatGPT requires page-by-page copy-paste with no document viewer, no TTS, and sends your data to external servers. Anuwad provides an integrated experience: a high-fidelity PDF viewer with lazy rendering, one-click AI translation with 13 explanation styles, automatic pre-translation of upcoming pages, sentence-level highlighted neural TTS, per-page AI configuration, and full offline capability for TTS — all in a single browser tab.
+Google Translate requires a manual copy-paste workflow, destroys document structure, and has no offline capability. ChatGPT requires page-by-page copy-paste with no document viewer, no TTS, and sends your data to external servers. Anuwad provides an integrated experience: a high-fidelity PDF viewer with lazy rendering, one-click AI translation with 13 explanation styles, continuous auto-read that translates ahead and advances pages automatically, sentence-level highlighted neural TTS, per-page AI configuration, and full offline capability for TTS — all in a single browser tab.
 
 ### What AI models does Anuwad support?
 
@@ -396,10 +403,9 @@ Contributions are welcome. The `documentation/` folder contains an Obsidian know
 
 Key areas for contribution:
 
-- **OCR integration** for scanned/image-only PDFs
 - **Additional Piper voice models** for underrepresented languages
 - **Mobile UI improvements** for the workspace view
-- **Translation quality tooling** (BLEU/COMET scoring)
+- **Terminology glossaries** for domain-specific documents
 
 ---
 

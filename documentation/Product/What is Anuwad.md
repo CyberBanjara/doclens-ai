@@ -1,6 +1,6 @@
-# What is DocLens AI
+# What is Anuwad
 
-> **DocLens AI** is a browser-first document intelligence application that lets users upload PDF documents, translate or explain their content using AI, and listen to the results through neural text-to-speech — all without uploading data to external servers.
+> **Anuwad** is a browser-first document intelligence application that lets users upload PDF documents, translate or explain their content using AI, and listen to the results through neural text-to-speech — all without uploading data to external servers.
 
 ---
 
@@ -26,7 +26,7 @@
 2. **Offline TTS** — Piper neural voices are downloaded once and cached locally via the [[Voice Cache Layer]] (OPFS + IndexedDB dual storage). No internet needed for playback.
 3. **Multi-language focus** — First-class support for Indian languages (Hindi, Bengali, Telugu, Malayalam) alongside global languages.
 4. **Per-page control** — Users can override AI settings (model, language, temperature, tone) on individual pages without changing global defaults.
-5. **Auto-translate** — Background pre-translation of upcoming pages creates a seamless ebook-like reading experience.
+5. **Continuous auto-read** — While listening, the next page is translated ahead of time and playback auto-advances page-to-page for a seamless ebook-like reading experience.
 6. **Real-time streaming** — AI translations stream to the UI token-by-token via SSE, reducing perceived latency.
 
 ---
@@ -45,7 +45,7 @@
 
 ## Application Structure
 
-DocLens has three main pages plus a settings sub-route:
+Anuwad has three main pages plus a settings sub-route:
 
 1. [[Library Page]] — Upload and manage documents
 2. [[Workspace Page]] — View PDFs, translate, and listen
@@ -55,7 +55,7 @@ DocLens has three main pages plus a settings sub-route:
 
 ## Related
 
-- [[Why DocLens Exists]] — The problem it solves
+- [[Why Anuwad Exists]] — The problem it solves
 - [[Tech Stack]] — How it's built
 - [[Design System]] — How it looks
 - [[End-to-End Pipeline]] — How data flows through it

@@ -1,6 +1,6 @@
 # 🧩 MOC — Components
 
-> Reusable UI components powering the DocLens AI application interface.
+> Reusable UI components powering the Anuwad application interface.
 
 ---
 

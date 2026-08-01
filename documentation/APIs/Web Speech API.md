@@ -7,7 +7,7 @@
 
 ## Purpose
 
-The **Web Speech API** provides standard speech synthesis interfaces. DocLens uses it as a fallback engine when offline models are not installed, or when the user prefers browser-native voices.
+The **Web Speech API** provides standard speech synthesis interfaces. Anuwad uses it as a fallback engine when offline models are not installed, or when the user prefers browser-native voices.
 
 ---
 
@@ -30,7 +30,6 @@ The **Web Speech API** provides standard speech synthesis interfaces. DocLens us
 
 - **Page integration:** [[Voice Settings Page]].
 - **Feature powered:** [[Text-to-Speech]].
-- **Team Owner:** [[Squad C — TTS]].
 
 ---
 

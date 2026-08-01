@@ -37,7 +37,6 @@ The Piper engine uses a **direct synthesis workflow** (not a buffered pipeline):
 ## Relationships
 
 - **Feature parent:** [[Text-to-Speech]].
-- **Team Owner:** [[Squad C — TTS]].
 - **API integration:** [[Piper WASM Engine]], [[Voice Cache Layer]].
 - **Management UI:** [[General Settings Page]] (Natural Voice Cache Manager).
 

@@ -31,7 +31,6 @@
 ## Relationships
 
 - **Page:** [[General Settings Page]].
-- **Team Owner:** Jointly managed by [[Shared Services]] DevOps and QA leads.
 
 ---
 

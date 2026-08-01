@@ -1,5 +1,6 @@
 import { useState } from "react";
-import { User, LogOut, Star, LogIn } from "lucide-react";
+import { User, LogOut, Star, ShieldCheck, FileText } from "lucide-react";
+import { Link } from "@tanstack/react-router";
 import { useAuth } from "@/context/AuthContext";
 import { Popover, PopoverTrigger, PopoverContent } from "@/components/ui/popover";
 import { ReviewModal } from "@/components/ReviewModal";
@@ -84,6 +85,24 @@ export function ProfileDropdown() {
                 <span>Add a Review</span>
               </button>
 
+              <Link
+                to="/privacy"
+                onClick={() => setOpen(false)}
+                className="flex w-full items-center gap-2.5 rounded-xl px-3 py-2 text-xs font-semibold text-muted-foreground transition-colors hover:bg-surface-2 hover:text-foreground"
+              >
+                <ShieldCheck className="h-4 w-4 text-primary" />
+                <span>Privacy Policy</span>
+              </Link>
+
+              <Link
+                to="/terms"
+                onClick={() => setOpen(false)}
+                className="flex w-full items-center gap-2.5 rounded-xl px-3 py-2 text-xs font-semibold text-muted-foreground transition-colors hover:bg-surface-2 hover:text-foreground"
+              >
+                <FileText className="h-4 w-4 text-primary" />
+                <span>Terms of Service</span>
+              </Link>
+
               <div className="my-1.5 h-px bg-border/60" />
 
               {/* Log Out */}
@@ -114,6 +133,26 @@ export function ProfileDropdown() {
                 </svg>
                 <span>Sign in with Google</span>
               </button>
+
+              <div className="my-1.5 h-px bg-border/60" />
+
+              <div className="flex items-center justify-around px-2 text-[11px] text-muted-foreground">
+                <Link
+                  to="/privacy"
+                  onClick={() => setOpen(false)}
+                  className="hover:text-primary transition-colors font-medium"
+                >
+                  Privacy
+                </Link>
+                <span>•</span>
+                <Link
+                  to="/terms"
+                  onClick={() => setOpen(false)}
+                  className="hover:text-primary transition-colors font-medium"
+                >
+                  Terms
+                </Link>
+              </div>
             </div>
           )}
         </PopoverContent>

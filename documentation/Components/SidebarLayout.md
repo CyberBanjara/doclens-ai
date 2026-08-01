@@ -14,19 +14,22 @@ Provides a persistent navigation shell for all pages except the workspace reader
 ## UI Structure & Elements
 
 1. **Sidebar Column (`w-64` desktop):**
-   - **Branded Header:** Shows the DocLens logo (`◐`) and styling. Links back to the index route.
-   - **Navigation Navigation Links:** Vertically stacked list of links with emoji icons (Library, Settings, Voice Settings). Active states receive a green border on the right.
-   - **Upload Button:** Prominent "+ New Document" button that triggers a hidden file input.
-   - **Help / Support Link:** Anchored to the bottom of the column.
-2. **Mobile Header (`h-14` below `md` breakpoint):**
-   - Renders a hamburger toggle and the page title. Displays the navigation list as a slide-out drawer with a blurred backdrop overlay.
+   - **Branded Header:** Shows the Anuwad logo image and wordmark. Links back to the index route.
+   - **Navigation Links:** Vertically stacked list of links with emoji icons — Library, Global Library, Appearance, General Settings (`NAV_ITEMS` in `SidebarLayout.tsx`).
+   - **Upload Button / Support / Profile:** `+ New Document` trigger (hidden file input), a Support modal trigger, and `ProfileDropdown` for sign-in/out.
+2. **Mobile (below the `useIsMobile` breakpoint):**
+   - A slim `h-12` top header (page title + `ProfileDropdown`, no hamburger/drawer) plus a **persistent bottom `MobileTabBar`** (`src/components/mobile/MobileTabBar.tsx`) for primary navigation.
+   - A floating circular "+" FAB (bottom-right, above the tab bar) opens the file picker for uploading a new document.
+   - There is no slide-out drawer — the old hamburger/drawer pattern was replaced by this bottom-tab layout in the mobile redesign.
 
 ---
 
 ## State & Props
 
-- **`children` (ReactNode):** Inner content rendered in the right-side layout container.
-- **`mobileOpen` (boolean):** Internal state managing mobile navigation drawer open states.
+- **`children` (ReactNode):** Inner content rendered in the layout container.
+- **`pageTitle` (string):** Title shown in the mobile top bar.
+- **`topBarRight` (ReactNode, optional):** Extra content for the right side of the top bar.
+- **`onNewDocument` ((file: File) => void, optional):** Callback fired when a file is picked via the upload button/FAB.
 
 ---
 

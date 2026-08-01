@@ -13,19 +13,22 @@ Provides a drag-and-drop file ingestion area. It validates file uploads, checks 
 
 ## UI Elements & States
 
-1. **Interactive dashed box (`h-56`):**
-   - Renders background styling patterns and an upload icon. Hovering expands the icon and highlights borders.
-   - Dragging files over the card changes border colors and displays a glowing background shadow.
-2. **Text indicators:**
-   - Main instruction: "Click or drag PDF documents here".
-   - Helper parameters: "PDF only · max 50.0 MB".
-   - Privacy reassurance: "processed entirely in your browser · nothing uploaded".
+Two variants, both sharing the same drag/drop + validation logic:
+
+1. **Default (full hero, `compact={false}`):**
+   - Dashed-border box with a grid background pattern and upload icon; hover/drag-over highlights the border and a soft radial glow.
+   - Text: "Drop a PDF here, or click to browse" / "Up to 50.0 MB · stays on your device".
+2. **Compact (`compact={true}`):**
+   - Slim `h-14` horizontal bar ("Add a PDF · or drop it here") — used once the library already has documents, so returning users aren't shown a large empty-state prompt every time.
+
+**Validation (in `handle()`):** rejects non-PDF files, rejects files over 50 MB, warns (but still accepts) files over 25 MB, and rejects empty files — each with a `sonner` toast.
 
 ---
 
 ## Properties & Callbacks
 
-- **`onNewDocument` (callback):** Callback triggered when a PDF file passes validation checks. Receives the validated File object.
+- **`onFile` ((file: File) => void):** Called with the validated File once it passes type/size checks.
+- **`compact` (boolean, optional):** Renders the slim horizontal bar variant instead of the full hero box.
 
 ---
 

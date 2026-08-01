@@ -9,15 +9,39 @@
 // Additionally, you should also exclude this file from your linter and/or formatter to prevent it from being checked or modified.
 
 import { Route as rootRouteImport } from './routes/__root'
+import { Route as TermsOfServiceRouteImport } from './routes/terms-of-service'
+import { Route as TermsRouteImport } from './routes/terms'
 import { Route as SettingsRouteImport } from './routes/settings'
+import { Route as PrivacyPolicyRouteImport } from './routes/privacy-policy'
+import { Route as PrivacyRouteImport } from './routes/privacy'
 import { Route as GlobalLibraryRouteImport } from './routes/global-library'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as SettingsAppearanceRouteImport } from './routes/settings_.appearance'
 import { Route as DocIdRouteImport } from './routes/doc.$id'
 
+const TermsOfServiceRoute = TermsOfServiceRouteImport.update({
+  id: '/terms-of-service',
+  path: '/terms-of-service',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const TermsRoute = TermsRouteImport.update({
+  id: '/terms',
+  path: '/terms',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const SettingsRoute = SettingsRouteImport.update({
   id: '/settings',
   path: '/settings',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const PrivacyPolicyRoute = PrivacyPolicyRouteImport.update({
+  id: '/privacy-policy',
+  path: '/privacy-policy',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const PrivacyRoute = PrivacyRouteImport.update({
+  id: '/privacy',
+  path: '/privacy',
   getParentRoute: () => rootRouteImport,
 } as any)
 const GlobalLibraryRoute = GlobalLibraryRouteImport.update({
@@ -44,14 +68,22 @@ const DocIdRoute = DocIdRouteImport.update({
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/global-library': typeof GlobalLibraryRoute
+  '/privacy': typeof PrivacyRoute
+  '/privacy-policy': typeof PrivacyPolicyRoute
   '/settings': typeof SettingsRoute
+  '/terms': typeof TermsRoute
+  '/terms-of-service': typeof TermsOfServiceRoute
   '/doc/$id': typeof DocIdRoute
   '/settings/appearance': typeof SettingsAppearanceRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/global-library': typeof GlobalLibraryRoute
+  '/privacy': typeof PrivacyRoute
+  '/privacy-policy': typeof PrivacyPolicyRoute
   '/settings': typeof SettingsRoute
+  '/terms': typeof TermsRoute
+  '/terms-of-service': typeof TermsOfServiceRoute
   '/doc/$id': typeof DocIdRoute
   '/settings/appearance': typeof SettingsAppearanceRoute
 }
@@ -59,7 +91,11 @@ export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
   '/global-library': typeof GlobalLibraryRoute
+  '/privacy': typeof PrivacyRoute
+  '/privacy-policy': typeof PrivacyPolicyRoute
   '/settings': typeof SettingsRoute
+  '/terms': typeof TermsRoute
+  '/terms-of-service': typeof TermsOfServiceRoute
   '/doc/$id': typeof DocIdRoute
   '/settings_/appearance': typeof SettingsAppearanceRoute
 }
@@ -68,21 +104,33 @@ export interface FileRouteTypes {
   fullPaths:
     | '/'
     | '/global-library'
+    | '/privacy'
+    | '/privacy-policy'
     | '/settings'
+    | '/terms'
+    | '/terms-of-service'
     | '/doc/$id'
     | '/settings/appearance'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
     | '/global-library'
+    | '/privacy'
+    | '/privacy-policy'
     | '/settings'
+    | '/terms'
+    | '/terms-of-service'
     | '/doc/$id'
     | '/settings/appearance'
   id:
     | '__root__'
     | '/'
     | '/global-library'
+    | '/privacy'
+    | '/privacy-policy'
     | '/settings'
+    | '/terms'
+    | '/terms-of-service'
     | '/doc/$id'
     | '/settings_/appearance'
   fileRoutesById: FileRoutesById
@@ -90,18 +138,50 @@ export interface FileRouteTypes {
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   GlobalLibraryRoute: typeof GlobalLibraryRoute
+  PrivacyRoute: typeof PrivacyRoute
+  PrivacyPolicyRoute: typeof PrivacyPolicyRoute
   SettingsRoute: typeof SettingsRoute
+  TermsRoute: typeof TermsRoute
+  TermsOfServiceRoute: typeof TermsOfServiceRoute
   DocIdRoute: typeof DocIdRoute
   SettingsAppearanceRoute: typeof SettingsAppearanceRoute
 }
 
 declare module '@tanstack/react-router' {
   interface FileRoutesByPath {
+    '/terms-of-service': {
+      id: '/terms-of-service'
+      path: '/terms-of-service'
+      fullPath: '/terms-of-service'
+      preLoaderRoute: typeof TermsOfServiceRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/terms': {
+      id: '/terms'
+      path: '/terms'
+      fullPath: '/terms'
+      preLoaderRoute: typeof TermsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/settings': {
       id: '/settings'
       path: '/settings'
       fullPath: '/settings'
       preLoaderRoute: typeof SettingsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/privacy-policy': {
+      id: '/privacy-policy'
+      path: '/privacy-policy'
+      fullPath: '/privacy-policy'
+      preLoaderRoute: typeof PrivacyPolicyRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/privacy': {
+      id: '/privacy'
+      path: '/privacy'
+      fullPath: '/privacy'
+      preLoaderRoute: typeof PrivacyRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/global-library': {
@@ -138,7 +218,11 @@ declare module '@tanstack/react-router' {
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   GlobalLibraryRoute: GlobalLibraryRoute,
+  PrivacyRoute: PrivacyRoute,
+  PrivacyPolicyRoute: PrivacyPolicyRoute,
   SettingsRoute: SettingsRoute,
+  TermsRoute: TermsRoute,
+  TermsOfServiceRoute: TermsOfServiceRoute,
   DocIdRoute: DocIdRoute,
   SettingsAppearanceRoute: SettingsAppearanceRoute,
 }

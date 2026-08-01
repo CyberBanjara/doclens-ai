@@ -1,16 +1,16 @@
 # ⛓️ MOC — Pipelines
 
-> The three core processing pipelines that handle document digestion, translation, and speech generation in DocLens AI.
+> The three core processing pipelines that handle document digestion, translation, and speech generation in Anuwad.
 
 ---
 
 ## Processing Pipelines
 
-| Pipeline                    | Source Role                  | Hand-off Format           | Target Role               |
-| --------------------------- | ---------------------------- | ------------------------- | ------------------------- |
-| [[PDF Extraction Pipeline]] | [[Squad A — PDF Extraction]] | `extraction_output.json`  | [[Squad B — Translation]] |
-| [[Translation Pipeline]]    | [[Squad B — Translation]]    | `translation_output.json` | [[Squad C — TTS]]         |
-| [[TTS Pipeline]]            | [[Squad C — TTS]]            | Clean audio output chunks | Browser Player            |
+| Pipeline                    | Input                     | Hand-off Format            | Consumer               |
+| ---------------------------- | -------------------------- | --------------------------- | ----------------------- |
+| [[PDF Extraction Pipeline]] | PDF binary (`ArrayBuffer`) | `PageData` record (`text`, `columns`) | [[Translation Pipeline]] |
+| [[Translation Pipeline]]    | `PageData` record          | `PageAi` record (`result`, `status`)  | [[TTS Pipeline]]         |
+| [[TTS Pipeline]]            | `PageAi.result` text       | Synthesized audio chunks    | Browser Player           |
 
 ---
 
@@ -29,8 +29,7 @@ flowchart TD
 ## Related MOCs
 
 - [[MOC — User Flows]] — The user-facing experience of these pipelines
-- [[MOC — Teams]] — Squads responsible for each pipeline
-- [[MOC — Roles]] — Individual roles executing the pipeline tasks
+- [[Architecture]] — How these pipelines fit into the overall module graph
 
 ---
 

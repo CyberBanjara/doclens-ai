@@ -146,8 +146,8 @@ export function SidebarLayout({
           </button>
         </div>
 
-        {/* Support Link */}
-        <div className="border-t border-border px-4 py-4">
+        {/* Support & Legal Links */}
+        <div className="border-t border-border px-4 py-3 space-y-1">
           <button
             onClick={() => setSupportOpen(true)}
             className="flex w-full items-center gap-3 rounded-lg px-4 py-2 text-sm text-muted-foreground transition-colors hover:text-primary"
@@ -155,6 +155,15 @@ export function SidebarLayout({
             <span className="text-base">❓</span>
             <span>Support & Feedback</span>
           </button>
+          <div className="flex items-center justify-between px-4 pt-1 text-[11px] font-medium text-muted-foreground">
+            <Link to="/privacy" className="hover:text-primary transition-colors">
+              Privacy Policy
+            </Link>
+            <span>•</span>
+            <Link to="/terms" className="hover:text-primary transition-colors">
+              Terms of Service
+            </Link>
+          </div>
         </div>
       </aside>
 

@@ -29,7 +29,6 @@ The OpenRouter API key is configured as an environment variable (`OPENROUTER_API
 ## Relationships
 
 - **Modal Component:** [[ApiKeyModal]].
-- **Team Owner:** Jointly managed by [[Squad B — Translation]] and [[Shared Services]] API teams.
 - **API Integration:** [[OpenRouter API]].
 
 ---

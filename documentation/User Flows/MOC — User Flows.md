@@ -1,6 +1,6 @@
 # 🔄 MOC — User Flows
 
-> How users accomplish tasks in DocLens AI, from first launch to daily usage.
+> How users accomplish tasks in Anuwad, from first launch to daily usage.
 
 ---
 

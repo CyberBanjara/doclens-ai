@@ -1,13 +1,13 @@
-# 🗺️ MOC — DocLens AI Project
+# 🗺️ MOC — Anuwad Project
 
-> Map of Content for the entire DocLens AI project. Every node links to a deeper MOC or individual note.
+> Map of Content for the entire Anuwad project. Every node links to a deeper MOC or individual note.
 
 ---
 
 ## Product & Vision
 
-- [[What is DocLens AI]] — Product definition and value proposition
-- [[Why DocLens Exists]] — Problem space and vision
+- [[What is Anuwad]] — Product definition and value proposition
+- [[Why Anuwad Exists]] — Problem space and vision
 - [[Design System]] — Deep Ocean theme, typography, color tokens
 - [[Tech Stack]] — Frameworks, libraries, and architecture
 
@@ -24,20 +24,15 @@
 
 ## Technical Architecture
 
+- [[Architecture]] — System architecture and module dependency graph
+- [[Folder Structure]] — Annotated map of the repository
+- [[Dependencies]] — Every package dependency, grouped by concern
+- [[Development Guidelines]] — Local setup, scripts, and coding conventions
 - [[MOC — Pipelines]] — PDF Extraction → Translation → TTS
 - [[MOC — APIs]] — External and browser API integrations
 - [[End-to-End Pipeline]] — Complete data flow diagram
 - [[Voice Cache Layer]] — Dual-storage neural voice model caching
 - [[Memory & Storage Audit]] — Audit of large-data storage hotspots and memory optimizations
-
----
-
-## Organization
-
-- [[MOC — Teams]] — Team structure (50 people, 3 squads + shared services)
-- [[MOC — Roles]] — Individual role definitions
-- [[Escalation Matrix]] — Issue routing
-- [[Meeting Cadence]] — Communication rhythms
 
 ---
 
@@ -54,7 +49,7 @@
 graph LR
     Product[🏠 Product] --> Pages[📄 Pages]
     Product --> Pipelines[⚙️ Pipelines]
-    Product --> Teams[👥 Teams]
+    Product --> Architecture[🏗️ Architecture]
 
     Pages --> Features[✨ Features]
     Pages --> Components[🧩 Components]
@@ -62,8 +57,8 @@ graph LR
     Features --> APIs[🔌 APIs]
     Features --> Pipelines
 
-    Pipelines --> Teams
-    Teams --> Roles[🎭 Roles]
+    Pipelines --> Architecture
+    Architecture --> Dependencies[📦 Dependencies]
 
     APIs --> Pipelines
 ```

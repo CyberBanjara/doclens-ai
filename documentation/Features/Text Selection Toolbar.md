@@ -25,7 +25,6 @@
 ## Relationships
 
 - **Component:** [[PdfViewer]] (parent render container).
-- **Team Owner:** Jointly managed by [[Squad A — PDF Extraction]] (positioning) and [[Squad B — Translation]] (triggers).
 
 ---
 

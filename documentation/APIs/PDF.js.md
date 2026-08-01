@@ -7,7 +7,7 @@
 
 ## Purpose
 
-**PDF.js** is a PDF viewer library developed by Mozilla. DocLens uses it to parse PDF files, extract text content, and render pages as high-resolution images in the UI.
+**PDF.js** is a PDF viewer library developed by Mozilla. Anuwad uses it to parse PDF files, extract text content, and render pages as high-resolution images in the UI.
 
 ---
 
@@ -32,7 +32,6 @@
 - **Component:** [[PdfViewer]].
 - **Feature powered:** [[PDF Viewer]], [[Document Management]].
 - **Pipeline:** [[PDF Extraction Pipeline]].
-- **Team Owner:** [[Squad A — PDF Extraction]].
 
 ---
 

@@ -1,6 +1,6 @@
-# 📚 DocLens AI — Knowledge Base
+# 📚 Anuwad — Knowledge Base
 
-> **Single source of truth** for the DocLens AI project.
+> **Single source of truth** for the Anuwad project.
 > Navigate by topic, or explore the [[00 — MOC — Project|Project Graph]] to see how everything connects.
 
 ---
@@ -9,34 +9,31 @@
 
 | Area                 | Description                                                      |
 | -------------------- | ---------------------------------------------------------------- |
-| [[MOC — Product]]    | What DocLens is, why it exists, design system, tech stack        |
+| [[MOC — Product]]    | What Anuwad is, why it exists, design system, tech stack        |
 | [[MOC — User Flows]] | How users interact with the product end-to-end                   |
 | [[MOC — Pages]]      | The application pages and their UI/UX design                     |
 | [[MOC — Features]]   | Every feature in detail — PDF viewer, AI translation, TTS, etc.  |
 | [[MOC — Components]] | Reusable React components powering the UI                        |
 | [[MOC — Pipelines]]  | The three core data pipelines: Extract → Translate → Speak       |
 | [[MOC — APIs]]       | External services and browser APIs the app depends on            |
-| [[MOC — Teams]]      | Organizational structure — squads, shared services, flex reserve |
-| [[MOC — Roles]]      | Individual role definitions across all teams                     |
 
 ---
 
 ## 🔗 Quick Links
 
-- [[What is DocLens AI]] — Product overview in 60 seconds
+- [[What is Anuwad]] — Product overview in 60 seconds
+- [[Architecture]] — System architecture and module dependency graph
+- [[Folder Structure]] — Annotated map of the repository
+- [[Dependencies]] — Every package dependency, grouped by concern
+- [[Development Guidelines]] — Local setup, scripts, and coding conventions
 - [[End-to-End Pipeline]] — Full PDF → Translation → TTS data flow
+- [[Global Library]] — Shared R2-backed document vault and cross-device sync
+- [[Authentication]] — Firebase Google Sign-In and Firestore reviews
 - [[Memory & Storage Audit]] — Audit of large-data storage hotspots and memory optimizations
 - [[Voice Cache Layer]] — Dual-storage neural voice model caching
 - [[Read Aloud Analysis]] — Read Aloud extension architecture & integration strategy
-- [[Escalation Matrix]] — Who to contact for what
 - [[Glossary]] — Key terms and abbreviations
 
 ---
 
-## 📁 Source Documents
-
-Original design documents and external reference logs/SOPs are archived in `_sources/` for reference.
-
----
-
-_Last updated: 2026-07-15_
+_Last updated: 2026-08-01_

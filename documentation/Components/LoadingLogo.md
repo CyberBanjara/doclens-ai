@@ -7,13 +7,13 @@
 
 ## Purpose
 
-A reusable animated loading spinner featuring the DocLens brand identity. Replaces generic spinners throughout the application with a cohesive branded experience during loading states.
+A reusable animated loading spinner featuring the Anuwad brand identity. Replaces generic spinners throughout the application with a cohesive branded experience during loading states.
 
 ---
 
 ## Visual Design
 
-- Displays the DocLens logo with a pulsing animation.
+- Displays the Anuwad logo with a pulsing animation.
 - Uses CSS keyframe animations defined in `src/styles.css` for smooth, performant pulsing effects.
 - Configurable size and optional label text.
 

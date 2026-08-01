@@ -1,4 +1,4 @@
-# DocLens AI — Memory & Storage Audit
+# Anuwad — Memory & Storage Audit
 
 > Comprehensive analysis of all large-data storage hotspots in memory and browser storage.
 

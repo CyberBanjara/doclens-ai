@@ -1,6 +1,7 @@
 # TTS Pipeline
 
-> The final stage of the document processing pipeline. Synthesizes translated text into spoken audio.
+> The final stage of the document processing pipeline. Synthesizes translated/explained text into spoken audio, sentence by sentence.
+> **Source:** `src/lib/tts.ts`, `src/context/TtsContext.tsx`
 
 ---
 
@@ -8,54 +9,45 @@
 
 ```mermaid
 flowchart LR
-    A[translation_output.json] --> B[Generate SSML]
-    B --> C{Engine Preferred?}
-    C -->|Neural| D[Piper WASM Engine]
-    C -->|Browser| E[Web Speech API]
-    D --> F[Quality Check]
+    A[PageAi.result text] --> B["splitSentences() — sentence chunking"]
+    B --> C{Voice engine}
+    C -->|Neural| D["Piper (ONNX/WASM) — synthesize per sentence"]
+    C -->|Browser| E[Web Speech API utterance]
+    D --> F[Playback + pre-synthesis of next sentence]
     E --> F
-    F --> G[Audio Output]
+    F --> G[Sentence-highlighted audio output]
 ```
 
 ---
 
 ## Detailed Steps
 
-### 1. SSML Preparation
+### 1. Sentence Chunking
 
-- Formats translation segments into SSML blocks to configure pronunciation parameters.
-- Inserts pauses for punctuation, emphasizes headings, and formats abbreviations.
-- Team responsible: [[TTS Engine Engineers]].
+- `splitSentences()` / `splitLineByPunctuation()` (`src/lib/tts.ts`) split the AI result text into sentence-level chunks using punctuation rules (commas are intentionally excluded so an engine reads them as a natural micro-pause instead of a hard break). There is no SSML generation — text is passed as plain strings to either engine.
 
-### 2. Voice Generation
+### 2. Voice Synthesis
 
-- Selects the target voice profile.
-- Processes text using the preferred engine:
-  - **Local WASM (Piper):** WebAssembly-based offline synthesis.
-  - **Browser (Web Speech API):** Native browser speech synthesis fallback.
-- Team responsible: [[TTS Engine Engineers]].
+`speakSentence()` in `TtsContext` (`src/context/TtsContext.tsx`) drives one of two engines per the user's selected voice:
 
-### 3. Sound Quality Review
+- **Neural (Piper):** `@diffusionstudio/vits-web` runs inference through `onnxruntime-web` (ONNX/WASM), producing a playable audio buffer per sentence. Voice model files are served from the [[Voice Cache Layer]] (OPFS/IndexedDB).
+- **Browser (native):** the [[Web Speech API]]'s `SpeechSynthesisUtterance` is used directly as a fallback/alternative, with no local model download required.
 
-- Monitors synthesized audio for issues like volume clipping or unexpected silence gaps.
-- Verifies pronunciation accuracy for key terms and checks text-to-audio sync times.
-- Team responsible: [[Audio QA]].
+### 3. Pre-Synthesis Pipelining
 
----
+- While one sentence plays, `preSynthesizeNext()` compiles the *next* sentence's neural audio in the background so playback advances without an audible gap between sentences.
 
-## Output Contract
+### 4. Playback & Highlighting
 
-Outputs clean audio streams:
-
-- Renders audio files (MP3/WAV/OGG) mapped to corresponding text chunks.
-- Coordinates sentence highlighting with speech playback in the browser.
+- Sentence boundaries drive [[HighlightableText]], which highlights the sentence currently being spoken in sync with playback position.
+- If **Continuous Play** is enabled and the last sentence on a page finishes, a `doclens:tts-next-page` event triggers auto-advance to the next page (see [[Auto-Translate|Continuous Auto-Read]]).
 
 ---
 
 ## Relationships
 
-- **Team Owner:** [[Squad C — TTS]].
 - **Core Technologies:** [[Piper WASM Engine]], [[Web Speech API]].
+- **Consumer of:** [[Translation Pipeline]] output (`PageAi.result`).
 
 ---
 

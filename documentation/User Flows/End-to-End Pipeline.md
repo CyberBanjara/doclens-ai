@@ -45,15 +45,12 @@ flowchart LR
 - **Process:** [[PDF.js]] renders each page, extracts text content with position data
 - **Enhancements:** Column detection (single vs multi-column), garbage ratio filtering
 - **Output:** Per-page text + metadata stored in IndexedDB
-- **Team:** [[Squad A — PDF Extraction]]
 
 ### Stage 2: AI Translation
 
 - **Input:** Extracted page text + user settings (mode, language, style, temperature)
 - **Process:** Payload built via `buildPagePayload()`, streamed via [[OpenRouter API]] using SSE
-- **Memory:** Optional previous-page context via `memoryExcerpt()`
 - **Output:** Translated/explained text stored in IndexedDB with settings hash
-- **Team:** [[Squad B — Translation]]
 
 ### Stage 3: Text-to-Speech
 
@@ -61,7 +58,6 @@ flowchart LR
 - **Process:** Text split into sentence chunks, each synthesized by [[Piper WASM Engine]] or [[Web Speech API]]
 - **Caching:** Voice models served from [[Voice Cache Layer]] (OPFS/IDB dual storage)
 - **Output:** Real-time audio playback with sentence-level highlighting
-- **Team:** [[Squad C — TTS]]
 
 ---
 
@@ -72,18 +68,11 @@ flowchart LR
 | Upload → Extraction      | PDF binary (ArrayBuffer) | Stored as blob in IDB                                           |
 | Extraction → Translation | `PageData` record        | `text`, `columns`, `pageNumber`                                 |
 | Translation → TTS        | `PageAi` record          | `result` (string), `status`, `settingsHash`                     |
-| Translation → Storage    | Settings hash            | `modelId`, `mode`, `language`, `style`, `temperature`, `memory` |
+| Translation → Storage    | Settings hash            | `modelId`, `mode`, `language`, `style`, `temperature`            |
 
 ---
 
 ## Cross-References
-
-### Team Ownership
-
-- [[Squad A — PDF Extraction]] owns Stage 1
-- [[Squad B — Translation]] owns Stage 2
-- [[Squad C — TTS]] owns Stage 3
-- [[Shared Services]] provides infrastructure for all stages
 
 ### Feature Mapping
 
@@ -98,7 +87,7 @@ flowchart LR
 - [[PDF to Translation Workflow]] — User perspective of Stage 1→2
 - [[Translation to TTS Workflow]] — User perspective of Stage 2→3
 - [[MOC — Pipelines]] — Pipeline details
-- [[What is DocLens AI]] — Product context
+- [[What is Anuwad]] — Product context
 
 ---
 

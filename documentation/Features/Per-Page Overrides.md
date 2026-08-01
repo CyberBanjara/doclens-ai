@@ -15,10 +15,11 @@
 ## Override Parameters
 
 - **AI Model:** Select alternative LLM models for specific pages.
-- **Mode:** Switch between Translate, Explain, Summarize, and Custom.
+- **Mode:** Switch between `translate` and `explain` (the only two `GlobalMode` values in `src/lib/openrouter.ts`; legacy "summarize"/"keypoints" values collapse into `explain`).
 - **Tone Style:** Adjust the explanation output tone.
 - **Temperature:** Configure LLM creativity level.
-- **Memory Context:** Toggle sequential memory context on or off.
+
+All four fields feed `computeSettingsHash()` (`src/lib/storage.ts`), which the app uses to detect whether a page's cached AI result is stale relative to its current settings.
 
 ---
 
@@ -33,7 +34,6 @@
 ## Relationships
 
 - **Component:** [[PageWorkstation]].
-- **Team Owner:** [[Squad B — Translation]].
 
 ---
 

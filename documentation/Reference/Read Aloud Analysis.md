@@ -1,4 +1,4 @@
-# Read Aloud Extension — Complete Architecture Analysis & DocLens Integration Strategy
+# Read Aloud Extension — Complete Architecture Analysis & Anuwad Integration Strategy
 
 ## Table of Contents
 
@@ -9,7 +9,7 @@
 5. [The PAID Engines (Need API Keys)](#5-the-paid-engines)
 6. [Text Chunking — Why It Matters](#6-text-chunking)
 7. [Audio Playback Pipeline](#7-audio-playback-pipeline)
-8. [Step-by-Step: How to Fork This Into DocLens](#8-forking-into-doclens)
+8. [Step-by-Step: How to Fork This Into Anuwad](#8-forking-into-doclens)
 9. [Recommended Strategy: Best Quality for Free](#9-recommended-strategy)
 
 ---
@@ -93,7 +93,7 @@ The extension uses a **message bus pattern**. Every component registers itself:
 ```
 
 > [!NOTE]
-> **For your DocLens app**: You won't need this messaging system! In a web app, all your code runs in one place. This complexity exists only because browser extensions are split across isolated contexts.
+> **For your Anuwad app**: You won't need this messaging system! In a web app, all your code runs in one place. This complexity exists only because browser extensions are split across isolated contexts.
 
 ---
 
@@ -200,7 +200,7 @@ async function googleTranslateSynthesizeSpeech(text, lang) {
 **Limitation**: 200 chars per request (extension splits text). May break if Google changes their internal API. **Cannot be used in production commercially** — violates Google TOS.
 
 > [!WARNING]
-> **For DocLens**: This approach is fragile and against Google's Terms of Service. It's a hack. Google can change their internal API at any time and break it. Not recommended for a production app.
+> **For Anuwad**: This approach is fragile and against Google's Terms of Service. It's a hack. Google can change their internal API at any time and break it. Not recommended for a production app.
 
 ---
 
@@ -227,7 +227,7 @@ function createPiperFrame() {
 **Key fact**: Piper models run entirely client-side. No server needed!
 
 > [!IMPORTANT]
-> **For DocLens**: Piper is your BEST option for high-quality free TTS. You can self-host the WASM runtime and models. See [Section 8](#8-forking-into-doclens).
+> **For Anuwad**: Piper is your BEST option for high-quality free TTS. You can self-host the WASM runtime and models. See [Section 8](#8-forking-into-doclens).
 
 ---
 
@@ -379,16 +379,16 @@ const cache = {
 
 ---
 
-## 8. Forking Into DocLens — Step-by-Step
+## 8. Forking Into Anuwad — Step-by-Step
 
-Here's how to add high-quality "listen to result" functionality to DocLens:
+Here's how to add high-quality "listen to result" functionality to Anuwad:
 
 ### Step 1: Create the TTS Manager Module
 
 Create a single file `tts-manager.js` that wraps all free TTS options:
 
 ```javascript
-// tts-manager.js - Your DocLens TTS Module
+// tts-manager.js - Your Anuwad TTS Module
 class TTSManager {
   constructor() {
     this.currentUtterance = null;
@@ -551,10 +551,10 @@ class PiperTTS {
 }
 ```
 
-### Step 3: Integrate Into Your DocLens Page Result Panel
+### Step 3: Integrate Into Your Anuwad Page Result Panel
 
 ```javascript
-// In your DocLens page result component:
+// In your Anuwad page result component:
 const tts = new TTSManager();
 
 // "Listen" button click handler
@@ -610,7 +610,7 @@ document.getElementById("stop-btn").addEventListener("click", () => {
 
 ## 9. Recommended Strategy — Best Quality for Free
 
-Here's my recommended **tiered approach** for DocLens:
+Here's my recommended **tiered approach** for Anuwad:
 
 ### Tier 1: Web Speech API (Simplest, works immediately)
 
@@ -657,7 +657,7 @@ Here's my recommended **tiered approach** for DocLens:
 
 ## Summary
 
-| Aspect              | Read Aloud Approach                   | Your DocLens Approach                       |
+| Aspect              | Read Aloud Approach                   | Your Anuwad Approach                       |
 | ------------------- | ------------------------------------- | ------------------------------------------- |
 | **Architecture**    | Extension (multi-context, messaging)  | Web app (single context, simple)            |
 | **TTS Engine**      | 12 engines, complex routing           | Start with Web Speech API, upgrade to Piper |

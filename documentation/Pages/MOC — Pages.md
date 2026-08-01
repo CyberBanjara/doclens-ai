@@ -1,6 +1,6 @@
 # 📄 MOC — Pages
 
-> The primary user-facing views of the DocLens AI application.
+> The primary user-facing views of the Anuwad application.
 
 ---
 

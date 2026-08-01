@@ -41,7 +41,6 @@ The system routes requests based on the selected engine preference:
 
 - **Engine detail:** [[Piper Neural TTS]], [[Web Speech API]].
 - **Caching:** [[Voice Cache Layer]].
-- **Team Owner:** [[Squad C — TTS]].
 - **Workflow:** [[Translation to TTS Workflow]].
 
 ---

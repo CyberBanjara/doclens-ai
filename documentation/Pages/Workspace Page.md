@@ -3,13 +3,13 @@
 > **Route:** `/doc/$id`  
 > **Source File:** `doc.$id.tsx`  
 > **Key Components:** [[PdfViewer]], [[RightPanel]], [[PageWorkstation]]  
-> **SEO Title:** `DocLens — Document`
+> **SEO Title:** `Anuwad — Document`
 
 ---
 
 ## Purpose
 
-The **Workspace Page** is the core functional workstation of DocLens. It implements a side-by-side workspace: the original PDF is rendered on the left, and interactive AI options (translations, custom prompts, explanations, summaries) and speech controls are hosted on the right.
+The **Workspace Page** is the core functional workstation of Anuwad. It implements a side-by-side workspace: the original PDF is rendered on the left, and interactive AI options (translations, custom prompts, explanations, summaries) and speech controls are hosted on the right.
 
 ---
 
@@ -65,7 +65,6 @@ Uses a 50/50 vertical split layout on desktop, stacking into a single column on 
 ## Relationships
 
 - **Workflow:** Handles the [[PDF to Translation Workflow]] and the [[Translation to TTS Workflow]].
-- **Team Ownership:** Jointly managed; layout by [[Squad A — PDF Extraction]], workstation by [[Squad B — Translation]], playback systems by [[Squad C — TTS]].
 
 ---
 

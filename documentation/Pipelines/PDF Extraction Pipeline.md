@@ -1,6 +1,7 @@
 # PDF Extraction Pipeline
 
 > The first stage of the document processing pipeline. Extracts text content from PDF binaries and structures it for translation.
+> **Source:** `src/lib/pdf.ts`
 
 ---
 
@@ -8,59 +9,44 @@
 
 ```mermaid
 flowchart LR
-    A[Input PDF] --> B[PDF Parsing]
-    B --> C{Digital Text?}
-    C -->|Yes| D[Clean Layout]
-    C -->|No| E[OCR Scan]
-    E --> D
-    D --> F[extraction_output.json]
+    A[Input PDF] --> B["PDF.js parsing (extractPdfPages)"]
+    B --> C{Text quality OK?}
+    C -->|Yes| F[PageExtraction per page]
+    C -->|No / garbled| E["Tesseract.js OCR (runOcrOnGarbledPages)"]
+    E --> F
+    F --> G[Stored in pageData / IndexedDB]
 ```
 
 ---
 
 ## Detailed Steps
 
-### 1. Ingestion & File Check
+### 1. Document Load
 
-- Ingests uploaded PDF files.
-- Checks layout orientation, size limits, security settings, and password protections.
-- Team responsible: [[PDF Parsing Engineers]] (Depth 1).
+- `loadDocFromSource()` / `loadPdfDocument()` load the PDF via a lazily-imported `pdfjs-dist` (`getPdfjs()`), with the worker script served locally.
 
-### 2. Layout & Structure Extraction
+### 2. Layout & Text Extraction
 
-- Processes digital text layers using [[PDF.js]].
-- Detects document structure: headers, body paragraphs, list structures, footnotes, and multi-column formats.
-- Team responsible: [[PDF Parsing Engineers]] (Depth 1).
+- `extractPdfPages()` walks each page's `TextContent` from PDF.js and runs `sortByColumns()` (column-aware geometry: `detectColumns` → `groupIntoSegments` → `sortByColumns`) so multi-column layouts read in the correct order instead of raw left-to-right stream order.
+- `cleanExtractedText()` strips Private Use Area glyphs, garbage/symbol-font characters, and other pdf.js extraction artifacts.
 
-### 3. OCR Image Processing
+### 3. OCR Fallback for Garbled/Scanned Pages
 
-- Scans low-confidence or image-only pages.
-- Pre-processes page images (binarization, contrast adjustments, rotation corrections).
-- Executes OCR parsing using Tesseract, Google Vision, or AWS Textract to extract text blocks.
-- Team responsible: [[OCR Specialists]] (Depth 1).
-
-### 4. Text Normalization & Layout Formatting
-
-- Merges extracted text layers and corrects common formatting issues.
-- Fixes ligature styling bugs, hyphenations, line breaks, header repetition, page numbering noise, and encoding errors.
-- Runs quality checks (e.g., character error rate checks) and routes low-confidence pages for review.
-- Team responsible: [[Text Cleaning Engineers]] (Depth 2).
+- `checkTextQuality()` scores extracted text (via `isGarbageLine()` heuristics) to detect pages that are image-only or where the embedded text layer is corrupted/garbled.
+- `runOcrOnGarbledPages()` renders flagged pages to a canvas and runs them through **Tesseract.js only** (`ocrPdfPage()` / `ocrPageById()`) — no external OCR service (e.g. Google Vision, AWS Textract) is used; everything runs client-side.
+- `cleanOcrText()` applies OCR-specific text cleanup to the Tesseract output.
 
 ---
 
-## Output Contract
+## Output
 
-Generates `extraction_output.json`:
-
-- Contains page details, text block lists, coordinate mappings, layout metrics, and extraction confidence flags.
-- Pushed to the [[Translation Pipeline]] input queue.
+Each page produces a `PageExtraction` (`text`, layout metadata) which is written to the `pageData` IndexedDB store (see [[IndexedDB Storage]]) and consumed by the [[Translation Pipeline]].
 
 ---
 
 ## Relationships
 
-- **Team Owner:** [[Squad A — PDF Extraction]].
-- **Core Technology:** [[PDF.js]].
+- **Core Technology:** [[PDF.js]], Tesseract.js.
 
 ---
 

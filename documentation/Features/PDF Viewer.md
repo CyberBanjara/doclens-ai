@@ -32,7 +32,6 @@ To process massive documents without running out of browser memory, the PDF view
 ## Relationships
 
 - **Component:** [[PdfViewer]].
-- **Team Owner:** [[Squad A — PDF Extraction]].
 - **Dependencies:** [[PDF.js]].
 
 ---

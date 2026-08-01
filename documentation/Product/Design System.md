@@ -1,6 +1,6 @@
 # Design System
 
-> The visual design language of DocLens AI — the **Deep Ocean** theme.
+> The visual design language of Anuwad — the **Deep Ocean** theme.
 
 ---
 
@@ -71,7 +71,7 @@ Cards and panels use `.glass-panel`:
 
 ## Related
 
-- [[What is DocLens AI]] — Product context
+- [[What is Anuwad]] — Product context
 - [[Tech Stack]] — Implementation details
 - [[Library Page]] — Design system in action
 - [[Workspace Page]] — Reader text and glassmorphism usage

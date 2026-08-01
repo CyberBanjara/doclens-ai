@@ -3,7 +3,7 @@
 > **Route:** `/` (index)  
 > **Source File:** `index.tsx`  
 > **Layout:** [[SidebarLayout]]  
-> **SEO Title:** `DocLens — Document Library`
+> **SEO Title:** `Anuwad — Document Library`
 
 ---
 
@@ -21,11 +21,11 @@ The layout utilizes a two-column setup where the left column is the fixed-width 
 ┌──────────┬───────────────────────────────────────────┐
 │  Sidebar │  Top Bar: "Library" | Doc Count | API     │
 │          ├───────────────────────────────────────────┤
-│  ◐ Logo  │  Scrollable Content                       │
+│  Logo    │  Scrollable Content                       │
 │  📁 Lib  │  - Hero Title: "Intelligence Library"     │
-│  ⚙ Gen   │  - API Key Warning Banner (Conditional)   │
-│  🎙 Voice│  - Ingestion Dropzone                     │
-│          │  - Grid Toolbar (Recent Documents)        │
+│  🌐 Glob │  - API Key Warning Banner (Conditional)   │
+│  🎨 Appr │  - Ingestion Dropzone                     │
+│  ⚙ Gen   │  - Grid Toolbar (Recent Documents)        │
 │          │  - Document Grid (Cards / Empty state)    │
 └──────────┴───────────────────────────────────────────┘
 ```
@@ -55,14 +55,13 @@ The layout utilizes a two-column setup where the left column is the fixed-width 
 
 - **Session Continuity (Cold Launch Auto-Restore):** Checks `sessionStorage` on mount. If a document was open during the last session, the page automatically redirects the user back to that document in the [[Workspace Page]] to preserve context.
 - **Async Storage:** Documents are retrieved from [[IndexedDB Storage]] using React state.
-- **Responsive Navigation:** Renders a hamburger menu on mobile which toggles the navigation panel drawer.
+- **Responsive Navigation:** On mobile, [[SidebarLayout]] renders a persistent bottom `MobileTabBar` plus a floating "+" upload button instead of a sidebar/drawer.
 
 ---
 
 ## Relationships
 
 - **Workflow:** Ingests documents and hands them to the [[PDF to Translation Workflow]].
-- **Team Ownership:** Owned by [[Squad A — PDF Extraction]].
 - **Key Component:** [[DocumentCard]], [[Dropzone]].
 
 ---

@@ -15,18 +15,18 @@
 
 ## Storage Architecture
 
-All document files are stored locally in the browser using [[IndexedDB Storage]]. The database schema maps:
+All document files are stored locally in the browser using [[IndexedDB Storage]] (`doclens` database). The relevant object stores are:
 
-- `document_blobs` → Raw PDF binary data.
-- `document_metadata` → File metadata and details.
-- `document_thumbnails` → Base64 image data for document cards.
+- `blobs` → Raw PDF binary data.
+- `documents` → File metadata (`DocRecord`: filename, page count, timestamps).
+- `thumbnails` → Generated first-page thumbnail images.
+- `pageData` → Per-page extracted text + AI results (deleted alongside the document).
 
 ---
 
 ## Relationships
 
 - **Pages:** Integrated on the [[Library Page]].
-- **Team Owner:** [[Squad A — PDF Extraction]].
 - **Storage integration:** [[IndexedDB Storage]].
 
 ---

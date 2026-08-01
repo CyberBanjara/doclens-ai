@@ -3,7 +3,7 @@
 > **Route:** `/settings/voice`  
 > **Source File:** `settings_.voice.tsx`  
 > **Layout:** [[SidebarLayout]]  
-> **SEO Title:** `DocLens — Voice Settings`
+> **SEO Title:** `Anuwad — Voice Settings`
 
 ---
 
@@ -60,7 +60,6 @@ Organized in a single column (`max-w-4xl`) for linear settings configuration (La
 ## Relationships
 
 - **Workflow:** Feeds voice metadata into the [[Translation to TTS Workflow]].
-- **Team Ownership:** Owned by [[Squad C — TTS]].
 - **Key APIs:** [[Piper WASM Engine]], [[Web Speech API]].
 
 ---
