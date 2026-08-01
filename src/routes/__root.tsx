@@ -242,6 +242,18 @@ function RootShell({ children }: { children: React.ReactNode }) {
             background-color: rgba(0, 0, 0, 0.05) !important;
           }
         ` }} />
+        {/* Pre-rendered static semantic block for Google OAuth Verification & Crawlers */}
+        <header className="sr-only" aria-hidden="false">
+          <h1>Anuwad — AI Document Reader &amp; Translator</h1>
+          <p>
+            Anuwad is a free, privacy-first document platform. Render PDFs locally in your browser, translate pages into over 90 languages using state-of-the-art AI, and convert text into natural speech. Sign in with Google to synchronize your saved document library and preferences securely across devices.
+          </p>
+          <nav>
+            <a href="/privacy">Privacy Policy</a>
+            <a href="/terms">Terms of Service</a>
+          </nav>
+        </header>
+
         {children}
         <Scripts />
       </body>
