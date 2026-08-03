@@ -165,11 +165,18 @@ export function TtsProvider({ children }: { children: React.ReactNode }) {
   });
   // Raw Piper catalog entries for dynamic voice registration
   const rawCatalogRef = useRef<any[]>([]);
-
   // Utterance and Audio refs to prevent garbage collection during playback
   const utteranceRef = useRef<SpeechSynthesisUtterance | null>(null);
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const activeAudioUrlRef = useRef<string | null>(null);
+  const rateRef = useRef<number>(rate);
+  // Session ID token to completely isolate TTS queues across page navigations & stops
+  const synthesisSessionIdRef = useRef<number>(0);
+
+  // Sync rateRef whenever rate state changes
+  useEffect(() => {
+    rateRef.current = rate;
+  }, [rate]);
 
   // Pre-synthesized audio queue map & synthesis state refs
   interface PreSynthesizedEntry {
@@ -184,7 +191,7 @@ export function TtsProvider({ children }: { children: React.ReactNode }) {
   // Track continuous sentence state to avoid race conditions
   const isTransitioningRef = useRef(false);
 
-  // Refresh voice list: merge native browser voices with neural catalog voices
+  // Refresh voice list: merge native browser voices with native catalog voices
   const refreshVoices = useCallback(async () => {
     const nativeSpeechVoices = await getBrowserVoices();
     const native: TtsVoice[] = nativeSpeechVoices.map((v) => ({
@@ -334,6 +341,7 @@ export function TtsProvider({ children }: { children: React.ReactNode }) {
 
   // Setters with localStorage persistence
   const setRate = (newRate: number) => {
+    rateRef.current = newRate;
     setRateState(newRate);
     localStorage.setItem("doclens:tts-rate", newRate.toString());
   };
@@ -366,6 +374,9 @@ export function TtsProvider({ children }: { children: React.ReactNode }) {
   }, [filteredVoices, selectedVoiceUri]);
 
   const cleanupAudio = useCallback(() => {
+    // Increment session ID token to invalidate any in-flight promises/events from previous pages
+    synthesisSessionIdRef.current++;
+
     stopCurrentAudioElement(audioRef);
     if (activeAudioUrlRef.current) {
       try {
@@ -395,6 +406,7 @@ export function TtsProvider({ children }: { children: React.ReactNode }) {
   const processPreSynthesizeQueue = useCallback(
     (currentIndex: number, sentenceList: string[]) => {
       if (!isPlayingRef.current) return;
+      const currentSessionId = synthesisSessionIdRef.current;
       const voice = availableVoices.find((v) => v.voiceURI === selectedVoiceUri);
       if (!voice?.isNeural || !ttsRef.current) return;
 
@@ -444,21 +456,25 @@ export function TtsProvider({ children }: { children: React.ReactNode }) {
       promise
         .then((wavBlob: Blob) => {
           isSynthesizingRef.current = false;
+          if (synthesisSessionIdRef.current !== currentSessionId) return;
+
           const currentEntry = preSynthesizedMapRef.current.get(targetIndex);
           if (currentEntry) {
             currentEntry.url = URL.createObjectURL(wavBlob);
           }
           // Continue filling queue for subsequent look-ahead slots
           if (isPlayingRef.current) {
-            processPreSynthesizeQueue(currentSentenceIndexRef.current, sentenceList);
+            processPreSynthesizeQueue(currentSentenceIndexRef.current, sentencesRef.current);
           }
         })
         .catch((err: any) => {
           isSynthesizingRef.current = false;
+          if (synthesisSessionIdRef.current !== currentSessionId) return;
+
           console.warn(`[TTS] Failed to pre-synthesize chunk ${targetIndex}:`, err);
           preSynthesizedMapRef.current.delete(targetIndex);
           if (isPlayingRef.current) {
-            processPreSynthesizeQueue(currentSentenceIndexRef.current, sentenceList);
+            processPreSynthesizeQueue(currentSentenceIndexRef.current, sentencesRef.current);
           }
         });
     },
@@ -469,6 +485,7 @@ export function TtsProvider({ children }: { children: React.ReactNode }) {
   const speakSentence = useCallback(
     (index: number, sentenceList: string[]) => {
       isTransitioningRef.current = false;
+      const currentSessionId = synthesisSessionIdRef.current;
 
       // Clear any previous active audio element before starting a new one.
       stopCurrentAudioElement(audioRef);
@@ -514,10 +531,12 @@ export function TtsProvider({ children }: { children: React.ReactNode }) {
       const voice = availableVoices.find((v) => v.voiceURI === selectedVoiceUri);
 
       const attachAudioHandlers = (audio: HTMLAudioElement, audioUrl: string) => {
-        audio.playbackRate = rate;
+        // Apply the latest speed dynamically for the upcoming segment
+        audio.playbackRate = rateRef.current;
 
         audio.onended = () => {
           if (isTransitioningRef.current) return;
+          if (synthesisSessionIdRef.current !== currentSessionId) return;
           isTransitioningRef.current = true;
 
           if (activeAudioUrlRef.current === audioUrl) {
@@ -525,8 +544,9 @@ export function TtsProvider({ children }: { children: React.ReactNode }) {
             activeAudioUrlRef.current = null;
           }
 
+          const currentSentences = sentencesRef.current;
           const nextIdx = index + 1;
-          if (nextIdx < sentenceList.length) {
+          if (nextIdx < currentSentences.length) {
             setCurrentSentenceIndex(nextIdx);
           }
 
@@ -535,7 +555,8 @@ export function TtsProvider({ children }: { children: React.ReactNode }) {
           transitionTimeoutRef.current = setTimeout(() => {
             transitionTimeoutRef.current = null;
             if (isPausedRef.current) return;
-            speakSentence(nextIdx, sentenceList);
+            if (synthesisSessionIdRef.current !== currentSessionId) return;
+            speakSentence(nextIdx, sentencesRef.current);
           }, 0);
         };
 
@@ -598,7 +619,7 @@ export function TtsProvider({ children }: { children: React.ReactNode }) {
 
           promise
             .then((wavBlob: Blob) => {
-              if (loadingIndexRef.current !== index || !isPlayingRef.current) {
+              if (synthesisSessionIdRef.current !== currentSessionId || loadingIndexRef.current !== index || !isPlayingRef.current) {
                 setIsNeuralLoading(false);
                 return;
               }
@@ -614,7 +635,7 @@ export function TtsProvider({ children }: { children: React.ReactNode }) {
               }
             })
             .catch((err: any) => {
-              if (loadingIndexRef.current !== index) return;
+              if (synthesisSessionIdRef.current !== currentSessionId || loadingIndexRef.current !== index) return;
               setIsNeuralLoading(false);
               console.error("Neural synthesis error:", err);
               toast.error(getFriendlyErrorMessage(err, "Failed to generate neural speech"));
@@ -658,7 +679,7 @@ export function TtsProvider({ children }: { children: React.ReactNode }) {
                 void refreshVoices();
               }
 
-              if (loadingIndexRef.current !== index || !isPlayingRef.current) {
+              if (synthesisSessionIdRef.current !== currentSessionId || loadingIndexRef.current !== index || !isPlayingRef.current) {
                 setIsNeuralLoading(false);
                 return;
               }
@@ -675,7 +696,7 @@ export function TtsProvider({ children }: { children: React.ReactNode }) {
             })
             .catch((err: any) => {
               if (toastId) toast.dismiss(toastId);
-              if (loadingIndexRef.current !== index) return;
+              if (synthesisSessionIdRef.current !== currentSessionId || loadingIndexRef.current !== index) return;
               setIsNeuralLoading(false);
               console.error("Neural synthesis error:", err);
               toast.error(getFriendlyErrorMessage(err, "Failed to generate neural speech"));
@@ -698,12 +719,13 @@ export function TtsProvider({ children }: { children: React.ReactNode }) {
             utterance.lang = nativeVoice.lang;
           }
         }
-        utterance.rate = rate;
+        utterance.rate = rateRef.current;
 
         utterance.onend = () => {
           if (isTransitioningRef.current) return;
+          if (synthesisSessionIdRef.current !== currentSessionId) return;
           isTransitioningRef.current = true;
-          speakSentence(index + 1, sentenceList);
+          speakSentence(index + 1, sentencesRef.current);
         };
 
         utterance.onerror = (e) => {
@@ -716,7 +738,7 @@ export function TtsProvider({ children }: { children: React.ReactNode }) {
         window.speechSynthesis.speak(utterance);
       }
     },
-    [availableVoices, selectedVoiceUri, rate, continuousPlay, processPreSynthesizeQueue],
+    [availableVoices, selectedVoiceUri, continuousPlay, processPreSynthesizeQueue],
   );
 
   // Public controls
