@@ -4,9 +4,10 @@ import { Link } from "@tanstack/react-router";
 import { useAuth } from "@/context/AuthContext";
 import { Popover, PopoverTrigger, PopoverContent } from "@/components/ui/popover";
 import { ReviewModal } from "@/components/ReviewModal";
+import { UserAvatar } from "@/components/UserAvatar";
 
 export function ProfileDropdown() {
-  const { user, signInWithGoogle, signOut } = useAuth();
+  const { user, userProfile, signInWithGoogle, signOut } = useAuth();
   const [open, setOpen] = useState(false);
   const [reviewOpen, setReviewOpen] = useState(false);
 
@@ -25,6 +26,10 @@ export function ProfileDropdown() {
     setReviewOpen(true);
   };
 
+  const photoURL = user?.photoURL || userProfile?.photoURL;
+  const name = user?.displayName || userProfile?.name;
+  const email = user?.email || userProfile?.email;
+
   return (
     <>
       <Popover open={open} onOpenChange={setOpen}>
@@ -33,11 +38,14 @@ export function ProfileDropdown() {
             className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-full border border-border/50 bg-surface/80 text-foreground shadow-sm transition-all hover:bg-surface-2 hover:scale-105 active:scale-95 outline-none"
             aria-label="User profile & account settings"
           >
-            {user?.photoURL ? (
-              <img
-                src={user.photoURL}
-                alt={user.displayName || "Profile"}
+            {user ? (
+              <UserAvatar
+                photoURL={photoURL}
+                name={name}
+                email={email}
                 className="h-7 w-7 rounded-full object-cover"
+                fallbackClassName="flex h-7 w-7 items-center justify-center rounded-full bg-primary text-xs font-bold text-primary-foreground"
+                iconClassName="h-4 w-4 text-primary-foreground"
               />
             ) : (
               <User className="h-5 w-5 text-muted-foreground" />
@@ -55,22 +63,19 @@ export function ProfileDropdown() {
             <div className="space-y-1">
               {/* Signed in user header */}
               <div className="flex items-center gap-3 rounded-xl bg-surface-2/70 p-2.5">
-                {user.photoURL ? (
-                  <img
-                    src={user.photoURL}
-                    alt={user.displayName || "User"}
-                    className="h-9 w-9 rounded-full object-cover border border-primary/20"
-                  />
-                ) : (
-                  <div className="flex h-9 w-9 items-center justify-center rounded-full bg-primary text-xs font-bold text-primary-foreground shadow-sm">
-                    {user.displayName?.[0] || user.email?.[0] || "U"}
-                  </div>
-                )}
+                <UserAvatar
+                  photoURL={photoURL}
+                  name={name}
+                  email={email}
+                  className="h-9 w-9 rounded-full object-cover border border-primary/20"
+                  fallbackClassName="flex h-9 w-9 items-center justify-center rounded-full bg-primary text-xs font-bold text-primary-foreground shadow-sm"
+                  iconClassName="h-5 w-5 text-primary-foreground"
+                />
                 <div className="min-w-0 flex-1">
                   <p className="truncate text-xs font-bold text-foreground">
-                    {user.displayName || "Signed In"}
+                    {name || "Signed In"}
                   </p>
-                  <p className="truncate text-[10px] text-muted-foreground">{user.email}</p>
+                  <p className="truncate text-[10px] text-muted-foreground">{email}</p>
                 </div>
               </div>
 

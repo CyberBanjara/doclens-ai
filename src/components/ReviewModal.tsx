@@ -11,13 +11,15 @@ import {
 import { submitReviewToFirestore } from "@/lib/firebase";
 import { useAuth } from "@/context/AuthContext";
 
+import { UserAvatar } from "@/components/UserAvatar";
+
 interface ReviewModalProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
 }
 
 export function ReviewModal({ open, onOpenChange }: ReviewModalProps) {
-  const { user } = useAuth();
+  const { user, userProfile } = useAuth();
   const [rating, setRating] = useState<number>(5);
   const [hoverRating, setHoverRating] = useState<number>(0);
   const [comment, setComment] = useState<string>("");
@@ -71,20 +73,17 @@ export function ReviewModal({ open, onOpenChange }: ReviewModalProps) {
           {/* User info preview */}
           {user && (
             <div className="flex items-center gap-3 rounded-lg border border-border bg-surface-2 p-3">
-              {user.photoURL ? (
-                <img
-                  src={user.photoURL}
-                  alt={user.displayName || "User"}
-                  className="h-8 w-8 rounded-full object-cover"
-                />
-              ) : (
-                <div className="flex h-8 w-8 items-center justify-center rounded-full bg-primary text-xs font-bold text-primary-foreground">
-                  {user.displayName?.[0] || user.email?.[0] || "U"}
-                </div>
-              )}
+              <UserAvatar
+                photoURL={user.photoURL || userProfile?.photoURL}
+                name={user.displayName || userProfile?.name}
+                email={user.email || userProfile?.email}
+                className="h-8 w-8 rounded-full object-cover"
+                fallbackClassName="flex h-8 w-8 items-center justify-center rounded-full bg-primary text-xs font-bold text-primary-foreground"
+                iconClassName="h-4 w-4 text-primary-foreground"
+              />
               <div className="min-w-0 flex-1">
                 <p className="truncate text-xs font-semibold text-foreground">
-                  {user.displayName || "Anonymous User"}
+                  {user.displayName || userProfile?.name || "Anonymous User"}
                 </p>
                 <p className="truncate text-[11px] text-muted-foreground">{user.email}</p>
               </div>

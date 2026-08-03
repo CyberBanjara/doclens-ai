@@ -1,0 +1,48 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    
+    // Helper functions for RBAC
+    function isSignedIn() {
+      return request.auth != null;
+    }
+    
+    function isOwner(userId) {
+      return isSignedIn() && request.auth.uid == userId;
+    }
+    
+    function getUserData() {
+      return get(/databases/$(database)/documents/users/$(request.auth.uid)).data;
+    }
+    
+    function isAdmin() {
+      return isSignedIn() && getUserData().role == 'admin';
+    }
+
+    function isEditor() {
+      return isSignedIn() && (getUserData().role == 'admin' || getUserData().role == 'editor');
+    }
+
+    // Rules for `users` collection
+    match /users/{userId} {
+      // Any authenticated user can read their own profile; admins can read any profile
+      allow read: if isOwner(userId) || isAdmin();
+      
+      // Allow user creation on first sign-in (ensuring default role is 'user')
+      allow create: if isOwner(userId) && request.resource.data.role == 'user';
+      
+      // Allow profile updates (metadata update, but preventing user from changing their own role unless admin)
+      allow update: if (isOwner(userId) && request.resource.data.role == resource.data.role) || isAdmin();
+      
+      // Only admins can delete user documents or grant admin/elevated roles
+      allow delete: if isAdmin();
+    }
+    
+    // Rules for `reviews` collection
+    match /reviews/{reviewId} {
+      allow read: if true;
+      allow create: if isSignedIn();
+      allow update, delete: if isAdmin() || (isSignedIn() && resource.data.uid == request.auth.uid);
+    }
+  }
+}
