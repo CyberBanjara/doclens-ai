@@ -1,11 +1,12 @@
 import { Link, useMatchRoute } from "@tanstack/react-router";
 import { useRef, useState } from "react";
-import { HelpCircle, Plus } from "lucide-react";
+import { Plus } from "lucide-react";
 import { ApiKeyStatusBadge } from "@/components/ApiKeyStatusBadge";
 import { SupportModal } from "@/components/SupportModal";
 import { MobileTabBar } from "@/components/mobile/MobileTabBar";
 import { ProfileDropdown } from "@/components/ProfileDropdown";
 import { useIsMobile } from "@/hooks/use-mobile";
+import { useAuth } from "@/context/AuthContext";
 
 interface SidebarLayoutProps {
   children: React.ReactNode;
@@ -17,7 +18,7 @@ interface SidebarLayoutProps {
   onNewDocument?: (file: File) => void;
 }
 
-const NAV_ITEMS = [
+const BASE_NAV_ITEMS = [
   { to: "/", label: "Library", icon: "📁" },
   { to: "/global-library", label: "Global Library", icon: "🌐" },
   { to: "/settings/appearance", label: "Appearance", icon: "🎨" },
@@ -34,6 +35,12 @@ export function SidebarLayout({
   const matchRoute = useMatchRoute();
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [supportOpen, setSupportOpen] = useState(false);
+  const { isPrivileged } = useAuth();
+
+  const navItems = [
+    ...BASE_NAV_ITEMS,
+    ...(isPrivileged ? [{ to: "/admin", label: "Admin", icon: "🛡️" }] : []),
+  ];
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -108,7 +115,7 @@ export function SidebarLayout({
 
         {/* Navigation */}
         <nav className="flex flex-col gap-1 px-4">
-          {NAV_ITEMS.map((item) => {
+          {navItems.map((item) => {
             const isActive =
               item.to === "/"
                 ? !!matchRoute({ to: "/", fuzzy: false })

@@ -29,18 +29,71 @@ export default defineConfig({
       },
     },
   },
-  plugins: isVercel
-    ? [
-        nitro({
-          vercel: {
-            functions: {
-              runtime: "nodejs22.x",
+  plugins: [
+    {
+      name: "vercel-api-dev-plugin",
+      configureServer(server: any) {
+        server.middlewares.use(async (req: any, res: any, next: any) => {
+          const url = req.url || "";
+          if (url.startsWith("/api/")) {
+            const pathName = url.split("?")[0];
+            const relativePath = `.${pathName}.ts`;
+            try {
+              const mod = await server.ssrLoadModule(relativePath);
+              if (mod && mod.default) {
+                // Ensure res.status & res.json exist
+                res.json = (data: any) => {
+                  res.setHeader("Content-Type", "application/json");
+                  res.end(JSON.stringify(data));
+                };
+                res.status = (code: number) => {
+                  res.statusCode = code;
+                  return res;
+                };
+
+                if (req.method === "POST" || req.method === "PUT" || req.method === "PATCH" || req.method === "DELETE") {
+                  let bodyStr = "";
+                  req.on("data", (chunk: any) => {
+                    bodyStr += chunk;
+                  });
+                  req.on("end", async () => {
+                    try {
+                      req.body = bodyStr ? JSON.parse(bodyStr) : {};
+                    } catch {
+                      req.body = {};
+                    }
+                    await mod.default(req, res);
+                  });
+                  return;
+                }
+                await mod.default(req, res);
+                return;
+              }
+            } catch (err: any) {
+              console.error(`Dev API error for ${pathName}:`, err);
+              res.statusCode = 500;
+              res.setHeader("Content-Type", "application/json");
+              res.end(JSON.stringify({ error: err.message }));
+              return;
+            }
+          }
+          next();
+        });
+      },
+    },
+    ...(isVercel
+      ? [
+          nitro({
+            vercel: {
+              functions: {
+                runtime: "nodejs22.x",
+              },
             },
-          },
-          rollupConfig: {
-            external: ["pdfjs-dist"],
-          },
-        }),
-      ]
-    : [],
+            rollupConfig: {
+              external: ["pdfjs-dist"],
+            },
+          }),
+        ]
+      : []),
+  ],
 });

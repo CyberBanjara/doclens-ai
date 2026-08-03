@@ -1,41 +1,41 @@
-# AI Translation Feature
+# AI Translation & Explanation Feature
 
-> Stream translation, summarization, and explanation capabilities.
+> Stream translation and explanation capabilities powered by 13 specialized explanation tone profiles.
 
 ---
 
 ## Capabilities
 
-- Streams translations into 90+ languages.
-- Supports alternative pipeline configurations:
-  - **Translate:** Direct language-to-language translation.
-  - **Explain:** Detailed conceptual explanations of page content.
-  - **Summarize:** Highlights core takeaways.
-  - **Custom Prompt:** Users can edit the system prompt template.
-- Implements sequential memory passing to maintain context between pages.
+- **Translation Mode (`translate`):** Direct language-to-language translation preserving original text structure and formatting into 90+ languages.
+- **Explanation Mode (`explain`):** Deep conceptual explanations powered by **13 Explanation Tones (Styles)** including:
+  - **Standard**, **ELI5**, **Storytelling**, **Socratic**, **Step-by-Step**, **Visual Thinking**, **Analogical**, **Practical**, **Expert Deep-Dive**, **Debate**, **Historical Context**, **Motivational**, and **Critical Thinking**.
+- **TTS-Friendly Native Prompting:** Applies negative generation rules natively in system prompts to prevent markdown, emojis, code fences, and decorative symbols, ensuring output is immediately ready for neural Text-to-Speech narration.
 
 ---
 
 ## Technical Integration
 
-- Calls edge endpoints that route queries to [[OpenRouter API]] models.
-- Uses an `AbortController` to stop active streaming requests when the user stops processing.
-- Stores output in [[IndexedDB Storage]] along with a hash of settings (model, tone, prompts) to verify cache validity if defaults change.
+- Calls server functions that proxy requests to [[OpenRouter API]] models as live SSE streams.
+- Uses `AbortController` bound to client request lifecycle to stop streaming on cancellation or page navigation.
+- Computes a `settingsHash` covering `(modelId, mode, language, style, temperature)` to validate IndexedDB cache entries.
 
 ---
 
-## UI Bindings
+## Code References
 
-- **Output Language Card:** Preset selections on the [[General Settings Page]].
-- **Workstation Sidebar:** Hosts the execution button and streaming view inside the [[Workspace Page]].
+- **Prompt Construction & Tones:** [openrouter.ts](file:///home/sanskar/Desktop/doclens-ai/src/lib/openrouter.ts#L614-L783)
+- **Settings Hash Calculation:** [storage/types.ts](file:///home/sanskar/Desktop/doclens-ai/src/lib/storage/types.ts#L64-L78)
+- **UI Tone Selector:** [ExplainSetupDialog.tsx](file:///home/sanskar/Desktop/doclens-ai/src/components/ExplainSetupDialog.tsx#L85-L107)
 
 ---
 
 ## Relationships
 
-- **Component:** [[PageWorkstation]].
+- **Detailed Documentation:** See [[Prompt Engineering & Explanation Tones]].
+- **Component:** [[PageWorkstation]], [[ExplainSetupDialog]].
 - **Dependencies:** [[OpenRouter API]].
 
 ---
 
 _Part of [[MOC — Features]]_
+

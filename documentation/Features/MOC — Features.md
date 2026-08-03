@@ -16,6 +16,7 @@
 ### AI Processing
 
 - [[AI Translation]] — Output language settings, tone profiles, OpenRouter endpoint connections, SSE streaming token parsing.
+- [[Prompt Engineering & Explanation Tones]] — 13 Explanation styles (ELI5, Storytelling, etc.), negative generation rules, system prompt architecture, and file links.
 - [[Auto-Translate|Continuous Auto-Read]] — Translate-ahead + auto-advance while listening to a page.
 - [[Per-Page Overrides]] — Custom configurations (model, tone, temperature, custom prompt payload editor) per page.
 - [[API Key Management]] — Server key environment checks, client status badges, verification modal.

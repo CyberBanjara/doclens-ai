@@ -4,21 +4,21 @@
     "type": "split",
     "children": [
       {
-        "id": "f4e47a7b270b5f66",
+        "id": "c8072be08701b9dd",
         "type": "tabs",
         "children": [
           {
-            "id": "105493eb34a835af",
+            "id": "d73b0193de20cf9c",
             "type": "leaf",
             "state": {
               "type": "markdown",
               "state": {
-                "file": "Product/What is Anuwad.md",
+                "file": "APIs/IndexedDB Storage.md",
                 "mode": "source",
                 "source": false
               },
               "icon": "lucide-file",
-              "title": "What is Anuwad"
+              "title": "IndexedDB Storage"
             }
           }
         ]
@@ -41,7 +41,9 @@
               "type": "file-explorer",
               "state": {
                 "sortOrder": "alphabetical",
-                "autoReveal": false
+                "autoReveal": false,
+                "showSearch": false,
+                "searchQuery": ""
               },
               "icon": "lucide-folder-closed",
               "title": "Files"
@@ -86,7 +88,7 @@
             "state": {
               "type": "localgraph",
               "state": {
-                "file": "Product/What is Anuwad.md",
+                "file": "APIs/IndexedDB Storage.md",
                 "options": {
                   "collapse-filter": true,
                   "search": "",
@@ -109,12 +111,12 @@
                   "repelStrength": 10,
                   "linkStrength": 1,
                   "linkDistance": 250,
-                  "scale": 0.661117805818619,
+                  "scale": 1.0534980272552341,
                   "close": true
                 }
               },
               "icon": "lucide-git-fork",
-              "title": "Graph of What is Anuwad"
+              "title": "Local graph"
             }
           }
         ]
@@ -226,33 +228,35 @@
       "bases:Create new base": false
     }
   },
-  "active": "105493eb34a835af",
+  "active": "d73b0193de20cf9c",
   "lastOpenFiles": [
+    "Features/Prompt Engineering & Explanation Tones.md",
+    "Product/Architecture.md",
+    "Pipelines/TTS Pipeline.md",
+    "Pipelines/Translation Pipeline.md",
+    "Features/AI Translation.md",
+    "User Flows/PDF to Translation Workflow.md",
+    "Features/Text Selection Toolbar.md",
+    "Features/Memory Diagnostics.md",
+    "Features/Memory & Storage Audit.md",
+    "Untitled.base",
+    "Product/What is Anuwad.md",
     "Product/Folder Structure.md.tmp.75128.f260c0dcd71e",
     "Product/MOC — Product.md",
     "00 — Index.md",
     "Product/Development Guidelines.md",
     "Product/Design System.md",
     "Product/Dependencies.md",
-    "Product/Architecture.md",
     "Reference/Read Aloud Analysis.md",
     "Reference/Glossary.md",
     "User Flows/Upload and Manage Documents.md",
     "User Flows/Translation to TTS Workflow.md",
-    "User Flows/PDF to Translation Workflow.md",
     "User Flows/MOC — User Flows.md",
     "User Flows/First Time Setup.md",
     "User Flows/End-to-End Pipeline.md",
     "APIs/IndexedDB Storage.md",
     "Components/LoadingLogo.md",
     "APIs/Voice Cache Layer.md",
-    "APIs/SQLite WASM + OPFS.md",
-    "Teams/Squad C — TTS.md",
-    "Product/What is Anuwad.md",
-    "Product/Tech Stack.md",
-    "Product/Why Anuwad Exists.md",
-    "Features/AI Translation.md",
-    "APIs/OpenRouter API.md",
-    "APIs/Web Speech API.md"
+    "APIs/SQLite WASM + OPFS.md"
   ]
 }
