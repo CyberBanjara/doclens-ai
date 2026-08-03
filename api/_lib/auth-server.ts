@@ -151,32 +151,51 @@ export async function verifyTokenAndFetchRole(
 
   // 2. Fetch User Role from Firestore `users/{uid}`
   let role: UserRole = "user";
+  let roleFetched = false;
 
-  try {
-    const apps = admin.apps || admin.default?.apps;
-    if (Array.isArray(apps) && apps.length > 0 && typeof admin.firestore === "function") {
-      const docSnap = await admin.firestore().collection("users").doc(uid).get();
-      if (docSnap.exists) {
-        const data = docSnap.data();
-        if (data && data.role) {
-          role = data.role as UserRole;
+  // Try Admin SDK first if service account is provided
+  if (process.env.FIREBASE_SERVICE_ACCOUNT) {
+    try {
+      const apps = admin.apps || admin.default?.apps;
+      if (Array.isArray(apps) && apps.length > 0 && typeof admin.firestore === "function") {
+        const docSnap = await admin.firestore().collection("users").doc(uid).get();
+        if (docSnap.exists) {
+          const data = docSnap.data();
+          if (data && data.role) {
+            role = data.role as UserRole;
+            roleFetched = true;
+          }
         }
       }
-    } else {
-      // Fallback: Query Firestore via REST API
+    } catch (fsErr) {
+      console.warn("Firestore Admin SDK role lookup warning:", fsErr);
+    }
+  }
+
+  // Fallback: Query Firestore via REST API if Admin SDK failed or wasn't configured
+  if (!roleFetched) {
+    try {
       const docRes = await fetch(
-        `https://firestore.googleapis.com/v1/projects/${projectId}/databases/(default)/documents/users/${uid}?key=${apiKey}`
+        `https://firestore.googleapis.com/v1/projects/${projectId}/databases/(default)/documents/users/${uid}?key=${apiKey}`,
+        {
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        }
       );
       if (docRes.ok) {
         const docData = await docRes.json();
         const roleField = docData.fields?.role?.stringValue;
         if (roleField) {
           role = roleField as UserRole;
+          roleFetched = true;
         }
+      } else {
+        console.warn("Firestore REST role lookup status:", docRes.status);
       }
+    } catch (restErr) {
+      console.warn("Firestore REST role lookup error:", restErr);
     }
-  } catch (fsErr) {
-    console.warn("Firestore role fetch warning:", fsErr);
   }
 
   const isPrivileged = PRIVILEGED_ROLES.includes(role);
