@@ -1,6 +1,7 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useState, useEffect, useCallback } from "react";
 import { SidebarLayout } from "@/components/SidebarLayout";
+import { UserAvatar } from "@/components/UserAvatar";
 import { useAuth, PRIVILEGED_ROLES } from "@/context/AuthContext";
 import { auth, type UserRole } from "@/lib/firebase";
 import { toast } from "sonner";
@@ -531,17 +532,13 @@ function AdminPage() {
                               {/* Avatar & Name */}
                               <td className="px-6 py-4 whitespace-nowrap">
                                 <div className="flex items-center gap-3">
-                                  {u.photoURL ? (
-                                    <img
-                                      src={u.photoURL}
-                                      alt={u.displayName}
-                                      className="h-10 w-10 rounded-full object-cover ring-2 ring-slate-100"
-                                    />
-                                  ) : (
-                                    <div className="flex h-10 w-10 items-center justify-center rounded-full bg-indigo-600 text-white font-bold text-sm shadow-sm">
-                                      {u.displayName ? u.displayName.charAt(0).toUpperCase() : "U"}
-                                    </div>
-                                  )}
+                                  <UserAvatar
+                                    photoURL={u.photoURL}
+                                    name={u.displayName}
+                                    email={u.email}
+                                    className="h-10 w-10 rounded-full object-cover ring-2 ring-slate-200"
+                                    fallbackClassName="flex h-10 w-10 items-center justify-center rounded-full bg-indigo-600 text-white font-bold text-sm shadow-sm ring-2 ring-slate-100"
+                                  />
                                   <div>
                                     <div className="font-bold text-slate-900 flex items-center gap-1.5">
                                       {u.displayName}
