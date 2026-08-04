@@ -19,15 +19,29 @@ import {
 } from "firebase/firestore";
 import { getAnalytics, logEvent, isSupported, type Analytics } from "firebase/analytics";
 
-const firebaseConfig = {
-  apiKey: import.meta.env.VITE_FIREBASE_API_KEY,
-  authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN,
-  projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID,
-  storageBucket: import.meta.env.VITE_FIREBASE_STORAGE_BUCKET,
-  messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID,
-  appId: import.meta.env.VITE_FIREBASE_APP_ID,
-  measurementId: import.meta.env.VITE_FIREBASE_MEASUREMENT_ID,
+// ---------------------------------------------------------------------------
+// Firebase configuration — injected at BUILD TIME via Vite `define`
+// ---------------------------------------------------------------------------
+// The env vars use the FIREBASE_ prefix (NOT VITE_) so Vite does NOT
+// auto-expose them to the client. Instead, `vite.config.ts` reads them at
+// compile time and replaces __FIREBASE_CONFIG__ with the literal values,
+// embedding them directly in the minified bundle. This means:
+//   ✅ No VITE_ prefix env vars (not auto-exposed by Vite)
+//   ✅ No /api/auth/firebase-config network call (nothing in Network tab)
+//   ✅ Server-side API code uses process.env.FIREBASE_* directly
+// ---------------------------------------------------------------------------
+
+declare const __FIREBASE_CONFIG__: {
+  apiKey: string;
+  authDomain: string;
+  projectId: string;
+  storageBucket: string;
+  messagingSenderId: string;
+  appId: string;
+  measurementId: string;
 };
+
+const firebaseConfig = __FIREBASE_CONFIG__;
 
 // Initialize Firebase App
 const app = getApps().length === 0 ? initializeApp(firebaseConfig) : getApp();
@@ -194,4 +208,3 @@ export async function getUserProfile(uid: string): Promise<UserProfile | null> {
 }
 
 export { app, analytics, onAuthStateChanged, type User };
-

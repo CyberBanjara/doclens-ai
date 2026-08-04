@@ -62,6 +62,7 @@ function AdminPage() {
     isAdmin,
     loading,
     serverVerifying,
+    adminToken,
     verifyRoleWithServer,
     changeUserRoleForTesting,
     signInWithGoogle,
@@ -96,11 +97,10 @@ function AdminPage() {
     setFetchingUsers(true);
     setFetchError(null);
     try {
-      const idToken = await auth.currentUser.getIdToken();
       const res = await fetch("/api/admin/list-users", {
         method: "GET",
         headers: {
-          Authorization: `Bearer ${idToken}`,
+          Authorization: `Bearer ${adminToken || ""}`,
         },
       });
 
@@ -118,7 +118,7 @@ function AdminPage() {
     } finally {
       setFetchingUsers(false);
     }
-  }, []);
+  }, [adminToken]);
 
   useEffect(() => {
     if (isAdmin) {
@@ -134,12 +134,11 @@ function AdminPage() {
     }
     setUpdatingUid(targetUid);
     try {
-      const idToken = await auth.currentUser.getIdToken();
       const res = await fetch("/api/admin/update-user-role", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          Authorization: `Bearer ${idToken}`,
+          Authorization: `Bearer ${adminToken || ""}`,
         },
         body: JSON.stringify({ targetUid, newRole }),
       });
@@ -206,12 +205,11 @@ function AdminPage() {
     }
     setOpLoading(endpoint);
     try {
-      const idToken = await auth.currentUser.getIdToken();
       const res = await fetch(endpoint, {
         method,
         headers: {
           "Content-Type": "application/json",
-          Authorization: `Bearer ${idToken}`,
+          Authorization: `Bearer ${adminToken || ""}`,
         },
         body: method !== "GET" ? JSON.stringify(bodyPayload) : undefined,
       });
@@ -237,6 +235,7 @@ function AdminPage() {
       setOpLoading(null);
     }
   };
+
 
   const getRoleBadgeStyle = (r: UserRole) => {
     switch (r) {

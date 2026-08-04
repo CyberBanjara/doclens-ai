@@ -6,8 +6,13 @@
 // You can pass additional config via defineConfig({ vite: { ... } }) if needed.
 import { defineConfig } from "@lovable.dev/vite-tanstack-config";
 import { nitro } from "nitro/vite";
+import { loadEnv } from "vite";
 
-const isVercel = process.env.VERCEL === "1";
+// Load ALL env vars (including non-VITE_ prefixed) from .env files
+// The empty string prefix '' means "load all", not just VITE_-prefixed
+const env = loadEnv(process.env.NODE_ENV || "development", process.cwd(), "");
+
+const isVercel = process.env.VERCEL === "1" || env.VERCEL === "1";
 
 export default defineConfig({
   nitro: false,
@@ -18,6 +23,21 @@ export default defineConfig({
     },
   },
   vite: {
+    // Inject Firebase config at build time from server-side env vars.
+    // These are NOT prefixed with VITE_ so Vite won't auto-expose them.
+    // The `define` option replaces the identifier at compile time, embedding
+    // the values into the minified bundle — no separate network request.
+    define: {
+      __FIREBASE_CONFIG__: JSON.stringify({
+        apiKey: env.FIREBASE_API_KEY || "",
+        authDomain: env.FIREBASE_AUTH_DOMAIN || "",
+        projectId: env.FIREBASE_PROJECT_ID || "",
+        storageBucket: env.FIREBASE_STORAGE_BUCKET || "",
+        messagingSenderId: env.FIREBASE_MESSAGING_SENDER_ID || "",
+        appId: env.FIREBASE_APP_ID || "",
+        measurementId: env.FIREBASE_MEASUREMENT_ID || "",
+      }),
+    },
     ssr: {
       external: ["pdfjs-dist"],
     },

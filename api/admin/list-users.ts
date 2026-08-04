@@ -1,6 +1,6 @@
 import type { VercelRequest, VercelResponse } from "@vercel/node";
 import * as adminModule from "firebase-admin";
-import { verifyTokenAndFetchRole, setCorsHeaders, type UserRole } from "../_lib/auth-server.js";
+import { verifyAdminJWT, setCorsHeaders, type UserRole } from "../_lib/auth-server.js";
 
 const admin = (adminModule as any).default || adminModule;
 
@@ -22,8 +22,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   }
 
   try {
-    // Strictly verify token & enforce caller MUST have 'admin' role
-    const authCheck = await verifyTokenAndFetchRole(req, ["admin"]);
+    // Strictly verify admin JWT & enforce caller MUST have 'admin' role
+    const authCheck = await verifyAdminJWT(req, ["admin"]);
 
     if (!authCheck.authorized) {
       return res.status(authCheck.statusCode).json({
@@ -32,8 +32,14 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       });
     }
 
-    const apiKey = process.env.VITE_FIREBASE_API_KEY || "AIzaSyBwfBcQ5HM_jbHrwwMa415fTg5NHoYuL6g";
-    const projectId = process.env.VITE_FIREBASE_PROJECT_ID || "anuwad-789a9";
+    const apiKey = process.env.FIREBASE_API_KEY;
+    const projectId = process.env.FIREBASE_PROJECT_ID;
+
+    if (!apiKey || !projectId) {
+      return res.status(500).json({
+        error: "Firebase configuration missing from server environment variables.",
+      });
+    }
 
     const usersList: UserItem[] = [];
 
@@ -65,7 +71,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
     // Fallback: Query Firestore via REST API if Admin SDK wasn't used or returned 0
     if (!adminFetched) {
-      const token = req.headers?.authorization?.split("Bearer ")[1] || req.body?.token;
+      const token = (req as any).firebaseIdToken;
       const restRes = await fetch(
         `https://firestore.googleapis.com/v1/projects/${projectId}/databases/(default)/documents/users?key=${apiKey}`,
         {
@@ -98,6 +104,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         console.error("Firestore REST list users error:", restRes.status, errJson);
       }
     }
+
 
     return res.status(200).json({
       success: true,

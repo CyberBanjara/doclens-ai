@@ -1,5 +1,6 @@
 import type { VercelRequest, VercelResponse } from "@vercel/node";
 import * as adminModule from "firebase-admin";
+import { SignJWT, jwtVerify } from "jose";
 
 const admin = (adminModule as any).default || adminModule;
 
@@ -25,14 +26,20 @@ try {
       ? JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT)
       : null;
 
+    const projectId = process.env.FIREBASE_PROJECT_ID;
+
+    if (!projectId) {
+      console.error("FIREBASE_PROJECT_ID environment variable is not set.");
+    }
+
     if (serviceAccount) {
       admin.initializeApp({
         credential: admin.credential.cert(serviceAccount),
-        projectId: process.env.VITE_FIREBASE_PROJECT_ID || "anuwad-789a9",
+        projectId,
       });
-    } else {
+    } else if (projectId) {
       admin.initializeApp({
-        projectId: process.env.VITE_FIREBASE_PROJECT_ID || "anuwad-789a9",
+        projectId,
       });
     }
   }
@@ -78,8 +85,20 @@ export async function verifyTokenAndFetchRole(
     };
   }
 
-  const apiKey = process.env.VITE_FIREBASE_API_KEY || "AIzaSyBwfBcQ5HM_jbHrwwMa415fTg5NHoYuL6g";
-  const projectId = process.env.VITE_FIREBASE_PROJECT_ID || "anuwad-789a9";
+  const apiKey = process.env.FIREBASE_API_KEY;
+  const projectId = process.env.FIREBASE_PROJECT_ID;
+
+  if (!apiKey || !projectId) {
+    return {
+      authorized: false,
+      uid: null,
+      email: null,
+      role: "user",
+      isPrivileged: false,
+      statusCode: 500,
+      error: "500 Internal Server Error: Firebase configuration missing from server environment",
+    };
+  }
 
   let uid: string | null = null;
   let email: string | null = null;
@@ -239,3 +258,100 @@ export function setCorsHeaders(res: VercelResponse) {
     "X-CSRF-Token, X-Requested-With, Accept, Accept-Version, Content-Length, Content-MD5, Content-Type, Date, X-Api-Version, Authorization"
   );
 }
+
+// ─────────────────────────────────────────────────────────────────────────────
+// JWT SESSION AUTHENTICATION (JOSE-based server-side session)
+// ─────────────────────────────────────────────────────────────────────────────
+
+const JWT_SECRET = process.env.ADMIN_JWT_SECRET || "super-secret-key-32-chars-long-or-more-for-jwt";
+const secretKey = new TextEncoder().encode(JWT_SECRET);
+
+/**
+ * Issues a short-lived admin JWT session token signed using a server-side secret.
+ * Contains: uid, email, role, and the original firebaseIdToken (for backend REST fallback).
+ */
+export async function issueSessionJWT(
+  firebaseIdToken: string,
+  uid: string,
+  email: string | null,
+  role: UserRole
+): Promise<string> {
+  return await new SignJWT({ uid, email, role, firebaseIdToken })
+    .setProtectedHeader({ alg: "HS256" })
+    .setIssuedAt()
+    .setExpirationTime("15m") // 15-minute short-lived session
+    .sign(secretKey);
+}
+
+/**
+ * Verifies a server-side session JWT token sent in headers or body,
+ * and extracts the caller's role and credentials.
+ */
+export async function verifyAdminJWT(
+  req: any,
+  allowedRoles?: UserRole[]
+): Promise<AuthResult> {
+  const token = extractToken(req);
+
+  if (!token) {
+    return {
+      authorized: false,
+      uid: null,
+      email: null,
+      role: "user",
+      isPrivileged: false,
+      statusCode: 401,
+      error: "401 Unauthorized: Missing Session Token",
+    };
+  }
+
+  try {
+    const { payload } = await jwtVerify(token, secretKey);
+    const uid = payload.uid as string;
+    const email = (payload.email as string) || null;
+    const role = (payload.role as UserRole) || "user";
+    const isPrivileged = PRIVILEGED_ROLES.includes(role);
+    const firebaseIdToken = payload.firebaseIdToken as string | undefined;
+
+    // Store the underlying Firebase ID token for Firestore REST fallback requests
+    req.firebaseIdToken = firebaseIdToken;
+
+    // Check against allowed roles if specified
+    if (allowedRoles && allowedRoles.length > 0) {
+      if (!allowedRoles.includes(role)) {
+        return {
+          authorized: false,
+          uid,
+          email,
+          role,
+          isPrivileged,
+          statusCode: 403,
+          error: `403 Forbidden: Role '${role}' is not authorized. Allowed roles: [${allowedRoles.join(
+            ", "
+          )}]`,
+        };
+      }
+    }
+
+    return {
+      authorized: true,
+      uid,
+      email,
+      role,
+      isPrivileged,
+      statusCode: 200,
+    };
+  } catch (err: any) {
+    console.error("JWT verification failed:", err);
+    return {
+      authorized: false,
+      uid: null,
+      email: null,
+      role: "user",
+      isPrivileged: false,
+      statusCode: 401,
+      error: `401 Unauthorized: Invalid or expired session: ${err.message}`,
+    };
+  }
+}
+

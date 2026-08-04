@@ -23,6 +23,7 @@ interface AuthContextType {
   isPrivileged: boolean;
   isAdmin: boolean;
   serverVerifying: boolean;
+  adminToken: string | null;
   hasRole: (roles: UserRole | UserRole[]) => boolean;
   signInWithGoogle: () => Promise<void>;
   signOut: () => Promise<void>;
@@ -40,6 +41,7 @@ const AuthContext = createContext<AuthContextType>({
   isPrivileged: false,
   isAdmin: false,
   serverVerifying: false,
+  adminToken: null,
   hasRole: () => false,
   signInWithGoogle: async () => {},
   signOut: async () => {},
@@ -54,10 +56,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [loading, setLoading] = useState(true);
   const [verifiedRole, setVerifiedRole] = useState<UserRole | null>(null);
   const [serverVerifying, setServerVerifying] = useState(false);
+  const [adminToken, setAdminToken] = useState<string | null>(() => {
+    return typeof window !== "undefined" ? localStorage.getItem("admin_session_token") : null;
+  });
 
   const verifyRoleWithServer = useCallback(async () => {
     if (!auth.currentUser) {
       setVerifiedRole(null);
+      setAdminToken(null);
+      if (typeof window !== "undefined") {
+        localStorage.removeItem("admin_session_token");
+      }
       return null;
     }
 
@@ -78,6 +87,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         console.warn("Server role verification returned error:", res.status, errJson);
         const fallbackRole = userProfile?.role || "user";
         setVerifiedRole(fallbackRole);
+        setAdminToken(null);
+        if (typeof window !== "undefined") {
+          localStorage.removeItem("admin_session_token");
+        }
         return {
           role: fallbackRole,
           isPrivileged: PRIVILEGED_ROLES.includes(fallbackRole),
@@ -88,18 +101,34 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       const serverRole: UserRole = data.role || "user";
       setVerifiedRole(serverRole);
 
+      if (data.token) {
+        setAdminToken(data.token);
+        if (typeof window !== "undefined") {
+          localStorage.setItem("admin_session_token", data.token);
+        }
+      } else {
+        setAdminToken(null);
+        if (typeof window !== "undefined") {
+          localStorage.removeItem("admin_session_token");
+        }
+      }
+
       if (userProfile && userProfile.role !== serverRole) {
         setUserProfile((prev) => (prev ? { ...prev, role: serverRole } : prev));
       }
 
       return {
         role: serverRole,
-        isPrivileged: data.isPrivileged ?? PRIVILEGED_ROLES.includes(serverRole),
+        isPrivileged: PRIVILEGED_ROLES.includes(serverRole),
       };
     } catch (err) {
       console.error("Failed to verify role with serverless function:", err);
       const fallbackRole = userProfile?.role || "user";
       setVerifiedRole(fallbackRole);
+      setAdminToken(null);
+      if (typeof window !== "undefined") {
+        localStorage.removeItem("admin_session_token");
+      }
       return {
         role: fallbackRole,
         isPrivileged: PRIVILEGED_ROLES.includes(fallbackRole),
@@ -139,8 +168,23 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           if (res.ok) {
             const data = await res.json();
             setVerifiedRole(data.role || profile?.role || "user");
+            if (data.token) {
+              setAdminToken(data.token);
+              if (typeof window !== "undefined") {
+                localStorage.setItem("admin_session_token", data.token);
+              }
+            } else {
+              setAdminToken(null);
+              if (typeof window !== "undefined") {
+                localStorage.removeItem("admin_session_token");
+              }
+            }
           } else {
             setVerifiedRole(profile?.role || "user");
+            setAdminToken(null);
+            if (typeof window !== "undefined") {
+              localStorage.removeItem("admin_session_token");
+            }
           }
         } catch (err) {
           console.error("Failed during auth state change verification:", err);
@@ -148,6 +192,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       } else {
         setUserProfile(null);
         setVerifiedRole(null);
+        setAdminToken(null);
+        if (typeof window !== "undefined") {
+          localStorage.removeItem("admin_session_token");
+        }
       }
       setLoading(false);
     });
@@ -173,6 +221,22 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       if (srvRes.ok) {
         const data = await srvRes.json();
         setVerifiedRole(data.role || "user");
+        if (data.token) {
+          setAdminToken(data.token);
+          if (typeof window !== "undefined") {
+            localStorage.setItem("admin_session_token", data.token);
+          }
+        } else {
+          setAdminToken(null);
+          if (typeof window !== "undefined") {
+            localStorage.removeItem("admin_session_token");
+          }
+        }
+      } else {
+        setAdminToken(null);
+        if (typeof window !== "undefined") {
+          localStorage.removeItem("admin_session_token");
+        }
       }
 
       toast.success(`Welcome back, ${res.user.displayName || "User"}!`);
@@ -189,6 +253,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       await logOut();
       setUserProfile(null);
       setVerifiedRole(null);
+      setAdminToken(null);
+      if (typeof window !== "undefined") {
+        localStorage.removeItem("admin_session_token");
+      }
       toast.info("Signed out successfully.");
     } catch (err: any) {
       console.error("Sign out error:", err);
@@ -202,12 +270,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       return false;
     }
     try {
-      const idToken = await auth.currentUser.getIdToken();
+      const token = typeof window !== "undefined" ? localStorage.getItem("admin_session_token") : null;
       const res = await fetch("/api/admin/set-role", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          Authorization: `Bearer ${idToken}`,
+          Authorization: `Bearer ${token || ""}`,
         },
         body: JSON.stringify({ newRole }),
       });
@@ -219,8 +287,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
       const data = await res.json();
       toast.success(`Role updated to '${data.newRole}' on Firestore & server.`);
-      setUserProfile((prev) => (prev ? { ...prev, role: data.newRole } : prev));
-      setVerifiedRole(data.newRole);
+      
+      // Re-fetch role from server to issue a new JWT containing the updated role
+      await verifyRoleWithServer();
       return true;
     } catch (err: any) {
       toast.error(`Failed to update role: ${err.message}`);
@@ -249,6 +318,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         isPrivileged,
         isAdmin,
         serverVerifying,
+        adminToken,
         hasRole,
         signInWithGoogle: handleSignIn,
         signOut: handleSignOut,
