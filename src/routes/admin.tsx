@@ -27,8 +27,8 @@ export const Route = createFileRoute("/admin")({
   component: AdminPage,
   head: () => ({
     meta: [
-      { title: "Anuwad — Admin User & Role Management" },
-      { name: "description", content: "Role-Based Access Control (RBAC) User Management Panel." },
+      { title: "Anuwad" },
+      { name: "description", content: "Anuwad Private PDF Reader & Translator." },
     ],
   }),
 });
@@ -82,6 +82,13 @@ function AdminPage() {
 
   // User Management Error State
   const [fetchError, setFetchError] = useState<string | null>(null);
+
+  // Set page document title dynamically ONLY if verified as Admin
+  useEffect(() => {
+    if (!loading && !serverVerifying && user && isAdmin) {
+      document.title = "Anuwad — Admin User & Role Management";
+    }
+  }, [loading, serverVerifying, user, isAdmin]);
 
   // Fetch Users from Protected Serverless Function (/api/admin/list-users)
   const fetchUsers = useCallback(async () => {
@@ -162,8 +169,8 @@ function AdminPage() {
     }
   };
 
-  // 1. Unauthenticated or Non-Privileged User (e.g. 'user') -> Render 404 Page Not Found (Obscurity / Attack Surface Minimization)
-  if (!loading && (!user || !isPrivileged || role === "user")) {
+  // 1. While auth state is initializing or verifying, OR if user is not a verified Admin -> Default to 404 Page Not Found (Zero Footprint)
+  if (loading || serverVerifying || !user || !isAdmin || role !== "admin") {
     return <NotFoundComponent />;
   }
 
