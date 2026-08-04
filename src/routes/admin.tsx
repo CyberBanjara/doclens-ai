@@ -478,20 +478,10 @@ function AdminPage() {
                     </p>
                     <div className="mt-4 flex gap-2">
                       <button
-                        onClick={async () => {
-                          toast.info("Promoting your account to Admin in Firestore...");
-                          await changeUserRoleForTesting("admin");
-                          await fetchUsers();
-                        }}
-                        className="inline-flex items-center gap-1.5 rounded-lg bg-indigo-600 px-4 py-2 text-xs font-bold text-white shadow-sm hover:bg-indigo-700 transition-colors"
-                      >
-                        <Shield className="h-4 w-4" /> Promote My Account to Admin in Firestore
-                      </button>
-                      <button
                         onClick={fetchUsers}
-                        className="inline-flex items-center gap-1 rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50"
+                        className="inline-flex items-center gap-1.5 rounded-lg border border-slate-300 bg-white px-4 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50 shadow-sm"
                       >
-                        <RefreshCw className="h-3.5 w-3.5" /> Retry
+                        <RefreshCw className="h-3.5 w-3.5" /> Refresh & Retry Authorization
                       </button>
                     </div>
                   </div>
@@ -620,15 +610,6 @@ function AdminPage() {
               <p className="text-sm text-amber-800">
                 User Role Management is restricted to full <strong className="font-semibold">Admins</strong>. As a <strong className="uppercase">{role}</strong>, you have access to the Role Dashboard view, but only full Admins can update another user's role in Firestore.
               </p>
-              <button
-                onClick={async () => {
-                  toast.info("Switching role to Admin for testing...");
-                  await changeUserRoleForTesting("admin");
-                }}
-                className="inline-flex items-center gap-1.5 rounded-lg border border-amber-300 bg-white px-3.5 py-2 text-xs font-bold text-amber-900 shadow-sm hover:bg-amber-100 transition-colors"
-              >
-                <UserCheck className="h-3.5 w-3.5 text-amber-600" /> Switch My Account to Admin
-              </button>
             </div>
           )}
 

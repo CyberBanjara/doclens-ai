@@ -14,12 +14,13 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   }
 
   try {
-    // Verify token for testing role switch
-    const authCheck = await verifyTokenAndFetchRole(req);
+    // Enforce that caller MUST be an 'admin' to set roles
+    const authCheck = await verifyTokenAndFetchRole(req, ["admin"]);
 
     if (!authCheck.authorized || !authCheck.uid) {
       return res.status(authCheck.statusCode).json({
         error: authCheck.error,
+        callerRole: authCheck.role,
       });
     }
 
