@@ -2,6 +2,7 @@ import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useState, useEffect, useCallback } from "react";
 import { SidebarLayout } from "@/components/SidebarLayout";
 import { UserAvatar } from "@/components/UserAvatar";
+import { NotFoundComponent } from "@/components/NotFound";
 import { useAuth, PRIVILEGED_ROLES } from "@/context/AuthContext";
 import { auth, type UserRole } from "@/lib/firebase";
 import { toast } from "sonner";
@@ -161,75 +162,9 @@ function AdminPage() {
     }
   };
 
-  // 1. Unauthenticated or Non-Privileged User (e.g. 'user') -> 403 Forbidden Screen
+  // 1. Unauthenticated or Non-Privileged User (e.g. 'user') -> Render 404 Page Not Found (Obscurity / Attack Surface Minimization)
   if (!loading && (!user || !isPrivileged || role === "user")) {
-    return (
-      <SidebarLayout pageTitle="403 Forbidden">
-        <div className="min-h-[80vh] flex flex-col items-center justify-center bg-background px-4 py-12 text-foreground">
-          <div className="w-full max-w-lg rounded-2xl border border-destructive/30 bg-destructive/5 p-8 text-center shadow-xl backdrop-blur-md">
-            <div className="mx-auto mb-6 flex h-20 w-20 items-center justify-center rounded-full bg-destructive/10 text-destructive ring-8 ring-destructive/5">
-              <ShieldAlert className="h-10 w-10" />
-            </div>
-
-            <div className="inline-flex items-center gap-2 rounded-full border border-destructive/30 bg-destructive/10 px-3 py-1 text-xs font-bold text-destructive mb-3">
-              HTTP 403 FORBIDDEN
-            </div>
-
-            <h1 className="text-3xl font-extrabold tracking-tight text-foreground">
-              Access Denied
-            </h1>
-
-            <p className="mt-3 text-sm leading-relaxed text-muted-foreground">
-              You do not have permission to view the Admin (Role Dashboard) page. Direct route access is restricted to privileged roles (<span className="font-semibold text-foreground">Admin, Moderator, Editor</span>).
-            </p>
-
-            <div className="mt-6 rounded-xl border border-border bg-card/50 p-4 text-left font-mono text-xs">
-              <div className="flex justify-between text-muted-foreground pb-2 border-b border-border mb-2">
-                <span>AUTHENTICATION STATUS</span>
-                <span className="font-semibold text-foreground">{user ? "SIGNED IN" : "NOT SIGNED IN"}</span>
-              </div>
-              <div className="flex justify-between text-muted-foreground pb-2 border-b border-border mb-2">
-                <span>USER UID</span>
-                <span className="truncate max-w-[200px] font-semibold text-foreground">{user?.uid || "N/A"}</span>
-              </div>
-              <div className="flex justify-between text-muted-foreground">
-                <span>CURRENT ROLE</span>
-                <span className="font-bold text-destructive uppercase">{role || "user"}</span>
-              </div>
-            </div>
-
-            <div className="mt-8 flex flex-col sm:flex-row items-center justify-center gap-3">
-              {!user ? (
-                <button
-                  onClick={signInWithGoogle}
-                  className="w-full sm:w-auto inline-flex items-center justify-center gap-2 rounded-lg bg-primary px-5 py-2.5 text-sm font-semibold text-primary-foreground shadow-md transition-all hover:bg-primary/90"
-                >
-                  <Key className="h-4 w-4" /> Sign In with Google
-                </button>
-              ) : (
-                <>
-                  <button
-                    onClick={() => navigate({ to: "/" })}
-                    className="w-full sm:w-auto inline-flex items-center justify-center rounded-lg bg-primary px-5 py-2.5 text-sm font-semibold text-primary-foreground transition-all hover:bg-primary/90"
-                  >
-                    Return to Library
-                  </button>
-                  <button
-                    onClick={async () => {
-                      toast.info("Promoting account to Admin for validation...");
-                      await changeUserRoleForTesting("admin");
-                    }}
-                    className="w-full sm:w-auto inline-flex items-center justify-center gap-1.5 rounded-lg border border-border bg-card px-4 py-2.5 text-xs font-semibold text-foreground hover:bg-accent transition-all"
-                  >
-                    <Shield className="h-3.5 w-3.5 text-primary" /> Switch to Admin Role
-                  </button>
-                </>
-              )}
-            </div>
-          </div>
-        </div>
-      </SidebarLayout>
-    );
+    return <NotFoundComponent />;
   }
 
   // Role display title and message
