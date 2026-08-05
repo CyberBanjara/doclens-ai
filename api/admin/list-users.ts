@@ -69,13 +69,18 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       }
     }
 
-    // Fallback: Query Firestore via REST API if Admin SDK wasn't used or returned 0
+    // Fallback: Query Firestore via REST API if Admin SDK wasn't used or failed
     if (!adminFetched) {
-      const token = (req as any).firebaseIdToken;
+      const firebaseIdToken =
+        (req.headers["x-firebase-id-token"] as string) ||
+        (req.headers["X-Firebase-ID-Token"] as string) ||
+        (req as any).firebaseIdToken ||
+        authCheck.firebaseIdToken;
+
       const restRes = await fetch(
         `https://firestore.googleapis.com/v1/projects/${projectId}/databases/(default)/documents/users?key=${apiKey}`,
         {
-          headers: token ? { Authorization: `Bearer ${token}` } : {},
+          headers: firebaseIdToken ? { Authorization: `Bearer ${firebaseIdToken}` } : {},
         }
       );
 
@@ -102,8 +107,14 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       } else {
         const errJson = await restRes.json().catch(() => ({}));
         console.error("Firestore REST list users error:", restRes.status, errJson);
+        return res.status(restRes.status).json({
+          error: `Firestore REST error (${restRes.status}): ${
+            errJson?.error?.message || "Missing or insufficient permissions to query users."
+          }`,
+        });
       }
     }
+
 
 
     return res.status(200).json({

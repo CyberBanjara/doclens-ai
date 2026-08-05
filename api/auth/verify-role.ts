@@ -4,15 +4,18 @@ import {
   setCorsHeaders,
   extractToken,
   issueSessionJWT,
+  issueRefreshToken,
+  setAuthCookies,
   PRIVILEGED_ROLES,
 } from "../_lib/auth-server.js";
 
 /**
  * /api/auth/verify-role
  *
- * Verifies the caller's Firebase ID token server-side, fetches the role from Firestore,
- * and if authorized (privileged), issues a short-lived JWT using the jose library.
- * Returns only the JWT (token) and user's role to the client.
+ * Verifies the caller's Firebase ID token server-side ONCE on login/auth change,
+ * fetches the user's role from Firestore, and issues a short-lived session JWT access token
+ * and a long-lived refresh token using the jose library.
+ * Sets HTTP cookies and returns { token, refreshToken, role }.
  */
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   setCorsHeaders(res);
@@ -38,9 +41,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     }
 
     let sessionToken: string | null = null;
+    let refreshToken: string | null = null;
     const isPrivileged = PRIVILEGED_ROLES.includes(authResult.role);
 
-    // If authorized (privileged), issue a short-lived JWT
+    // Issue JWT access token and refresh token for privileged/authenticated user
     if (isPrivileged) {
       sessionToken = await issueSessionJWT(
         firebaseIdToken,
@@ -48,11 +52,20 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         authResult.email,
         authResult.role
       );
+      refreshToken = await issueRefreshToken(
+        authResult.uid,
+        authResult.email,
+        authResult.role
+      );
     }
 
-    // Return only the JWT and the user's role to the client
+    // Set HTTP cookies for browser inspection and automated request attachment
+    setAuthCookies(res, sessionToken, refreshToken);
+
+    // Return tokens and the user's role to the client
     return res.status(200).json({
       token: sessionToken,
+      refreshToken: refreshToken,
       role: authResult.role,
     });
   } catch (err: any) {
@@ -62,4 +75,6 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     });
   }
 }
+
+
 

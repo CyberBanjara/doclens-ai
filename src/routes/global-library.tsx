@@ -24,6 +24,7 @@ import { formatBytes, formatDate, base64ToBlob, parseFileCategory, type R2File, 
 import { CategoryMarqueeRow } from "@/components/CategoryMarqueeRow";
 import { R2UploadDialog } from "@/components/R2UploadDialog";
 import { DeleteFileDialog } from "@/components/DeleteFileDialog";
+import { useAuth } from "@/context/AuthContext";
 
 export const Route = createFileRoute("/global-library")({
   component: GlobalLibraryPage,
@@ -47,6 +48,8 @@ const STANDARD_CATEGORIES: Record<string, { label: string; icon: string; desc: s
 function GlobalLibraryPage() {
   const isMobile = useIsMobile();
   const navigate = useNavigate();
+  const { adminToken } = useAuth();
+
   const [files, setFiles] = useState<R2File[]>([]);
   const [loading, setLoading] = useState(true);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
@@ -199,7 +202,11 @@ function GlobalLibraryPage() {
     setDeletingKey(target.key);
     const toastId = toast.loading(`Deleting "${target.key}" from R2...`);
     try {
-      await deleteFromR2({ data: { key: target.key } });
+      const activeToken =
+        adminToken ||
+        (typeof window !== "undefined" ? localStorage.getItem("admin_session_token") : null) ||
+        "";
+      await deleteFromR2({ data: { key: target.key, token: activeToken } });
       toast.success(`"${target.key}" deleted from Cloudflare R2.`, { id: toastId });
       setFiles((prev) => {
         const next = prev.filter((f) => f.key !== target.key);
@@ -213,6 +220,7 @@ function GlobalLibraryPage() {
       setDeletingKey(null);
     }
   };
+
 
   const handleReorganize = async () => {
     if (reorganizing) return;

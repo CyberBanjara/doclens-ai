@@ -16,7 +16,9 @@ export interface AuthResult {
   isPrivileged: boolean;
   statusCode: number;
   error?: string;
+  firebaseIdToken?: string;
 }
+
 
 // Initialize Firebase Admin if apps is available and empty
 try {
@@ -48,21 +50,61 @@ try {
 }
 
 /**
- * Extracts Authorization Bearer token from Vercel/Node request or body
+ * Extracts Authorization Bearer token from Vercel/Node request, body, query, or HTTP cookies
  */
 export function extractToken(req: any): string | null {
   const authHeader = req.headers?.authorization || req.headers?.Authorization;
   if (authHeader && typeof authHeader === "string" && authHeader.startsWith("Bearer ")) {
-    return authHeader.split("Bearer ")[1].trim();
+    const extracted = authHeader.split("Bearer ")[1].trim();
+    if (extracted && extracted !== "null" && extracted !== "undefined") {
+      return extracted;
+    }
   }
-  if (req.body?.token && typeof req.body.token === "string") {
+  if (req.body?.token && typeof req.body.token === "string" && req.body.token !== "null") {
     return req.body.token;
   }
-  if (req.query?.token && typeof req.query.token === "string") {
+  if (req.query?.token && typeof req.query.token === "string" && req.query.token !== "null") {
     return req.query.token;
+  }
+  if (req.cookies?.admin_session_token) {
+    return req.cookies.admin_session_token;
+  }
+  const rawCookie = req.headers?.cookie;
+  if (rawCookie && typeof rawCookie === "string") {
+    const match = rawCookie.match(/(?:^|;\s*)admin_session_token=([^;]+)/);
+    if (match) return decodeURIComponent(match[1]);
   }
   return null;
 }
+
+/**
+ * Sets HTTP cookies for admin_session_token and admin_refresh_token in the VercelResponse.
+ */
+export function setAuthCookies(res: VercelResponse, sessionToken?: string | null, refreshToken?: string | null) {
+  const cookies: string[] = [];
+
+  if (sessionToken) {
+    cookies.push(`admin_session_token=${encodeURIComponent(sessionToken)}; Path=/; SameSite=Lax; Max-Age=900`);
+  }
+  if (refreshToken) {
+    cookies.push(`admin_refresh_token=${encodeURIComponent(refreshToken)}; Path=/; SameSite=Lax; Max-Age=604800`);
+  }
+
+  if (cookies.length > 0) {
+    res.setHeader("Set-Cookie", cookies);
+  }
+}
+
+/**
+ * Clears HTTP cookies in response
+ */
+export function clearAuthCookies(res: VercelResponse) {
+  res.setHeader("Set-Cookie", [
+    "admin_session_token=; Path=/; SameSite=Lax; Max-Age=0",
+    "admin_refresh_token=; Path=/; SameSite=Lax; Max-Age=0",
+  ]);
+}
+
 
 /**
  * Verifies Firebase ID Token server-side and fetches the user's role from Firestore (`users/{uid}`).
@@ -260,15 +302,15 @@ export function setCorsHeaders(res: VercelResponse) {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// JWT SESSION AUTHENTICATION (JOSE-based server-side session)
+// JWT SESSION AUTHENTICATION (JOSE-based server-side session & refresh mechanism)
 // ─────────────────────────────────────────────────────────────────────────────
 
 const JWT_SECRET = process.env.ADMIN_JWT_SECRET || "super-secret-key-32-chars-long-or-more-for-jwt";
 const secretKey = new TextEncoder().encode(JWT_SECRET);
 
 /**
- * Issues a short-lived admin JWT session token signed using a server-side secret.
- * Contains: uid, email, role, and the original firebaseIdToken (for backend REST fallback).
+ * Issues a short-lived admin/session JWT access token signed using a server-side secret.
+ * Contains: uid, email, role, tokenType="access", and optional firebaseIdToken.
  */
 export async function issueSessionJWT(
   firebaseIdToken: string,
@@ -276,16 +318,125 @@ export async function issueSessionJWT(
   email: string | null,
   role: UserRole
 ): Promise<string> {
-  return await new SignJWT({ uid, email, role, firebaseIdToken })
+  return await new SignJWT({ uid, email, role, tokenType: "access", firebaseIdToken })
     .setProtectedHeader({ alg: "HS256" })
     .setIssuedAt()
-    .setExpirationTime("15m") // 15-minute short-lived session
+    .setExpirationTime("15m") // 15-minute short-lived session access token
     .sign(secretKey);
 }
 
 /**
+ * Issues a longer-lived refresh token signed using the server-side secret.
+ * Contains: uid, email, role, tokenType="refresh".
+ */
+export async function issueRefreshToken(
+  uid: string,
+  email: string | null,
+  role: UserRole
+): Promise<string> {
+  return await new SignJWT({ uid, email, role, tokenType: "refresh" })
+    .setProtectedHeader({ alg: "HS256" })
+    .setIssuedAt()
+    .setExpirationTime("7d") // 7-day refresh token duration
+    .sign(secretKey);
+}
+
+/**
+ * Verifies a refresh token's cryptographic signature and returns its payload without calling Firebase/Firestore.
+ */
+export async function verifyRefreshToken(refreshToken: string): Promise<{
+  valid: boolean;
+  uid?: string;
+  email?: string | null;
+  role?: UserRole;
+  error?: string;
+}> {
+  try {
+    const { payload } = await jwtVerify(refreshToken, secretKey);
+    if (payload.tokenType !== "refresh") {
+      return { valid: false, error: "Invalid token type: expected refresh token" };
+    }
+    return {
+      valid: true,
+      uid: payload.uid as string,
+      email: (payload.email as string) || null,
+      role: (payload.role as UserRole) || "user",
+    };
+  } catch (err: any) {
+    return { valid: false, error: `Invalid or expired refresh token: ${err.message}` };
+  }
+}
+
+/**
+ * Verifies a raw JWT string's signature cryptographically without external requests to Firebase or Firestore.
+ */
+export async function verifyTokenString(
+  token: string,
+  allowedRoles?: UserRole[]
+): Promise<AuthResult> {
+  try {
+    const { payload } = await jwtVerify(token, secretKey);
+    const uid = (payload.uid as string) || null;
+    const email = (payload.email as string) || null;
+    const role = (payload.role as UserRole) || "user";
+    const isPrivileged = PRIVILEGED_ROLES.includes(role);
+
+    if (!uid) {
+      return {
+        authorized: false,
+        uid: null,
+        email: null,
+        role: "user",
+        isPrivileged: false,
+        statusCode: 401,
+        error: "401 Unauthorized: Invalid payload claims in JWT token",
+      };
+    }
+
+    // Check allowed roles
+    if (allowedRoles && allowedRoles.length > 0) {
+      if (!allowedRoles.includes(role)) {
+        return {
+          authorized: false,
+          uid,
+          email,
+          role,
+          isPrivileged,
+          statusCode: 403,
+          error: `403 Forbidden: Role '${role}' is not authorized. Allowed roles: [${allowedRoles.join(
+            ", "
+          )}]`,
+        };
+      }
+    }
+
+    const firebaseIdToken = payload.firebaseIdToken as string | undefined;
+
+    return {
+      authorized: true,
+      uid,
+      email,
+      role,
+      isPrivileged,
+      statusCode: 200,
+      firebaseIdToken,
+    };
+  } catch (err: any) {
+    return {
+      authorized: false,
+      uid: null,
+      email: null,
+      role: "user",
+      isPrivileged: false,
+      statusCode: 401,
+      error: `401 Unauthorized: Invalid or expired session JWT: ${err.message}`,
+    };
+  }
+}
+
+/**
  * Verifies a server-side session JWT token sent in headers or body,
- * and extracts the caller's role and credentials.
+ * and extracts the caller's role and credentials strictly via cryptographic signature.
  */
 export async function verifyAdminJWT(
   req: any,
@@ -305,53 +456,17 @@ export async function verifyAdminJWT(
     };
   }
 
-  try {
-    const { payload } = await jwtVerify(token, secretKey);
-    const uid = payload.uid as string;
-    const email = (payload.email as string) || null;
-    const role = (payload.role as UserRole) || "user";
-    const isPrivileged = PRIVILEGED_ROLES.includes(role);
-    const firebaseIdToken = payload.firebaseIdToken as string | undefined;
+  const result = await verifyTokenString(token, allowedRoles);
 
-    // Store the underlying Firebase ID token for Firestore REST fallback requests
-    req.firebaseIdToken = firebaseIdToken;
-
-    // Check against allowed roles if specified
-    if (allowedRoles && allowedRoles.length > 0) {
-      if (!allowedRoles.includes(role)) {
-        return {
-          authorized: false,
-          uid,
-          email,
-          role,
-          isPrivileged,
-          statusCode: 403,
-          error: `403 Forbidden: Role '${role}' is not authorized. Allowed roles: [${allowedRoles.join(
-            ", "
-          )}]`,
-        };
-      }
-    }
-
-    return {
-      authorized: true,
-      uid,
-      email,
-      role,
-      isPrivileged,
-      statusCode: 200,
-    };
-  } catch (err: any) {
-    console.error("JWT verification failed:", err);
-    return {
-      authorized: false,
-      uid: null,
-      email: null,
-      role: "user",
-      isPrivileged: false,
-      statusCode: 401,
-      error: `401 Unauthorized: Invalid or expired session: ${err.message}`,
-    };
+  if (result.authorized && req) {
+    const xHeaderToken =
+      (req.headers?.["x-firebase-id-token"] as string) ||
+      (req.headers?.["X-Firebase-ID-Token"] as string);
+    req.firebaseIdToken = xHeaderToken || result.firebaseIdToken;
   }
+
+  return result;
 }
+
+
 

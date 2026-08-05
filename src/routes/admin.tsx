@@ -97,10 +97,12 @@ function AdminPage() {
     setFetchingUsers(true);
     setFetchError(null);
     try {
+      const idToken = await auth.currentUser.getIdToken();
       const res = await fetch("/api/admin/list-users", {
         method: "GET",
         headers: {
           Authorization: `Bearer ${adminToken || ""}`,
+          "X-Firebase-ID-Token": idToken,
         },
       });
 
@@ -134,14 +136,17 @@ function AdminPage() {
     }
     setUpdatingUid(targetUid);
     try {
+      const idToken = await auth.currentUser.getIdToken();
       const res = await fetch("/api/admin/update-user-role", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
           Authorization: `Bearer ${adminToken || ""}`,
+          "X-Firebase-ID-Token": idToken,
         },
         body: JSON.stringify({ targetUid, newRole }),
       });
+
 
       const resData = await res.json().catch(() => ({}));
 
