@@ -752,13 +752,13 @@ function GlobalLibraryPage() {
       {/* Full-screen Authentication Overlay */}
       {!user && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center bg-background/35 backdrop-blur-md p-4 animate-in fade-in duration-200">
-          <div className="w-full max-w-md rounded-3xl border border-border/80 bg-card/90 p-6 sm:p-8 shadow-2xl backdrop-blur-xl text-center space-y-6">
-            <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-2xl bg-primary/10 text-primary border border-primary/20 shadow-inner">
-              <Globe className="h-8 w-8 animate-pulse" />
+          <div className="w-full max-w-sm sm:max-w-md rounded-3xl border border-border/80 bg-card/90 p-5 sm:p-8 shadow-2xl backdrop-blur-xl text-center space-y-5 sm:space-y-6">
+            <div className="mx-auto flex h-14 w-14 sm:h-16 sm:w-16 items-center justify-center rounded-2xl bg-primary/10 text-primary border border-primary/20 shadow-inner">
+              <Globe className="h-7 w-7 sm:h-8 sm:w-8 animate-pulse" />
             </div>
 
-            <div className="space-y-2">
-              <h2 className="text-2xl font-extrabold tracking-tight text-foreground sm:text-3xl">
+            <div className="space-y-1.5 sm:space-y-2">
+              <h2 className="text-xl sm:text-3xl font-extrabold tracking-tight text-foreground">
                 Access Global Library
               </h2>
               <p className="text-xs sm:text-sm text-muted-foreground leading-relaxed max-w-xs mx-auto">
@@ -767,15 +767,15 @@ function GlobalLibraryPage() {
             </div>
 
             {authLoading ? (
-              <div className="py-4 flex justify-center">
-                <LoadingLogo size={48} label="Checking authentication..." />
+              <div className="py-3 flex justify-center">
+                <LoadingLogo size={44} label="Checking authentication..." />
               </div>
             ) : (
               <button
                 onClick={() => void signInWithGoogle()}
-                className="flex w-full items-center justify-center gap-3 rounded-2xl bg-primary py-3.5 px-4 text-sm font-semibold text-primary-foreground shadow-lg shadow-primary/25 transition-all hover:opacity-95 active:scale-95 cursor-pointer"
+                className="flex w-full items-center justify-center gap-3 rounded-2xl bg-primary py-3 sm:py-3.5 px-4 text-xs sm:text-sm font-semibold text-primary-foreground shadow-lg shadow-primary/25 transition-all hover:opacity-95 active:scale-95 cursor-pointer"
               >
-                <svg className="h-5 w-5 fill-current" viewBox="0 0 24 24">
+                <svg className="h-4 w-4 sm:h-5 sm:w-5 fill-current" viewBox="0 0 24 24">
                   <path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" />
                   <path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" />
                   <path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.06H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.94l2.85-2.22.81-.63z" />
@@ -785,7 +785,7 @@ function GlobalLibraryPage() {
               </button>
             )}
 
-            <div className="flex items-center justify-center gap-4 text-[11px] text-muted-foreground font-medium pt-1">
+            <div className="flex items-center justify-center gap-4 text-[10px] sm:text-[11px] text-muted-foreground font-medium pt-0.5">
               <a href="/privacy" className="hover:text-primary transition-colors">
                 Privacy Policy
               </a>

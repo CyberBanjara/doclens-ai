@@ -295,13 +295,6 @@ function DashboardPage() {
 
       {isMobile ? (
         <div className="space-y-4 px-4 pb-8 pt-3">
-          <button
-            onClick={() => navigate({ to: "/global-library" })}
-            className="flex w-full items-center justify-center gap-2 rounded-xl bg-primary px-4 py-2.5 text-xs font-semibold text-primary-foreground shadow-sm transition-all hover:opacity-90 active:scale-95 cursor-pointer"
-          >
-            <Globe className="h-4 w-4" />
-            <span>Access Global Library</span>
-          </button>
           {keyStatus !== "valid" && (
             <div
               className={`flex items-center justify-between gap-3 rounded-xl border px-3.5 py-2.5 ${
