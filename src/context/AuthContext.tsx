@@ -295,6 +295,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const handleSignIn = async () => {
     try {
       const res = await signInWithGoogle();
+      if (!res || !res.user) return;
+
       const profile = await syncUserProfile(res.user);
       if (profile) setUserProfile(profile);
 
@@ -319,7 +321,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       toast.success(`Welcome back, ${res.user.displayName || "User"}!`);
     } catch (err: any) {
       console.error("Sign in error:", err);
-      if (err.code !== "auth/popup-closed-by-user") {
+      const isCancelled =
+        err?.code === "auth/popup-closed-by-user" ||
+        err?.code === "auth/cancelled-popup-request" ||
+        err?.code === "auth/user-cancelled";
+
+      if (err?.code === "auth/popup-blocked") {
+        toast.info("Popup blocked by browser. Redirecting to Google Sign-In...");
+      } else if (isCancelled) {
+        console.info("Google Sign-In popup closed or cancelled by user.");
+      } else {
         toast.error(err.message || "Failed to sign in with Google.");
       }
     }

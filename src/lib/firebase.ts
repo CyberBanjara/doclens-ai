@@ -3,6 +3,8 @@ import {
   getAuth,
   GoogleAuthProvider,
   signInWithPopup,
+  signInWithRedirect,
+  getRedirectResult,
   signOut,
   onAuthStateChanged,
   type User,
@@ -89,7 +91,16 @@ export function logPageView(pagePath: string) {
 }
 
 export async function signInWithGoogle() {
-  return await signInWithPopup(auth, googleProvider);
+  try {
+    return await signInWithPopup(auth, googleProvider);
+  } catch (err: any) {
+    if (err?.code === "auth/popup-blocked") {
+      console.warn("Firebase auth popup blocked by browser. Redirecting to Google Sign-In...");
+      await signInWithRedirect(auth, googleProvider);
+      return null;
+    }
+    throw err;
+  }
 }
 
 export async function logOut() {
