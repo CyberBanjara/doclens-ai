@@ -193,7 +193,7 @@ export function PageWorkstation({
   // Handle "ensure this page's AI content is ready" requests from RightPanel —
   // driven by page navigation, continuous-play look-ahead, and AI-tab
   // catch-up. Fast-paths to doclens:page-ready if already fresh; otherwise
-  // generates it, respecting the same explain-mode setup gate as a manual click.
+  // generates it with direct client-side execution.
   useEffect(() => {
     return listenDocEvent("doclens:ensure-page-ready", (d) => {
       if (d.docId !== docId) return;
@@ -215,17 +215,11 @@ export function PageWorkstation({
           }
         }
 
-        if (shouldShowExplainSetup()) {
-          setPendingExplainAction({ type: "page-ensure", pageNumber });
-          setExplainSetupOpen(true);
-          return;
-        }
-
         const result = await runPageOnce(pageNumber);
         if (result) dispatchPageReady(docId, pageNumber, result);
       })();
     });
-  }, [docId, runPageOnce, shouldShowExplainSetup]);
+  }, [docId, runPageOnce]);
 
   // ─── Auto-translate page 1 when doc is loaded and analyzed ───
   const autoTranslatedPage1Ref = useRef<Record<string, boolean>>({});

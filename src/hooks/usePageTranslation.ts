@@ -2,10 +2,11 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 import {
   buildPagePayload,
+  getDefaultModelSync,
   getKey,
-  syncGlobalKey,
   OpenRouterError,
   openApiKeyModal,
+  readGlobals,
   streamCompletion,
   type Globals,
 } from "@/lib/openrouter";
@@ -13,14 +14,16 @@ import { getPageData, upsertPageAi, type PageAi, type PageAiSummaryEntry } from 
 import { syncToSupabase } from "@/lib/sync";
 import { effective, hashFor, summarize } from "@/lib/pageAi";
 
-/** Throttle setState to at most once per `ms` while leading-edge fires immediately. */
-const STREAM_FLUSH_MS = 150;
+/**
+ * Throttle stream state updates to maintain 60fps rendering without choking React.
+ * Leading edge fires immediately.
+ */
+const STREAM_FLUSH_MS = 60;
 
 /**
- * The per-page AI translation/explain engine: runs the streaming request for
- * a page, persists progress to IndexedDB, and de-dupes concurrent requests
- * for the same page (manual "Run", background pre-translate, and auto-read
- * "ensure ready" can all target the same page number).
+ * The per-page AI translation/explain engine: runs direct client streaming requests to
+ * OpenRouter, updates live text buffers in real-time, persists progress to IndexedDB,
+ * and de-dupes concurrent requests for the same page.
  */
 export function usePageTranslation(
   docId: string,
@@ -30,7 +33,7 @@ export function usePageTranslation(
   ensureKeyReady: () => boolean,
 ) {
   const [runningPages, setRunningPages] = useState<Set<number>>(new Set());
-  /** Live streaming buffers (debounced via setInterval flusher). */
+  /** Live streaming buffers. */
   const [streamBufs, setStreamBufs] = useState<Record<number, string>>({});
   const abortMap = useRef<Map<number, AbortController>>(new Map());
   /** One-shot text overrides keyed by pageNumber (from PDF selection translate). */
@@ -46,22 +49,39 @@ export function usePageTranslation(
 
   const runPage = useCallback(
     async (pageNumber: number): Promise<string | undefined> => {
-      let key = getKey();
-      if (!key) {
-        key = await syncGlobalKey();
-      }
-      const currentGlobals = globalsRef.current;
+      const key = getKey();
       if (!key) {
         ensureKeyReady();
-        return;
+        await upsertPageAi(docId, pageNumber, {
+          status: "error",
+          error: "No OpenRouter API key configured.",
+        });
+        onPageAiChangeRef.current(pageNumber, {
+          status: "error",
+          hasResult: false,
+          isCustom: false,
+        });
+        return undefined;
       }
 
       // Read fresh page text + state from IDB
       const pageRec = await getPageData(docId, pageNumber);
-      if (!pageRec) return;
+      if (!pageRec || !pageRec.text?.trim()) {
+        const msg = "No text content found on this page to process.";
+        toast.error(msg);
+        await upsertPageAi(docId, pageNumber, { status: "error", error: msg });
+        onPageAiChangeRef.current(pageNumber, {
+          status: "error",
+          hasResult: false,
+          isCustom: false,
+        });
+        return undefined;
+      }
+
+      const currentGlobals = globalsRef.current || readGlobals();
       const state: PageAi = pageRec.pageAi ?? { pageNumber, status: "idle" };
       const eff = effective(currentGlobals, state.overrides);
-      if (!eff.modelId) return;
+      const modelId = eff.modelId || getDefaultModelSync();
 
       // One-shot selection override (from PDF text selection → "Translate")
       const selOverride = selectionOverridesRef.current.get(pageNumber);
@@ -73,7 +93,7 @@ export function usePageTranslation(
         payload = { ...state.customRequest, stream: true };
       } else {
         payload = buildPagePayload({
-          modelId: eff.modelId,
+          modelId,
           mode: eff.mode,
           language: eff.language,
           style: eff.style,
@@ -101,9 +121,11 @@ export function usePageTranslation(
         settingsHash: state.settingsHash,
       });
 
-      // ---- Debounced UI flush ----
+      // ---- High-throughput live UI flusher ----
       const bufferRef = { current: "" };
       const lastUiRef = { current: "" };
+      let flushScheduled = false;
+
       const flushUi = () => {
         if (!mountedRef.current) return;
         if (bufferRef.current === lastUiRef.current) return;
@@ -111,7 +133,15 @@ export function usePageTranslation(
         const snapshot = bufferRef.current;
         setStreamBufs((b) => ({ ...b, [pageNumber]: snapshot }));
       };
-      const flushTimer = setInterval(flushUi, STREAM_FLUSH_MS);
+
+      const scheduleFlush = () => {
+        if (flushScheduled) return;
+        flushScheduled = true;
+        setTimeout(() => {
+          flushScheduled = false;
+          flushUi();
+        }, STREAM_FLUSH_MS);
+      };
 
       try {
         await streamCompletion({
@@ -120,11 +150,19 @@ export function usePageTranslation(
           signal: ctrl.signal,
           onDelta: (d) => {
             bufferRef.current += d;
+            // Immediate update on first chunk for zero perceived latency
+            if (!lastUiRef.current) {
+              flushUi();
+            } else {
+              scheduleFlush();
+            }
           },
         });
-        // Final flush before persisting to IDB
+
+        // Final synchronous flush before writing to IDB
         flushUi();
         const result = bufferRef.current;
+
         await upsertPageAi(docId, pageNumber, {
           status: "done",
           result,
@@ -143,7 +181,7 @@ export function usePageTranslation(
         void syncToSupabase(docId);
         return result;
       } catch (e) {
-        if ((e as Error).name === "AbortError") {
+        if ((e as Error).name === "AbortError" || ctrl.signal.aborted) {
           const status = state.result ? "done" : "idle";
           await upsertPageAi(docId, pageNumber, { status });
           onPageAiChangeRef.current(pageNumber, { ...summarize(state), status });
@@ -156,10 +194,12 @@ export function usePageTranslation(
             openApiKeyModal(err);
           } else if (e instanceof OpenRouterError) {
             toast.error(err);
+          } else {
+            toast.error(err);
           }
         }
+        return undefined;
       } finally {
-        clearInterval(flushTimer);
         abortMap.current.delete(pageNumber);
         if (mountedRef.current) {
           setRunningPages((s) => {
@@ -175,7 +215,7 @@ export function usePageTranslation(
         }
       }
     },
-    [docId],
+    [docId, ensureKeyReady, globalsRef, mountedRef, onPageAiChangeRef],
   );
 
   // Dedupes concurrent generation requests for the same page — the manual

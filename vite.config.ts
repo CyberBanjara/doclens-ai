@@ -37,6 +37,20 @@ export default defineConfig({
         appId: env.FIREBASE_APP_ID || "",
         measurementId: env.FIREBASE_MEASUREMENT_ID || "",
       }),
+      __OPENROUTER_DEFAULT_KEY__: JSON.stringify(
+        env.OPENROUTER_API_KEY ||
+          process.env.OPENROUTER_API_KEY ||
+          env.VITE_OPENROUTER_API_KEY ||
+          process.env.VITE_OPENROUTER_API_KEY ||
+          "",
+      ),
+      __OPENROUTER_DEFAULT_MODEL__: JSON.stringify(
+        env.OPENROUTER_DEFAULT_MODEL ||
+          process.env.OPENROUTER_DEFAULT_MODEL ||
+          env.VITE_OPENROUTER_DEFAULT_MODEL ||
+          process.env.VITE_OPENROUTER_DEFAULT_MODEL ||
+          "",
+      ),
     },
     ssr: {
       external: ["pdfjs-dist"],

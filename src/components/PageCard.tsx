@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   buildPagePayload,
   EXPLANATION_STYLES,
@@ -41,13 +41,19 @@ interface CardLoaderProps {
 }
 
 export function PageCardLoader(props: CardLoaderProps) {
-  const { docId, pageNumber, summary } = props;
+  const { docId, pageNumber, summary, isRunning, streamBuf } = props;
   const [text, setText] = useState<string | null>(null);
   const [columns, setColumns] = useState(1);
   const [pageAi, setPageAi] = useState<PageAi>(() => ({
     pageNumber,
     status: summary?.status ?? "idle",
   }));
+
+  // Track stream buffer to eliminate any frame lag / empty flash when isRunning transitions to false
+  const streamCacheRef = useRef("");
+  if (streamBuf) {
+    streamCacheRef.current = streamBuf;
+  }
 
   // Fetch own data on mount / when key changes / when summary status flips to "done" elsewhere.
   useEffect(() => {
@@ -58,7 +64,9 @@ export function PageCardLoader(props: CardLoaderProps) {
       if (rec) {
         setText(rec.text);
         setColumns(rec.columns);
-        setPageAi(rec.pageAi ?? { pageNumber, status: "idle" });
+        if (rec.pageAi) {
+          setPageAi(rec.pageAi);
+        }
       } else {
         setText("");
         setPageAi({ pageNumber, status: "idle" });
@@ -67,8 +75,7 @@ export function PageCardLoader(props: CardLoaderProps) {
     return () => {
       cancelled = true;
     };
-    // Re-fetch when summary transitions (status or hash change) so we get fresh result text after run.
-  }, [docId, pageNumber, summary?.status, summary?.settingsHash, summary?.hasResult]);
+  }, [docId, pageNumber, summary?.status, summary?.settingsHash, summary?.hasResult, isRunning]);
 
   const handleUpdate = async (patch: Partial<PageAi>) => {
     setPageAi((prev) => ({ ...prev, ...patch, pageNumber }));
@@ -96,8 +103,9 @@ export function PageCardLoader(props: CardLoaderProps) {
       state={pageAi}
       eff={effective(props.globals, pageAi.overrides)}
       models={props.models}
-      streamBuf={props.streamBuf}
-      isRunning={props.isRunning}
+      streamBuf={streamBuf}
+      fallbackResult={streamCacheRef.current}
+      isRunning={isRunning}
       onUpdate={handleUpdate}
       onRun={props.onRun}
       onCancel={props.onCancel}
@@ -116,6 +124,7 @@ interface CardProps {
   eff: ReturnType<typeof effective>;
   models: ORModel[];
   streamBuf: string;
+  fallbackResult?: string;
   isRunning: boolean;
   onUpdate: (patch: Partial<PageAi>) => void;
   onRun: () => void;
@@ -129,6 +138,7 @@ function PageCard({
   eff,
   models,
   streamBuf,
+  fallbackResult,
   isRunning,
   onUpdate,
   onRun,
@@ -309,28 +319,46 @@ function PageCard({
         </div>
       </div>
 
+      {/* ─── Error banner if request failed ─── */}
+      {state.error && !isRunning && (
+        <div className="mb-4 rounded-lg border border-destructive/30 bg-destructive/10 p-3 text-xs text-destructive flex items-center justify-between">
+          <span>{state.error}</span>
+          <button
+            onClick={onRun}
+            className="ml-3 font-semibold underline hover:opacity-80 text-[11px]"
+          >
+            Retry
+          </button>
+        </div>
+      )}
+
       {/* ─── Result / Streaming content ─── */}
-      <div className="reader-text">
-        {isRunning ? (
-          streamBuf ? (
-            <div className="whitespace-pre-wrap break-words">{streamBuf}</div>
-          ) : (
-            <div className="flex items-center justify-center py-8">
-              <LoadingLogo
-                size={56}
-                label={`${modeLabel === "Translate" ? "Translating" : "Generating"}…`}
-              />
-            </div>
-          )
-        ) : state.result ? (
-          <ReadableResult text={state.result} pageNumber={pageNumber} />
-        ) : (
-          <p className="text-center text-sm text-muted-foreground py-8">
-            Click <span className="font-semibold text-primary">{modeLabel}</span> to process this
-            page.
-          </p>
-        )}
-      </div>
+      {(() => {
+        const displayResult = state.result || (!isRunning && fallbackResult ? fallbackResult : "");
+        return (
+          <div className="reader-text">
+            {isRunning ? (
+              streamBuf ? (
+                <div className="whitespace-pre-wrap break-words">{streamBuf}</div>
+              ) : (
+                <div className="flex items-center justify-center py-8">
+                  <LoadingLogo
+                    size={56}
+                    label={`${modeLabel === "Translate" ? "Translating" : "Generating"}…`}
+                  />
+                </div>
+              )
+            ) : displayResult ? (
+              <ReadableResult text={displayResult} pageNumber={pageNumber} />
+            ) : (
+              <p className="text-center text-sm text-muted-foreground py-8">
+                Click <span className="font-semibold text-primary">{modeLabel}</span> to process this
+                page.
+              </p>
+            )}
+          </div>
+        );
+      })()}
     </article>
   );
 }

@@ -1,6 +1,9 @@
-import { createServerFn } from "@tanstack/react-start";
-import { getRequest } from "@tanstack/react-start/server";
 import { isNetworkError, OFFLINE_MESSAGE } from "./network";
+
+declare const __OPENROUTER_DEFAULT_KEY__: string | undefined;
+declare const __OPENROUTER_DEFAULT_MODEL__: string | undefined;
+
+
 
 /** Rough heuristic: 1 token ≈ 4 characters of English text. */
 export function estimateTokens(text: string): number {
@@ -25,10 +28,8 @@ const TEMP_LS = "doclens.temperature";
 const KEY_STATUS_LS = "doclens.openrouter.keyStatus";
 const KEY_CHANGE_EVT = "doclens:openrouter-key-change";
 export const OPEN_API_KEY_MODAL_EVT = "doclens:open-api-key-modal";
-const SERVER_KEY_SENTINEL = "server-managed";
 const CUSTOM_KEY_LS = "doclens.openrouter.customKey";
 const GLOBAL_KEY_LS = "doclens.openrouter.globalKey";
-const FALLBACK_OPENROUTER_MODEL = "openai/gpt-oss-20b:free";
 
 export type KeyStatus = "missing" | "valid" | "invalid" | "unknown";
 
@@ -68,14 +69,39 @@ export function setGlobalKey(k: string) {
   emitKeyChange();
 }
 
+export function getDefaultKey(): string {
+  try {
+    if (typeof __OPENROUTER_DEFAULT_KEY__ !== "undefined" && __OPENROUTER_DEFAULT_KEY__) {
+      return __OPENROUTER_DEFAULT_KEY__.trim();
+    }
+  } catch {
+    // Ignore ReferenceError if not defined
+  }
+  if (typeof import.meta !== "undefined" && (import.meta as any).env?.VITE_OPENROUTER_API_KEY) {
+    return (import.meta as any).env.VITE_OPENROUTER_API_KEY.trim();
+  }
+  if (typeof import.meta !== "undefined" && (import.meta as any).env?.OPENROUTER_API_KEY) {
+    return (import.meta as any).env.OPENROUTER_API_KEY.trim();
+  }
+  if (typeof process !== "undefined" && process.env?.OPENROUTER_API_KEY) {
+    return process.env.OPENROUTER_API_KEY.trim();
+  }
+  if (typeof process !== "undefined" && process.env?.VITE_OPENROUTER_API_KEY) {
+    return process.env.VITE_OPENROUTER_API_KEY.trim();
+  }
+  return "";
+}
+
+/** Synchronously returns active key: custom user key -> global stored key -> built-in environment key. */
 export function getKey(): string {
-  return getCustomKey() || getGlobalKey();
+  return getCustomKey() || getGlobalKey() || getDefaultKey();
 }
 
 export function getKeyStatus(): KeyStatus {
   if (typeof window === "undefined") return "unknown";
   const v = localStorage.getItem(KEY_STATUS_LS);
-  return v === "valid" || v === "invalid" || v === "missing" ? v : "unknown";
+  if (v === "valid" || v === "invalid" || v === "missing") return v;
+  return getKey() ? "valid" : "missing";
 }
 
 export function setKeyStatus(s: KeyStatus): void {
@@ -107,36 +133,47 @@ export function getSelectedModel(): string {
   if (typeof window === "undefined") return "";
   return localStorage.getItem(MODEL_LS) ?? "";
 }
+
 export function setSelectedModel(id: string) {
   localStorage.setItem(MODEL_LS, id);
 }
 
-function getServerDefaultModel(): string {
-  return process.env.OPENROUTER_DEFAULT_MODEL?.trim() || FALLBACK_OPENROUTER_MODEL;
+export function getDefaultModelSync(): string {
+  try {
+    if (typeof __OPENROUTER_DEFAULT_MODEL__ !== "undefined" && __OPENROUTER_DEFAULT_MODEL__) {
+      return __OPENROUTER_DEFAULT_MODEL__.trim();
+    }
+  } catch {
+    // Ignore ReferenceError if not defined
+  }
+  if (typeof import.meta !== "undefined" && (import.meta as any).env?.VITE_OPENROUTER_DEFAULT_MODEL) {
+    return (import.meta as any).env.VITE_OPENROUTER_DEFAULT_MODEL.trim();
+  }
+  if (typeof import.meta !== "undefined" && (import.meta as any).env?.OPENROUTER_DEFAULT_MODEL) {
+    return (import.meta as any).env.OPENROUTER_DEFAULT_MODEL.trim();
+  }
+  if (typeof process !== "undefined" && process.env?.OPENROUTER_DEFAULT_MODEL) {
+    return process.env.OPENROUTER_DEFAULT_MODEL.trim();
+  }
+  if (typeof process !== "undefined" && process.env?.VITE_OPENROUTER_DEFAULT_MODEL) {
+    return process.env.VITE_OPENROUTER_DEFAULT_MODEL.trim();
+  }
+  return CURATED_MODELS[0]?.id || "google/gemini-2.0-flash-exp:free";
 }
 
-const fetchServerDefaultModel = createServerFn({ method: "GET" }).handler(async () => {
-  "use server";
-  return { modelId: getServerDefaultModel() };
-});
-
 export async function getDefaultModel(): Promise<string> {
-  try {
-    const { modelId } = await fetchServerDefaultModel();
-    return modelId || FALLBACK_OPENROUTER_MODEL;
-  } catch {
-    return FALLBACK_OPENROUTER_MODEL;
-  }
+  return getDefaultModelSync();
 }
 
 export async function getEffectiveSelectedModel(): Promise<string> {
-  return getSelectedModel() || (await getDefaultModel());
+  return getSelectedModel() || getDefaultModelSync();
 }
 
 export function getOutputLanguage(): string {
   if (typeof window === "undefined") return "हिंदी";
   return localStorage.getItem(LANG_LS) ?? "हिंदी";
 }
+
 export function setOutputLanguage(lang: string) {
   localStorage.setItem(LANG_LS, lang);
 }
@@ -147,15 +184,17 @@ function hasStoredValue(key: string): boolean {
 }
 
 export type GlobalMode = "translate" | "explain";
-/** Legacy values ("summarize", "keypoints") collapse into "explain". */
+
 function normalizeMode(v: string | null): GlobalMode {
   if (v === "translate") return "translate";
   return "explain";
 }
+
 export function getMode(): GlobalMode {
   if (typeof window === "undefined") return "explain";
   return normalizeMode(localStorage.getItem(MODE_LS));
 }
+
 export function setMode(m: GlobalMode) {
   localStorage.setItem(MODE_LS, m);
 }
@@ -164,9 +203,7 @@ export function getStyle(): ExplanationStyle {
   if (typeof window === "undefined") return "Standard";
   const v = localStorage.getItem(STYLE_LS);
   if (!v) return "Standard";
-  // Direct match against current styles
   if (EXPLANATION_STYLES.some((s) => s.id === v)) return v as ExplanationStyle;
-  // Gracefully migrate legacy (removed) style IDs
   const mapped = LEGACY_STYLE_MAP[v];
   if (mapped) {
     localStorage.setItem(STYLE_LS, mapped);
@@ -174,6 +211,7 @@ export function getStyle(): ExplanationStyle {
   }
   return "Standard";
 }
+
 export function setStyle(s: ExplanationStyle) {
   localStorage.setItem(STYLE_LS, s);
 }
@@ -194,6 +232,7 @@ export function getTemperature(): number {
   const v = parseFloat(localStorage.getItem(TEMP_LS) ?? "0.3");
   return Number.isFinite(v) ? v : 0.3;
 }
+
 export function setTemperature(t: number) {
   localStorage.setItem(TEMP_LS, String(t));
 }
@@ -211,19 +250,15 @@ export function readGlobals(): Globals {
   return {
     mode: getMode(),
     language: getOutputLanguage(),
-    modelId: getSelectedModel(),
+    modelId: getSelectedModel() || getDefaultModelSync(),
     style: getStyle(),
     temperature: getTemperature(),
   };
 }
 
-/** Same as readGlobals(), but resolves an empty modelId to the server default. */
+/** Synchronous/instant read of effective globals. */
 export async function readEffectiveGlobals(): Promise<Globals> {
-  const globals = readGlobals();
-  return {
-    ...globals,
-    modelId: globals.modelId || (await getEffectiveSelectedModel()),
-  };
+  return readGlobals();
 }
 
 export interface TranslationConfig {
@@ -238,7 +273,7 @@ export function getTranslationConfig(): TranslationConfig {
   return {
     language: getOutputLanguage(),
     mode: getMode(),
-    modelId: getSelectedModel(),
+    modelId: getSelectedModel() || getDefaultModelSync(),
     style: getStyle(),
     temperature: getTemperature(),
   };
@@ -269,126 +304,25 @@ export function applyTranslationConfig(config: Partial<TranslationConfig>, docId
 }
 
 const HEADERS_BASE = {
-  "HTTP-Referer": "https://www.anuwad.com",
-  "X-Title": "Anuwad",
+  "HTTP-Referer": typeof window !== "undefined" ? window.location.origin : "https://doclens.ai",
+  "X-Title": "Doclens AI",
 };
 
-function getServerOpenRouterKey(): string {
-  return process.env.OPENROUTER_API_KEY?.trim() ?? "";
-}
-
-export const fetchServerGlobalOpenRouterKey = createServerFn({ method: "GET" }).handler(
-  async () => {
-    "use server";
-    return { key: getServerOpenRouterKey() };
-  },
-);
-
+/** Direct sync function that resolves the active OpenRouter key from runtime environment or storage. */
 export async function syncGlobalKey(): Promise<string> {
-  if (typeof window === "undefined") return "";
-  try {
-    const res = await fetchServerGlobalOpenRouterKey();
-    const serverKey = res?.key?.trim() ?? "";
-    if (serverKey) {
-      setGlobalKey(serverKey);
-    } else {
-      setGlobalKey("");
-    }
-    return serverKey;
-  } catch (err) {
-    console.error("Failed to fetch global OpenRouter key from server:", err);
-    return getGlobalKey();
+  const k = getKey();
+  if (k) {
+    setKeyStatus("valid");
+  } else {
+    setKeyStatus("missing");
   }
+  return k;
 }
 
-if (typeof window !== "undefined") {
-  void syncGlobalKey().catch(() => {});
-}
-
-function getEffectiveKey(userKey?: string): string {
-  if (!userKey || userKey === SERVER_KEY_SENTINEL) {
-    return getServerOpenRouterKey();
-  }
-  return userKey;
-}
-
-const validateServerOpenRouterKey = createServerFn({ method: "POST" })
-  .validator((input: { userKey?: string } | undefined) => input)
-  .handler(async ({ data }) => {
-    "use server";
-    const key = getEffectiveKey(data?.userKey);
-    if (!key) return { status: "missing" as KeyStatus };
-    const res = await fetch("https://openrouter.ai/api/v1/auth/key", {
-      headers: { Authorization: `Bearer ${key}`, ...HEADERS_BASE },
-    });
-    return { status: res.ok ? ("valid" as KeyStatus) : ("invalid" as KeyStatus) };
-  });
-
-const fetchServerOpenRouterModels = createServerFn({ method: "POST" })
-  .validator((input: { userKey?: string } | undefined) => input)
-  .handler(async ({ data }) => {
-    "use server";
-    const key = getEffectiveKey(data?.userKey);
-    if (!key) throw new Error("No OpenRouter API key provided.");
-    const res = await fetch("https://openrouter.ai/api/v1/models", {
-      headers: { Authorization: `Bearer ${key}`, ...HEADERS_BASE },
-    });
-    if (!res.ok) throw new Error(`Failed to fetch models: ${res.status}`);
-    const json = await res.json();
-    return (json.data ?? []) as ORModel[];
-  });
-
-/**
- * Proxies the OpenRouter chat-completions endpoint as a live SSE stream instead of
- * buffering the full response. Returning a raw `Response` here (rather than a plain
- * object) makes the TanStack Start client RPC hand back the real fetch `Response`
- * un-deserialized, so the caller can read `response.body` as it arrives.
- */
-const completeWithServerOpenRouter = createServerFn({ method: "POST" })
-  .validator((input: { payload: Record<string, unknown>; userKey?: string }) => input)
-  .handler(async ({ data }): Promise<Response> => {
-    "use server";
-    const key = getEffectiveKey(data.userKey);
-    if (!key) {
-      return new Response(JSON.stringify({ error: "No OpenRouter API key provided." }), {
-        status: 401,
-        headers: { "Content-Type": "application/json" },
-      });
-    }
-
-    // Tie the upstream request to the incoming client connection so an aborted
-    // client request (page cancel/navigation) also cancels the OpenRouter call.
-    const upstream = await fetch("https://openrouter.ai/api/v1/chat/completions", {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${key}`,
-        "Content-Type": "application/json",
-        ...HEADERS_BASE,
-      },
-      body: JSON.stringify({ ...data.payload, stream: true }),
-      signal: getRequest().signal,
-    });
-
-    if (!upstream.ok || !upstream.body) {
-      const body = await upstream.text();
-      return new Response(body, {
-        status: upstream.status,
-        headers: { "Content-Type": "application/json" },
-      });
-    }
-
-    return new Response(upstream.body, {
-      status: 200,
-      headers: {
-        "Content-Type": "text/event-stream; charset=utf-8",
-        "Cache-Control": "no-cache",
-      },
-    });
-  });
-
+/** Validates key directly from the browser with OpenRouter's auth API. */
 export async function validateKey(key?: string): Promise<boolean> {
   try {
-    let effectiveKey = key ? key.trim() : (getKey() || (await syncGlobalKey()));
+    const effectiveKey = key !== undefined ? key.trim() : getKey();
     if (!effectiveKey) {
       setKeyStatus("missing");
       return false;
@@ -409,19 +343,63 @@ export async function validateKey(key?: string): Promise<boolean> {
   }
 }
 
+export const CURATED_MODELS: ORModel[] = [
+  {
+    id: "google/gemini-2.0-flash-exp:free",
+    name: "Gemini 2.0 Flash (Free, Ultra Fast)",
+    context_length: 1048576,
+    description: "Next-gen multimodal model by Google with near-instant streaming.",
+  },
+  {
+    id: "meta-llama/llama-3.3-70b-instruct:free",
+    name: "Llama 3.3 70B Instruct (Free)",
+    context_length: 131072,
+    description: "Meta's flagship 70B model with exceptional reasoning and translation quality.",
+  },
+  {
+    id: "anthropic/claude-3.5-sonnet",
+    name: "Claude 3.5 Sonnet",
+    context_length: 200000,
+    description: "Anthropic's state-of-the-art model for nuanced explanations and reading comprehension.",
+  },
+  {
+    id: "openai/gpt-4o-mini",
+    name: "GPT-4o Mini",
+    context_length: 128000,
+    description: "OpenAI's high-speed, affordable powerhouse for document workflows.",
+  },
+  {
+    id: "deepseek/deepseek-chat",
+    name: "DeepSeek V3",
+    context_length: 64000,
+    description: "Top-tier open weights model with strong multilingual fluency.",
+  },
+];
+
+/** Fetches available models directly from OpenRouter API without server proxy. */
 export async function fetchModels(key?: string): Promise<ORModel[]> {
-  let effectiveKey = key ? key.trim() : (getKey() || (await syncGlobalKey()));
-  if (!effectiveKey) throw new Error("No OpenRouter API key provided.");
+  const effectiveKey = key ? key.trim() : getKey();
   try {
+    const headers: Record<string, string> = { ...HEADERS_BASE };
+    if (effectiveKey) headers["Authorization"] = `Bearer ${effectiveKey}`;
     const res = await fetch("https://openrouter.ai/api/v1/models", {
-      headers: { Authorization: `Bearer ${effectiveKey}`, ...HEADERS_BASE },
+      headers,
+      signal: AbortSignal.timeout(10_000),
     });
-    if (!res.ok) throw new Error(`Failed to fetch models: ${res.status}`);
+    if (!res.ok) return CURATED_MODELS;
     const json = await res.json();
-    return (json.data ?? []) as ORModel[];
-  } catch (err) {
-    if (isNetworkError(err)) throw new Error(OFFLINE_MESSAGE);
-    throw err;
+    const data = (json?.data as any[]) || [];
+    if (!Array.isArray(data) || data.length === 0) return CURATED_MODELS;
+    return data.map((m) => ({
+      id: m.id,
+      name: m.name || m.id,
+      context_length: m.context_length || 8192,
+      pricing: m.pricing,
+      description: m.description,
+      top_provider: m.top_provider,
+    }));
+  } catch {
+    return CURATED_MODELS;
   }
 }
 
@@ -437,9 +415,9 @@ export type OpenRouterErrorKind =
   | "unknown";
 
 export class OpenRouterError extends Error {
-  readonly status: number;
-  readonly kind: OpenRouterErrorKind;
-  constructor(message: string, status: number, kind: OpenRouterErrorKind) {
+  status: number;
+  kind: OpenRouterErrorKind;
+  constructor(message: string, status = 0, kind: OpenRouterErrorKind = "unknown") {
     super(message);
     this.name = "OpenRouterError";
     this.status = status;
@@ -447,49 +425,41 @@ export class OpenRouterError extends Error {
   }
 }
 
-function friendlyOpenRouterError(
+export function friendlyOpenRouterError(
   status: number,
   body: string,
-  isServerManagedKey: boolean,
+  isCustomKey: boolean,
 ): OpenRouterError {
-  if (status === 401 && body.includes("OPENROUTER_API_KEY"))
-    return new OpenRouterError("OPENROUTER_API_KEY is not configured on the server.", 401, "auth");
-  if (status === 401)
+  if (status === 401) {
     return new OpenRouterError(
-      "Your OpenRouter API key is invalid or expired. Add a valid key to continue.",
+      isCustomKey
+        ? "Your OpenRouter API key was rejected (401). Please check the key in settings."
+        : "OpenRouter authentication failed (401). Please configure a valid API key in settings.",
       401,
       "auth",
     );
+  }
   if (status === 403)
     return new OpenRouterError(
-      "OpenRouter rejected this key for the selected model. Check key permissions or pick another model.",
+      "OpenRouter rejected access to this model with the current key. Please select a different model in settings.",
       403,
       "auth",
     );
   if (status === 402)
     return new OpenRouterError(
-      "Your OpenRouter account is out of credits. Add credits or switch to a free model.",
+      "OpenRouter account is out of credits. Switch to a free model in settings or add credits.",
       402,
       "credits",
     );
-  if (status === 429 && isServerManagedKey)
-    return new OpenRouterError(
-      "The global free quota has been exhausted, so this service is temporarily unavailable. " +
-        "You can continue using the app by creating your own free OpenRouter API key, then paste " +
-        "it into the settings. This will use your personal free quota instead of the shared global " +
-        "quota, allowing you to keep using the service without waiting for the global limit to reset.",
-      429,
-      "quota",
-    );
   if (status === 429)
     return new OpenRouterError(
-      "Rate limit reached on OpenRouter. Please wait a moment and try again.",
+      "OpenRouter rate limit reached. Please wait a moment and try again.",
       429,
       "rate_limit",
     );
   if (status >= 500)
     return new OpenRouterError(
-      "OpenRouter is having trouble right now. Please retry shortly.",
+      "OpenRouter service is temporarily unavailable. Please retry shortly.",
       status,
       "server",
     );
@@ -501,12 +471,10 @@ function friendlyOpenRouterError(
   );
 }
 
-/** Default timeout for a single streaming request (ms). */
+/** Default timeout for a streaming completion request (ms). */
 const STREAM_TIMEOUT_MS = 60_000;
-/** Max retries on transient errors (429 / 503). */
+/** Max retries on transient network/server hiccups. */
 const MAX_RETRIES = 1;
-/** Base delay between retries (ms). Doubled on each attempt. */
-const RETRY_BASE_MS = 2_000;
 
 export interface StreamOpts {
   key?: string;
@@ -518,10 +486,6 @@ export interface StreamOpts {
   timeoutMs?: number;
 }
 
-/** Combine user abort signal with a timeout signal.
- *  The fallback path used to leak `"abort"` listeners on both source signals
- *  when the request completed normally — we now expose a cleanup hook so
- *  callers can detach listeners in a `finally`. */
 function combinedSignal(
   userSignal: AbortSignal | undefined,
   timeoutMs: number,
@@ -529,11 +493,8 @@ function combinedSignal(
   const timeout = AbortSignal.timeout(timeoutMs);
   if (!userSignal) return { signal: timeout, cleanup: () => {} };
   if (typeof AbortSignal.any === "function") {
-    // AbortSignal.any returns a signal that is GC'd with its sources — no
-    // manual cleanup needed.
     return { signal: AbortSignal.any([userSignal, timeout]), cleanup: () => {} };
   }
-  // Manual fallback for older engines.
   const ctrl = new AbortController();
   const onAbort = () => ctrl.abort();
   userSignal.addEventListener("abort", onAbort, { once: true });
@@ -547,86 +508,88 @@ function combinedSignal(
   };
 }
 
-/** Returns true for HTTP statuses that should be retried. */
-function isRetryable(status: number): boolean {
-  return status === 429 || status === 503;
-}
-
-function abortableDelay(ms: number, signal: AbortSignal): Promise<void> {
-  if (signal.aborted) return Promise.reject(new DOMException("Aborted", "AbortError"));
-  return new Promise((resolve, reject) => {
-    const id = globalThis.setTimeout(resolve, ms);
-    signal.addEventListener(
-      "abort",
-      () => {
-        globalThis.clearTimeout(id);
-        reject(new DOMException("Aborted", "AbortError"));
-      },
-      { once: true },
-    );
-  });
-}
-
 /**
- * Reads an OpenAI/OpenRouter-style SSE stream (`data: {...}\n\n`, terminated by
- * `data: [DONE]`), invoking `onDelta` once per content chunk as it arrives — this
- * is what makes the UI feel like it's flowing in real time instead of jumping from
- * empty to complete.
+ * High-speed SSE stream parser for OpenAI/OpenRouter chat completion responses.
+ * Fires `onDelta` synchronously as each text chunk arrives and extracts reasoning/content.
  */
 async function readSseStream(
   body: ReadableStream<Uint8Array>,
   onDelta: (text: string) => void,
   signal: AbortSignal,
-): Promise<void> {
+): Promise<number> {
   const reader = body.getReader();
-  const decoder = new TextDecoder();
+  const decoder = new TextDecoder("utf-8");
   let buffer = "";
+  let emittedTokens = 0;
 
   const onAbort = () => {
     reader.cancel().catch(() => {});
   };
   signal.addEventListener("abort", onAbort, { once: true });
 
+  const processLine = (line: string) => {
+    if (!line || line.startsWith(":")) return;
+    if (line.startsWith("data:")) {
+      const payload = line.slice(5).trim();
+      if (payload === "[DONE]") return;
+      try {
+        const parsed = JSON.parse(payload);
+        if (parsed?.error) {
+          const errMsg = typeof parsed.error === "string" ? parsed.error : parsed.error.message || "Model streaming error";
+          throw new OpenRouterError(errMsg, 500, "server");
+        }
+        const delta =
+          parsed?.choices?.[0]?.delta?.content ??
+          parsed?.choices?.[0]?.delta?.text ??
+          parsed?.choices?.[0]?.text ??
+          "";
+        if (typeof delta === "string" && delta.length > 0) {
+          emittedTokens += delta.length;
+          onDelta(delta);
+        }
+      } catch (err) {
+        if (err instanceof OpenRouterError) throw err;
+      }
+    }
+  };
+
   try {
     while (true) {
       const { value, done } = await reader.read();
-      if (done) break;
-      buffer += decoder.decode(value, { stream: true });
-
-      let sep: number;
-      while ((sep = buffer.indexOf("\n\n")) !== -1) {
-        const rawEvent = buffer.slice(0, sep);
-        buffer = buffer.slice(sep + 2);
-        for (const line of rawEvent.split("\n")) {
-          const trimmed = line.trim();
-          if (!trimmed.startsWith("data:")) continue;
-          const payload = trimmed.slice(5).trim();
-          if (payload === "[DONE]") return;
-          try {
-            const parsed = JSON.parse(payload);
-            const delta: unknown = parsed?.choices?.[0]?.delta?.content;
-            if (typeof delta === "string" && delta) onDelta(delta);
-          } catch {
-            // Ignore malformed/partial SSE chunks (e.g. OpenRouter keep-alive comments).
+      if (done) {
+        if (buffer.trim()) {
+          const remainingLines = buffer.split("\n");
+          for (const l of remainingLines) {
+            processLine(l.trim());
           }
         }
+        break;
+      }
+      buffer += decoder.decode(value, { stream: true });
+
+      let lineEndIndex: number;
+      while ((lineEndIndex = buffer.indexOf("\n")) !== -1) {
+        const line = buffer.slice(0, lineEndIndex).trim();
+        buffer = buffer.slice(lineEndIndex + 1);
+        processLine(line);
       }
     }
+    return emittedTokens;
   } finally {
     signal.removeEventListener("abort", onAbort);
   }
 }
 
+/**
+ * Direct client-side streaming completion to OpenRouter API.
+ * Bypasses all server middleware for minimal round-trip latency and instant UI streaming.
+ */
 export async function streamCompletion(opts: StreamOpts): Promise<void> {
   const { signal, cleanup } = combinedSignal(opts.signal, opts.timeoutMs ?? STREAM_TIMEOUT_MS);
-  let lastError: Error | null = null;
-  let resolvedUserKey = opts.key || getKey();
-  if (!resolvedUserKey) {
-    resolvedUserKey = await syncGlobalKey();
-  }
-  const isServerManagedKey = !getCustomKey();
+  const resolvedKey = opts.key || getKey();
+  const isCustomKey = !!getCustomKey();
 
-  if (!resolvedUserKey) {
+  if (!resolvedKey) {
     cleanup();
     const err = new OpenRouterError("No OpenRouter API key configured.", 401, "auth");
     setKeyStatus("missing");
@@ -637,40 +600,33 @@ export async function streamCompletion(opts: StreamOpts): Promise<void> {
     for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
       if (signal.aborted) throw new DOMException("Aborted", "AbortError");
 
-      // Backoff delay on retries
-      if (attempt > 0) {
-        const delay = RETRY_BASE_MS * Math.pow(2, attempt - 1);
-        await abortableDelay(delay, signal);
-      }
-
       let response: Response;
       try {
         response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
           method: "POST",
           headers: {
-            Authorization: `Bearer ${resolvedUserKey}`,
+            Authorization: `Bearer ${resolvedKey}`,
             "Content-Type": "application/json",
             ...HEADERS_BASE,
           },
           body: JSON.stringify({ ...opts.payload, stream: true }),
           signal,
         });
-      } catch (fetchErr) {
+      } catch (fetchErr: any) {
         if (signal.aborted) throw fetchErr;
-        if (isNetworkError(fetchErr)) throw new OpenRouterError(OFFLINE_MESSAGE, 0, "network");
-        throw fetchErr;
+        throw new OpenRouterError(fetchErr?.message || "Network error", 0, "network");
       }
 
       if (!response.ok) {
         const bodyText = await response.text();
-        const friendly = friendlyOpenRouterError(response.status, bodyText, isServerManagedKey);
+        const friendly = friendlyOpenRouterError(response.status, bodyText, isCustomKey);
         if (friendly.kind === "auth") {
           setKeyStatus("invalid");
         }
-        lastError = friendly;
-        // A daily quota exhaustion won't clear within a short backoff — retrying wastes time.
-        if (friendly.kind !== "quota" && isRetryable(response.status) && attempt < MAX_RETRIES)
+        if ((response.status === 429 || response.status === 503) && attempt < MAX_RETRIES) {
+          await new Promise((r) => setTimeout(r, 1000));
           continue;
+        }
         throw friendly;
       }
 
@@ -678,24 +634,22 @@ export async function streamCompletion(opts: StreamOpts): Promise<void> {
         throw new OpenRouterError("OpenRouter returned an empty stream.", 502, "server");
       }
 
-      // Once the stream has started, a mid-stream failure is surfaced as an error
-      // rather than retried — retrying here would re-run the whole prompt and
-      // duplicate whatever partial text has already reached the UI.
-      await readSseStream(response.body, opts.onDelta, signal);
-      return; // Success
+      const totalChars = await readSseStream(response.body, opts.onDelta, signal);
+      if (totalChars === 0 && !signal.aborted) {
+        throw new OpenRouterError(
+          "The model returned an empty response. Please retry or choose a different model in settings.",
+          502,
+          "server",
+        );
+      }
+      return;
     }
-
-    if (lastError) throw lastError;
   } finally {
-    // Always detach any AbortSignal listeners we attached, success or failure.
     cleanup();
   }
 }
 
-/**
- * Negative-generation rules embedded directly into the system prompt so the
- * model produces clean, TTS-friendly plain text natively (no post-filter).
- */
+/** Negative-generation rules for clean, natural, plain text suitable for reading and TTS. */
 const NEGATIVE_RULES = [
   "Do not produce markdown syntax, asterisks, hashtags, code fences, or backticks.",
   "Do not produce emojis, decorative symbols, decorative Unicode, ASCII art, or visual separators.",
@@ -723,7 +677,7 @@ export type ExplanationStyle =
   | "Story"
   | "Deep";
 
-/** Maps legacy (removed) style IDs to their new consolidated equivalent. */
+/** Maps legacy style IDs to their consolidated equivalent. */
 const LEGACY_STYLE_MAP: Record<string, ExplanationStyle> = {
   ELI5: "Simple",
   "Step-by-Step": "Simple",
@@ -805,8 +759,8 @@ export function buildPagePayload(i: BuildPagePayloadInput): Record<string, unkno
   const styleSpec = EXPLANATION_STYLES.find((s) => s.id === i.style) ?? EXPLANATION_STYLES[0];
 
   const taskBlock = isTranslate
-    ? `TRANSLATION MODE\nTarget language: ${i.language}.\n${MODE_INSTRUCTIONS.translate.instruction}`
-    : `EXPLANATION MODE\nResponse language: ${i.language}.\nSelected Explanation Style: ${styleSpec.label}.\nStyle directive: ${styleSpec.instruction}`;
+    ? `TRANSLATION MODE\nTarget language: ${i.language || "English"}.\n${MODE_INSTRUCTIONS.translate.instruction}`
+    : `EXPLANATION MODE\nResponse language: ${i.language || "English"}.\nSelected Explanation Style: ${styleSpec.label}.\nStyle directive: ${styleSpec.instruction}`;
 
   const system = [
     "You are an advanced AI reading and teaching assistant integrated into a PDF.js-based document reader.",
@@ -820,9 +774,9 @@ export function buildPagePayload(i: BuildPagePayloadInput): Record<string, unkno
   const user = `--- Page ${i.pageNumber} ---\n${i.pageText}`;
 
   return {
-    model: i.modelId,
+    model: i.modelId || getDefaultModelSync(),
     stream: true,
-    temperature: i.temperature,
+    temperature: i.temperature ?? 0.3,
     max_tokens: 4000,
     messages: [
       { role: "system", content: system },
@@ -830,4 +784,3 @@ export function buildPagePayload(i: BuildPagePayloadInput): Record<string, unkno
     ],
   };
 }
-
