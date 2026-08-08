@@ -27,6 +27,9 @@ export async function clearTtsSessionCache() {
   ONNX_SESSION_CACHE.clear();
 }
 
+/** Mutex chain ensuring ONNX inference calls are strictly serialized */
+let inferenceChain: Promise<any> = Promise.resolve();
+
 /**
  * A previously-cached voice model (OPFS/IndexedDB) can end up mismatched with its
  * config — e.g. downloaded mid-update from the upstream Piper voices repo — which
@@ -34,27 +37,35 @@ export async function clearTtsSessionCache() {
  * bad pair is cached indefinitely, the user would otherwise be stuck forever. Detect
  * that failure signature, wipe the cached copy of just that voice, and retry once
  * with a fresh download.
+ *
+ * Runs all inferences through a serialized mutex chain to prevent concurrent WASM clashes.
  */
-export async function predictWithRecovery(
+export function predictWithRecovery(
   tts: any,
   params: { text: string; voiceId: string | null },
   onProgress?: (progress: any) => void,
 ): Promise<Blob> {
-  try {
-    return await tts.predict(params, onProgress);
-  } catch (err: any) {
-    const message = String(err?.message || err || "");
-    const looksLikeCorruptedModel = /Gather|out of data bounds|OrtRun|ERROR_CODE/i.test(message);
-    if (!looksLikeCorruptedModel) throw err;
+  const task = async (): Promise<Blob> => {
+    try {
+      return await tts.predict(params, onProgress);
+    } catch (err: any) {
+      const message = String(err?.message || err || "");
+      const looksLikeCorruptedModel = /Gather|out of data bounds/i.test(message);
+      if (!looksLikeCorruptedModel) throw err;
 
-    console.warn(
-      `[TTS] Voice model "${params.voiceId}" failed inference (likely a corrupted/stale cached copy) — clearing cache and retrying:`,
-      message,
-    );
-    await clearTtsSessionCache();
-    if (params.voiceId) await deleteCachedVoice(params.voiceId);
-    return await tts.predict(params, onProgress);
-  }
+      console.warn(
+        `[TTS] Voice model "${params.voiceId}" failed inference (likely a corrupted/stale cached copy) — clearing cache and retrying:`,
+        message,
+      );
+      await clearTtsSessionCache();
+      if (params.voiceId) await deleteCachedVoice(params.voiceId);
+      return await tts.predict(params, onProgress);
+    }
+  };
+
+  const resultPromise = inferenceChain.then(task, task);
+  inferenceChain = resultPromise.catch(() => {});
+  return resultPromise;
 }
 
 /**

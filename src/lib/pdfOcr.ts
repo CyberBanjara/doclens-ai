@@ -20,21 +20,21 @@ export async function getOcrWorker(): Promise<Worker> {
   return ocrWorkerPromise;
 }
 
+export async function terminateOcrWorker(): Promise<void> {
+  if (ocrWorkerPromise) {
+    try {
+      const worker = await ocrWorkerPromise;
+      await worker.terminate();
+    } catch {}
+    ocrWorkerPromise = null;
+  }
+}
+
 // Vite Hot Module Replacement (HMR) cleanup
 if (import.meta.hot) {
   import.meta.hot.dispose(() => {
     try {
-      if (ocrWorkerPromise) {
-        ocrWorkerPromise
-          .then((worker) => {
-            try {
-              worker.terminate();
-            } catch {
-              /* ignore */
-            }
-          })
-          .catch(() => {});
-      }
+      void terminateOcrWorker();
     } catch (e) {
       console.warn("[HMR] Failed to dispose OCR worker:", e);
     }
@@ -53,77 +53,83 @@ export async function ocrPdfPage(page: any, columns = 1): Promise<string> {
   const ctx = canvas.getContext("2d");
   if (!ctx) throw new Error("Could not create 2D canvas context");
 
-  await page.render({ canvasContext: ctx, viewport: viewport2 }).promise;
+  try {
+    await page.render({ canvasContext: ctx, viewport: viewport2 }).promise;
 
-  // Run Tesseract OCR on the full canvas
-  const result = await worker.recognize(canvas, {}, { blocks: true });
-  const rawWords = (result.data as any)?.words || [];
-  const words: any[] = [];
-  if (rawWords.length > 0) {
-    words.push(...rawWords);
-  } else {
-    const blocks = (result.data as any)?.blocks || [];
-    for (const block of blocks) {
-      const paras = block.paragraphs || [];
-      for (const para of paras) {
-        const lines = para.lines || [];
-        for (const line of lines) {
-          const lineWords = line.words || [];
-          for (const w of lineWords) {
-            words.push(w);
+    // Run Tesseract OCR on the full canvas
+    const result = await worker.recognize(canvas, {}, { blocks: true });
+    const rawWords = (result.data as any)?.words || [];
+    const words: any[] = [];
+    if (rawWords.length > 0) {
+      words.push(...rawWords);
+    } else {
+      const blocks = (result.data as any)?.blocks || [];
+      for (const block of blocks) {
+        const paras = block.paragraphs || [];
+        for (const para of paras) {
+          const lines = para.lines || [];
+          for (const line of lines) {
+            const lineWords = line.words || [];
+            for (const w of lineWords) {
+              words.push(w);
+            }
           }
         }
       }
     }
-  }
 
-  const origViewport = page.getViewport({ scale: 1.0 });
-  const items: TextItem[] = [];
+    const origViewport = page.getViewport({ scale: 1.0 });
+    const items: TextItem[] = [];
 
-  for (const w of words) {
-    if (typeof w.confidence === "number" && w.confidence < 60) {
-      continue;
+    for (const w of words) {
+      if (typeof w.confidence === "number" && w.confidence < 60) {
+        continue;
+      }
+      // Scale coordinates back to 1.0x and invert Y to match PDF.js orientation
+      const x0 = w.bbox.x0 / 2.0;
+      const x1 = w.bbox.x1 / 2.0;
+      const y0 = w.bbox.y0 / 2.0;
+      const y1 = w.bbox.y1 / 2.0;
+
+      items.push({
+        str: w.text || "",
+        x: x0,
+        y: origViewport.height - y1,
+        width: x1 - x0,
+        height: y1 - y0,
+      });
     }
-    // Scale coordinates back to 1.0x and invert Y to match PDF.js orientation
-    const x0 = w.bbox.x0 / 2.0;
-    const x1 = w.bbox.x1 / 2.0;
-    const y0 = w.bbox.y0 / 2.0;
-    const y1 = w.bbox.y1 / 2.0;
 
-    items.push({
-      str: w.text || "",
-      x: x0,
-      y: origViewport.height - y1,
-      width: x1 - x0,
-      height: y1 - y0,
-    });
-  }
-
-  // Detect columns dynamically if not forced by the caller
-  let cols = columns;
-  if (cols <= 1) {
-    cols = detectColumns(items, origViewport.width, 8);
-  }
-
-  // Sort words respecting layout structure/columns
-  const sorted = sortByColumns(items, origViewport.width, cols, 8);
-
-  // Reconstruct text layout-aware
-  let rawText = "";
-  let lastY: number | null = null;
-  for (const it of sorted) {
-    if (lastY !== null && Math.abs(it.y - lastY) > 8) {
-      rawText += "\n";
-    } else if (rawText && !rawText.endsWith(" ") && !rawText.endsWith("\n")) {
-      rawText += " ";
+    // Detect columns dynamically if not forced by the caller
+    let cols = columns;
+    if (cols <= 1) {
+      cols = detectColumns(items, origViewport.width, 8);
     }
-    rawText += it.str;
-    lastY = it.y;
+
+    // Sort words respecting layout structure/columns
+    const sorted = sortByColumns(items, origViewport.width, cols, 8);
+
+    // Reconstruct text layout-aware
+    let rawText = "";
+    let lastY: number | null = null;
+    for (const it of sorted) {
+      if (lastY !== null && Math.abs(it.y - lastY) > 8) {
+        rawText += "\n";
+      } else if (rawText && !rawText.endsWith(" ") && !rawText.endsWith("\n")) {
+        rawText += " ";
+      }
+      rawText += it.str;
+      lastY = it.y;
+    }
+
+    const cleaned = cleanOcrText(rawText);
+
+    return cleaned;
+  } finally {
+    // Immediately release the large 2x canvas pixel memory
+    canvas.width = 0;
+    canvas.height = 0;
   }
-
-  const cleaned = cleanOcrText(rawText);
-
-  return cleaned;
 }
 
 export async function ocrPageById(blob: Blob, pageNumber: number, columns = 1): Promise<string> {
@@ -200,6 +206,9 @@ export async function runOcrOnGarbledPages(
   } finally {
     try {
       await pdf.destroy();
+    } catch {}
+    try {
+      await terminateOcrWorker();
     } catch {}
   }
 }

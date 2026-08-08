@@ -69,8 +69,10 @@ export function useAiTabAutoPlay({
   useEffect(() => {
     return listenDocEvent("doclens:page-ready", (d) => {
       if (d.docId !== docId || d.pageNumber !== activePage || tabRef.current !== "ai") return;
+      // Do not automatically trigger speech synthesis unless audio playback is actively playing
+      if (!isPlaying) return;
       if (autoPlayedPagesRef.current.has(d.pageNumber)) return;
-      if (isPlaying && activePageNumber === d.pageNumber && currentTextSource === "ai") return;
+      if (activePageNumber === d.pageNumber && currentTextSource === "ai") return;
 
       autoPlayedPagesRef.current.add(d.pageNumber);
       if (!hasCompletedTtsVoiceSetup()) {
@@ -79,5 +81,5 @@ export function useAiTabAutoPlay({
         play(d.result, "ai", d.pageNumber, 0);
       }
     });
-  }, [docId, activePage, isPlaying, activePageNumber, currentTextSource, play]);
+  }, [docId, activePage, isPlaying, activePageNumber, currentTextSource, play, requestVoiceOnboarding]);
 }

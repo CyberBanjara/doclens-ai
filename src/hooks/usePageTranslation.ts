@@ -3,6 +3,7 @@ import { toast } from "sonner";
 import {
   buildPagePayload,
   getKey,
+  syncGlobalKey,
   OpenRouterError,
   openApiKeyModal,
   streamCompletion,
@@ -45,7 +46,10 @@ export function usePageTranslation(
 
   const runPage = useCallback(
     async (pageNumber: number): Promise<string | undefined> => {
-      const key = getKey();
+      let key = getKey();
+      if (!key) {
+        key = await syncGlobalKey();
+      }
       const currentGlobals = globalsRef.current;
       if (!key) {
         ensureKeyReady();

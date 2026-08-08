@@ -27,6 +27,7 @@ const KEY_CHANGE_EVT = "doclens:openrouter-key-change";
 export const OPEN_API_KEY_MODAL_EVT = "doclens:open-api-key-modal";
 const SERVER_KEY_SENTINEL = "server-managed";
 const CUSTOM_KEY_LS = "doclens.openrouter.customKey";
+const GLOBAL_KEY_LS = "doclens.openrouter.globalKey";
 const FALLBACK_OPENROUTER_MODEL = "openai/gpt-oss-20b:free";
 
 export type KeyStatus = "missing" | "valid" | "invalid" | "unknown";
@@ -52,8 +53,23 @@ export function setCustomKey(k: string) {
   emitKeyChange();
 }
 
+export function getGlobalKey(): string {
+  if (typeof window === "undefined") return "";
+  return localStorage.getItem(GLOBAL_KEY_LS) ?? "";
+}
+
+export function setGlobalKey(k: string) {
+  if (typeof window === "undefined") return;
+  if (k) {
+    localStorage.setItem(GLOBAL_KEY_LS, k.trim());
+  } else {
+    localStorage.removeItem(GLOBAL_KEY_LS);
+  }
+  emitKeyChange();
+}
+
 export function getKey(): string {
-  return getCustomKey() || SERVER_KEY_SENTINEL;
+  return getCustomKey() || getGlobalKey();
 }
 
 export function getKeyStatus(): KeyStatus {
@@ -146,8 +162,17 @@ export function setMode(m: GlobalMode) {
 
 export function getStyle(): ExplanationStyle {
   if (typeof window === "undefined") return "Standard";
-  const v = localStorage.getItem(STYLE_LS) as ExplanationStyle | null;
-  return v && EXPLANATION_STYLES.some((s) => s.id === v) ? v : "Standard";
+  const v = localStorage.getItem(STYLE_LS);
+  if (!v) return "Standard";
+  // Direct match against current styles
+  if (EXPLANATION_STYLES.some((s) => s.id === v)) return v as ExplanationStyle;
+  // Gracefully migrate legacy (removed) style IDs
+  const mapped = LEGACY_STYLE_MAP[v];
+  if (mapped) {
+    localStorage.setItem(STYLE_LS, mapped);
+    return mapped;
+  }
+  return "Standard";
 }
 export function setStyle(s: ExplanationStyle) {
   localStorage.setItem(STYLE_LS, s);
@@ -252,6 +277,34 @@ function getServerOpenRouterKey(): string {
   return process.env.OPENROUTER_API_KEY?.trim() ?? "";
 }
 
+export const fetchServerGlobalOpenRouterKey = createServerFn({ method: "GET" }).handler(
+  async () => {
+    "use server";
+    return { key: getServerOpenRouterKey() };
+  },
+);
+
+export async function syncGlobalKey(): Promise<string> {
+  if (typeof window === "undefined") return "";
+  try {
+    const res = await fetchServerGlobalOpenRouterKey();
+    const serverKey = res?.key?.trim() ?? "";
+    if (serverKey) {
+      setGlobalKey(serverKey);
+    } else {
+      setGlobalKey("");
+    }
+    return serverKey;
+  } catch (err) {
+    console.error("Failed to fetch global OpenRouter key from server:", err);
+    return getGlobalKey();
+  }
+}
+
+if (typeof window !== "undefined") {
+  void syncGlobalKey().catch(() => {});
+}
+
 function getEffectiveKey(userKey?: string): string {
   if (!userKey || userKey === SERVER_KEY_SENTINEL) {
     return getServerOpenRouterKey();
@@ -335,20 +388,37 @@ const completeWithServerOpenRouter = createServerFn({ method: "POST" })
 
 export async function validateKey(key?: string): Promise<boolean> {
   try {
-    const effectiveKey = key !== undefined ? key : getCustomKey();
-    const { status } = await validateServerOpenRouterKey({ data: { userKey: effectiveKey } });
+    let effectiveKey = key ? key.trim() : (getKey() || (await syncGlobalKey()));
+    if (!effectiveKey) {
+      setKeyStatus("missing");
+      return false;
+    }
+    const res = await fetch("https://openrouter.ai/api/v1/auth/key", {
+      headers: { Authorization: `Bearer ${effectiveKey}`, ...HEADERS_BASE },
+    });
+    const status: KeyStatus = res.ok ? "valid" : "invalid";
     setKeyStatus(status);
     return status === "valid";
-  } catch {
+  } catch (err) {
+    if (isNetworkError(err)) {
+      setKeyStatus("unknown");
+      return false;
+    }
     setKeyStatus("unknown");
     return false;
   }
 }
 
 export async function fetchModels(key?: string): Promise<ORModel[]> {
-  const effectiveKey = key !== undefined ? key : getCustomKey();
+  let effectiveKey = key ? key.trim() : (getKey() || (await syncGlobalKey()));
+  if (!effectiveKey) throw new Error("No OpenRouter API key provided.");
   try {
-    return await fetchServerOpenRouterModels({ data: { userKey: effectiveKey } });
+    const res = await fetch("https://openrouter.ai/api/v1/models", {
+      headers: { Authorization: `Bearer ${effectiveKey}`, ...HEADERS_BASE },
+    });
+    if (!res.ok) throw new Error(`Failed to fetch models: ${res.status}`);
+    const json = await res.json();
+    return (json.data ?? []) as ORModel[];
   } catch (err) {
     if (isNetworkError(err)) throw new Error(OFFLINE_MESSAGE);
     throw err;
@@ -550,8 +620,18 @@ async function readSseStream(
 export async function streamCompletion(opts: StreamOpts): Promise<void> {
   const { signal, cleanup } = combinedSignal(opts.signal, opts.timeoutMs ?? STREAM_TIMEOUT_MS);
   let lastError: Error | null = null;
-  const resolvedUserKey = opts.key || getCustomKey();
-  const isServerManagedKey = !resolvedUserKey || resolvedUserKey === SERVER_KEY_SENTINEL;
+  let resolvedUserKey = opts.key || getKey();
+  if (!resolvedUserKey) {
+    resolvedUserKey = await syncGlobalKey();
+  }
+  const isServerManagedKey = !getCustomKey();
+
+  if (!resolvedUserKey) {
+    cleanup();
+    const err = new OpenRouterError("No OpenRouter API key configured.", 401, "auth");
+    setKeyStatus("missing");
+    throw err;
+  }
 
   try {
     for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
@@ -563,11 +643,16 @@ export async function streamCompletion(opts: StreamOpts): Promise<void> {
         await abortableDelay(delay, signal);
       }
 
-      const body = { ...opts.payload, stream: true };
-      let response: Awaited<ReturnType<typeof completeWithServerOpenRouter>>;
+      let response: Response;
       try {
-        response = await completeWithServerOpenRouter({
-          data: { payload: body, userKey: resolvedUserKey },
+        response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
+          method: "POST",
+          headers: {
+            Authorization: `Bearer ${resolvedUserKey}`,
+            "Content-Type": "application/json",
+            ...HEADERS_BASE,
+          },
+          body: JSON.stringify({ ...opts.payload, stream: true }),
           signal,
         });
       } catch (fetchErr) {
@@ -580,7 +665,7 @@ export async function streamCompletion(opts: StreamOpts): Promise<void> {
         const bodyText = await response.text();
         const friendly = friendlyOpenRouterError(response.status, bodyText, isServerManagedKey);
         if (friendly.kind === "auth") {
-          setKeyStatus(friendly.message.includes("OPENROUTER_API_KEY") ? "missing" : "invalid");
+          setKeyStatus("invalid");
         }
         lastError = friendly;
         // A daily quota exhaustion won't clear within a short backoff — retrying wastes time.
@@ -634,97 +719,61 @@ export interface ExplanationStyleSpec {
 
 export type ExplanationStyle =
   | "Standard"
-  | "ELI5"
-  | "Storytelling"
-  | "Socratic"
-  | "Step-by-Step"
-  | "Visual Thinking"
-  | "Analogical"
-  | "Practical"
-  | "Expert Deep-Dive"
-  | "Debate"
-  | "Historical Context"
-  | "Motivational"
-  | "Critical Thinking";
+  | "Simple"
+  | "Story"
+  | "Deep";
+
+/** Maps legacy (removed) style IDs to their new consolidated equivalent. */
+const LEGACY_STYLE_MAP: Record<string, ExplanationStyle> = {
+  ELI5: "Simple",
+  "Step-by-Step": "Simple",
+  "Visual Thinking": "Simple",
+  Analogical: "Simple",
+  Practical: "Simple",
+  Motivational: "Simple",
+  Storytelling: "Story",
+  Socratic: "Story",
+  "Expert Deep-Dive": "Deep",
+  Debate: "Deep",
+  "Historical Context": "Deep",
+  "Critical Thinking": "Deep",
+};
 
 export const EXPLANATION_STYLES: ExplanationStyleSpec[] = [
   {
     id: "Standard",
     label: "Standard",
     instruction:
-      "Use balanced, neutral, clear, and easy-to-understand explanations. Maintain readability and structured flow.",
+      "Use balanced, neutral, clear, and easy-to-understand explanations. Maintain readability and structured flow. Present information in a well-organized manner that is accessible to a general audience.",
   },
   {
-    id: "ELI5",
-    label: "ELI5",
+    id: "Simple",
+    label: "Simple",
     instruction:
-      "Explain as if teaching a complete beginner or young learner. Avoid jargon when possible; if technical terms are necessary, define them immediately in simple language. Use intuitive examples and simplified reasoning.",
+      "Explain as if teaching a complete beginner or young learner. Avoid jargon; if technical terms are necessary, define them immediately in simple language. " +
+      "Use analogies and comparisons with familiar real-world systems or experiences to make abstract concepts relatable. " +
+      "Break complex ideas into sequential, logical steps — each building naturally on the previous one. " +
+      "Include practical, real-world examples and use cases to show how concepts apply in reality. " +
+      "Help the learner visualize systems and relationships through mental imagery and spatial descriptions when it aids understanding. " +
+      "Use encouraging, confidence-building language that reduces intimidation around difficult concepts.",
   },
   {
-    id: "Storytelling",
-    label: "Storytelling",
+    id: "Story",
+    label: "Story",
     instruction:
-      "Teach concepts using narratives, scenarios, characters, or story-like progression. Make the explanation emotionally engaging and memorable.",
+      "Teach concepts using narratives, scenarios, characters, or story-like progression. Make the explanation emotionally engaging and memorable. " +
+      "Weave in guided questions and progressive reasoning to encourage self-discovery and deeper engagement — pose thought-provoking questions before revealing conclusions when appropriate. " +
+      "Use relatable analogies within the narrative to anchor abstract ideas. Build the story arc so that each new concept follows naturally from the last.",
   },
   {
-    id: "Socratic",
-    label: "Socratic",
+    id: "Deep",
+    label: "Deep",
     instruction:
-      "Teach primarily through guided questions and progressive reasoning. Encourage critical thinking and self-discovery. Avoid instantly revealing conclusions unless necessary.",
-  },
-  {
-    id: "Step-by-Step",
-    label: "Step-by-Step",
-    instruction:
-      "Break the explanation into sequential logical stages. Ensure each step builds naturally on the previous one. Maintain clarity throughout the progression.",
-  },
-  {
-    id: "Visual Thinking",
-    label: "Visual Thinking",
-    instruction:
-      "Explain using mental imagery, hierarchy, structure, spatial relationships, and diagram-like descriptions. Help the learner mentally visualize systems and relationships.",
-  },
-  {
-    id: "Analogical",
-    label: "Analogical",
-    instruction:
-      "Use analogies and comparisons with familiar real-world systems or experiences. Simplify abstract concepts through relatable examples.",
-  },
-  {
-    id: "Practical",
-    label: "Practical",
-    instruction:
-      "Focus on real-world applications, implementation methods, use cases, and practical outcomes. Emphasize how concepts are actually used in reality.",
-  },
-  {
-    id: "Expert Deep-Dive",
-    label: "Expert Deep-Dive",
-    instruction:
-      "Provide advanced technical depth, nuance, complexity, edge cases, and detailed reasoning. Assume the learner already understands foundational concepts.",
-  },
-  {
-    id: "Debate",
-    label: "Debate",
-    instruction:
-      "Present multiple viewpoints, interpretations, arguments, strengths, weaknesses, and counterarguments. Avoid oversimplifying nuanced topics.",
-  },
-  {
-    id: "Historical Context",
-    label: "Historical Context",
-    instruction:
-      "Explain the historical background, evolution, discoveries, timeline, and major contributors behind the concepts. Include important historical developments where relevant.",
-  },
-  {
-    id: "Motivational",
-    label: "Motivational",
-    instruction:
-      "Use encouraging, confidence-building, supportive language. Reduce intimidation around difficult concepts while remaining informative.",
-  },
-  {
-    id: "Critical Thinking",
-    label: "Critical Thinking",
-    instruction:
-      "Analyze assumptions, evaluate evidence, identify limitations, and encourage deeper reasoning. Promote analytical understanding rather than passive acceptance.",
+      "Provide advanced technical depth, nuance, complexity, edge cases, and detailed reasoning. Assume the learner already understands foundational concepts. " +
+      "Present multiple viewpoints, interpretations, arguments, strengths, weaknesses, and counterarguments where the topic warrants it — avoid oversimplifying nuanced issues. " +
+      "Include relevant historical background, evolution, key discoveries, and major contributors when they add meaningful context. " +
+      "Analyze assumptions, evaluate evidence, identify limitations, and promote analytical understanding over passive acceptance. " +
+      "Encourage critical thinking by highlighting open questions and areas of ongoing debate.",
   },
 ];
 

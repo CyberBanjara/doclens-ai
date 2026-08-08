@@ -166,7 +166,7 @@ function SettingsPage() {
     const savedKey = getCustomKey();
     setCustomKeyInput(savedKey);
     void handleValidate(savedKey);
-    void refreshTtsVoices();
+    void refreshTtsVoices(true);
   }, [refreshTtsVoices]);
 
   const loadModels = async () => {

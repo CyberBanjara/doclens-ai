@@ -30,7 +30,7 @@ interface VoiceOnboardingDialogProps {
 
 export function VoiceOnboardingDialog({ open, onOpenChange, onReady }: VoiceOnboardingDialogProps) {
   const isMobile = useIsMobile();
-  const { outputLanguage, availableVoices, setOutputLanguage, setSelectedVoiceUri, downloadVoice } =
+  const { outputLanguage, availableVoices, setOutputLanguage, setSelectedVoiceUri, downloadVoice, refreshVoices } =
     useTts();
 
   const [pickedLanguage, setPickedLanguage] = useState(outputLanguage);
@@ -39,17 +39,17 @@ export function VoiceOnboardingDialog({ open, onOpenChange, onReady }: VoiceOnbo
   const [progress, setProgress] = useState(0);
   const [error, setError] = useState<string | null>(null);
 
-  // Reset local picks each time the dialog is (re)opened
+  // Reset local picks and load neural voice catalog each time the dialog is (re)opened
   useEffect(() => {
     if (open) {
+      void refreshVoices(true);
       setPickedLanguage(outputLanguage);
       setPickedVoiceUri(null);
       setDownloading(false);
       setProgress(0);
       setError(null);
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [open]);
+  }, [open, outputLanguage, refreshVoices]);
 
   const voicesForLanguage = useMemo(() => {
     return filterVoicesByLanguage(availableVoices, pickedLanguage).sort((a, b) => {

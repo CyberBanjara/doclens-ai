@@ -151,12 +151,12 @@ export function PageWorkstation({
   const ensureKeyReady = useCallback((): boolean => {
     if (!getKey()) {
       toast.error("Configure OPENROUTER_API_KEY to run translations.");
-      openApiKeyModal("Add a valid server OPENROUTER_API_KEY to start translating.");
+      openApiKeyModal("Add a valid OPENROUTER_API_KEY to start translating.");
       return false;
     }
     if (getKeyStatus() === "invalid") {
-      toast.error("The server OpenRouter key is invalid or expired.");
-      openApiKeyModal("The server OpenRouter key is invalid or expired.");
+      toast.error("The OpenRouter API key is invalid or expired.");
+      openApiKeyModal("The OpenRouter API key is invalid or expired.");
       return false;
     }
     return true;

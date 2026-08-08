@@ -15,8 +15,8 @@ interface Props {
 }
 
 const DPR = typeof window !== "undefined" ? Math.min(window.devicePixelRatio || 1, 2) : 1;
-/** Max bitmaps kept simultaneously (current page ±2). */
-const MAX_RENDERED = 5;
+/** Max bitmaps kept simultaneously (current page ±1). */
+const MAX_RENDERED = 3;
 
 /**
  * PDF viewer with lazy canvas + text-layer rendering driven by IntersectionObserver.
