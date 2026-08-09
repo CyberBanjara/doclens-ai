@@ -7,10 +7,10 @@ export const COOKIE_NAME = "session_token";
 export const SESSION_EXPIRY_SECONDS = 4 * 60 * 60; // 4 hours
 
 export function getSecretKey(): Uint8Array {
-  const secret =
-    process.env.ADMIN_JWT_SECRET ||
-    process.env.JWT_SECRET ||
-    "anuwaad-production-secure-auth-secret-key-min32chars";
+  const secret = process.env.ADMIN_JWT_SECRET || "";
+  if (!secret) {
+    throw new Error("Missing ADMIN_JWT_SECRET environment variable");
+  }
   return new TextEncoder().encode(secret);
 }
 

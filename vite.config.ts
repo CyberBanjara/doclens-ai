@@ -29,27 +29,19 @@ export default defineConfig({
     // the values into the minified bundle — no separate network request.
     define: {
       __FIREBASE_CONFIG__: JSON.stringify({
-        apiKey: env.FIREBASE_API_KEY || "",
-        authDomain: env.FIREBASE_AUTH_DOMAIN || "",
-        projectId: env.FIREBASE_PROJECT_ID || "",
-        storageBucket: env.FIREBASE_STORAGE_BUCKET || "",
-        messagingSenderId: env.FIREBASE_MESSAGING_SENDER_ID || "",
-        appId: env.FIREBASE_APP_ID || "",
-        measurementId: env.FIREBASE_MEASUREMENT_ID || "",
+        apiKey: process.env.FIREBASE_API_KEY || env.FIREBASE_API_KEY || "",
+        authDomain: process.env.FIREBASE_AUTH_DOMAIN || env.FIREBASE_AUTH_DOMAIN || "",
+        projectId: process.env.FIREBASE_PROJECT_ID || env.FIREBASE_PROJECT_ID || "",
+        storageBucket: process.env.FIREBASE_STORAGE_BUCKET || env.FIREBASE_STORAGE_BUCKET || "",
+        messagingSenderId: process.env.FIREBASE_MESSAGING_SENDER_ID || env.FIREBASE_MESSAGING_SENDER_ID || "",
+        appId: process.env.FIREBASE_APP_ID || env.FIREBASE_APP_ID || "",
+        measurementId: process.env.FIREBASE_MEASUREMENT_ID || env.FIREBASE_MEASUREMENT_ID || "",
       }),
       __OPENROUTER_DEFAULT_KEY__: JSON.stringify(
-        env.OPENROUTER_API_KEY ||
-          process.env.OPENROUTER_API_KEY ||
-          env.VITE_OPENROUTER_API_KEY ||
-          process.env.VITE_OPENROUTER_API_KEY ||
-          "",
+        process.env.OPENROUTER_API_KEY || env.OPENROUTER_API_KEY || "",
       ),
       __OPENROUTER_DEFAULT_MODEL__: JSON.stringify(
-        env.OPENROUTER_DEFAULT_MODEL ||
-          process.env.OPENROUTER_DEFAULT_MODEL ||
-          env.VITE_OPENROUTER_DEFAULT_MODEL ||
-          process.env.VITE_OPENROUTER_DEFAULT_MODEL ||
-          "",
+        process.env.OPENROUTER_DEFAULT_MODEL || env.OPENROUTER_DEFAULT_MODEL || "",
       ),
     },
     ssr: {

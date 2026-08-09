@@ -1,4 +1,10 @@
-import { getAuth, GoogleAuthProvider, signInWithPopup, signOut as fbSignOut } from "firebase/auth";
+import {
+  getAuth,
+  GoogleAuthProvider,
+  signInWithPopup,
+  signInWithRedirect,
+  signOut as fbSignOut,
+} from "firebase/auth";
 import { getFirebaseApp } from "./firebase";
 
 export type UserRole = "admin" | "editor" | "moderator" | "viewer" | "user";
@@ -55,53 +61,77 @@ export function setStoredAuthToken(token: string | null): void {
 /**
  * Trigger Google Sign-In popup to obtain an identity token.
  */
-export async function promptGoogleIdToken(): Promise<string> {
+export async function promptGoogleUser(): Promise<{ idToken: string; user: ClientUser }> {
   const app = getFirebaseApp();
   const auth = getAuth(app);
   const provider = new GoogleAuthProvider();
   provider.setCustomParameters({ prompt: "select_account" });
 
-  const result = await signInWithPopup(auth, provider);
-  const idToken = await result.user.getIdToken(true);
-
-  // Store token in client storage for authorized Firestore operations
-  setStoredAuthToken(idToken);
-
-  // Sign out from client Firebase Auth instance
+  let result;
   try {
-    await fbSignOut(auth);
-  } catch {
-    // Ignore cleanup error
+    result = await signInWithPopup(auth, provider);
+  } catch (err: any) {
+    if (err?.code === "auth/popup-blocked") {
+      console.warn("Firebase auth popup blocked. Redirecting to Google Sign-In...");
+      await signInWithRedirect(auth, provider);
+      throw new Error("Redirecting to Google Sign-In...");
+    }
+    throw err;
   }
 
+  const idToken = await result.user.getIdToken(true);
+  setStoredAuthToken(idToken);
+
+  const fallbackUser: ClientUser = {
+    uid: result.user.uid,
+    email: (result.user.email || "").toLowerCase(),
+    name: result.user.displayName || result.user.email?.split("@")[0] || "User",
+    photoURL: result.user.photoURL || "",
+    role: "user",
+  };
+
+  return { idToken, user: fallbackUser };
+}
+
+/**
+ * Trigger Google Sign-In popup to obtain an identity token.
+ */
+export async function promptGoogleIdToken(): Promise<string> {
+  const { idToken } = await promptGoogleUser();
   return idToken;
 }
 
 /**
  * Login with Google:
- * 1. Prompts Google login once.
+ * 1. Authenticates with Google via Firebase Auth SDK.
  * 2. Saves credential on client for authorized admin fetches.
- * 3. Sends ID token to serverless /api/auth/google-login.
- * 4. Server verifies identity, syncs role in Firestore, sets HttpOnly cookie session.
- * 5. Receives filtered client user data.
+ * 3. Sends ID token to serverless /api/auth/google-login for role sync & HttpOnly cookie.
+ * 4. Falls back gracefully to Firebase client user if server is unreachable.
  */
 export async function apiLoginWithGoogle(): Promise<ClientUser> {
-  const idToken = await promptGoogleIdToken();
+  const { idToken, user: fallbackUser } = await promptGoogleUser();
 
-  const res = await fetch("/api/auth/google-login", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    credentials: "include",
-    body: JSON.stringify({ idToken }),
-  });
+  try {
+    const res = await fetch("/api/auth/google-login", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      credentials: "include",
+      body: JSON.stringify({ idToken }),
+    });
 
-  if (!res.ok) {
-    const errorData = await res.json().catch(() => ({ error: "Authentication failed" }));
-    throw new Error(errorData.error || `Login failed with status ${res.status}`);
+    if (res.ok) {
+      const data = await res.json();
+      if (data?.user) {
+        return data.user as ClientUser;
+      }
+    } else {
+      console.warn("Serverless /api/auth/google-login returned status:", res.status);
+    }
+  } catch (err) {
+    console.warn("Could not reach /api/auth/google-login, using authenticated client session:", err);
   }
 
-  const data = await res.json();
-  return data.user as ClientUser;
+  return fallbackUser;
 }
 
 /**
@@ -124,10 +154,19 @@ export async function apiFetchCurrentUser(): Promise<ClientUser | null> {
 }
 
 /**
- * Logout and clear the HttpOnly session cookie on the server and local client storage.
+ * Logout and clear both the HttpOnly session cookie on the server and local client storage.
  */
 export async function apiLogout(): Promise<void> {
   setStoredAuthToken(null);
+
+  try {
+    const app = getFirebaseApp();
+    const auth = getAuth(app);
+    await fbSignOut(auth);
+  } catch (err) {
+    console.warn("Client Firebase signout warning:", err);
+  }
+
   try {
     await fetch("/api/auth/logout", {
       method: "POST",
