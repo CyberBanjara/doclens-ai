@@ -6,7 +6,7 @@ import type { ClientUser } from "../../lib/auth-types";
 
 export default defineEventHandler(async (event) => {
   try {
-    const body = await readBody(event);
+    const body = await readBody<{ idToken?: string }>(event);
     const idToken = body?.idToken;
 
     if (!idToken || typeof idToken !== "string") {

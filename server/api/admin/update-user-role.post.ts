@@ -10,7 +10,7 @@ export default defineEventHandler(async (event) => {
     // 1. Verify admin privilege via HttpOnly cookie session
     await requireSessionFromEvent(event, ["admin"]);
 
-    const body = await readBody(event);
+    const body = await readBody<{ uid?: string; role?: string; idToken?: string }>(event);
     const { uid, role, idToken } = body || {};
 
     if (!uid || typeof uid !== "string") {
