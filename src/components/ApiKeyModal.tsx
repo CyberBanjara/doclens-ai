@@ -1,3 +1,4 @@
+import { Eye, EyeOff } from "lucide-react";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
 import {
@@ -29,6 +30,7 @@ export function ApiKeyModal() {
   const [reason, setReason] = useState<string | null>(null);
   const [status, setStatus] = useState<Status>("unknown");
   const [customKey, setCustomKeyInput] = useState("");
+  const [showKey, setShowKey] = useState(false);
 
   // Listen for global open requests.
   useEffect(() => {
@@ -96,13 +98,35 @@ export function ApiKeyModal() {
           <label className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">
             Custom API Key (Optional)
           </label>
-          <input
-            type="password"
-            placeholder="sk-or-v1-..."
-            value={customKey}
-            onChange={(e) => setCustomKeyInput(e.target.value)}
-            className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm font-mono outline-none focus:border-primary"
-          />
+          <div className="relative flex items-center">
+            <input
+              type="text"
+              autoComplete="off"
+              autoCorrect="off"
+              autoCapitalize="off"
+              spellCheck={false}
+              data-1p-ignore="true"
+              data-lpignore="true"
+              data-form-type="other"
+              name="openrouter_api_key_custom"
+              placeholder="sk-or-v1-..."
+              value={customKey}
+              onChange={(e) => setCustomKeyInput(e.target.value)}
+              style={{
+                WebkitTextSecurity: showKey ? "none" : "disc",
+              }}
+              className="w-full rounded-md border border-border bg-background pl-3 pr-10 py-2 text-sm font-mono outline-none focus:border-primary"
+            />
+            <button
+              type="button"
+              onClick={() => setShowKey(!showKey)}
+              className="absolute right-3 text-muted-foreground hover:text-foreground"
+              tabIndex={-1}
+              aria-label={showKey ? "Hide key" : "Show key"}
+            >
+              {showKey ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+            </button>
+          </div>
           <p className="text-[10px] text-muted-foreground">
             If provided, this key overrides the server environment variable. Leave blank to fallback
             to the server-managed key.

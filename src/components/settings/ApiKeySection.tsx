@@ -1,4 +1,5 @@
-import { KeyRound } from "lucide-react";
+import { KeyRound, Eye, EyeOff } from "lucide-react";
+import { useState } from "react";
 
 type KeyStatus = "unknown" | "missing" | "valid" | "invalid" | "checking";
 
@@ -15,6 +16,8 @@ export function ApiKeySection({
   keyStatus,
   onValidate,
 }: ApiKeySectionProps) {
+  const [showKey, setShowKey] = useState(false);
+
   return (
     <section className="glass-panel flex flex-col gap-4 rounded-[18px] p-4 md:col-span-5 md:p-6">
       <div className="flex items-center gap-3">
@@ -38,13 +41,35 @@ export function ApiKeySection({
             Get a key →
           </a>
         </div>
-        <input
-          type="password"
-          placeholder="sk-or-v1-..."
-          value={customKey}
-          onChange={(e) => onCustomKeyChange(e.target.value)}
-          className="w-full rounded-[10px] border border-border bg-background px-3 py-2 text-sm font-mono outline-none focus:border-primary"
-        />
+        <div className="relative flex items-center">
+          <input
+            type="text"
+            autoComplete="off"
+            autoCorrect="off"
+            autoCapitalize="off"
+            spellCheck={false}
+            data-1p-ignore="true"
+            data-lpignore="true"
+            data-form-type="other"
+            name="openrouter_api_key_custom"
+            placeholder="sk-or-v1-..."
+            value={customKey}
+            onChange={(e) => onCustomKeyChange(e.target.value)}
+            style={{
+              WebkitTextSecurity: showKey ? "none" : "disc",
+            }}
+            className="w-full rounded-[10px] border border-border bg-background pl-3 pr-10 py-2 text-sm font-mono outline-none focus:border-primary"
+          />
+          <button
+            type="button"
+            onClick={() => setShowKey(!showKey)}
+            className="absolute right-3 text-muted-foreground hover:text-foreground"
+            tabIndex={-1}
+            aria-label={showKey ? "Hide key" : "Show key"}
+          >
+            {showKey ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+          </button>
+        </div>
         <p className="text-[10px] text-muted-foreground">
           Leave blank to fallback to the server environment key. Saved locally in your browser.
         </p>

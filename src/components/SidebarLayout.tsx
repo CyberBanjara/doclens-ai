@@ -115,10 +115,7 @@ export function SidebarLayout({
         {/* Navigation */}
         <nav className="flex flex-col gap-1 px-4">
           {navItems.map((item) => {
-            const isActive =
-              item.to === "/"
-                ? !!matchRoute({ to: "/", fuzzy: false })
-                : !!matchRoute({ to: item.to, fuzzy: true });
+            const isActive = !!matchRoute({ to: item.to, fuzzy: true });
 
             return (
               <Link
