@@ -140,29 +140,9 @@ export function SidebarLayout({
         {/* Spacer */}
         <div className="flex-1" />
 
-        {/* New Document Button */}
-        <div className="px-4 pb-4 flex items-center justify-center">
-          {fileInput}
-          <button
-            onClick={() => fileInputRef.current?.click()}
-            className="flex h-12 w-12 items-center justify-center rounded-full bg-primary text-primary-foreground shadow-lg transition-transform hover:scale-110 active:scale-95 shadow-primary/30"
-            aria-label="Add new document"
-            title="Add new PDF document"
-          >
-            <Plus className="h-6 w-6" />
-          </button>
-        </div>
-
-        {/* Support & Legal Links */}
-        <div className="border-t border-border px-4 py-3 space-y-1">
-          <button
-            onClick={() => setSupportOpen(true)}
-            className="flex w-full items-center gap-3 rounded-lg px-4 py-2 text-sm text-muted-foreground transition-colors hover:text-primary"
-          >
-            <span className="text-base">❓</span>
-            <span>Support & Feedback</span>
-          </button>
-          <div className="flex items-center justify-between px-4 pt-1 text-[11px] font-medium text-muted-foreground">
+        {/* Legal Links */}
+        <div className="border-t border-border px-4 py-3">
+          <div className="flex items-center justify-between px-4 text-[11px] font-medium text-muted-foreground">
             <Link to="/privacy" className="hover:text-primary transition-colors">
               Privacy Policy
             </Link>
