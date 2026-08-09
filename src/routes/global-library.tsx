@@ -3,28 +3,22 @@ import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 import {
   ArrowLeft,
-  Download,
   FileText,
-  Folder,
   Globe,
-  Plus,
   RefreshCw,
   Search,
   Trash2,
-  Upload,
   X,
-  Zap,
 } from "lucide-react";
 import { SidebarLayout } from "@/components/SidebarLayout";
-import { deleteFromR2, downloadFromR2, uploadToR2, reorganizeR2Files } from "@/lib/r2";
+import { deleteFromR2, downloadFromR2 } from "@/lib/r2";
 import { getCachedR2Files, setCachedR2Files } from "@/lib/r2-cache";
 import { createDoc } from "@/lib/storage";
 import { LoadingLogo } from "@/components/LoadingLogo";
 import { getSyncConfig } from "@/lib/sync";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { formatBytes, formatDate, base64ToBlob, parseFileCategory, type R2File, type ParsedR2File } from "@/lib/file-utils";
-import { CategoryMarqueeRow } from "@/components/CategoryMarqueeRow";
-import { R2UploadDialog } from "@/components/R2UploadDialog";
+import { CategoryMarqueeRow, type CategoryMarqueeItem } from "@/components/CategoryMarqueeRow";
 import { DeleteFileDialog } from "@/components/DeleteFileDialog";
 import { useAuth } from "@/context/AuthContext";
 
@@ -63,16 +57,6 @@ function GlobalLibraryPage() {
   // Category navigation & search
   const [activeCategory, setActiveCategory] = useState<string>("all");
   const [searchQuery, setSearchQuery] = useState("");
-
-  // Direct Upload modal states
-  const [showUploadModal, setShowUploadModal] = useState(false);
-  const [uploadFile, setUploadFile] = useState<File | null>(null);
-  const [uploadCategory, setUploadCategory] = useState("history");
-  const [customUploadCategory, setCustomUploadCategory] = useState("");
-  const [uploadingDirect, setUploadingDirect] = useState(false);
-
-  // Reorganize state
-  const [reorganizing, setReorganizing] = useState(false);
 
   const fetchFiles = async (silent = false, forceRefresh = false) => {
     if (!silent) setLoading(true);
@@ -129,6 +113,30 @@ function GlobalLibraryPage() {
     const keys = new Set([...Object.keys(STANDARD_CATEGORIES), ...Object.keys(categoryStats)]);
     return Array.from(keys);
   }, [categoryStats]);
+
+  const marqueeItems: CategoryMarqueeItem[] = useMemo(() => {
+    const allItem: CategoryMarqueeItem = {
+      key: "all",
+      label: `All (${files.length})`,
+      icon: "🌐",
+      active: activeCategory === "all",
+      onClick: () => setActiveCategory("all"),
+    };
+
+    const catItems: CategoryMarqueeItem[] = categoriesList.map((catKey) => {
+      const meta = STANDARD_CATEGORIES[catKey] || { label: catKey, icon: "📂" };
+      const count = categoryStats[catKey]?.count || 0;
+      return {
+        key: catKey,
+        label: `${meta.label} (${count})`,
+        icon: meta.icon,
+        active: activeCategory === catKey,
+        onClick: () => setActiveCategory(catKey),
+      };
+    });
+
+    return [allItem, ...catItems];
+  }, [files.length, categoriesList, activeCategory, categoryStats]);
 
   const filteredFiles = useMemo(() => {
     return parsedFiles.filter((f) => {
@@ -219,120 +227,14 @@ function GlobalLibraryPage() {
     }
   };
 
-
-  const handleReorganize = async () => {
-    if (reorganizing) return;
-    setReorganizing(true);
-    const toastId = toast.loading("Organising files in R2 bucket into subject virtual folders...");
-    try {
-      const res = await reorganizeR2Files();
-      if (res.movedCount > 0) {
-        toast.success(
-          `Successfully reorganised ${res.movedCount} files into category virtual folders!`,
-          { id: toastId },
-        );
-      } else {
-        toast.info("All files are already organised into category virtual folders.", {
-          id: toastId,
-        });
-      }
-      await fetchFiles(true, true);
-    } catch (e: any) {
-      console.error(e);
-      toast.error(e?.message || "Failed to reorganise R2 bucket.", { id: toastId });
-    } finally {
-      setReorganizing(false);
-    }
-  };
-
-  const handleDirectUploadSubmit = async () => {
-    if (!uploadFile || uploadingDirect) return;
-    const targetCat = uploadCategory === "custom" ? customUploadCategory.trim() : uploadCategory;
-    setUploadingDirect(true);
-    const toastId = toast.loading(
-      `Uploading "${uploadFile.name}" to R2 (${targetCat || "uncategorized"})...`,
-    );
-
-    try {
-      const arrayBuf = await uploadFile.arrayBuffer();
-      const base64Data = Buffer.from(arrayBuf).toString("base64");
-
-      const res = await uploadToR2({
-        data: {
-          fileName: uploadFile.name,
-          contentType: uploadFile.type || "application/pdf",
-          base64Data,
-          category: targetCat,
-        },
-      });
-
-      if (syncEnabled) {
-        try {
-          const { saveSupabaseExtraction } = await import("@/lib/supabase");
-          const { getTranslationConfig } = await import("@/lib/openrouter");
-          const translationConfig = getTranslationConfig();
-          await saveSupabaseExtraction({
-            data: {
-              key: res.key,
-              size: uploadFile.size,
-              lastModified: new Date().toISOString(),
-              numPages: 0,
-              text: JSON.stringify({ version: 1, pages: [], translationConfig }),
-              usedOcr: false,
-              translationConfig,
-            },
-          });
-        } catch (supaErr) {
-          console.warn("Failed to initialize Supabase metadata for upload:", supaErr);
-        }
-      }
-
-      if (res.alreadyExists) {
-        toast.warning(`File is already uploaded under key "${res.key}".`, { id: toastId });
-      } else {
-        toast.success(`Uploaded successfully under folder prefix "${res.category}/"!`, {
-          id: toastId,
-        });
-      }
-
-      setShowUploadModal(false);
-      setUploadFile(null);
-      await fetchFiles(true, true);
-    } catch (e: any) {
-      console.error(e);
-      toast.error(e?.message || "Failed to upload file to Cloudflare R2.", { id: toastId });
-    } finally {
-      setUploadingDirect(false);
-    }
-  };
-
   return (
     <SidebarLayout
       pageTitle="Global Library"
       topBarRight={
         <div className="flex items-center gap-2">
-          {syncEnabled && (
-            <button
-              onClick={() => setShowUploadModal(true)}
-              disabled={!user || loading || reorganizing}
-              className="flex items-center gap-1.5 rounded-lg bg-primary px-3 py-1.5 text-xs font-semibold text-primary-foreground shadow-sm transition-all hover:opacity-90 active:scale-95 disabled:opacity-50"
-            >
-              <Upload className="h-3.5 w-3.5" /> Upload
-            </button>
-          )}
-          {syncEnabled && (
-            <button
-              onClick={handleReorganize}
-              disabled={!user || loading || reorganizing}
-              className="flex items-center gap-1.5 rounded-lg border border-primary/30 bg-primary/10 px-3 py-1.5 text-xs font-medium text-primary transition-all hover:bg-primary/20 active:scale-95 disabled:opacity-50"
-              title="Automatically rename and move flat files into subject folder prefixes (history/, economics/, etc.)"
-            >
-              <Zap className="h-3.5 w-3.5" /> {reorganizing ? "Organising…" : "Organise"}
-            </button>
-          )}
           <button
             onClick={() => void fetchFiles(false, true)}
-            disabled={!user || loading || !!importingKey || !!deletingKey || reorganizing}
+            disabled={!user || loading || !!importingKey || !!deletingKey}
             className="flex h-8 w-8 items-center justify-center rounded-lg border border-border bg-surface text-muted-foreground transition-colors hover:bg-surface-2 hover:text-foreground disabled:opacity-50"
             aria-label="Refresh"
             title="Refresh"
@@ -361,26 +263,6 @@ function GlobalLibraryPage() {
             </div>
           ) : (
             <>
-              {syncEnabled && (
-                <div className="flex items-center gap-2">
-                  <button
-                    onClick={handleReorganize}
-                    disabled={reorganizing}
-                    className="flex flex-1 items-center justify-center gap-1.5 rounded-xl border border-border bg-surface px-3 py-2 text-xs font-medium text-muted-foreground transition-transform active:scale-95 disabled:opacity-50"
-                  >
-                    <Zap className="h-3.5 w-3.5" /> {reorganizing ? "Organising…" : "Organise"}
-                  </button>
-                  <button
-                    onClick={() => void fetchFiles(false, true)}
-                    disabled={loading}
-                    className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-xl border border-border bg-surface text-muted-foreground transition-transform active:scale-95 disabled:opacity-50"
-                    aria-label="Refresh"
-                  >
-                    <RefreshCw className={`h-3.5 w-3.5 ${loading ? "animate-spin" : ""}`} />
-                  </button>
-                </div>
-              )}
-
               <div className="relative">
                 <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
                 <input
@@ -401,38 +283,49 @@ function GlobalLibraryPage() {
                 )}
               </div>
 
-              <CategoryMarqueeRow
-                items={[
-                  {
-                    key: "all",
-                    label: `All (${files.length})`,
-                    active: activeCategory === "all",
-                    onClick: () => setActiveCategory("all"),
-                  },
-                  ...categoriesList.map((catKey) => {
-                    const meta = STANDARD_CATEGORIES[catKey] || {
-                      label: catKey.charAt(0).toUpperCase() + catKey.slice(1),
-                      icon: "📂",
-                    };
-                    const stats = categoryStats[catKey] || { count: 0, totalSize: 0 };
-                    return {
-                      key: catKey,
-                      label: `${meta.label} (${stats.count})`,
-                      icon: meta.icon,
-                      active: activeCategory === catKey,
-                      onClick: () => setActiveCategory(catKey),
-                    };
-                  }),
-                ]}
-              />
+              {/* Horizontal Category Selector */}
+              <div className="-mx-4 flex overflow-x-auto px-4 py-1 no-scrollbar space-x-2">
+                <button
+                  onClick={() => setActiveCategory("all")}
+                  className={`flex shrink-0 items-center gap-1.5 rounded-xl px-3 py-1.5 text-xs font-medium transition-all ${
+                    activeCategory === "all"
+                      ? "bg-primary text-primary-foreground shadow-sm"
+                      : "bg-surface-2/60 text-muted-foreground hover:text-foreground"
+                  }`}
+                >
+                  <span>🌐</span>
+                  <span>All ({files.length})</span>
+                </button>
+                {categoriesList.map((catKey) => {
+                  const meta = STANDARD_CATEGORIES[catKey] || { label: catKey, icon: "📂" };
+                  const count = categoryStats[catKey]?.count || 0;
+                  const isActive = activeCategory === catKey;
+                  return (
+                    <button
+                      key={catKey}
+                      onClick={() => setActiveCategory(catKey)}
+                      className={`flex shrink-0 items-center gap-1.5 rounded-xl px-3 py-1.5 text-xs font-medium transition-all ${
+                        isActive
+                          ? "bg-primary text-primary-foreground shadow-sm"
+                          : "bg-surface-2/60 text-muted-foreground hover:text-foreground"
+                      }`}
+                    >
+                      <span>{meta.icon}</span>
+                      <span>
+                        {meta.label} ({count})
+                      </span>
+                    </button>
+                  );
+                })}
+              </div>
 
+              {/* Files Mobile List */}
               {filteredFiles.length === 0 ? (
-                <div className="flex flex-col items-center gap-2 rounded-3xl border border-dashed border-border py-16 text-center">
-                  <Folder className="h-7 w-7 text-muted-foreground" />
-                  <p className="text-sm text-muted-foreground">No documents here yet</p>
+                <div className="rounded-2xl border border-dashed border-border bg-surface/30 p-8 text-center">
+                  <p className="text-xs text-muted-foreground">No documents found.</p>
                 </div>
               ) : (
-                <div className="space-y-2">
+                <div className="space-y-2.5">
                   {filteredFiles.map((file) => {
                     const isImporting = importingKey === file.key;
                     const isDeleting = deletingKey === file.key;
@@ -440,38 +333,39 @@ function GlobalLibraryPage() {
                       label: file.category,
                       icon: "📂",
                     };
+
                     return (
                       <div
                         key={file.key}
-                        className="flex items-center gap-3 rounded-2xl border border-border bg-surface/50 p-3"
+                        className="flex items-center justify-between gap-3 rounded-2xl border border-border bg-surface/60 p-3.5 backdrop-blur-md shadow-sm"
                       >
-                        <div className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-xl bg-primary/10 text-primary">
-                          <FileText className="h-5 w-5" />
-                        </div>
-                        <div className="min-w-0 flex-1">
-                          <div className="truncate text-sm font-medium text-foreground">
-                            {file.displayName}
+                        <div className="min-w-0 flex-1 space-y-1">
+                          <div className="flex items-center gap-2">
+                            <span className="text-xs">{catMeta.icon}</span>
+                            <span className="truncate text-xs font-semibold text-foreground">
+                              {file.displayName}
+                            </span>
                           </div>
-                          <div className="truncate text-[11px] text-muted-foreground">
-                            {catMeta.icon} {catMeta.label} · {formatBytes(file.size)}
+                          <div className="flex items-center gap-2 text-[11px] text-muted-foreground">
+                            <span>{formatBytes(file.size)}</span>
+                            <span>•</span>
+                            <span>{formatDate(file.lastModified)}</span>
                           </div>
                         </div>
+
                         <button
                           onClick={() => handleImport(file)}
                           disabled={!!importingKey || !!deletingKey}
-                          className="flex-shrink-0 rounded-full bg-primary/10 px-3 py-1.5 text-xs font-semibold text-primary transition-transform active:scale-95 disabled:opacity-50"
+                          className="shrink-0 rounded-xl bg-primary px-3 py-1.5 text-xs font-semibold text-primary-foreground transition-transform active:scale-95 disabled:opacity-50"
                         >
-                          {isImporting ? (
-                            <Download className="h-3.5 w-3.5 animate-pulse" />
-                          ) : (
-                            "Import"
-                          )}
+                          {isImporting ? "Importing…" : "Import"}
                         </button>
+
                         {syncEnabled && (
                           <button
                             onClick={() => setDeleteTarget(file)}
                             disabled={!!importingKey || !!deletingKey}
-                            className="flex-shrink-0 rounded-full p-1.5 text-muted-foreground transition-transform active:scale-95 disabled:opacity-50"
+                            className="shrink-0 text-muted-foreground hover:text-destructive p-1.5 transition-colors"
                             aria-label="Delete"
                           >
                             {isDeleting ? (
@@ -487,16 +381,6 @@ function GlobalLibraryPage() {
                 </div>
               )}
             </>
-          )}
-
-          {syncEnabled && (
-            <button
-              onClick={() => setShowUploadModal(true)}
-              className="fixed bottom-[calc(4.25rem+env(safe-area-inset-bottom))] right-4 z-40 flex h-14 w-14 items-center justify-center rounded-full bg-primary text-primary-foreground shadow-xl transition-transform active:scale-95"
-              aria-label="Upload PDF"
-            >
-              <Plus className="h-6 w-6" />
-            </button>
           )}
         </div>
       ) : (
@@ -521,99 +405,36 @@ function GlobalLibraryPage() {
                 </button>
               </div>
             ) : loading ? (
-              <div className="flex h-64 flex-col items-center justify-center rounded-xl border border-border bg-surface/30">
-                <LoadingLogo size={72} label="Listing Cloudflare R2 files..." />
+              <div className="flex h-64 flex-col items-center justify-center">
+                <LoadingLogo size={72} label="Loading Global Library…" />
               </div>
             ) : (
               <div className="space-y-6">
-                {/* Virtual Category Folder Grid */}
-                <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-7">
-                  {/* All Files card */}
-                  <button
-                    type="button"
-                    onClick={() => setActiveCategory("all")}
-                    className={`flex flex-col justify-between rounded-xl border p-4 text-left transition-all hover:scale-[1.02] cursor-pointer ${
-                      activeCategory === "all"
-                        ? "border-primary bg-primary/10 ring-1 ring-primary"
-                        : "border-border bg-surface/50 hover:bg-surface-2"
-                    }`}
-                  >
-                    <div className="flex items-center justify-between">
-                      <span className="text-2xl">📚</span>
-                      <span className="rounded-full bg-surface-2 px-2 py-0.5 font-mono text-[10px] font-semibold text-muted-foreground">
-                        {files.length}
-                      </span>
-                    </div>
-                    <div className="mt-3 font-semibold text-sm text-foreground truncate">
-                      All Files
-                    </div>
-                  </button>
+                {/* Horizontal Category Cards */}
+                <CategoryMarqueeRow items={marqueeItems} />
 
-                  {categoriesList.map((catKey) => {
-                    const meta = STANDARD_CATEGORIES[catKey] || {
-                      label: catKey.charAt(0).toUpperCase() + catKey.slice(1),
-                      icon: "📂",
-                      desc: `${catKey}/`,
-                    };
-                    const stats = categoryStats[catKey] || { count: 0, totalSize: 0 };
-                    const isActive = activeCategory === catKey;
-
-                    return (
-                      <button
-                        key={catKey}
-                        type="button"
-                        onClick={() => setActiveCategory(catKey)}
-                        className={`flex flex-col justify-between rounded-xl border p-4 text-left transition-all hover:scale-[1.02] cursor-pointer ${
-                          isActive
-                            ? "border-primary bg-primary/10 ring-1 ring-primary"
-                            : "border-border bg-surface/50 hover:bg-surface-2"
-                        }`}
-                      >
-                        <div className="flex items-center justify-between">
-                          <span className="text-2xl">{meta.icon}</span>
-                          <span className="rounded-full bg-surface-2 px-2 py-0.5 font-mono text-[10px] font-semibold text-muted-foreground">
-                            {stats.count}
-                          </span>
-                        </div>
-                        <div
-                          className="mt-3 font-semibold text-sm text-foreground truncate"
-                          title={meta.label}
-                        >
-                          {meta.label}
-                        </div>
-                      </button>
-                    );
-                  })}
-                </div>
-
-                {/* Toolbar & Search Bar */}
-                <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between rounded-xl border border-border bg-surface/40 p-4">
-                  <span className="text-sm font-medium text-foreground">
-                    {activeCategory === "all"
-                      ? "All folders"
-                      : STANDARD_CATEGORIES[activeCategory]?.label || activeCategory}
-                    <span className="ml-1.5 text-xs font-normal text-muted-foreground">
-                      {filteredFiles.length} {filteredFiles.length === 1 ? "document" : "documents"}
-                    </span>
-                  </span>
-                  <div className="relative max-w-xs w-full">
-                    <Search className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
+                {/* Toolbar */}
+                <div className="flex items-center justify-between gap-4">
+                  <div className="relative w-72">
+                    <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
                     <input
                       type="text"
-                      placeholder="Search"
+                      placeholder="Search global library..."
                       value={searchQuery}
                       onChange={(e) => setSearchQuery(e.target.value)}
-                      className="w-full rounded-lg border border-border bg-surface py-1.5 pl-8 pr-8 text-xs text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-primary"
+                      className="w-full rounded-xl border border-border bg-surface/50 py-2 pl-9 pr-9 text-xs text-foreground placeholder:text-muted-foreground focus:border-primary focus:outline-none transition-colors"
                     />
                     {searchQuery && (
                       <button
                         onClick={() => setSearchQuery("")}
-                        className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
-                        aria-label="Clear search"
+                        className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground"
                       >
                         <X className="h-3.5 w-3.5" />
                       </button>
                     )}
+                  </div>
+                  <div className="text-xs text-muted-foreground">
+                    Showing <span className="font-semibold text-foreground">{filteredFiles.length}</span> documents
                   </div>
                 </div>
 
@@ -627,19 +448,6 @@ function GlobalLibraryPage() {
                       No documents found in <span className="font-semibold">{activeCategory}</span>{" "}
                       folder prefix.
                     </p>
-                    {syncEnabled && (
-                      <button
-                        onClick={() => {
-                          if (activeCategory !== "all" && activeCategory !== "uncategorized") {
-                            setUploadCategory(activeCategory);
-                          }
-                          setShowUploadModal(true);
-                        }}
-                        className="mt-4 inline-flex items-center gap-2 rounded-lg bg-primary px-4 py-2 text-xs font-semibold text-primary-foreground hover:opacity-90 transition-opacity"
-                      >
-                        + Upload to {activeCategory}
-                      </button>
-                    )}
                   </div>
                 ) : (
                   <div className="overflow-hidden rounded-xl border border-border bg-surface/30 backdrop-blur-md">
@@ -725,21 +533,6 @@ function GlobalLibraryPage() {
         </div>
       )}
       </div>
-
-      {/* Direct R2 Upload Modal */}
-      <R2UploadDialog
-        isMobile={isMobile}
-        open={showUploadModal}
-        onOpenChange={setShowUploadModal}
-        uploadFile={uploadFile}
-        onFileChange={setUploadFile}
-        uploadCategory={uploadCategory}
-        onCategoryChange={setUploadCategory}
-        customUploadCategory={customUploadCategory}
-        onCustomCategoryChange={setCustomUploadCategory}
-        uploadingDirect={uploadingDirect}
-        onSubmit={handleDirectUploadSubmit}
-      />
 
       {/* Delete confirmation dialog */}
       <DeleteFileDialog

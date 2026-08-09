@@ -79,18 +79,13 @@ function AppearanceSettingsPage() {
     <SidebarLayout
       pageTitle="Appearance Settings"
       onNewDocument={handleNewDocument}
-      topBarRight={
-        <span className="rounded-full border border-primary/20 bg-primary/10 px-4 py-1 text-xs font-bold text-primary">
-          System Online
-        </span>
-      }
     >
       <div className="mx-auto max-w-7xl space-y-8 p-8 pb-28">
         {/* Page Header */}
-        <header>
-          <h3 className="text-4xl font-bold tracking-tight text-foreground">Appearance Settings</h3>
-          <p className="mt-2 text-base text-muted-foreground">
-            Customize the look and feel of your Anuwad workspace.
+        <header className="hidden md:block">
+          <h3 className="text-3xl font-bold tracking-tight text-foreground">Appearance Settings</h3>
+          <p className="mt-1 text-sm text-muted-foreground">
+            Customize the look and feel of your workspace.
           </p>
         </header>
 

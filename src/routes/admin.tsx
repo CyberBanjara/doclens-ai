@@ -299,16 +299,11 @@ function AdminPage() {
         <div className="relative overflow-hidden rounded-2xl border border-primary/20 bg-gradient-to-br from-primary/10 via-surface to-background p-6 shadow-xl backdrop-blur-xl">
           <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
             <div className="space-y-1">
-              <div className="inline-flex items-center gap-2 rounded-full border border-primary/30 bg-primary/15 px-3 py-0.5 text-xs font-semibold text-primary">
-                <ShieldAlert className="h-3.5 w-3.5" />
-                <span>Serverless Role-Based Access Control</span>
-              </div>
-              <h1 className="text-2xl font-black tracking-tight text-foreground sm:text-3xl">
+              <h1 className="text-2xl font-bold tracking-tight text-foreground sm:text-3xl">
                 User & Role Management
               </h1>
               <p className="text-xs text-muted-foreground sm:text-sm">
-                Manage user permissions and privileges across Anuwad. All operations execute via
-                secure serverless endpoints backed by Firestore and HttpOnly JWT sessions.
+                Manage user accounts, permissions, and administrative access.
               </p>
             </div>
           </div>

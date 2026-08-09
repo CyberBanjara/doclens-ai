@@ -38,9 +38,6 @@ export function AppHeader({ right }: { right?: React.ReactNode }) {
           <h1 className="text-lg font-black tracking-tight text-primary transition-colors group-hover:text-foreground">
             Anuwad
           </h1>
-          <span className="hidden font-mono text-[10px] uppercase tracking-[0.22em] text-muted-foreground sm:inline">
-            AI Intelligence
-          </span>
         </div>
       </Link>
       <div className="flex items-center gap-2">
@@ -53,7 +50,6 @@ export function AppHeader({ right }: { right?: React.ReactNode }) {
           </span>
         )}
         {right}
-        <ApiKeyStatusBadge />
 
         <Link
           to="/settings"

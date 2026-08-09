@@ -2,7 +2,7 @@ import { Link, useMatchRoute } from "@tanstack/react-router";
 import { Library, Globe, Palette, Settings } from "lucide-react";
 
 const TABS = [
-  { to: "/", label: "Library", icon: Library },
+  { to: "/library", label: "Library", icon: Library },
   { to: "/global-library", label: "Global", icon: Globe },
   { to: "/settings/appearance", label: "Appearance", icon: Palette },
   { to: "/settings", label: "Settings", icon: Settings },

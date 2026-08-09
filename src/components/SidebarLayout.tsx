@@ -1,7 +1,6 @@
 import { Link, useMatchRoute } from "@tanstack/react-router";
 import { useRef, useState } from "react";
-import { Plus, ShieldAlert } from "lucide-react";
-import { ApiKeyStatusBadge } from "@/components/ApiKeyStatusBadge";
+import { Plus } from "lucide-react";
 import { SupportModal } from "@/components/SupportModal";
 import { MobileTabBar } from "@/components/mobile/MobileTabBar";
 import { useIsMobile } from "@/hooks/use-mobile";
@@ -19,7 +18,7 @@ interface SidebarLayoutProps {
 }
 
 const BASE_NAV_ITEMS = [
-  { to: "/", label: "Library", icon: "📁" },
+  { to: "/library", label: "Library", icon: "📁" },
   { to: "/global-library", label: "Global Library", icon: "🌐" },
   { to: "/settings/appearance", label: "Appearance", icon: "🎨" },
   { to: "/settings", label: "General Settings", icon: "⚙" },
@@ -109,9 +108,6 @@ export function SidebarLayout({
               <h1 className="text-lg font-bold tracking-tight text-foreground transition-colors group-hover:text-primary">
                 Anuwad
               </h1>
-              <p className="text-[11px] font-medium tracking-wide text-muted-foreground">
-                AI Intelligence
-              </p>
             </div>
           </Link>
         </div>
@@ -185,7 +181,6 @@ export function SidebarLayout({
           <h2 className="text-2xl font-bold tracking-tight text-foreground">{pageTitle}</h2>
           <div className="flex items-center gap-4">
             {topBarRight}
-            <ApiKeyStatusBadge />
             <ProfileDropdown />
           </div>
         </header>

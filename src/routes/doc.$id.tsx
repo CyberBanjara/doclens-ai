@@ -464,7 +464,7 @@ function DocPage() {
         <div className="text-center">
           <div className="text-sm text-muted-foreground">Document not found</div>
           <Link
-            to="/"
+            to="/library"
             className="mt-4 inline-flex items-center gap-2 rounded-lg bg-primary/10 px-4 py-2 text-sm font-medium text-primary transition-colors hover:bg-primary/20"
           >
             ← Back to Library
@@ -499,7 +499,7 @@ function DocPage() {
           <Link
             to="/"
             className="flex h-8 w-8 items-center justify-center rounded-lg transition-colors hover:bg-surface-2"
-            title="Back to Library"
+            title="Home"
           >
             <img
               src="/light_13746323.png"

@@ -113,11 +113,10 @@ export function SupportModal({ open, onOpenChange }: SupportModalProps) {
             </span>
             <div>
               <DialogTitle className="text-xl font-bold tracking-tight text-foreground">
-                Become a Premium Supporter
+                Support & Feedback
               </DialogTitle>
               <DialogDescription className="text-xs text-muted-foreground mt-0.5">
-                Every language barrier broken is a mind set free. Join us in making knowledge
-                accessible to all.
+                Help us improve Anuwad by sharing feedback or supporting development.
               </DialogDescription>
             </div>
           </div>
@@ -127,11 +126,10 @@ export function SupportModal({ open, onOpenChange }: SupportModalProps) {
           {/* Section 1: Feedback Survey */}
           <div className="rounded-xl border border-border bg-surface-2 p-4">
             <h4 className="flex items-center gap-2 text-sm font-bold text-foreground">
-              📋 1. Take Our Survey
+              📋 Feedback Survey
             </h4>
             <p className="mt-1 text-xs text-muted-foreground">
-              Your feedback shapes the future of Anuwad. Take our quick 2-minute Google Forms
-              survey.
+              Share your thoughts and suggestions in our quick 2-minute survey.
             </p>
             <a
               href="https://docs.google.com/forms/d/e/1FAIpQLSde85yO0QiwAYb_fxbtD1inrGLn5Vry6pCjtEd_O_nUbx7pQQ/viewform?usp=publish-editor"
@@ -139,7 +137,7 @@ export function SupportModal({ open, onOpenChange }: SupportModalProps) {
               rel="noreferrer"
               className="mt-3 inline-flex w-full items-center justify-center gap-2 rounded-full bg-background border border-border hover:bg-border px-4 py-2.5 text-xs font-semibold text-foreground transition-all active:scale-95 shadow-sm"
             >
-              Start Survey
+              Take Survey
               <ExternalLink className="h-3.5 w-3.5" />
             </a>
           </div>
@@ -147,10 +145,10 @@ export function SupportModal({ open, onOpenChange }: SupportModalProps) {
           {/* Section 2: Contribute & Sponsor */}
           <div className="rounded-xl border border-border bg-surface-2 p-4">
             <h4 className="flex items-center gap-2 text-sm font-bold text-foreground">
-              💻 2. Contribute to this Project
+              💻 Contribute to Project
             </h4>
             <p className="mt-1 text-xs text-muted-foreground">
-              Anuwad is open source. You can view the code, raise issues, or submit PRs on GitHub.
+              Anuwad is open source. You can view the code, report issues, or contribute on GitHub.
             </p>
             <a
               href="https://github.com/CyberBanjara/doclens-ai"
@@ -166,12 +164,10 @@ export function SupportModal({ open, onOpenChange }: SupportModalProps) {
             <div className="mt-5 border-t border-border pt-4">
               <h5 className="flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-muted-foreground">
                 <Heart className="h-3.5 w-3.5 text-destructive fill-destructive" />
-                Fund the Mission
+                Support Development
               </h5>
               <p className="mt-1 text-xs text-muted-foreground">
-                Millions of students struggle with textbooks they can't read in their own language.
-                Your contribution keeps Anuwad free, fast, and private — so that no learner is left
-                behind.
+                Your contribution helps keep Anuwad free, fast, and maintained.
               </p>
 
               {/* Amount Preset Grid */}
@@ -210,12 +206,12 @@ export function SupportModal({ open, onOpenChange }: SupportModalProps) {
                 disabled={paying || amount <= 0}
                 className="mt-4 flex w-full items-center justify-center gap-2 rounded-full bg-primary py-2.5 text-xs font-semibold text-primary-foreground transition-all hover:opacity-95 active:scale-95 disabled:opacity-40 shadow-sm"
               >
-                {paying ? "Opening checkout..." : `Support this Mission — ₹${amount}`}
+                {paying ? "Opening checkout..." : `Support Project — ₹${amount}`}
               </button>
 
               <div className="mt-3 flex items-center gap-1.5 text-[10px] text-muted-foreground">
                 <AlertCircle className="h-3 w-3" />
-                <span>Runs in Razorpay Test Mode by default.</span>
+                <span>Runs in Razorpay Test Mode.</span>
               </div>
             </div>
           </div>

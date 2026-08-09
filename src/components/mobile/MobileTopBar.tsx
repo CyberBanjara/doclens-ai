@@ -16,7 +16,7 @@ export function MobileTopBar({ docName, activePage, pageCount, onOpenPageJump }:
       <div className="absolute inset-0 -z-10 bg-gradient-to-b from-background/90 via-background/60 to-transparent backdrop-blur-md [mask-image:linear-gradient(to_bottom,black_60%,transparent)]" />
 
       <Link
-        to="/"
+        to="/library"
         className="pointer-events-auto flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-full bg-surface/80 text-foreground shadow-sm backdrop-blur-md active:scale-95"
         aria-label="Back to Library"
       >

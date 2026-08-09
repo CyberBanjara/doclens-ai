@@ -40,15 +40,7 @@ export function DocumentCard({ doc, onDelete }: DocumentCardProps) {
           </div>
         )}
         {/* Gradient overlay */}
-        <div className="absolute inset-0 bg-gradient-to-t from-background to-transparent" />
-        {/* Status badges */}
-        <div className="absolute right-2 top-2 flex flex-col gap-1 items-end">
-          {doc.hasExtraction && (
-            <span className="rounded-full border border-primary/30 bg-primary/25 px-2.5 py-0.5 text-[10px] font-bold text-primary">
-              Extracted
-            </span>
-          )}
-        </div>
+        <div className="absolute inset-0 bg-gradient-to-t from-background/40 to-transparent" />
       </div>
 
       {/* Document Info */}
@@ -56,17 +48,16 @@ export function DocumentCard({ doc, onDelete }: DocumentCardProps) {
         <h4 className="truncate text-sm font-semibold text-foreground group-hover:text-primary transition-colors">
           {doc.fileName}
         </h4>
-        <div className="flex flex-wrap items-center gap-1.5">
-          {doc.hasExtraction && (
-            <span className="rounded-full bg-accent/15 px-2.5 py-0.5 text-[10px] font-bold tracking-tight text-accent">
-              AI Processed
+        <div className="flex flex-wrap items-center gap-1.5 min-h-[20px]">
+          {doc.aiResultCount > 0 ? (
+            <span className="rounded-md bg-primary/10 px-2 py-0.5 text-[10px] font-medium text-primary">
+              {doc.aiResultCount} {doc.aiResultCount === 1 ? "translation" : "translations"}
             </span>
-          )}
-          {doc.aiResultCount > 0 && (
-            <span className="rounded-full bg-surface-2 px-2.5 py-0.5 text-[10px] font-semibold text-muted-foreground">
-              {doc.aiResultCount} Results
+          ) : doc.hasExtraction ? (
+            <span className="rounded-md bg-surface-2 px-2 py-0.5 text-[10px] font-medium text-muted-foreground">
+              Ready
             </span>
-          )}
+          ) : null}
         </div>
       </div>
 
