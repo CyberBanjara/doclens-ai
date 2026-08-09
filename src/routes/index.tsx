@@ -95,39 +95,39 @@ function HomePage() {
         onChange={handleFileChange}
       />
 
-      <div className="mx-auto max-w-5xl px-4 py-8 sm:px-8 sm:py-14 space-y-10 pb-28 md:pb-16">
+      <div className="mx-auto max-w-5xl px-4 py-8 sm:px-8 sm:py-16 space-y-12 pb-28 md:pb-16">
         {/* Title / Intro */}
-        <div className="space-y-2 text-center max-w-xl mx-auto pt-4 sm:pt-8">
-          <h1 className="text-3xl sm:text-4xl font-extrabold tracking-tight text-foreground">
+        <div className="space-y-3 text-center max-w-xl mx-auto pt-4 sm:pt-8">
+          <h1 className="text-3xl sm:text-5xl font-semibold tracking-tight text-foreground font-display">
             Anuwad
           </h1>
-          <p className="text-sm text-muted-foreground">
+          <p className="text-base text-muted-foreground font-normal leading-relaxed">
             Browser-based document reader & AI translator
           </p>
         </div>
 
         {/* ─── Three Primary Horizontal Options ─── */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-5 lg:gap-6 pt-4">
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 pt-4">
           {/* 1. Global Library */}
           <Link
             to="/global-library"
-            className="group flex flex-col justify-between rounded-2xl border border-border bg-card/60 p-6 backdrop-blur-md transition-all duration-200 hover:border-primary/50 hover:bg-surface-2/60 hover:-translate-y-0.5 shadow-sm"
+            className="group flex flex-col justify-between rounded-[18px] border border-border/80 bg-surface/50 p-6 backdrop-blur-md transition-all duration-200 hover:border-primary/60 hover:bg-surface-2/70 active:scale-[0.98] shadow-sm"
           >
-            <div className="space-y-4">
-              <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-primary/10 text-primary transition-transform group-hover:scale-105">
-                <Globe className="h-5 w-5" />
+            <div className="space-y-5">
+              <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-primary/10 text-primary transition-transform group-hover:scale-105">
+                <Globe className="h-6 w-6" />
               </div>
               <div>
-                <h2 className="text-lg font-bold text-foreground group-hover:text-primary transition-colors">
+                <h2 className="text-xl font-semibold text-foreground tracking-tight group-hover:text-primary transition-colors">
                   Global Library
                 </h2>
-                <p className="mt-1 text-xs text-muted-foreground leading-relaxed">
+                <p className="mt-1.5 text-xs text-muted-foreground leading-relaxed">
                   Browse community archives, manuscripts, and public books.
                 </p>
               </div>
             </div>
 
-            <div className="mt-6 flex items-center gap-1.5 text-xs font-semibold text-primary">
+            <div className="mt-8 flex items-center gap-1.5 text-xs font-medium text-primary">
               <span>Open Global Library</span>
               <ArrowRight className="h-3.5 w-3.5 transition-transform group-hover:translate-x-1" />
             </div>
@@ -136,23 +136,23 @@ function HomePage() {
           {/* 2. Local Library */}
           <Link
             to="/library"
-            className="group flex flex-col justify-between rounded-2xl border border-border bg-card/60 p-6 backdrop-blur-md transition-all duration-200 hover:border-primary/50 hover:bg-surface-2/60 hover:-translate-y-0.5 shadow-sm"
+            className="group flex flex-col justify-between rounded-[18px] border border-border/80 bg-surface/50 p-6 backdrop-blur-md transition-all duration-200 hover:border-primary/60 hover:bg-surface-2/70 active:scale-[0.98] shadow-sm"
           >
-            <div className="space-y-4">
-              <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-primary/10 text-primary transition-transform group-hover:scale-105">
-                <FolderOpen className="h-5 w-5" />
+            <div className="space-y-5">
+              <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-primary/10 text-primary transition-transform group-hover:scale-105">
+                <FolderOpen className="h-6 w-6" />
               </div>
               <div>
-                <h2 className="text-lg font-bold text-foreground group-hover:text-primary transition-colors">
+                <h2 className="text-xl font-semibold text-foreground tracking-tight group-hover:text-primary transition-colors">
                   Local Library
                 </h2>
-                <p className="mt-1 text-xs text-muted-foreground leading-relaxed">
+                <p className="mt-1.5 text-xs text-muted-foreground leading-relaxed">
                   View your stored documents, reading progress, and page translations.
                 </p>
               </div>
             </div>
 
-            <div className="mt-6 flex items-center gap-1.5 text-xs font-semibold text-primary">
+            <div className="mt-8 flex items-center gap-1.5 text-xs font-medium text-primary">
               <span>Open Local Library</span>
               <ArrowRight className="h-3.5 w-3.5 transition-transform group-hover:translate-x-1" />
             </div>
@@ -164,34 +164,34 @@ function HomePage() {
             onDragLeave={handleDragLeave}
             onDrop={handleDrop}
             onClick={() => fileInputRef.current?.click()}
-            className={`group flex flex-col justify-between rounded-2xl border-2 border-dashed p-6 backdrop-blur-md transition-all duration-200 cursor-pointer ${
+            className={`group flex flex-col justify-between rounded-[18px] border-2 border-dashed p-6 backdrop-blur-md transition-all duration-200 cursor-pointer active:scale-[0.98] ${
               isDragging
-                ? "border-primary bg-primary/10 scale-[1.01]"
-                : "border-primary/40 bg-primary/5 hover:border-primary hover:bg-primary/10 hover:-translate-y-0.5"
+                ? "border-primary bg-primary/10"
+                : "border-primary/30 bg-primary/5 hover:border-primary hover:bg-primary/10"
             }`}
           >
-            <div className="space-y-4">
-              <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-primary text-primary-foreground shadow-sm transition-transform group-hover:scale-105">
+            <div className="space-y-5">
+              <div className="flex h-12 w-12 items-center justify-center rounded-full bg-primary text-primary-foreground shadow-sm transition-transform group-hover:scale-105">
                 {isProcessing ? (
-                  <span className="h-4 w-4 animate-spin rounded-full border-2 border-primary-foreground border-t-transparent" />
+                  <span className="h-5 w-5 animate-spin rounded-full border-2 border-primary-foreground border-t-transparent" />
                 ) : (
-                  <UploadCloud className="h-5 w-5" />
+                  <UploadCloud className="h-6 w-6" />
                 )}
               </div>
               <div>
-                <h2 className="text-lg font-bold text-foreground group-hover:text-primary transition-colors">
+                <h2 className="text-xl font-semibold text-foreground tracking-tight group-hover:text-primary transition-colors">
                   Add New Book / PDF
                 </h2>
-                <p className="mt-1 text-xs text-muted-foreground leading-relaxed">
+                <p className="mt-1.5 text-xs text-muted-foreground leading-relaxed">
                   Drop a PDF file here or click to browse and import.
                 </p>
               </div>
             </div>
 
-            <div className="mt-6 flex items-center gap-2">
+            <div className="mt-8 flex items-center gap-2">
               <button
                 type="button"
-                className="inline-flex items-center gap-1.5 rounded-xl bg-primary px-3.5 py-1.5 text-xs font-semibold text-primary-foreground shadow-sm transition-transform active:scale-95"
+                className="inline-flex items-center gap-1.5 rounded-full bg-primary px-4 py-2 text-xs font-semibold text-primary-foreground shadow-sm transition-all hover:opacity-90 active:scale-95"
               >
                 <Plus className="h-3.5 w-3.5" />
                 <span>Select PDF</span>
@@ -201,8 +201,8 @@ function HomePage() {
         </div>
 
         {/* Footer */}
-        <footer className="border-t border-border/50 pt-8 text-center text-xs text-muted-foreground space-y-2">
-          <div className="flex justify-center items-center gap-4">
+        <footer className="border-t border-border/40 pt-8 text-center text-xs text-muted-foreground space-y-2">
+          <div className="flex justify-center items-center gap-4 font-medium">
             <Link to="/privacy" className="hover:text-primary transition-colors">
               Privacy Policy
             </Link>
@@ -211,7 +211,7 @@ function HomePage() {
               Terms of Service
             </Link>
           </div>
-          <p>© {new Date().getFullYear()} Anuwad.com</p>
+          <p className="text-[11px]">© {new Date().getFullYear()} Anuwad.com</p>
         </footer>
       </div>
     </SidebarLayout>

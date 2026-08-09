@@ -96,8 +96,8 @@
   --popover: #171f33;
   --popover-foreground: #dae2fd;
 
-  --primary: #4edea3;
-  --primary-foreground: #003824;
+  --primary: #0066cc;
+  --primary-foreground: #ffffff;
 
   --secondary: #2d3449;
   --secondary-foreground: #dae2fd;
@@ -105,8 +105,8 @@
   --muted: #222a3d;
   --muted-foreground: #8a96a8;
 
-  --accent: #c0c1ff;
-  --accent-foreground: #07006c;
+  --accent: #2997ff;
+  --accent-foreground: #ffffff;
 
   --destructive: oklch(0.65 0.22 25);
   --destructive-foreground: oklch(0.98 0.005 260);
@@ -114,7 +114,7 @@
   --border: rgba(255, 255, 255, 0.08);
   --border-strong: rgba(255, 255, 255, 0.18);
   --input: #2d3449;
-  --ring: #4edea3;
+  --ring: #0071e3;
 
   /* Syntax highlighting tokens */
   --syntax-key: #c0c1ff;
