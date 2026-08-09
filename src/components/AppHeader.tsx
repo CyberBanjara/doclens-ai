@@ -27,7 +27,7 @@ function useQuotaIndicator(): string | null {
 export function AppHeader({ right }: { right?: React.ReactNode }) {
   const quota = useQuotaIndicator();
   return (
-    <header className="flex h-14 items-center justify-between border-b border-border bg-surface px-4 shadow-sm">
+    <header className="relative z-40 flex h-14 items-center justify-between border-b border-border bg-surface px-4 shadow-sm">
       <Link to="/" className="flex items-center gap-3 group">
         <img
           src="/light_13746323.png"

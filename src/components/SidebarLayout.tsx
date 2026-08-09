@@ -62,7 +62,7 @@ export function SidebarLayout({
   if (isMobile) {
     return (
       <div className="flex h-dvh flex-col bg-background text-foreground">
-        <header className="flex h-12 flex-shrink-0 items-center justify-between border-b border-border bg-background/80 px-4 backdrop-blur-md">
+        <header className="relative z-40 flex h-12 flex-shrink-0 items-center justify-between border-b border-border bg-background/80 px-4 backdrop-blur-md">
           <div className="w-9 flex-shrink-0" />
           <h2 className="flex-1 truncate text-center text-base font-semibold tracking-tight text-foreground">
             {pageTitle}
@@ -181,7 +181,7 @@ export function SidebarLayout({
       {/* ──── Main Content Area ──── */}
       <div className="flex flex-1 flex-col overflow-hidden">
         {/* Top Bar */}
-        <header className="flex h-16 flex-shrink-0 items-center justify-between border-b border-border bg-background/80 px-8 backdrop-blur-md">
+        <header className="relative z-40 flex h-16 flex-shrink-0 items-center justify-between border-b border-border bg-background/80 px-8 backdrop-blur-md">
           <h2 className="text-2xl font-bold tracking-tight text-foreground">{pageTitle}</h2>
           <div className="flex items-center gap-4">
             {topBarRight}

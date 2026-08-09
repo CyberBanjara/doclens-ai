@@ -493,7 +493,7 @@ function DocPage() {
     <div className="flex h-dvh flex-col bg-background text-foreground">
       {/* ─── Slim Document Header (desktop only — mobile uses the floating MobileTopBar overlay) ─── */}
       {!isMobile && (
-      <header className="flex h-12 flex-shrink-0 items-center justify-between border-b border-border bg-surface/80 backdrop-blur-md px-4">
+      <header className="relative z-40 flex h-12 flex-shrink-0 items-center justify-between border-b border-border bg-surface/80 backdrop-blur-md px-4">
         {/* Left: Back + Title */}
         <div className="flex items-center gap-3 min-w-0">
           <Link
