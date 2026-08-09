@@ -2,8 +2,8 @@ import { useEffect, useState } from "react";
 import { loadPdfDocument } from "@/lib/pdf";
 import { getDocBlob, getThumbnail, saveThumbnailBlob } from "@/lib/storage";
 
-const THUMB_W = 200;
-const THUMB_H = 260;
+const THUMB_W = 400;
+const THUMB_H = 520;
 
 async function renderPageToJpegBlob(pdfBlob: Blob): Promise<Blob> {
   const pdf = await loadPdfDocument(pdfBlob);
@@ -37,7 +37,7 @@ async function renderPageToJpegBlob(pdfBlob: Blob): Promise<Blob> {
             else reject(new Error("Canvas to blob conversion failed"));
           },
           "image/jpeg",
-          0.8,
+          0.92,
         );
       });
     } finally {

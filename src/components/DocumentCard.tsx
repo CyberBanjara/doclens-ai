@@ -21,12 +21,12 @@ export function DocumentCard({ doc, onDelete }: DocumentCardProps) {
       className="group glass-panel flex flex-col gap-3 rounded-[18px] p-3 transition-all duration-300 hover:bg-surface-2/40 border border-border"
     >
       {/* Thumbnail Area */}
-      <div className="relative h-40 overflow-hidden rounded-xl border border-border bg-background/80 shadow-[3px_5px_30px_rgba(0,0,0,0.22)]">
+      <div className="relative h-44 overflow-hidden rounded-xl border border-border bg-muted/20 shadow-sm">
         {thumbnailUrl ? (
           <img
             src={thumbnailUrl}
             alt={`Preview of ${doc.fileName}`}
-            className="h-full w-full object-cover opacity-60 transition-transform duration-500 group-hover:scale-105"
+            className="h-full w-full object-cover object-top opacity-100 transition-transform duration-500 group-hover:scale-105"
           />
         ) : loading ? (
           <div className="flex h-full w-full items-center justify-center">
@@ -39,8 +39,6 @@ export function DocumentCard({ doc, onDelete }: DocumentCardProps) {
             </div>
           </div>
         )}
-        {/* Gradient overlay */}
-        <div className="absolute inset-0 bg-gradient-to-t from-background/40 to-transparent" />
       </div>
 
       {/* Document Info */}
