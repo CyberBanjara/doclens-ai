@@ -7,9 +7,9 @@ import { RightPanel } from "@/components/RightPanel";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { MobileTopBar } from "@/components/mobile/MobileTopBar";
 import { MobileBottomBar } from "@/components/mobile/MobileBottomBar";
-import { ProfileDropdown } from "@/components/ProfileDropdown";
 import { MobileOverflowSheet } from "@/components/mobile/MobileOverflowSheet";
 import { MobilePageJumpSheet } from "@/components/mobile/MobilePageJumpSheet";
+import { ProfileDropdown } from "@/components/ProfileDropdown";
 import {
   getDoc,
   getDocBlob,

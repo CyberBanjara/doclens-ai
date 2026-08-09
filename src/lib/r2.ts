@@ -1,7 +1,6 @@
 import { createServerFn } from "@tanstack/react-start";
 import crypto from "crypto";
 import { isGlobalSyncEnabled } from "./env";
-import { verifyTokenString } from "../../api/_lib/auth-server";
 
 
 // Ensure process.env has the suppression flag set BEFORE any AWS SDK libraries are loaded.
@@ -187,25 +186,12 @@ export const listR2Files = createServerFn({ method: "GET" })
   });
 
 export const deleteFromR2 = createServerFn({ method: "POST" })
-  .validator((input: { key: string; token?: string }) => input)
+  .validator((input: { key: string }) => input)
   .handler(async ({ data }) => {
     "use server";
     const isSyncEnabled = isGlobalSyncEnabled();
     if (!isSyncEnabled) {
       throw new Error("Global sync (R2 deletions) is disabled in this environment.");
-    }
-
-    // Cryptographic JWT Signature Verification (No Firebase/Firestore roundtrips)
-    const token = data.token;
-    if (!token) {
-      throw new Error("403 Forbidden: Missing session JWT token. Admin signature verification required for delete operation.");
-    }
-
-    const authCheck = await verifyTokenString(token, ["admin"]);
-    if (!authCheck.authorized || authCheck.role !== "admin") {
-      throw new Error(
-        authCheck.error || "403 Forbidden: You are not authorized to delete files from Global Library. Verified Admin role required."
-      );
     }
 
     try {

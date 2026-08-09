@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { User } from "lucide-react";
+import { User as UserIcon } from "lucide-react";
 
 interface UserAvatarProps {
   photoURL?: string | null;
@@ -14,9 +14,9 @@ export function UserAvatar({
   photoURL,
   name,
   email,
-  className = "h-8 w-8 rounded-full object-cover",
-  fallbackClassName = "flex h-8 w-8 items-center justify-center rounded-full bg-primary text-xs font-bold text-primary-foreground shadow-sm",
-  iconClassName = "h-4 w-4 text-muted-foreground",
+  className = "h-8 w-8 rounded-full object-cover ring-1 ring-border/50",
+  fallbackClassName = "flex h-8 w-8 items-center justify-center rounded-full bg-primary/20 text-xs font-bold text-primary shadow-sm ring-1 ring-border/50",
+  iconClassName = "h-4 w-4 text-primary",
 }: UserAvatarProps) {
   const [imageError, setImageError] = useState(false);
 
@@ -31,6 +31,7 @@ export function UserAvatar({
         crossOrigin="anonymous"
         onError={() => setImageError(true)}
         className={className}
+        loading="lazy"
       />
     );
   }
@@ -41,7 +42,7 @@ export function UserAvatar({
 
   return (
     <div className={fallbackClassName}>
-      <User className={iconClassName} />
+      <UserIcon className={iconClassName} />
     </div>
   );
 }

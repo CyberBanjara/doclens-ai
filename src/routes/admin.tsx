@@ -1,734 +1,651 @@
-import { createFileRoute, useNavigate } from "@tanstack/react-router";
-import { useState, useEffect, useCallback } from "react";
-import { SidebarLayout } from "@/components/SidebarLayout";
-import { UserAvatar } from "@/components/UserAvatar";
-import { NotFoundComponent } from "@/components/NotFound";
-import { useAuth, PRIVILEGED_ROLES } from "@/context/AuthContext";
-import { auth, type UserRole } from "@/lib/firebase";
+import { createFileRoute, Link } from "@tanstack/react-router";
+import { useState, useEffect, useMemo } from "react";
 import { toast } from "sonner";
 import {
-  Shield,
   ShieldAlert,
-  CheckCircle2,
-  Key,
-  RefreshCw,
-  Database,
-  Lock,
+  ShieldCheck,
   Users,
-  UserCheck,
   Search,
-  Filter,
-  UserCog,
-  Loader2,
-  AlertTriangle,
+  RefreshCw,
+  UserCheck,
+  UserX,
+  Lock,
+  ArrowLeft,
+  Copy,
+  Check,
+  ChevronDown,
+  Sparkles,
+  Info,
+  Clock,
+  Mail,
+  Fingerprint,
 } from "lucide-react";
+import { useAuth } from "@/context/AuthContext";
+import {
+  type AdminUserProfile,
+  type UserRole,
+  apiAdminListUsers,
+  apiAdminUpdateUserRole,
+  promptGoogleIdToken,
+} from "@/lib/auth-client";
+import { SidebarLayout } from "@/components/SidebarLayout";
+import { UserAvatar } from "@/components/UserAvatar";
 
 export const Route = createFileRoute("/admin")({
   component: AdminPage,
-  head: () => ({
-    meta: [
-      { title: "Anuwad" },
-      { name: "description", content: "Anuwad Private PDF Reader & Translator." },
-    ],
-  }),
 });
 
-interface UserItem {
-  uid: string;
-  displayName: string;
-  email: string;
-  photoURL: string | null;
-  role: UserRole;
-  createdAt?: string;
-  updatedAt?: string;
-}
+const ALL_ROLES: UserRole[] = ["admin", "editor", "moderator", "viewer", "user"];
 
-interface ServerOpResult {
-  endpoint: string;
-  status: number;
-  statusText: string;
-  data: any;
-  timestamp: string;
-}
+const ROLE_CONFIG: Record<
+  UserRole,
+  { label: string; bg: string; text: string; border: string; desc: string }
+> = {
+  admin: {
+    label: "Admin",
+    bg: "bg-red-500/15",
+    text: "text-red-400",
+    border: "border-red-500/30",
+    desc: "Full system control, manage roles & resources",
+  },
+  editor: {
+    label: "Editor",
+    bg: "bg-purple-500/15",
+    text: "text-purple-400",
+    border: "border-purple-500/30",
+    desc: "Can publish, edit, and curate global content",
+  },
+  moderator: {
+    label: "Moderator",
+    bg: "bg-amber-500/15",
+    text: "text-amber-400",
+    border: "border-amber-500/30",
+    desc: "Can manage and review public library submissions",
+  },
+  viewer: {
+    label: "Viewer",
+    bg: "bg-blue-500/15",
+    text: "text-blue-400",
+    border: "border-blue-500/30",
+    desc: "Read-only access with preview permissions",
+  },
+  user: {
+    label: "User",
+    bg: "bg-emerald-500/15",
+    text: "text-emerald-400",
+    border: "border-emerald-500/30",
+    desc: "Standard application access & personal library",
+  },
+};
 
-const ALL_ROLES: UserRole[] = ["admin", "moderator", "editor", "user", "viewer"];
+function formatDate(dateStr?: string) {
+  if (!dateStr) return "Never";
+  try {
+    const d = new Date(dateStr);
+    return isNaN(d.getTime())
+      ? "Unknown"
+      : d.toLocaleDateString("en-US", {
+          month: "short",
+          day: "numeric",
+          year: "numeric",
+          hour: "2-digit",
+          minute: "2-digit",
+        });
+  } catch {
+    return dateStr;
+  }
+}
 
 function AdminPage() {
-  const navigate = useNavigate();
-  const {
-    user,
-    role,
-    isPrivileged,
-    isAdmin,
-    loading,
-    serverVerifying,
-    adminToken,
-    verifyRoleWithServer,
-    changeUserRoleForTesting,
-    signInWithGoogle,
-  } = useAuth();
-
-  const [activeTab, setActiveTab] = useState<"users" | "dashboard" | "role-tester" | "api-tester">("users");
-
-  // User Management State
-  const [usersList, setUsersList] = useState<UserItem[]>([]);
-  const [fetchingUsers, setFetchingUsers] = useState(false);
-  const [updatingUid, setUpdatingUid] = useState<string | null>(null);
+  const { user, loading: authLoading, isAdmin, signInWithGoogle } = useAuth();
+  const [users, setUsers] = useState<AdminUserProfile[]>([]);
+  const [loading, setLoading] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const [roleFilter, setRoleFilter] = useState<string>("all");
+  const [updatingUid, setUpdatingUid] = useState<string | null>(null);
+  const [selectedUser, setSelectedUser] = useState<AdminUserProfile | null>(null);
+  const [copiedId, setCopiedId] = useState<string | null>(null);
 
-  // API Tester State
-  const [opLoading, setOpLoading] = useState<string | null>(null);
-  const [lastOpResult, setLastOpResult] = useState<ServerOpResult | null>(null);
-
-  // User Management Error State
-  const [fetchError, setFetchError] = useState<string | null>(null);
-
-  // Set page document title dynamically ONLY if verified as Admin
-  useEffect(() => {
-    if (!loading && !serverVerifying && user && isAdmin) {
-      document.title = "Anuwad — Admin User & Role Management";
-    }
-  }, [loading, serverVerifying, user, isAdmin]);
-
-  // Fetch Users from Protected Serverless Function (/api/admin/list-users)
-  const fetchUsers = useCallback(async () => {
-    if (!auth.currentUser) return;
-    setFetchingUsers(true);
-    setFetchError(null);
+  // Load user list when admin is confirmed
+  const fetchUsers = async () => {
+    if (!isAdmin) return;
     try {
-      const idToken = await auth.currentUser.getIdToken();
-      const res = await fetch("/api/admin/list-users", {
-        method: "GET",
-        headers: {
-          Authorization: `Bearer ${adminToken || ""}`,
-          "X-Firebase-ID-Token": idToken,
-        },
-      });
-
-      const resData = await res.json().catch(() => ({}));
-
-      if (!res.ok) {
-        throw new Error(resData.error || `HTTP ${res.status} ${res.statusText}`);
-      }
-
-      setUsersList(resData.users || []);
+      setLoading(true);
+      const data = await apiAdminListUsers();
+      setUsers(data);
     } catch (err: any) {
-      console.error("Failed to fetch users list:", err);
-      setFetchError(err.message);
-      toast.error(`Error loading user directory: ${err.message}`);
+      console.error("Failed to load users:", err);
+      toast.error("Failed to fetch users", {
+        description: err?.message || "Could not retrieve user directory.",
+      });
     } finally {
-      setFetchingUsers(false);
+      setLoading(false);
     }
-  }, [adminToken]);
+  };
 
   useEffect(() => {
     if (isAdmin) {
       fetchUsers();
     }
-  }, [isAdmin, fetchUsers]);
+  }, [isAdmin]);
 
-  // Handle Role Change via Vercel Serverless Function (/api/admin/update-user-role)
-  const handleUpdateRole = async (targetUid: string, newRole: UserRole) => {
-    if (!auth.currentUser) {
-      toast.error("Authentication required.");
-      return;
-    }
-    setUpdatingUid(targetUid);
+  const handleRoleChange = async (targetUid: string, newRole: UserRole) => {
     try {
-      const idToken = await auth.currentUser.getIdToken();
-      const res = await fetch("/api/admin/update-user-role", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${adminToken || ""}`,
-          "X-Firebase-ID-Token": idToken,
-        },
-        body: JSON.stringify({ targetUid, newRole }),
-      });
+      setUpdatingUid(targetUid);
+      await apiAdminUpdateUserRole(targetUid, newRole);
 
-
-      const resData = await res.json().catch(() => ({}));
-
-      if (!res.ok) {
-        throw new Error(resData.error || `HTTP ${res.status} ${res.statusText}`);
-      }
-
-      toast.success(`Updated user role to '${newRole}' successfully!`);
-
-      // Immediately refresh user directory state without full page reload
-      setUsersList((prev) =>
-        prev.map((u) => (u.uid === targetUid ? { ...u, role: newRole } : u))
+      // Optimistic update local state
+      setUsers((prev) =>
+        prev.map((u) => (u.uid === targetUid ? { ...u, role: newRole } : u)),
       );
 
-      // If the admin modified their own role, trigger context refresh
-      if (targetUid === user?.uid) {
-        await verifyRoleWithServer();
+      if (selectedUser && selectedUser.uid === targetUid) {
+        setSelectedUser((prev) => (prev ? { ...prev, role: newRole } : null));
       }
+
+      toast.success("Role updated successfully", {
+        description: `User role changed to ${newRole.toUpperCase()}`,
+      });
     } catch (err: any) {
-      console.error("Failed to update user role:", err);
-      toast.error(`Failed to update role: ${err.message}`);
+      console.error("Failed to update role:", err);
+      toast.error("Failed to update role", {
+        description: err?.message || "Server rejected role modification.",
+      });
+      // Re-fetch to synchronize state
+      fetchUsers();
     } finally {
       setUpdatingUid(null);
     }
   };
 
-  // 1. While auth state is initializing or verifying, OR if user is not a verified Admin -> Default to 404 Page Not Found (Zero Footprint)
-  if (loading || serverVerifying || !user || !isAdmin || role !== "admin") {
-    return <NotFoundComponent />;
-  }
-
-  // Role display title and message
-  let roleTitle = "Role Dashboard";
-  let roleMessage = `This is the ${role ? role.charAt(0).toUpperCase() + role.slice(1) : "Admin"} page. You are a ${role ? role.charAt(0).toUpperCase() + role.slice(1) : "Admin"}.`;
-  
-  if (role === "admin") {
-    roleTitle = "Admin Page & User Directory";
-    roleMessage = "This is the Admin page. You are an Admin.";
-  } else if (role === "moderator") {
-    roleTitle = "Moderator Page";
-    roleMessage = "This is the Moderator page. You are a Moderator.";
-  } else if (role === "editor") {
-    roleTitle = "Editor Page";
-    roleMessage = "This is the Editor page. You are an Editor.";
-  }
-
-  // Filter users list by search query and role filter
-  const filteredUsers = usersList.filter((u) => {
-    const matchesSearch =
-      u.displayName.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      u.email.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      u.uid.toLowerCase().includes(searchQuery.toLowerCase());
-    const matchesRole = roleFilter === "all" || u.role === roleFilter;
-    return matchesSearch && matchesRole;
-  });
-
-  const executeServerOp = async (endpoint: string, method: string = "POST", bodyPayload: any = {}) => {
-    if (!auth.currentUser) {
-      toast.error("Not authenticated");
-      return;
-    }
-    setOpLoading(endpoint);
-    try {
-      const res = await fetch(endpoint, {
-        method,
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${adminToken || ""}`,
-        },
-        body: method !== "GET" ? JSON.stringify(bodyPayload) : undefined,
-      });
-
-      const resData = await res.json().catch(() => ({}));
-      const result: ServerOpResult = {
-        endpoint,
-        status: res.status,
-        statusText: res.statusText,
-        data: resData,
-        timestamp: new Date().toLocaleTimeString(),
-      };
-      setLastOpResult(result);
-
-      if (res.ok) {
-        toast.success(`[${res.status} OK] ${endpoint} succeeded!`);
-      } else {
-        toast.error(`[${res.status} ${res.statusText}] ${resData.error || "Operation rejected by server"}`);
-      }
-    } catch (err: any) {
-      toast.error(`Request failed: ${err.message}`);
-    } finally {
-      setOpLoading(null);
-    }
+  const copyToClipboard = (text: string, id: string) => {
+    navigator.clipboard.writeText(text);
+    setCopiedId(id);
+    toast.success("Copied to clipboard");
+    setTimeout(() => setCopiedId(null), 2000);
   };
 
+  // Filtered users
+  const filteredUsers = useMemo(() => {
+    return users.filter((u) => {
+      const matchesSearch =
+        u.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        u.email.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        u.uid.toLowerCase().includes(searchQuery.toLowerCase());
+      const matchesRole = roleFilter === "all" || u.role === roleFilter;
+      return matchesSearch && matchesRole;
+    });
+  }, [users, searchQuery, roleFilter]);
 
-  const getRoleBadgeStyle = (r: UserRole) => {
-    switch (r) {
-      case "admin":
-        return "bg-rose-50 text-rose-700 ring-rose-600/20";
-      case "moderator":
-        return "bg-purple-50 text-purple-700 ring-purple-600/20";
-      case "editor":
-        return "bg-indigo-50 text-indigo-700 ring-indigo-600/20";
-      case "viewer":
-        return "bg-amber-50 text-amber-700 ring-amber-600/20";
-      default:
-        return "bg-slate-100 text-slate-700 ring-slate-600/10";
+  // Statistics
+  const stats = useMemo(() => {
+    const total = users.length;
+    const admins = users.filter((u) => u.role === "admin").length;
+    const editors = users.filter((u) => u.role === "editor").length;
+    const moderators = users.filter((u) => u.role === "moderator").length;
+    const standardUsers = users.filter((u) => u.role === "user" || u.role === "viewer").length;
+    return { total, admins, editors, moderators, standardUsers };
+  }, [users]);
+
+  // If auth is loading, show clean loader
+  if (authLoading) {
+    return (
+      <SidebarLayout pageTitle="Administration">
+        <div className="flex h-[70vh] flex-col items-center justify-center gap-4">
+          <div className="flex h-12 w-12 items-center justify-center rounded-2xl border border-primary/30 bg-primary/10 animate-pulse">
+            <RefreshCw className="h-6 w-6 animate-spin text-primary" />
+          </div>
+          <p className="text-sm font-medium text-muted-foreground">Verifying administrator session…</p>
+        </div>
+      </SidebarLayout>
+    );
+  }
+
+  // If user is not an admin, show unauthorized state
+  if (!isAdmin) {
+    return (
+      <SidebarLayout pageTitle="Access Restricted">
+        <div className="mx-auto flex max-w-lg flex-col items-center justify-center px-4 py-20 text-center">
+          <div className="relative mb-6 flex h-20 w-20 items-center justify-center rounded-3xl border border-red-500/30 bg-red-500/10 shadow-[0_0_40px_rgba(239,68,68,0.15)]">
+            <Lock className="h-10 w-10 text-red-400" />
+            <span className="absolute -top-1 -right-1 flex h-4 w-4">
+              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75" />
+              <span className="relative inline-flex rounded-full h-4 w-4 bg-red-500" />
+            </span>
+          </div>
+
+          <h2 className="text-2xl font-bold tracking-tight text-foreground sm:text-3xl">
+            Administrator Privileges Required
+          </h2>
+          <p className="mt-3 text-sm leading-relaxed text-muted-foreground">
+            This section is restricted to authorized administrators. All access requests and role
+            verifications are enforced server-side via Secure HttpOnly sessions.
+          </p>
+
+          <div className="mt-8 flex flex-col gap-3 sm:flex-row">
+            {!user ? (
+              <button
+                onClick={() => signInWithGoogle()}
+                className="inline-flex items-center justify-center gap-2 rounded-xl bg-primary px-5 py-2.5 text-sm font-semibold text-primary-foreground shadow-lg shadow-primary/20 transition-all hover:bg-primary/90 active:scale-95"
+              >
+                <ShieldCheck className="h-4 w-4" />
+                <span>Sign in with Google</span>
+              </button>
+            ) : (
+              <div className="rounded-xl border border-border/80 bg-surface-2/60 px-4 py-2.5 text-xs text-muted-foreground">
+                Signed in as <span className="font-semibold text-foreground">{user.email}</span> (Role:{" "}
+                <span className="font-semibold text-amber-400 uppercase">{user.role}</span>)
+              </div>
+            )}
+            <Link
+              to="/"
+              className="inline-flex items-center justify-center gap-2 rounded-xl border border-border bg-surface px-5 py-2.5 text-sm font-medium text-foreground transition-all hover:bg-surface-2 active:scale-95"
+            >
+              <ArrowLeft className="h-4 w-4" />
+              <span>Back to Library</span>
+            </Link>
+          </div>
+        </div>
+      </SidebarLayout>
+    );
+  }
+
+  const handleReauthorize = async () => {
+    try {
+      setLoading(true);
+      toast.info("Opening Google verification popup...");
+      await promptGoogleIdToken();
+      toast.success("Admin credentials verified! Loading users...");
+      const data = await apiAdminListUsers();
+      setUsers(data);
+    } catch (err: any) {
+      console.error("Reauthorization failed:", err);
+      toast.error("Failed to verify admin credentials", {
+        description: err?.message || "Popup was cancelled or authentication failed.",
+      });
+    } finally {
+      setLoading(false);
     }
   };
 
   return (
-    <SidebarLayout pageTitle="Admin (Role Dashboard)">
-      {/* ──── Clean White Dashboard Screen Container ──── */}
-      <div className="min-h-full bg-white text-slate-900 p-6 md:p-10 font-sans">
-        <div className="mx-auto max-w-6xl space-y-8">
-          
-          {/* Header Banner */}
-          <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-slate-200 pb-6">
-            <div>
-              <div className="flex items-center gap-2">
-                <span className="inline-flex items-center rounded-md bg-emerald-50 px-2.5 py-1 text-xs font-bold text-emerald-700 ring-1 ring-inset ring-emerald-600/20">
-                  <CheckCircle2 className="mr-1 h-3.5 w-3.5" /> Authenticated & Authorized
-                </span>
-                <span className="inline-flex items-center rounded-md bg-indigo-50 px-2.5 py-1 text-xs font-bold text-indigo-700 ring-1 ring-inset ring-indigo-700/10 uppercase">
-                  Role: {role}
-                </span>
-              </div>
-              <h1 className="mt-2 text-3xl font-extrabold tracking-tight text-slate-900">
-                {roleTitle}
-              </h1>
-            </div>
-
-            <div className="flex items-center gap-3">
-              <button
-                onClick={async () => {
-                  toast.info("Re-verifying ID token with Vercel Serverless Function...");
-                  await verifyRoleWithServer();
-                  if (isAdmin) fetchUsers();
-                }}
-                disabled={serverVerifying || fetchingUsers}
-                className="inline-flex items-center gap-1.5 rounded-lg border border-slate-300 bg-white px-3.5 py-2 text-xs font-semibold text-slate-700 shadow-sm hover:bg-slate-50 transition-colors disabled:opacity-50"
-              >
-                <RefreshCw className={`h-3.5 w-3.5 ${serverVerifying || fetchingUsers ? "animate-spin" : ""}`} />
-                Refresh Data
-              </button>
-            </div>
-          </div>
-
-          {/* Primary Role Welcome Message Card */}
-          <div className="rounded-2xl border border-slate-200 bg-slate-50 p-6 shadow-sm text-center md:text-left flex flex-col md:flex-row items-center gap-6">
-            <div className="flex h-14 w-14 flex-shrink-0 items-center justify-center rounded-2xl bg-indigo-600 text-white shadow-md">
-              <Shield className="h-7 w-7" />
-            </div>
+    <SidebarLayout
+      pageTitle="Administration"
+      topBarRight={
+        <div className="flex items-center gap-2">
+          <button
+            onClick={handleReauthorize}
+            disabled={loading}
+            className="inline-flex items-center gap-1.5 rounded-lg border border-primary/30 bg-primary/10 px-3 py-1.5 text-xs font-semibold text-primary transition-all hover:bg-primary/20 hover:border-primary/50 disabled:opacity-50"
+            title="Re-verify Google authentication for admin operations"
+          >
+            <ShieldCheck className="h-3.5 w-3.5" />
+            <span>Verify Token</span>
+          </button>
+          <button
+            onClick={fetchUsers}
+            disabled={loading}
+            className="inline-flex items-center gap-2 rounded-lg border border-border/80 bg-surface-2/60 px-3 py-1.5 text-xs font-medium text-foreground transition-all hover:bg-surface-2 disabled:opacity-50"
+            title="Refresh user directory"
+          >
+            <RefreshCw className={`h-3.5 w-3.5 ${loading ? "animate-spin text-primary" : ""}`} />
+            <span>Refresh</span>
+          </button>
+        </div>
+      }
+    >
+      <div className="mx-auto max-w-7xl px-4 py-8 sm:px-8">
+        {/* Banner */}
+        <div className="relative overflow-hidden rounded-2xl border border-primary/20 bg-gradient-to-br from-primary/10 via-surface to-background p-6 shadow-xl backdrop-blur-xl">
+          <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
             <div className="space-y-1">
-              <span className="text-xs font-bold tracking-wider text-indigo-600 uppercase">
-                RBAC Verification Active
-              </span>
-              <h2 className="text-xl font-bold text-slate-900 tracking-tight">
-                {roleMessage}
-              </h2>
-              <p className="text-xs text-slate-600">
-                {isAdmin
-                  ? "As an Admin, you have full access to view all registered users and manage user roles via serverless functions."
-                  : "You are currently viewing the Role Dashboard. Note that full User Management actions require the 'admin' role."}
+              <div className="inline-flex items-center gap-2 rounded-full border border-primary/30 bg-primary/15 px-3 py-0.5 text-xs font-semibold text-primary">
+                <ShieldAlert className="h-3.5 w-3.5" />
+                <span>Serverless Role-Based Access Control</span>
+              </div>
+              <h1 className="text-2xl font-black tracking-tight text-foreground sm:text-3xl">
+                User & Role Management
+              </h1>
+              <p className="text-xs text-muted-foreground sm:text-sm">
+                Manage user permissions and privileges across Anuwad. All operations execute via
+                secure serverless endpoints backed by Firestore and HttpOnly JWT sessions.
               </p>
             </div>
           </div>
 
-          {/* Navigation Tabs */}
-          <div className="flex border-b border-slate-200 space-x-8 overflow-x-auto">
-            {isAdmin && (
+          {/* Stat Cards */}
+          <div className="mt-6 grid grid-cols-2 gap-3 sm:grid-cols-4">
+            <div className="rounded-xl border border-border/60 bg-surface-2/40 p-3.5 backdrop-blur-md">
+              <div className="flex items-center justify-between text-xs text-muted-foreground">
+                <span>Total Users</span>
+                <Users className="h-4 w-4 text-primary" />
+              </div>
+              <p className="mt-2 text-2xl font-bold tracking-tight text-foreground">{stats.total}</p>
+            </div>
+
+            <div className="rounded-xl border border-red-500/20 bg-red-500/5 p-3.5 backdrop-blur-md">
+              <div className="flex items-center justify-between text-xs text-red-400">
+                <span>Admins</span>
+                <ShieldAlert className="h-4 w-4" />
+              </div>
+              <p className="mt-2 text-2xl font-bold tracking-tight text-red-400">{stats.admins}</p>
+            </div>
+
+            <div className="rounded-xl border border-purple-500/20 bg-purple-500/5 p-3.5 backdrop-blur-md">
+              <div className="flex items-center justify-between text-xs text-purple-400">
+                <span>Editors & Mods</span>
+                <Sparkles className="h-4 w-4 text-purple-400" />
+              </div>
+              <p className="mt-2 text-2xl font-bold tracking-tight text-purple-400">
+                {stats.editors + stats.moderators}
+              </p>
+            </div>
+
+            <div className="rounded-xl border border-emerald-500/20 bg-emerald-500/5 p-3.5 backdrop-blur-md">
+              <div className="flex items-center justify-between text-xs text-emerald-400">
+                <span>Standard Users</span>
+                <UserCheck className="h-4 w-4" />
+              </div>
+              <p className="mt-2 text-2xl font-bold tracking-tight text-emerald-400">
+                {stats.standardUsers}
+              </p>
+            </div>
+          </div>
+        </div>
+
+        {/* Controls: Search and Filter */}
+        <div className="mt-8 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <div className="relative flex-1 max-w-md">
+            <Search className="absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+            <input
+              type="text"
+              placeholder="Search by name, email, or UID…"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="w-full rounded-xl border border-border/80 bg-surface/80 pl-10 pr-4 py-2 text-sm text-foreground placeholder:text-muted-foreground/60 shadow-sm backdrop-blur-sm transition-all focus:border-primary/50 focus:outline-none focus:ring-2 focus:ring-primary/20"
+            />
+          </div>
+
+          <div className="flex items-center gap-2 overflow-x-auto pb-1 sm:pb-0">
+            <span className="text-xs font-medium text-muted-foreground whitespace-nowrap">
+              Filter:
+            </span>
+            {["all", ...ALL_ROLES].map((role) => (
               <button
-                onClick={() => setActiveTab("users")}
-                className={`pb-4 text-sm font-semibold border-b-2 transition-colors flex items-center gap-2 whitespace-nowrap ${
-                  activeTab === "users"
-                    ? "border-indigo-600 text-indigo-600"
-                    : "border-transparent text-slate-500 hover:text-slate-700 hover:border-slate-300"
+                key={role}
+                onClick={() => setRoleFilter(role)}
+                className={`rounded-lg px-3 py-1.5 text-xs font-semibold uppercase tracking-wider transition-all whitespace-nowrap ${
+                  roleFilter === role
+                    ? "bg-primary text-primary-foreground shadow-sm shadow-primary/30"
+                    : "border border-border/60 bg-surface/50 text-muted-foreground hover:bg-surface-2 hover:text-foreground"
                 }`}
               >
-                <Users className="h-4 w-4" /> User Directory & Role Management
+                {role}
               </button>
-            )}
-
-            <button
-              onClick={() => setActiveTab("dashboard")}
-              className={`pb-4 text-sm font-semibold border-b-2 transition-colors flex items-center gap-2 whitespace-nowrap ${
-                activeTab === "dashboard"
-                  ? "border-indigo-600 text-indigo-600"
-                  : "border-transparent text-slate-500 hover:text-slate-700 hover:border-slate-300"
-              }`}
-            >
-              <Database className="h-4 w-4" /> System Credentials & Security
-            </button>
-
-            <button
-              onClick={() => setActiveTab("role-tester")}
-              className={`pb-4 text-sm font-semibold border-b-2 transition-colors flex items-center gap-2 whitespace-nowrap ${
-                activeTab === "role-tester"
-                  ? "border-indigo-600 text-indigo-600"
-                  : "border-transparent text-slate-500 hover:text-slate-700 hover:border-slate-300"
-              }`}
-            >
-              <UserCog className="h-4 w-4" /> Role Simulator
-            </button>
-
-            <button
-              onClick={() => setActiveTab("api-tester")}
-              className={`pb-4 text-sm font-semibold border-b-2 transition-colors flex items-center gap-2 whitespace-nowrap ${
-                activeTab === "api-tester"
-                  ? "border-indigo-600 text-indigo-600"
-                  : "border-transparent text-slate-500 hover:text-slate-700 hover:border-slate-300"
-              }`}
-            >
-              <Lock className="h-4 w-4" /> Serverless API Tester
-            </button>
+            ))}
           </div>
-
-          {/* ──── TAB 1: USER DIRECTORY & ROLE MANAGEMENT ──── */}
-          {activeTab === "users" && isAdmin && (
-            <div className="space-y-6">
-              {/* Directory Filter & Search Header */}
-              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-slate-50 p-4 rounded-xl border border-slate-200">
-                <div className="relative flex-1">
-                  <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
-                  <input
-                    type="text"
-                    placeholder="Search by name, email, or UID..."
-                    value={searchQuery}
-                    onChange={(e) => setSearchQuery(e.target.value)}
-                    className="w-full rounded-lg border border-slate-300 bg-white pl-9 pr-4 py-2 text-sm text-slate-900 placeholder:text-slate-400 focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500"
-                  />
-                </div>
-
-                <div className="flex items-center gap-2">
-                  <Filter className="h-4 w-4 text-slate-500" />
-                  <select
-                    value={roleFilter}
-                    onChange={(e) => setRoleFilter(e.target.value)}
-                    className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-medium text-slate-700 focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500"
-                  >
-                    <option value="all">All Roles ({usersList.length})</option>
-                    <option value="admin">Admin</option>
-                    <option value="moderator">Moderator</option>
-                    <option value="editor">Editor</option>
-                    <option value="user">User</option>
-                    <option value="viewer">Viewer</option>
-                  </select>
-
-                  <button
-                    onClick={fetchUsers}
-                    disabled={fetchingUsers}
-                    className="inline-flex items-center gap-1.5 rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-100 disabled:opacity-50"
-                  >
-                    <RefreshCw className={`h-3.5 w-3.5 ${fetchingUsers ? "animate-spin" : ""}`} />
-                    Reload Users
-                  </button>
-                </div>
-              </div>
-
-              {/* Users Directory Table */}
-              <div className="rounded-xl border border-slate-200 bg-white shadow-sm overflow-hidden">
-                {fetchError ? (
-                  <div className="flex flex-col items-center justify-center p-8 text-center bg-rose-50/50">
-                    <div className="flex h-12 w-12 items-center justify-center rounded-full bg-rose-100 text-rose-600 mb-3">
-                      <AlertTriangle className="h-6 w-6" />
-                    </div>
-                    <h4 className="text-base font-bold text-slate-900">
-                      Server Authorization Error (HTTP 403)
-                    </h4>
-                    <p className="text-xs text-rose-700 max-w-md mt-1 font-mono bg-rose-100/60 p-2.5 rounded-lg border border-rose-200">
-                      {fetchError}
-                    </p>
-                    <p className="text-xs text-slate-600 max-w-md mt-3">
-                      Your Firestore user document (<code className="bg-slate-100 px-1 py-0.5 rounded">users/{user?.uid}</code>) currently has role <strong className="uppercase font-bold text-rose-600">{role || "user"}</strong> instead of <strong className="uppercase font-bold text-emerald-600">admin</strong>.
-                    </p>
-                    <div className="mt-4 flex gap-2">
-                      <button
-                        onClick={fetchUsers}
-                        className="inline-flex items-center gap-1.5 rounded-lg border border-slate-300 bg-white px-4 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50 shadow-sm"
-                      >
-                        <RefreshCw className="h-3.5 w-3.5" /> Refresh & Retry Authorization
-                      </button>
-                    </div>
-                  </div>
-                ) : fetchingUsers && usersList.length === 0 ? (
-                  <div className="flex flex-col items-center justify-center p-12 text-slate-500">
-                    <Loader2 className="h-8 w-8 animate-spin text-indigo-600 mb-3" />
-                    <p className="text-sm font-medium">Fetching registered users from Firestore...</p>
-                  </div>
-                ) : filteredUsers.length === 0 ? (
-                  <div className="flex flex-col items-center justify-center p-12 text-slate-500">
-                    <Users className="h-10 w-10 text-slate-300 mb-2" />
-                    <p className="text-base font-semibold text-slate-700">No users found</p>
-                    <p className="text-xs text-slate-500 mt-1">
-                      {searchQuery || roleFilter !== "all"
-                        ? "Try clearing your search filters."
-                        : "No user documents registered in Firestore yet."}
-                    </p>
-                  </div>
-                ) : (
-                  <div className="overflow-x-auto">
-                    <table className="w-full text-left text-sm text-slate-600">
-                      <thead className="bg-slate-50 text-xs uppercase tracking-wider text-slate-500 border-b border-slate-200">
-                        <tr>
-                          <th className="px-6 py-4 font-semibold">User</th>
-                          <th className="px-6 py-4 font-semibold">Email</th>
-                          <th className="px-6 py-4 font-semibold">Firebase UID</th>
-                          <th className="px-6 py-4 font-semibold">Current Role</th>
-                          <th className="px-6 py-4 font-semibold text-right">Manage Role</th>
-                        </tr>
-                      </thead>
-                      <tbody className="divide-y divide-slate-100">
-                        {filteredUsers.map((u) => {
-                          const isUpdating = updatingUid === u.uid;
-                          const isSelf = u.uid === user?.uid;
-
-                          return (
-                            <tr key={u.uid} className="hover:bg-slate-50/70 transition-colors">
-                              {/* Avatar & Name */}
-                              <td className="px-6 py-4 whitespace-nowrap">
-                                <div className="flex items-center gap-3">
-                                  <UserAvatar
-                                    photoURL={u.photoURL}
-                                    name={u.displayName}
-                                    email={u.email}
-                                    className="h-10 w-10 rounded-full object-cover ring-2 ring-slate-200"
-                                    fallbackClassName="flex h-10 w-10 items-center justify-center rounded-full bg-indigo-600 text-white font-bold text-sm shadow-sm ring-2 ring-slate-100"
-                                  />
-                                  <div>
-                                    <div className="font-bold text-slate-900 flex items-center gap-1.5">
-                                      {u.displayName}
-                                      {isSelf && (
-                                        <span className="rounded bg-indigo-100 px-1.5 py-0.5 text-[10px] font-bold text-indigo-700">
-                                          YOU
-                                        </span>
-                                      )}
-                                    </div>
-                                    <span className="text-xs text-slate-400">
-                                      Registered user
-                                    </span>
-                                  </div>
-                                </div>
-                              </td>
-
-                              {/* Email */}
-                              <td className="px-6 py-4 whitespace-nowrap text-slate-700 font-medium">
-                                {u.email}
-                              </td>
-
-                              {/* UID */}
-                              <td className="px-6 py-4 whitespace-nowrap font-mono text-xs text-slate-500">
-                                {u.uid}
-                              </td>
-
-                              {/* Current Role Badge */}
-                              <td className="px-6 py-4 whitespace-nowrap">
-                                <span
-                                  className={`inline-flex items-center rounded-md px-2.5 py-1 text-xs font-bold uppercase ring-1 ring-inset ${getRoleBadgeStyle(
-                                    u.role
-                                  )}`}
-                                >
-                                  {u.role}
-                                </span>
-                              </td>
-
-                              {/* Role Management Dropdown */}
-                              <td className="px-6 py-4 whitespace-nowrap text-right">
-                                <div className="flex items-center justify-end gap-2">
-                                  {isUpdating ? (
-                                    <div className="inline-flex items-center gap-1.5 text-xs text-indigo-600 font-semibold">
-                                      <Loader2 className="h-4 w-4 animate-spin" /> Saving...
-                                    </div>
-                                  ) : (
-                                    <select
-                                      value={u.role}
-                                      onChange={(e) =>
-                                        handleUpdateRole(u.uid, e.target.value as UserRole)
-                                      }
-                                      className="rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-xs font-bold text-slate-800 shadow-sm focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500 hover:border-slate-400"
-                                    >
-                                      {ALL_ROLES.map((r) => (
-                                        <option key={r} value={r}>
-                                          Role: {r.toUpperCase()}
-                                        </option>
-                                      ))}
-                                    </select>
-                                  )}
-                                </div>
-                              </td>
-                            </tr>
-                          );
-                        })}
-                      </tbody>
-                    </table>
-                  </div>
-                )}
-              </div>
-            </div>
-          )}
-
-          {/* Restricted Notice for Non-Admin Privileged Roles */}
-          {activeTab === "users" && !isAdmin && (
-            <div className="rounded-xl border border-amber-200 bg-amber-50 p-6 text-amber-900 space-y-3">
-              <div className="flex items-center gap-2 font-bold text-base text-amber-800">
-                <AlertTriangle className="h-5 w-5 text-amber-600" /> Restricted Feature Notice
-              </div>
-              <p className="text-sm text-amber-800">
-                User Role Management is restricted to full <strong className="font-semibold">Admins</strong>. As a <strong className="uppercase">{role}</strong>, you have access to the Role Dashboard view, but only full Admins can update another user's role in Firestore.
-              </p>
-            </div>
-          )}
-
-          {/* ──── TAB 2: OVERVIEW & CREDENTIALS ──── */}
-          {activeTab === "dashboard" && (
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              <div className="rounded-xl border border-slate-200 bg-white p-6 shadow-sm space-y-4">
-                <h3 className="text-lg font-bold text-slate-900 flex items-center gap-2">
-                  <Database className="h-5 w-5 text-indigo-600" /> Authenticated User Profile
-                </h3>
-                <dl className="divide-y divide-slate-100 text-sm">
-                  <div className="py-2.5 flex justify-between">
-                    <dt className="text-slate-500">Display Name</dt>
-                    <dd className="font-semibold text-slate-900">{user?.displayName || "N/A"}</dd>
-                  </div>
-                  <div className="py-2.5 flex justify-between">
-                    <dt className="text-slate-500">Email Address</dt>
-                    <dd className="font-semibold text-slate-900">{user?.email || "N/A"}</dd>
-                  </div>
-                  <div className="py-2.5 flex justify-between">
-                    <dt className="text-slate-500">Firebase UID</dt>
-                    <dd className="font-mono text-xs text-slate-700 truncate max-w-[220px]">{user?.uid}</dd>
-                  </div>
-                  <div className="py-2.5 flex justify-between">
-                    <dt className="text-slate-500">Firestore Document</dt>
-                    <dd className="font-mono text-xs text-slate-700">{`users/${user?.uid}`}</dd>
-                  </div>
-                  <div className="py-2.5 flex justify-between">
-                    <dt className="text-slate-500">Assigned Role</dt>
-                    <dd className="font-bold text-indigo-600 uppercase">{role}</dd>
-                  </div>
-                </dl>
-              </div>
-
-              <div className="rounded-xl border border-slate-200 bg-white p-6 shadow-sm space-y-4">
-                <h3 className="text-lg font-bold text-slate-900 flex items-center gap-2">
-                  <Lock className="h-5 w-5 text-emerald-600" /> Server-Side Security Architecture
-                </h3>
-                <ul className="space-y-3 text-sm text-slate-600">
-                  <li className="flex items-start gap-2.5">
-                    <CheckCircle2 className="h-5 w-5 text-emerald-600 flex-shrink-0 mt-0.5" />
-                    <span><strong className="text-slate-900">Zero Trust Client:</strong> All role modifications are strictly executed via protected Vercel Serverless Functions.</span>
-                  </li>
-                  <li className="flex items-start gap-2.5">
-                    <CheckCircle2 className="h-5 w-5 text-emerald-600 flex-shrink-0 mt-0.5" />
-                    <span><strong className="text-slate-900">ID Token Validation:</strong> Every request validates the caller's Firebase ID token against Google servers.</span>
-                  </li>
-                  <li className="flex items-start gap-2.5">
-                    <CheckCircle2 className="h-5 w-5 text-emerald-600 flex-shrink-0 mt-0.5" />
-                    <span><strong className="text-slate-900">Firestore Authorization:</strong> Serverless functions query Firestore <code className="text-xs bg-slate-100 px-1 py-0.5 rounded">users/{'{callerUid}'}</code> to independently verify admin role.</span>
-                  </li>
-                </ul>
-              </div>
-            </div>
-          )}
-
-          {/* ──── TAB 3: ROLE SIMULATOR ──── */}
-          {activeTab === "role-tester" && (
-            <div className="rounded-xl border border-slate-200 bg-white p-6 shadow-sm space-y-6">
-              <div>
-                <h3 className="text-lg font-bold text-slate-900">Switch Your Role for Verification Testing</h3>
-                <p className="text-sm text-slate-600 mt-1">
-                  Change your current role in Firestore (<code className="text-xs bg-slate-100 px-1 py-0.5 rounded">users/{user?.uid}</code>) to test route protection, sidebar navigation visibility, and user directory access live.
-                </p>
-              </div>
-
-              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4">
-                {(["admin", "moderator", "editor", "user"] as UserRole[]).map((r) => {
-                  const isCurrent = role === r;
-                  const isPriv = PRIVILEGED_ROLES.includes(r);
-                  return (
-                    <button
-                      key={r}
-                      onClick={() => changeUserRoleForTesting(r)}
-                      className={`flex flex-col items-center justify-center p-5 rounded-xl border transition-all text-center ${
-                        isCurrent
-                          ? "border-indigo-600 bg-indigo-50/50 ring-2 ring-indigo-600"
-                          : "border-slate-200 bg-white hover:border-slate-300 hover:bg-slate-50"
-                      }`}
-                    >
-                      <span className={`text-xs font-bold uppercase tracking-wider px-2 py-0.5 rounded-full mb-2 ${
-                        isPriv ? "bg-emerald-100 text-emerald-800" : "bg-slate-100 text-slate-700"
-                      }`}>
-                        {isPriv ? "Privileged" : "Default"}
-                      </span>
-                      <span className="text-lg font-extrabold text-slate-900 uppercase">{r}</span>
-                      <span className="text-xs text-slate-500 mt-1">
-                        {r === "admin" ? "Full Admin & Directory Access" : isPriv ? "Dashboard Access Only" : "403 Forbidden Access"}
-                      </span>
-                    </button>
-                  );
-                })}
-              </div>
-            </div>
-          )}
-
-          {/* ──── TAB 4: SERVERLESS FUNCTION API TESTER ──── */}
-          {activeTab === "api-tester" && (
-            <div className="space-y-6">
-              <div className="rounded-xl border border-slate-200 bg-white p-6 shadow-sm space-y-4">
-                <div>
-                  <h3 className="text-lg font-bold text-slate-900">Protected Vercel Serverless Function Tester</h3>
-                  <p className="text-sm text-slate-600 mt-1">
-                    Execute dedicated Vercel Serverless Functions to verify that token verification, UID extraction, and Firestore role checks are independently enforced before executing actions.
-                  </p>
-                </div>
-
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 pt-2">
-                  <button
-                    onClick={() => executeServerOp("/api/admin/list-users", "GET")}
-                    disabled={opLoading !== null}
-                    className="flex flex-col text-left p-4 rounded-xl border border-slate-200 bg-white hover:bg-slate-50 transition-all hover:border-indigo-300"
-                  >
-                    <span className="text-xs font-semibold text-slate-500">GET</span>
-                    <span className="text-sm font-bold text-slate-900 mt-1">List All Users</span>
-                    <span className="text-[11px] text-slate-500 mt-1">Allowed: Admin Only</span>
-                  </button>
-
-                  <button
-                    onClick={() => executeServerOp("/api/admin/create-resource", "POST", { title: "New Document", content: "Test content" })}
-                    disabled={opLoading !== null}
-                    className="flex flex-col text-left p-4 rounded-xl border border-slate-200 bg-white hover:bg-slate-50 transition-all hover:border-indigo-300"
-                  >
-                    <span className="text-xs font-semibold text-slate-500">POST</span>
-                    <span className="text-sm font-bold text-slate-900 mt-1">Create Resource</span>
-                    <span className="text-[11px] text-slate-500 mt-1">Allowed: Admin, Editor</span>
-                  </button>
-
-                  <button
-                    onClick={() => executeServerOp("/api/admin/update-resource", "POST", { resourceId: "res_999", updates: { title: "Updated Title" } })}
-                    disabled={opLoading !== null}
-                    className="flex flex-col text-left p-4 rounded-xl border border-slate-200 bg-white hover:bg-slate-50 transition-all hover:border-indigo-300"
-                  >
-                    <span className="text-xs font-semibold text-slate-500">POST</span>
-                    <span className="text-sm font-bold text-slate-900 mt-1">Update Resource</span>
-                    <span className="text-[11px] text-slate-500 mt-1">Allowed: Admin, Editor, Moderator</span>
-                  </button>
-
-                  <button
-                    onClick={() => executeServerOp("/api/admin/delete-resource", "POST", { resourceId: "res_999" })}
-                    disabled={opLoading !== null}
-                    className="flex flex-col text-left p-4 rounded-xl border border-slate-200 bg-white hover:bg-slate-50 transition-all hover:border-rose-300"
-                  >
-                    <span className="text-xs font-semibold text-rose-600">DELETE</span>
-                    <span className="text-sm font-bold text-slate-900 mt-1">Delete Resource</span>
-                    <span className="text-[11px] text-slate-500 mt-1">Allowed: Admin Only</span>
-                  </button>
-                </div>
-              </div>
-
-              {/* Server Response Inspector */}
-              {lastOpResult && (
-                <div className="rounded-xl border border-slate-200 bg-slate-900 text-slate-100 p-6 space-y-3 font-mono text-xs shadow-md">
-                  <div className="flex justify-between items-center border-b border-slate-800 pb-3">
-                    <div className="flex items-center gap-2">
-                      <span className={`px-2 py-0.5 rounded text-white font-bold ${
-                        lastOpResult.status >= 200 && lastOpResult.status < 300 ? "bg-emerald-600" : "bg-rose-600"
-                      }`}>
-                        HTTP {lastOpResult.status} {lastOpResult.statusText}
-                      </span>
-                      <span className="text-slate-400">{lastOpResult.endpoint}</span>
-                    </div>
-                    <span className="text-slate-500">{lastOpResult.timestamp}</span>
-                  </div>
-                  <pre className="overflow-x-auto p-3 bg-slate-950 rounded-lg text-emerald-400">
-                    {JSON.stringify(lastOpResult.data, null, 2)}
-                  </pre>
-                </div>
-              )}
-            </div>
-          )}
-
         </div>
+
+        {/* Users Table */}
+        <div className="mt-4 overflow-hidden rounded-2xl border border-border/80 bg-surface/60 shadow-xl backdrop-blur-xl">
+          <div className="overflow-x-auto">
+            <table className="w-full text-left text-sm">
+              <thead className="border-b border-border/80 bg-surface-2/50 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
+                <tr>
+                  <th className="px-6 py-3.5">User</th>
+                  <th className="px-6 py-3.5">Role</th>
+                  <th className="px-6 py-3.5 hidden md:table-cell">Last Login</th>
+                  <th className="px-6 py-3.5 hidden lg:table-cell">Created</th>
+                  <th className="px-6 py-3.5 text-right">Actions</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-border/60">
+                {loading && users.length === 0 ? (
+                  <tr>
+                    <td colSpan={5} className="px-6 py-12 text-center text-muted-foreground">
+                      <div className="flex items-center justify-center gap-3">
+                        <RefreshCw className="h-5 w-5 animate-spin text-primary" />
+                        <span>Loading user directory from Firestore…</span>
+                      </div>
+                    </td>
+                  </tr>
+                ) : filteredUsers.length === 0 ? (
+                  <tr>
+                    <td colSpan={5} className="px-6 py-12 text-center text-muted-foreground">
+                      <div className="flex flex-col items-center justify-center gap-2">
+                        <UserX className="h-8 w-8 text-muted-foreground/50" />
+                        <p className="font-medium text-foreground">No users found</p>
+                        <p className="text-xs">
+                          {searchQuery || roleFilter !== "all"
+                            ? "Try adjusting your search criteria or role filters."
+                            : "No user profiles currently registered."}
+                        </p>
+                      </div>
+                    </td>
+                  </tr>
+                ) : (
+                  filteredUsers.map((u) => {
+                    const roleCfg = ROLE_CONFIG[u.role] || ROLE_CONFIG.user;
+                    const isSelf = user?.uid === u.uid;
+                    const isUpdating = updatingUid === u.uid;
+
+                    return (
+                      <tr
+                        key={u.uid}
+                        className="transition-colors hover:bg-surface-2/40 cursor-pointer"
+                        onClick={() => setSelectedUser(u)}
+                      >
+                        {/* User info */}
+                        <td className="px-6 py-4">
+                          <div className="flex items-center gap-3">
+                            <UserAvatar
+                              photoURL={u.photoURL}
+                              name={u.name}
+                              email={u.email}
+                              className="h-10 w-10 rounded-full object-cover ring-2 ring-border/80"
+                              fallbackClassName="flex h-10 w-10 items-center justify-center rounded-full bg-primary/20 text-sm font-bold text-primary ring-2 ring-border/80"
+                            />
+                            <div className="min-w-0">
+                              <div className="flex items-center gap-2">
+                                <p className="font-semibold text-foreground truncate">{u.name}</p>
+                                {isSelf && (
+                                  <span className="rounded-full bg-primary/20 px-2 py-0.5 text-[10px] font-bold text-primary">
+                                    You
+                                  </span>
+                                )}
+                              </div>
+                              <p className="text-xs text-muted-foreground truncate">{u.email}</p>
+                            </div>
+                          </div>
+                        </td>
+
+                        {/* Role selector / badge */}
+                        <td className="px-6 py-4" onClick={(e) => e.stopPropagation()}>
+                          <div className="relative inline-block">
+                            <select
+                              value={u.role}
+                              disabled={isUpdating}
+                              onChange={(e) => handleRoleChange(u.uid, e.target.value as UserRole)}
+                              className={`appearance-none rounded-lg border px-3 py-1.5 pr-8 text-xs font-semibold uppercase tracking-wider transition-all focus:outline-none focus:ring-2 focus:ring-primary/20 cursor-pointer disabled:opacity-50 ${roleCfg.bg} ${roleCfg.text} ${roleCfg.border}`}
+                            >
+                              {ALL_ROLES.map((r) => (
+                                <option key={r} value={r} className="bg-popover text-foreground">
+                                  {r.toUpperCase()}
+                                </option>
+                              ))}
+                            </select>
+                            <ChevronDown
+                              className={`pointer-events-none absolute right-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 ${
+                                isUpdating ? "animate-spin" : roleCfg.text
+                              }`}
+                            />
+                          </div>
+                        </td>
+
+                        {/* Last login */}
+                        <td className="px-6 py-4 text-xs text-muted-foreground hidden md:table-cell">
+                          {formatDate(u.lastLoginAt)}
+                        </td>
+
+                        {/* Created */}
+                        <td className="px-6 py-4 text-xs text-muted-foreground hidden lg:table-cell">
+                          {formatDate(u.createdAt)}
+                        </td>
+
+                        {/* Actions */}
+                        <td className="px-6 py-4 text-right" onClick={(e) => e.stopPropagation()}>
+                          <button
+                            onClick={() => setSelectedUser(u)}
+                            className="inline-flex items-center gap-1.5 rounded-lg border border-border/80 bg-surface-2/60 px-3 py-1 text-xs font-medium text-foreground transition-colors hover:bg-surface-2"
+                          >
+                            <Info className="h-3 w-3" />
+                            <span>Details</span>
+                          </button>
+                        </td>
+                      </tr>
+                    );
+                  })
+                )}
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        {/* User Details Modal */}
+        {selectedUser && (
+          <div
+            className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm animate-in fade-in duration-150"
+            onClick={() => setSelectedUser(null)}
+          >
+            <div
+              className="w-full max-w-lg overflow-hidden rounded-2xl border border-border/80 bg-popover p-6 shadow-2xl backdrop-blur-xl animate-in zoom-in-95 duration-150"
+              onClick={(e) => e.stopPropagation()}
+            >
+              {/* Header */}
+              <div className="flex items-start justify-between">
+                <div className="flex items-center gap-3.5">
+                  <UserAvatar
+                    photoURL={selectedUser.photoURL}
+                    name={selectedUser.name}
+                    email={selectedUser.email}
+                    className="h-14 w-14 rounded-2xl object-cover ring-2 ring-primary/30"
+                    fallbackClassName="flex h-14 w-14 items-center justify-center rounded-2xl bg-primary/20 text-lg font-bold text-primary ring-2 ring-primary/30"
+                  />
+                  <div>
+                    <h3 className="text-lg font-bold text-foreground">{selectedUser.name}</h3>
+                    <p className="text-xs text-muted-foreground">{selectedUser.email}</p>
+                  </div>
+                </div>
+
+                <button
+                  onClick={() => setSelectedUser(null)}
+                  className="rounded-lg p-1.5 text-muted-foreground hover:bg-surface-2 hover:text-foreground"
+                >
+                  ✕
+                </button>
+              </div>
+
+              {/* Details List */}
+              <div className="mt-6 space-y-3.5 rounded-xl border border-border/60 bg-surface/50 p-4 text-xs">
+                <div className="flex items-center justify-between">
+                  <span className="flex items-center gap-1.5 text-muted-foreground">
+                    <Fingerprint className="h-3.5 w-3.5" />
+                    <span>User UID:</span>
+                  </span>
+                  <div className="flex items-center gap-1.5">
+                    <span className="font-mono text-[11px] text-foreground max-w-[200px] truncate">
+                      {selectedUser.uid}
+                    </span>
+                    <button
+                      onClick={() => copyToClipboard(selectedUser.uid, "uid")}
+                      className="p-1 text-muted-foreground hover:text-foreground"
+                      title="Copy UID"
+                    >
+                      {copiedId === "uid" ? (
+                        <Check className="h-3.5 w-3.5 text-emerald-400" />
+                      ) : (
+                        <Copy className="h-3.5 w-3.5" />
+                      )}
+                    </button>
+                  </div>
+                </div>
+
+                <div className="flex items-center justify-between">
+                  <span className="flex items-center gap-1.5 text-muted-foreground">
+                    <Mail className="h-3.5 w-3.5" />
+                    <span>Email:</span>
+                  </span>
+                  <span className="font-medium text-foreground">{selectedUser.email}</span>
+                </div>
+
+                <div className="flex items-center justify-between">
+                  <span className="flex items-center gap-1.5 text-muted-foreground">
+                    <Clock className="h-3.5 w-3.5" />
+                    <span>Last Login:</span>
+                  </span>
+                  <span className="font-medium text-foreground">
+                    {formatDate(selectedUser.lastLoginAt)}
+                  </span>
+                </div>
+
+                <div className="flex items-center justify-between">
+                  <span className="flex items-center gap-1.5 text-muted-foreground">
+                    <Clock className="h-3.5 w-3.5" />
+                    <span>Account Created:</span>
+                  </span>
+                  <span className="font-medium text-foreground">
+                    {formatDate(selectedUser.createdAt)}
+                  </span>
+                </div>
+              </div>
+
+              {/* Role Selection inside modal */}
+              <div className="mt-6">
+                <label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                  Change Privilege / Role
+                </label>
+                <div className="mt-2 grid grid-cols-1 gap-2 sm:grid-cols-2">
+                  {ALL_ROLES.map((r) => {
+                    const cfg = ROLE_CONFIG[r];
+                    const isCurrent = selectedUser.role === r;
+
+                    return (
+                      <button
+                        key={r}
+                        onClick={() => handleRoleChange(selectedUser.uid, r)}
+                        disabled={updatingUid === selectedUser.uid}
+                        className={`flex flex-col items-start rounded-xl border p-3 text-left transition-all ${
+                          isCurrent
+                            ? `${cfg.bg} ${cfg.border} ring-1 ring-primary/40`
+                            : "border-border/60 bg-surface/40 hover:bg-surface-2/60"
+                        }`}
+                      >
+                        <div className="flex w-full items-center justify-between">
+                          <span className={`text-xs font-bold uppercase tracking-wider ${cfg.text}`}>
+                            {cfg.label}
+                          </span>
+                          {isCurrent && <Check className="h-3.5 w-3.5 text-primary" />}
+                        </div>
+                        <p className="mt-1 text-[11px] text-muted-foreground line-clamp-2">
+                          {cfg.desc}
+                        </p>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+
+              <div className="mt-6 flex justify-end">
+                <button
+                  onClick={() => setSelectedUser(null)}
+                  className="rounded-xl border border-border bg-surface px-4 py-2 text-xs font-semibold text-foreground hover:bg-surface-2"
+                >
+                  Done
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
     </SidebarLayout>
   );

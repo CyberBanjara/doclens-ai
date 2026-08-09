@@ -12,7 +12,6 @@ import { ApiKeyModal } from "@/components/ApiKeyModal";
 import { Toaster } from "@/components/ui/sonner";
 import { useEffect } from "react";
 import { initTheme } from "@/lib/theme";
-import { logPageView } from "@/lib/firebase";
 
 import appCss from "../styles.css?url";
 import { TtsProvider } from "@/context/TtsContext";
@@ -269,10 +268,6 @@ function RootComponent() {
       }
     };
   }, []);
-
-  useEffect(() => {
-    logPageView(location.pathname);
-  }, [location.pathname]);
 
   return (
     <AuthProvider>

@@ -1,11 +1,11 @@
 import { Link, useMatchRoute } from "@tanstack/react-router";
 import { useRef, useState } from "react";
-import { Plus } from "lucide-react";
+import { Plus, ShieldAlert } from "lucide-react";
 import { ApiKeyStatusBadge } from "@/components/ApiKeyStatusBadge";
 import { SupportModal } from "@/components/SupportModal";
 import { MobileTabBar } from "@/components/mobile/MobileTabBar";
-import { ProfileDropdown } from "@/components/ProfileDropdown";
 import { useIsMobile } from "@/hooks/use-mobile";
+import { ProfileDropdown } from "@/components/ProfileDropdown";
 import { useAuth } from "@/context/AuthContext";
 
 interface SidebarLayoutProps {
@@ -35,11 +35,12 @@ export function SidebarLayout({
   const matchRoute = useMatchRoute();
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [supportOpen, setSupportOpen] = useState(false);
-  const { isPrivileged } = useAuth();
+
+  const { isAdmin } = useAuth();
 
   const navItems = [
     ...BASE_NAV_ITEMS,
-    ...(isPrivileged ? [{ to: "/admin", label: "Admin", icon: "🛡️" }] : []),
+    ...(isAdmin ? [{ to: "/admin" as const, label: "Admin", icon: "🛡️" }] : []),
   ];
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -61,12 +62,14 @@ export function SidebarLayout({
   if (isMobile) {
     return (
       <div className="flex h-dvh flex-col bg-background text-foreground">
-        <header className="flex h-12 flex-shrink-0 items-center gap-2 border-b border-border bg-background/80 px-4 backdrop-blur-md">
+        <header className="flex h-12 flex-shrink-0 items-center justify-between border-b border-border bg-background/80 px-4 backdrop-blur-md">
           <div className="w-9 flex-shrink-0" />
           <h2 className="flex-1 truncate text-center text-base font-semibold tracking-tight text-foreground">
             {pageTitle}
           </h2>
-          <ProfileDropdown />
+          <div className="flex items-center">
+            <ProfileDropdown />
+          </div>
         </header>
 
         <main className="flex-1 overflow-y-auto pb-24">{children}</main>

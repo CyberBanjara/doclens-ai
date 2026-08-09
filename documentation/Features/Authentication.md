@@ -1,32 +1,55 @@
-# Authentication Feature
+# Serverless Authentication & Authorization Architecture
 
-> Google Sign-In via Firebase Auth, plus a Firestore-backed review flow.
-> **Source:** `src/lib/firebase.ts`, `src/context/AuthContext.tsx`, `src/components/ProfileDropdown.tsx`, `src/components/ReviewModal.tsx`
+## Overview
 
----
-
-## Capabilities
-
-- **Google Sign-In:** Popup-based OAuth via Firebase Auth (`signInWithPopup` + `GoogleAuthProvider`), configured to always show the account picker (`prompt: "select_account"`).
-- **Session State:** Auth state is observed globally via `onAuthStateChanged`, exposed app-wide through `AuthContext`.
-- **Leave a Review:** Signed-in users can submit a star rating + comment, written to a Firestore `reviews` collection.
-- **Analytics:** Firebase Analytics logs page views (`logPageView()`), initialized only when `isSupported()` (guards against unsupported/SSR environments).
+Anuwad implements a **serverless-only, zero-refresh-token authentication & authorization architecture** designed for high security, speed, and privacy.
 
 ---
 
-## Architecture
+## Key Principles & Security Model
 
-- `src/lib/firebase.ts` initializes the Firebase app (config from `VITE_FIREBASE_*` env vars) and exports `auth`, `googleProvider`, `db` (Firestore), `signInWithGoogle()`, `logOut()`, `submitReviewToFirestore()`, and `logPageView()`.
-- `AuthContext` (`src/context/AuthContext.tsx`) wraps the app (mounted in `routes/__root.tsx`) and exposes `{ user, loading, signInWithGoogle, signOut }` via `useAuth()`. Sign-in/out both toast success or failure.
-- `ProfileDropdown` (header/sidebar avatar popover) is the primary entry point: shows the user's photo/name when signed in, a "Sign in with Google" action when not, and opens `ReviewModal` for the review flow.
-- `ReviewModal` collects a 1–5 star rating and optional comment, then calls `submitReviewToFirestore()`; requires the user to already be signed in.
+1. **Single-Use Google Login:**
+   - Client triggers Google authentication once during sign-in to obtain a Google ID token.
+   - Client Firebase Auth instance is immediately signed out so no persistent client-side token or session remains in browser memory.
+
+2. **Server-Side Identity Verification & Firestore Role Synchronization:**
+   - Serverless endpoint `POST /api/auth/google-login` verifies the token with Google/Firebase Identity Toolkit.
+   - The user's role is synchronized from Google to Firestore (`users/{uid}` collection) server-side (defaulting to `'user'`).
+
+3. **HttpOnly Cookie JWT Sessions:**
+   - The server signs a short-lived JWT session (4-hour expiration) with `{ uid, email, name, photoURL, role }` using `jose` with server secret `ADMIN_JWT_SECRET`.
+   - The JWT is stored exclusively in a **Secure, HttpOnly, SameSite=Lax** cookie (`session_token`).
+   - No auth tokens or secrets are ever returned in API response bodies or exposed to client JavaScript.
+
+4. **Filtered Client Profile:**
+   - The client receives only the minimal profile fields required for the UI: `{ uid, name, email, photoURL, role }`.
+   - On page load, `GET /api/auth/me` verifies the HttpOnly cookie server-side and returns the filtered profile.
+
+5. **Protected Admin Management:**
+   - `GET /api/admin/users`: Protected by server-side session check requiring role `'admin'`.
+   - `POST /api/admin/update-user-role`: Updates a user's role directly in Firestore after verifying administrator authorization.
 
 ---
 
-## Relationships
+## Serverless Endpoints
 
-- **Components:** [[ProfileDropdown]] *(doc not yet written)*, [[ReviewModal]] *(doc not yet written)*.
-- **Used In:** `routes/__root.tsx` (global), [[SidebarLayout]].
+| Endpoint | Method | Access | Description |
+| :--- | :---: | :---: | :--- |
+| `/api/auth/google-login` | `POST` | Public | Verifies Google token, syncs role in Firestore, sets HttpOnly cookie |
+| `/api/auth/me` | `GET` | Session Cookie | Validates session cookie and returns filtered client user |
+| `/api/auth/logout` | `POST` | Public | Clears HttpOnly session cookie |
+| `/api/admin/users` | `GET` | Admin Only | Lists all registered users from Firestore |
+| `/api/admin/update-user-role` | `POST` | Admin Only | Modifies user roles in Firestore (`admin`, `editor`, `moderator`, `viewer`, `user`) |
+
+---
+
+## User Roles & Hierarchy
+
+- **`admin`**: Full administrative access, role assignment, directory view.
+- **`editor`**: Curation and editorial permissions for global library.
+- **`moderator`**: Content review and moderation.
+- **`viewer`**: Read-only preview permissions.
+- **`user`**: Standard authenticated user.
 
 ---
 
