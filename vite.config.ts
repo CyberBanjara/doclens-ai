@@ -71,11 +71,31 @@ export default defineConfig({
           const url = req.url || "";
           if (url.startsWith("/api/")) {
             const pathName = url.split("?")[0];
-            const relativePath = `.${pathName}.ts`;
-            try {
-              const mod = await server.ssrLoadModule(relativePath);
-              if (mod && mod.default) {
-                // Ensure res.status & res.json exist
+            const method = (req.method || "GET").toLowerCase();
+            const candidates = [
+              `./server${pathName}.${method}.ts`,
+              `./server${pathName}.ts`,
+              `./server${pathName}/index.ts`,
+              `.${pathName}.ts`,
+            ];
+
+            let mod: any = null;
+            for (const candidate of candidates) {
+              try {
+                mod = await server.ssrLoadModule(candidate);
+                if (mod && mod.default) break;
+              } catch {
+                // Try next candidate
+              }
+            }
+
+            if (mod && mod.default) {
+              try {
+                const { toNodeHandler } = await import("h3/node");
+                const nodeHandler = toNodeHandler(mod.default);
+                return await nodeHandler(req, res);
+              } catch {
+                // Fallback to direct call if not an H3 event handler
                 res.json = (data: any) => {
                   res.setHeader("Content-Type", "application/json");
                   res.end(JSON.stringify(data));
@@ -103,12 +123,6 @@ export default defineConfig({
                 await mod.default(req, res);
                 return;
               }
-            } catch (err: any) {
-              console.error(`Dev API error for ${pathName}:`, err);
-              res.statusCode = 500;
-              res.setHeader("Content-Type", "application/json");
-              res.end(JSON.stringify({ error: err.message }));
-              return;
             }
           }
           next();
@@ -118,6 +132,7 @@ export default defineConfig({
     ...(isVercel
       ? [
           nitro({
+            scanDirs: ["server"],
             vercel: {
               functions: {
                 runtime: "nodejs22.x",
@@ -131,3 +146,4 @@ export default defineConfig({
       : []),
   ],
 });
+
