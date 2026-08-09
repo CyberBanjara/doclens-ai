@@ -91,8 +91,10 @@ export default defineConfig({
 
             if (mod && mod.default) {
               try {
+                const { createApp } = await import("h3");
                 const { toNodeHandler } = await import("h3/node");
-                const nodeHandler = toNodeHandler(mod.default);
+                const app = createApp().use(mod.default);
+                const nodeHandler = toNodeHandler(app);
                 return await nodeHandler(req, res);
               } catch {
                 // Fallback to direct call if not an H3 event handler
