@@ -114,7 +114,7 @@ export function ApiKeyModal() {
               onChange={(e) => setCustomKeyInput(e.target.value)}
               style={{
                 WebkitTextSecurity: showKey ? "none" : "disc",
-              }}
+              } as React.CSSProperties}
               className="w-full rounded-md border border-border bg-background pl-3 pr-10 py-2 text-sm font-mono outline-none focus:border-primary"
             />
             <button

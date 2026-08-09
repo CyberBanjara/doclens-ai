@@ -17,10 +17,7 @@ export function MobileTabBar() {
   return (
     <nav className="fixed inset-x-0 bottom-0 z-40 flex items-stretch border-t border-border bg-surface/90 pb-[env(safe-area-inset-bottom)] backdrop-blur-xl">
       {TABS.map((tab) => {
-        const isActive =
-          tab.to === "/"
-            ? !!matchRoute({ to: "/", fuzzy: false })
-            : !!matchRoute({ to: tab.to, fuzzy: true });
+        const isActive = !!matchRoute({ to: tab.to, fuzzy: true });
         const Icon = tab.icon;
         return (
           <Link

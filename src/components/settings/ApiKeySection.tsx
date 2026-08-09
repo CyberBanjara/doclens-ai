@@ -57,7 +57,7 @@ export function ApiKeySection({
             onChange={(e) => onCustomKeyChange(e.target.value)}
             style={{
               WebkitTextSecurity: showKey ? "none" : "disc",
-            }}
+            } as React.CSSProperties}
             className="w-full rounded-[10px] border border-border bg-background pl-3 pr-10 py-2 text-sm font-mono outline-none focus:border-primary"
           />
           <button
