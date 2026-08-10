@@ -3,24 +3,25 @@ import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 import {
   ArrowLeft,
-  FileText,
   Globe,
   RefreshCw,
   Search,
-  Trash2,
   X,
+  Layers,
+  FolderOpen,
 } from "lucide-react";
 import { SidebarLayout } from "@/components/SidebarLayout";
 import { deleteFromR2, downloadFromR2 } from "@/lib/r2";
 import { getCachedR2Files, setCachedR2Files } from "@/lib/r2-cache";
-import { createDoc } from "@/lib/storage";
+import { createDoc, listDocs, type DocSummary } from "@/lib/storage";
 import { LoadingLogo } from "@/components/LoadingLogo";
 import { getSyncConfig } from "@/lib/sync";
 import { useIsMobile } from "@/hooks/use-mobile";
-import { formatBytes, formatDate, base64ToBlob, parseFileCategory, type R2File, type ParsedR2File } from "@/lib/file-utils";
-import { CategoryMarqueeRow, type CategoryMarqueeItem } from "@/components/CategoryMarqueeRow";
+import { formatBytes, base64ToBlob, parseFileCategory, type R2File, type ParsedR2File } from "@/lib/file-utils";
 import { DeleteFileDialog } from "@/components/DeleteFileDialog";
 import { useAuth } from "@/context/AuthContext";
+import { CategoryVerticalHeap, getCategoryMeta } from "@/components/CategoryVerticalHeap";
+import { GlobalLibraryCard } from "@/components/GlobalLibraryCard";
 
 export const Route = createFileRoute("/global-library")({
   component: GlobalLibraryPage,
@@ -44,9 +45,10 @@ const STANDARD_CATEGORIES: Record<string, { label: string; icon: string; desc: s
 function GlobalLibraryPage() {
   const isMobile = useIsMobile();
   const navigate = useNavigate();
-  const { user, loading: authLoading, signInWithGoogle } = useAuth();
+  const { user, isAdmin, loading: authLoading, signInWithGoogle } = useAuth();
 
   const [files, setFiles] = useState<R2File[]>([]);
+  const [localDocs, setLocalDocs] = useState<DocSummary[]>([]);
   const [loading, setLoading] = useState(true);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [importingKey, setImportingKey] = useState<string | null>(null);
@@ -62,8 +64,12 @@ function GlobalLibraryPage() {
     if (!silent) setLoading(true);
     setErrorMsg(null);
     try {
-      const res = await getCachedR2Files({ forceRefresh });
+      const [res, docs] = await Promise.all([
+        getCachedR2Files({ forceRefresh }),
+        listDocs().catch(() => []),
+      ]);
       setFiles(res.files || []);
+      setLocalDocs(docs || []);
     } catch (e: any) {
       console.error(e);
       setErrorMsg(e?.message || "Failed to list files from Cloudflare R2.");
@@ -114,29 +120,16 @@ function GlobalLibraryPage() {
     return Array.from(keys);
   }, [categoryStats]);
 
-  const marqueeItems: CategoryMarqueeItem[] = useMemo(() => {
-    const allItem: CategoryMarqueeItem = {
-      key: "all",
-      label: `All (${files.length})`,
-      icon: "🌐",
-      active: activeCategory === "all",
-      onClick: () => setActiveCategory("all"),
-    };
-
-    const catItems: CategoryMarqueeItem[] = categoriesList.map((catKey) => {
-      const meta = STANDARD_CATEGORIES[catKey] || { label: catKey, icon: "📂" };
-      const count = categoryStats[catKey]?.count || 0;
-      return {
-        key: catKey,
-        label: `${meta.label} (${count})`,
-        icon: meta.icon,
-        active: activeCategory === catKey,
-        onClick: () => setActiveCategory(catKey),
-      };
-    });
-
-    return [allItem, ...catItems];
-  }, [files.length, categoriesList, activeCategory, categoryStats]);
+  // Map of local doc filename -> doc id
+  const localDocsMap = useMemo(() => {
+    const map: Record<string, string> = {};
+    for (const d of localDocs) {
+      if (d.fileName) {
+        map[d.fileName.toLowerCase()] = d.id;
+      }
+    }
+    return map;
+  }, [localDocs]);
 
   const filteredFiles = useMemo(() => {
     return parsedFiles.filter((f) => {
@@ -148,6 +141,14 @@ function GlobalLibraryPage() {
       return matchesCat && matchesSearch;
     });
   }, [parsedFiles, activeCategory, searchQuery]);
+
+  const activeCategoryMeta = useMemo(() => {
+    return getCategoryMeta(activeCategory);
+  }, [activeCategory]);
+
+  const totalLibrarySize = useMemo(() => {
+    return parsedFiles.reduce((sum, f) => sum + f.size, 0);
+  }, [parsedFiles]);
 
   const handleImport = async (file: R2File) => {
     if (importingKey) return;
@@ -227,17 +228,74 @@ function GlobalLibraryPage() {
     }
   };
 
+  const [syncingThumbnails, setSyncingThumbnails] = useState(false);
+
+  const handleSyncAllThumbnails = async () => {
+    if (syncingThumbnails || files.length === 0) return;
+    setSyncingThumbnails(true);
+    const toastId = toast.loading("Checking & syncing missing PDF thumbnails in R2...");
+    let syncedCount = 0;
+    try {
+      const { getThumbnailFromR2, downloadFromR2 } = await import("@/lib/r2");
+      const { renderPageToJpegBlob } = await import("@/hooks/useThumbnail");
+      const { base64ToBlob } = await import("@/lib/file-utils");
+      const { uploadBlobAsThumbnailToR2 } = await import("@/hooks/useR2Thumbnail");
+
+      for (let i = 0; i < files.length; i++) {
+        const file = files[i];
+        try {
+          const check = await getThumbnailFromR2({ data: { fileKey: file.key } });
+          if (!check.found) {
+            toast.loading(`Generating thumbnail (${i + 1}/${files.length}): "${file.key.split("/").pop() || file.key}"...`, { id: toastId });
+            const res = await downloadFromR2({ data: { key: file.key } });
+            const pdfBlob = base64ToBlob(res.base64Data, res.contentType);
+            const thumbBlob = await renderPageToJpegBlob(pdfBlob);
+            const ok = await uploadBlobAsThumbnailToR2(file.key, thumbBlob);
+            if (ok) syncedCount++;
+          }
+        } catch (err) {
+          console.warn(`Failed syncing thumbnail for ${file.key}:`, err);
+        }
+      }
+
+      if (syncedCount > 0) {
+        toast.success(`Successfully generated and saved ${syncedCount} missing thumbnails to Cloudflare R2!`, { id: toastId });
+        void fetchFiles(true, true);
+      } else {
+        toast.success("All R2 PDF thumbnails are already generated and stored in Cloudflare R2!", { id: toastId });
+      }
+    } catch (e: any) {
+      console.error(e);
+      toast.error(e?.message || "Failed to sync R2 thumbnails.", { id: toastId });
+    } finally {
+      setSyncingThumbnails(false);
+    }
+  };
+
   return (
     <SidebarLayout
       pageTitle="Global Library"
       topBarRight={
         <div className="flex items-center gap-2">
+          {isAdmin && (
+            <button
+              onClick={() => void handleSyncAllThumbnails()}
+              disabled={!user || loading || syncingThumbnails || !!importingKey || !!deletingKey}
+              className="flex items-center gap-1.5 h-8 px-2.5 rounded-lg border border-border bg-surface text-xs font-medium text-muted-foreground transition-colors hover:bg-surface-2 hover:text-foreground disabled:opacity-50 cursor-pointer"
+              aria-label="Sync R2 Thumbnails"
+              title="Generate & store missing PDF thumbnails in Cloudflare R2"
+            >
+              <Layers className={`h-3.5 w-3.5 ${syncingThumbnails ? "animate-spin text-primary" : ""}`} />
+              <span className="hidden sm:inline">Sync Thumbnails</span>
+            </button>
+          )}
+
           <button
             onClick={() => void fetchFiles(false, true)}
-            disabled={!user || loading || !!importingKey || !!deletingKey}
-            className="flex h-8 w-8 items-center justify-center rounded-lg border border-border bg-surface text-muted-foreground transition-colors hover:bg-surface-2 hover:text-foreground disabled:opacity-50"
+            disabled={!user || loading || syncingThumbnails || !!importingKey || !!deletingKey}
+            className="flex h-8 w-8 items-center justify-center rounded-lg border border-border bg-surface text-muted-foreground transition-colors hover:bg-surface-2 hover:text-foreground disabled:opacity-50 cursor-pointer"
             aria-label="Refresh"
-            title="Refresh"
+            title="Refresh library"
           >
             <RefreshCw className={`h-3.5 w-3.5 ${loading ? "animate-spin" : ""}`} />
           </button>
@@ -245,293 +303,129 @@ function GlobalLibraryPage() {
       }
     >
       <div className={`transition-all duration-300 ${!user ? "filter blur-[5px] pointer-events-none select-none opacity-50" : ""}`}>
-        {isMobile ? (
-          <div className="space-y-4 px-4 pb-24 pt-4">
+        <div className="mx-auto max-w-7xl p-4 sm:p-6 lg:p-8 space-y-6">
+          <h1 className="sr-only">Cloudflare R2 Global Library</h1>
+
           {errorMsg ? (
-            <div className="rounded-2xl border border-destructive/40 bg-destructive/10 p-5 text-center">
-              <p className="text-sm text-foreground/90">{errorMsg}</p>
+            <div className="rounded-3xl border border-destructive/40 bg-destructive/10 p-6 sm:p-8 text-center max-w-2xl mx-auto shadow-lg">
+              <div className="font-mono text-[11px] font-bold uppercase tracking-[0.2em] text-destructive">
+                configuration error
+              </div>
+              <p className="mt-2 text-sm text-foreground/95">{errorMsg}</p>
+              <p className="mt-1 text-xs text-muted-foreground leading-relaxed">
+                Make sure you have populated the Cloudflare R2 credentials (`R2_ACCOUNT_ID`,
+                `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY`, `R2_BUCKET_NAME`) in your `.env` file.
+              </p>
               <button
                 onClick={() => void fetchFiles(false, true)}
-                className="mt-3 rounded-full bg-primary px-4 py-1.5 text-xs font-semibold text-primary-foreground transition-transform active:scale-95"
+                className="mt-4 rounded-full bg-primary px-5 py-2 font-mono text-xs uppercase tracking-widest text-primary-foreground hover:opacity-90 active:scale-95 transition-all shadow-md cursor-pointer font-bold"
               >
-                Retry
+                Retry Connection
               </button>
             </div>
           ) : loading ? (
-            <div className="flex h-64 flex-col items-center justify-center">
-              <LoadingLogo size={64} label="Loading…" />
+            <div className="flex h-96 flex-col items-center justify-center">
+              <LoadingLogo size={72} label="Loading Global Library…" />
             </div>
           ) : (
-            <>
-              <div className="relative">
-                <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-                <input
-                  type="text"
-                  placeholder="Search"
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                  className="w-full rounded-xl border border-border bg-surface py-2.5 pl-9 pr-9 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-primary"
-                />
-                {searchQuery && (
-                  <button
-                    onClick={() => setSearchQuery("")}
-                    className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground"
-                    aria-label="Clear search"
-                  >
-                    <X className="h-4 w-4" />
-                  </button>
-                )}
-              </div>
+            /* Main Split Layout: Left Vertical Category Heap & Right Playcard Grid */
+            <div className="flex flex-col lg:flex-row items-start gap-6 lg:gap-8">
+              {/* Left Column: Vertical Category Heap Sidebar */}
+              <CategoryVerticalHeap
+                categories={categoriesList}
+                activeCategory={activeCategory}
+                onSelectCategory={setActiveCategory}
+                categoryStats={categoryStats}
+                totalCount={files.length}
+                totalSize={totalLibrarySize}
+                searchQuery={searchQuery}
+                onSearchChange={setSearchQuery}
+                syncEnabled={syncEnabled}
+              />
 
-              {/* Horizontal Category Selector */}
-              <div className="-mx-4 flex overflow-x-auto px-4 py-1 no-scrollbar space-x-2">
-                <button
-                  onClick={() => setActiveCategory("all")}
-                  className={`flex shrink-0 items-center gap-1.5 rounded-xl px-3 py-1.5 text-xs font-medium transition-all ${
-                    activeCategory === "all"
-                      ? "bg-primary text-primary-foreground shadow-sm"
-                      : "bg-surface-2/60 text-muted-foreground hover:text-foreground"
-                  }`}
-                >
-                  <span>🌐</span>
-                  <span>All ({files.length})</span>
-                </button>
-                {categoriesList.map((catKey) => {
-                  const meta = STANDARD_CATEGORIES[catKey] || { label: catKey, icon: "📂" };
-                  const count = categoryStats[catKey]?.count || 0;
-                  const isActive = activeCategory === catKey;
-                  return (
-                    <button
-                      key={catKey}
-                      onClick={() => setActiveCategory(catKey)}
-                      className={`flex shrink-0 items-center gap-1.5 rounded-xl px-3 py-1.5 text-xs font-medium transition-all ${
-                        isActive
-                          ? "bg-primary text-primary-foreground shadow-sm"
-                          : "bg-surface-2/60 text-muted-foreground hover:text-foreground"
-                      }`}
+              {/* Right Column: Library Playcards Container */}
+              <main className="flex-1 min-w-0 w-full space-y-5">
+                {/* Active Category Banner / Toolbar */}
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 rounded-2xl border border-border/80 bg-surface/50 p-4 sm:p-5 backdrop-blur-xl shadow-sm">
+                  <div className="flex items-center gap-3.5">
+                    <div
+                      className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl text-2xl shadow-inner border ${activeCategoryMeta.borderAccent} bg-gradient-to-br ${activeCategoryMeta.gradient}`}
                     >
-                      <span>{meta.icon}</span>
-                      <span>
-                        {meta.label} ({count})
-                      </span>
-                    </button>
-                  );
-                })}
-              </div>
-
-              {/* Files Mobile List */}
-              {filteredFiles.length === 0 ? (
-                <div className="rounded-2xl border border-dashed border-border bg-surface/30 p-8 text-center">
-                  <p className="text-xs text-muted-foreground">No documents found.</p>
-                </div>
-              ) : (
-                <div className="space-y-2.5">
-                  {filteredFiles.map((file) => {
-                    const isImporting = importingKey === file.key;
-                    const isDeleting = deletingKey === file.key;
-                    const catMeta = STANDARD_CATEGORIES[file.category] || {
-                      label: file.category,
-                      icon: "📂",
-                    };
-
-                    return (
-                      <div
-                        key={file.key}
-                        className="flex items-center justify-between gap-3 rounded-2xl border border-border bg-surface/60 p-3.5 backdrop-blur-md shadow-sm"
-                      >
-                        <div className="min-w-0 flex-1 space-y-1">
-                          <div className="flex items-center gap-2">
-                            <span className="text-xs">{catMeta.icon}</span>
-                            <span className="truncate text-xs font-semibold text-foreground">
-                              {file.displayName}
-                            </span>
-                          </div>
-                          <div className="flex items-center gap-2 text-[11px] text-muted-foreground">
-                            <span>{formatBytes(file.size)}</span>
-                            <span>•</span>
-                            <span>{formatDate(file.lastModified)}</span>
-                          </div>
-                        </div>
-
-                        <button
-                          onClick={() => handleImport(file)}
-                          disabled={!!importingKey || !!deletingKey}
-                          className="shrink-0 rounded-xl bg-primary px-3 py-1.5 text-xs font-semibold text-primary-foreground transition-transform active:scale-95 disabled:opacity-50"
-                        >
-                          {isImporting ? "Importing…" : "Import"}
-                        </button>
-
-                        {syncEnabled && (
-                          <button
-                            onClick={() => setDeleteTarget(file)}
-                            disabled={!!importingKey || !!deletingKey}
-                            className="shrink-0 text-muted-foreground hover:text-destructive p-1.5 transition-colors"
-                            aria-label="Delete"
-                          >
-                            {isDeleting ? (
-                              <span className="inline-block h-3.5 w-3.5 rounded-full border-2 border-destructive border-t-transparent spin-slow" />
-                            ) : (
-                              <Trash2 className="h-3.5 w-3.5" />
-                            )}
-                          </button>
+                      {activeCategoryMeta.icon}
+                    </div>
+                    <div>
+                      <h2 className="text-lg sm:text-xl font-bold tracking-tight text-foreground flex items-center gap-2">
+                        {activeCategoryMeta.label}
+                      </h2>
+                      <p className="text-xs text-muted-foreground mt-0.5">
+                        Showing <span className="font-bold text-foreground">{filteredFiles.length}</span> {filteredFiles.length === 1 ? "playcard" : "playcards"}
+                        {searchQuery && (
+                          <span> matching "<span className="text-primary font-medium">{searchQuery}</span>"</span>
                         )}
-                      </div>
-                    );
-                  })}
-                </div>
-              )}
-            </>
-          )}
-        </div>
-      ) : (
-        <div className="mx-auto max-w-7xl space-y-6 p-8">
-          <h1 className="sr-only">Cloudflare R2 Global Library</h1>
-          <section>
-            {errorMsg ? (
-              <div className="rounded-[18px] border border-destructive/40 bg-destructive/10 p-6 text-center">
-                <div className="font-mono text-[11px] uppercase tracking-[0.2em] text-destructive">
-                  configuration error
-                </div>
-                <p className="mt-2 text-sm text-foreground/95">{errorMsg}</p>
-                <p className="mt-1 text-xs text-muted-foreground">
-                  Make sure you have populated the Cloudflare R2 credentials (`R2_ACCOUNT_ID`,
-                  `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY`, `R2_BUCKET_NAME`) in your `.env` file.
-                </p>
-                <button
-                  onClick={() => void fetchFiles(false, true)}
-                  className="mt-4 rounded-full bg-primary px-4 py-1.5 font-mono text-[11px] uppercase tracking-widest text-primary-foreground hover:opacity-90 active:scale-95 transition-all shadow-sm"
-                >
-                  Retry
-                </button>
-              </div>
-            ) : loading ? (
-              <div className="flex h-64 flex-col items-center justify-center">
-                <LoadingLogo size={72} label="Loading Global Library…" />
-              </div>
-            ) : (
-              <div className="space-y-6">
-                {/* Horizontal Category Cards */}
-                <CategoryMarqueeRow items={marqueeItems} />
+                      </p>
+                    </div>
+                  </div>
 
-                {/* Toolbar */}
-                <div className="flex items-center justify-between gap-4">
-                  <div className="relative w-72">
-                    <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-                    <input
-                      type="text"
-                      placeholder="Search global library..."
-                      value={searchQuery}
-                      onChange={(e) => setSearchQuery(e.target.value)}
-                      className="w-full rounded-xl border border-border bg-surface/50 py-2 pl-9 pr-9 text-xs text-foreground placeholder:text-muted-foreground focus:border-primary focus:outline-none transition-colors"
-                    />
+                  <div className="flex items-center gap-2 text-xs font-medium text-muted-foreground self-end sm:self-center">
+                    <span className="rounded-xl border border-border/60 bg-surface-2/60 px-3 py-1.5 font-mono text-[11px] font-semibold text-foreground">
+                      {filteredFiles.length} / {files.length} Total
+                    </span>
+                  </div>
+                </div>
+
+                {/* Playcard Grid */}
+                {filteredFiles.length === 0 ? (
+                  <div className="rounded-3xl border border-dashed border-border/80 bg-surface/30 p-12 text-center space-y-3">
+                    <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-2xl bg-surface-2/70 text-3xl shadow-inner border border-border/60">
+                      <FolderOpen className="h-8 w-8 text-muted-foreground" />
+                    </div>
+                    <div className="space-y-1">
+                      <p className="text-base font-bold text-foreground">No documents found</p>
+                      <p className="text-xs text-muted-foreground max-w-sm mx-auto leading-relaxed">
+                        {searchQuery
+                          ? `No documents matching "${searchQuery}" in ${activeCategoryMeta.label}.`
+                          : `There are currently no document playcards in the "${activeCategoryMeta.label}" category.`}
+                      </p>
+                    </div>
                     {searchQuery && (
                       <button
                         onClick={() => setSearchQuery("")}
-                        className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground"
+                        className="inline-flex items-center gap-1.5 rounded-xl border border-border bg-surface-2 px-4 py-2 text-xs font-semibold text-foreground transition-all hover:bg-surface hover:border-border-strong active:scale-95 cursor-pointer"
                       >
                         <X className="h-3.5 w-3.5" />
+                        Clear Search Filter
                       </button>
                     )}
                   </div>
-                  <div className="text-xs text-muted-foreground">
-                    Showing <span className="font-semibold text-foreground">{filteredFiles.length}</span> documents
-                  </div>
-                </div>
-
-                {/* Files Table / Empty state */}
-                {filteredFiles.length === 0 ? (
-                  <div className="glass-panel rounded-xl border-dashed p-10 text-center">
-                    <div className="font-mono text-[11px] uppercase tracking-widest text-muted-foreground">
-                      folder empty
-                    </div>
-                    <p className="mt-2 text-sm text-foreground/80">
-                      No documents found in <span className="font-semibold">{activeCategory}</span>{" "}
-                      folder prefix.
-                    </p>
-                  </div>
                 ) : (
-                  <div className="overflow-hidden rounded-xl border border-border bg-surface/30 backdrop-blur-md">
-                    <div className="overflow-x-auto">
-                      <table className="w-full border-collapse text-left text-sm">
-                        <thead>
-                          <tr className="border-b border-border bg-surface-2/40 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-                            <th className="px-6 py-4">Document Name</th>
-                            <th className="px-6 py-4">Category Folder</th>
-                            <th className="px-6 py-4">Size</th>
-                            <th className="px-6 py-4">Uploaded On</th>
-                            <th className="px-6 py-4 text-right">Actions</th>
-                          </tr>
-                        </thead>
-                        <tbody className="divide-y divide-border/40">
-                          {filteredFiles.map((file) => {
-                            const isImporting = importingKey === file.key;
-                            const isDeleting = deletingKey === file.key;
-                            const catMeta = STANDARD_CATEGORIES[file.category] || {
-                              label: file.category,
-                              icon: "📂",
-                            };
+                  <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-2 xl:grid-cols-3">
+                    {filteredFiles.map((file) => {
+                      const cleanName = file.displayName || file.key.split("/").pop() || file.key;
+                      const localId =
+                        localDocsMap[cleanName.toLowerCase()] ||
+                        localDocsMap[file.key.toLowerCase()] ||
+                        null;
 
-                            return (
-                              <tr
-                                key={file.key}
-                                className="group transition-colors hover:bg-surface-2/20"
-                              >
-                                <td className="px-6 py-4 font-medium text-foreground">
-                                  <div className="flex items-center gap-3">
-                                    <FileText className="h-4 w-4 flex-shrink-0 text-muted-foreground" />
-                                    <span
-                                      className="block max-w-md truncate font-medium"
-                                      title={file.key}
-                                    >
-                                      {file.displayName}
-                                    </span>
-                                  </div>
-                                </td>
-                                <td className="px-6 py-4">
-                                  <span className="inline-flex items-center gap-1.5 rounded-full border border-border bg-surface-2/60 px-2.5 py-1 text-xs font-medium text-foreground">
-                                    <span>{catMeta.icon}</span>
-                                    <span>{catMeta.label}</span>
-                                  </span>
-                                </td>
-                                <td className="px-6 py-4 text-muted-foreground">
-                                  {formatBytes(file.size)}
-                                </td>
-                                <td className="px-6 py-4 text-muted-foreground">
-                                  {formatDate(file.lastModified)}
-                                </td>
-                                <td className="px-6 py-4 text-right">
-                                  <div className="flex items-center justify-end gap-3">
-                                    <button
-                                      onClick={() => handleImport(file)}
-                                      disabled={!!importingKey || !!deletingKey}
-                                      className="rounded-lg bg-primary/10 px-3 py-1.5 text-xs font-semibold text-primary transition-all hover:bg-primary/20 active:scale-95 disabled:opacity-50 cursor-pointer"
-                                    >
-                                      {isImporting ? "Importing…" : "Import"}
-                                    </button>
-                                    {syncEnabled && (
-                                      <button
-                                        onClick={() => setDeleteTarget(file)}
-                                        disabled={!!importingKey || !!deletingKey}
-                                        className="rounded-lg border border-destructive/20 px-3 py-1.5 text-xs font-medium text-destructive transition-all hover:bg-destructive/10 active:scale-95 disabled:opacity-50 cursor-pointer"
-                                      >
-                                        {isDeleting ? "Deleting…" : "Delete"}
-                                      </button>
-                                    )}
-                                  </div>
-                                </td>
-                              </tr>
-                            );
-                          })}
-                        </tbody>
-                      </table>
-                    </div>
+                      return (
+                        <GlobalLibraryCard
+                          key={file.key}
+                          file={file}
+                          localDocId={localId}
+                          importing={importingKey === file.key}
+                          deleting={deletingKey === file.key}
+                          syncEnabled={syncEnabled}
+                          onImport={handleImport}
+                          onDelete={(f) => setDeleteTarget(f)}
+                          onOpenLocalDoc={(docId) => navigate({ to: "/doc/$id", params: { id: docId } })}
+                        />
+                      );
+                    })}
                   </div>
                 )}
-              </div>
-            )}
-          </section>
+              </main>
+            </div>
+          )}
         </div>
-      )}
       </div>
 
       {/* Delete confirmation dialog */}

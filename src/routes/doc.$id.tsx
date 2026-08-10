@@ -391,7 +391,7 @@ function DocPage() {
       reader.readAsDataURL(blob);
       const base64Data = await base64Promise;
 
-      const { uploadToR2 } = await import("@/lib/r2");
+      const { uploadToR2, uploadThumbnailToR2 } = await import("@/lib/r2");
       const res = await uploadToR2({
         data: {
           fileName: doc.fileName,
@@ -400,6 +400,26 @@ function DocPage() {
           category: finalCategory,
         },
       });
+
+      if (res.key) {
+        try {
+          const { renderPageToJpegBlob } = await import("@/hooks/useThumbnail");
+          const thumbBlob = await renderPageToJpegBlob(blob);
+          const thumbReader = new FileReader();
+          thumbReader.onloadend = () => {
+            const result = thumbReader.result as string;
+            if (result) {
+              const thumbBase64 = result.split(",")[1];
+              if (thumbBase64) {
+                uploadThumbnailToR2({ data: { fileKey: res.key, base64Data: thumbBase64 } }).catch(() => {});
+              }
+            }
+          };
+          thumbReader.readAsDataURL(thumbBlob);
+        } catch (thumbErr) {
+          console.warn("Thumbnail upload to R2 failed:", thumbErr);
+        }
+      }
 
       if (res.alreadyExists) {
         toast.warning(`Document is already uploaded in "${res.key}".`, { id: toastId });

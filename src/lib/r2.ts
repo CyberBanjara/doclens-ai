@@ -167,6 +167,8 @@ export const listR2Files = createServerFn({ method: "GET" })
 
         for (const obj of data.Contents || []) {
           if (!obj.Key) continue;
+          // Exclude stored thumbnails from the main PDF file listing
+          if (obj.Key.startsWith("thumbnails/") || obj.Key.startsWith(".thumbnails/")) continue;
           files.push({
             key: obj.Key,
             size: obj.Size || 0,
@@ -182,6 +184,111 @@ export const listR2Files = createServerFn({ method: "GET" })
     } catch (err: any) {
       console.error("R2 List error:", err);
       throw new Error(err?.message || "Failed to list files from R2.");
+    }
+  });
+
+export const uploadThumbnailToR2 = createServerFn({ method: "POST" })
+  .validator((input: { fileKey: string; base64Data: string }) => input)
+  .handler(async ({ data }) => {
+    "use server";
+    const isSyncEnabled = isGlobalSyncEnabled();
+    if (!isSyncEnabled) {
+      return { success: false, reason: "Sync disabled" };
+    }
+    try {
+      const { s3, bucketName, sdk } = await getS3Client();
+      const buffer = Buffer.from(data.base64Data, "base64");
+      const thumbKey = `thumbnails/${data.fileKey}.jpg`;
+
+      await s3.send(
+        new sdk.PutObjectCommand({
+          Bucket: bucketName,
+          Key: thumbKey,
+          Body: buffer,
+          ContentLength: buffer.length,
+          ContentType: "image/jpeg",
+        })
+      );
+      return { success: true, key: thumbKey };
+    } catch (err: any) {
+      console.warn("R2 Thumbnail Upload error:", err?.message);
+      return { success: false, error: err?.message };
+    }
+  });
+
+export const getThumbnailFromR2 = createServerFn({ method: "POST" })
+  .validator((input: { fileKey: string }) => input)
+  .handler(async ({ data }) => {
+    "use server";
+    try {
+      const { s3, bucketName, publicBaseUrl, sdk } = await getS3Client();
+      const thumbKey = `thumbnails/${data.fileKey}.jpg`;
+
+      // Verify if the thumbnail object actually exists in the R2 bucket
+      try {
+        await s3.send(
+          new sdk.HeadObjectCommand({
+            Bucket: bucketName,
+            Key: thumbKey,
+          })
+        );
+      } catch {
+        // Thumbnail file does not exist in R2 bucket
+        return { found: false };
+      }
+
+      if (publicBaseUrl) {
+        return { found: true, url: `${publicBaseUrl}/${thumbKey}` };
+      }
+
+      const response = await s3.send(
+        new sdk.GetObjectCommand({
+          Bucket: bucketName,
+          Key: thumbKey,
+        })
+      );
+
+      const body = response.Body;
+      if (!body) return { found: false };
+
+      const chunks: Buffer[] = [];
+      const stream = body as any;
+
+      return new Promise<{ found: boolean; base64Data?: string; contentType?: string }>((resolve) => {
+        if (typeof stream.on === "function") {
+          stream.on("data", (chunk: any) => chunks.push(Buffer.from(chunk)));
+          stream.on("error", () => resolve({ found: false }));
+          stream.on("end", () => {
+            const buffer = Buffer.concat(chunks);
+            resolve({
+              found: true,
+              base64Data: buffer.toString("base64"),
+              contentType: response.ContentType || "image/jpeg",
+            });
+          });
+        } else {
+          void (async () => {
+            try {
+              const reader = stream.getReader();
+              while (true) {
+                const { done, value } = await reader.read();
+                if (done) break;
+                chunks.push(Buffer.from(value));
+              }
+              const buffer = Buffer.concat(chunks);
+              resolve({
+                found: true,
+                base64Data: buffer.toString("base64"),
+                contentType: response.ContentType || "image/jpeg",
+              });
+            } catch {
+              resolve({ found: false });
+            }
+          })();
+        }
+      });
+    } catch {
+      return { found: false };
     }
   });
 
@@ -202,6 +309,17 @@ export const deleteFromR2 = createServerFn({ method: "POST" })
           Key: data.key,
         })
       );
+      // Try to clean up separate thumbnail object if present
+      try {
+        await s3.send(
+          new sdk.DeleteObjectCommand({
+            Bucket: bucketName,
+            Key: `thumbnails/${data.key}.jpg`,
+          })
+        );
+      } catch {
+        // Thumbnail cleanup error ignored
+      }
       return { success: true };
     } catch (err: any) {
       console.error("R2 Delete error:", err);

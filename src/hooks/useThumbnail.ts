@@ -5,7 +5,7 @@ import { getDocBlob, getThumbnail, saveThumbnailBlob } from "@/lib/storage";
 const THUMB_W = 400;
 const THUMB_H = 520;
 
-async function renderPageToJpegBlob(pdfBlob: Blob): Promise<Blob> {
+export async function renderPageToJpegBlob(pdfBlob: Blob): Promise<Blob> {
   const pdf = await loadPdfDocument(pdfBlob);
   try {
     const page = await pdf.getPage(1);
