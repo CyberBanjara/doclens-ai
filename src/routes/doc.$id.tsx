@@ -25,6 +25,7 @@ import {
   type PageAiSummaryEntry,
 } from "@/lib/storage";
 import { syncFromSupabase, syncToSupabase, getSyncConfig } from "@/lib/sync";
+import { useAuth } from "@/context/AuthContext";
 import { checkTextQuality } from "@/lib/textCleaning";
 import { UPLOAD_CATEGORIES } from "@/lib/uploadCategories";
 import { ChevronLeft, ChevronRight, Cloud, RefreshCw, Settings, Zap } from "lucide-react";
@@ -99,6 +100,7 @@ function DocPage() {
   const { page: urlPage } = Route.useSearch();
   const navigate = useNavigate();
   const isMobile = useIsMobile();
+  const { isAdmin } = useAuth();
   const [readerOpen, setReaderOpen] = useState(false);
   const [pageJumpOpen, setPageJumpOpen] = useState(false);
   const [overflowOpen, setOverflowOpen] = useState(false);
@@ -609,11 +611,11 @@ function DocPage() {
               )}
             </button>
           )}
-          {pageCount > 0 && syncEnabled && (
+          {pageCount > 0 && (isAdmin || syncEnabled) && (
             <button
               onClick={handleUploadToR2}
               disabled={uploading}
-              className="flex h-8 w-8 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-surface-2 hover:text-foreground disabled:opacity-40"
+              className="flex h-8 w-8 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-surface-2 hover:text-foreground disabled:opacity-40 cursor-pointer"
               title={uploading ? "Uploading to R2..." : "Upload to Cloudflare R2"}
             >
               {uploading ? (
@@ -623,11 +625,11 @@ function DocPage() {
               )}
             </button>
           )}
-          {pageCount > 0 && syncEnabled && (
+          {pageCount > 0 && (isAdmin || syncEnabled) && (
             <button
               onClick={handleSyncToSupabase}
               disabled={syncingSupabase}
-              className="flex h-8 w-8 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-surface-2 hover:text-foreground disabled:opacity-40"
+              className="flex h-8 w-8 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-surface-2 hover:text-foreground disabled:opacity-40 cursor-pointer"
               title={syncingSupabase ? "Syncing to Supabase..." : "Sync to Supabase"}
             >
               {syncingSupabase ? (
@@ -702,7 +704,7 @@ function DocPage() {
               status={status}
               uploading={uploading}
               syncingSupabase={syncingSupabase}
-              syncEnabled={syncEnabled}
+              syncEnabled={isAdmin || syncEnabled}
               onAnalyze={handleAnalyze}
               onUploadToR2={handleUploadToR2}
               onSyncToSupabase={handleSyncToSupabase}

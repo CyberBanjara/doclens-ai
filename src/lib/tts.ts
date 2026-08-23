@@ -1,12 +1,16 @@
+import { cleanAiText } from "./cleanAiText";
+
 /**
  * Splits input text into clean sentence chunks.
  * Uses punctuation rules for Latin and East Asian languages.
  */
 export function splitSentences(text: string): string[] {
   if (!text) return [];
+  const cleaned = cleanAiText(text);
+  if (!cleaned) return [];
 
   // Split by newlines, keeping the newlines in the tokens array
-  const tokens = text.split(/(\r?\n+)/);
+  const tokens = cleaned.split(/(\r?\n+)/);
   const chunks: string[] = [];
   let currentChunk = "";
 

@@ -32,6 +32,19 @@ export function formatDate(dateStr?: string) {
   }
 }
 
+export function fileToBase64(file: Blob | File): Promise<string> {
+  return new Promise<string>((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => {
+      const result = reader.result as string;
+      const base64 = result.includes(",") ? result.split(",")[1] : result;
+      resolve(base64);
+    };
+    reader.onerror = (error) => reject(error);
+    reader.readAsDataURL(file);
+  });
+}
+
 export function base64ToBlob(base64: string, mimeType = "application/pdf") {
   const byteCharacters = atob(base64);
   const byteArrays = [];

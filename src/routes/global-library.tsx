@@ -9,6 +9,7 @@ import {
   X,
   Layers,
   FolderOpen,
+  Upload,
 } from "lucide-react";
 import { SidebarLayout } from "@/components/SidebarLayout";
 import { deleteFromR2, downloadFromR2 } from "@/lib/r2";
@@ -19,6 +20,7 @@ import { getSyncConfig } from "@/lib/sync";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { formatBytes, base64ToBlob, parseFileCategory, type R2File, type ParsedR2File } from "@/lib/file-utils";
 import { DeleteFileDialog } from "@/components/DeleteFileDialog";
+import { R2UploadDialog } from "@/components/R2UploadDialog";
 import { useAuth } from "@/context/AuthContext";
 import { CategoryVerticalHeap, getCategoryMeta } from "@/components/CategoryVerticalHeap";
 import { GlobalLibraryCard } from "@/components/GlobalLibraryCard";
@@ -59,6 +61,59 @@ function GlobalLibraryPage() {
   // Category navigation & search
   const [activeCategory, setActiveCategory] = useState<string>("all");
   const [searchQuery, setSearchQuery] = useState("");
+
+  // R2 Direct Upload states
+  const [uploadDialogOpen, setUploadDialogOpen] = useState(false);
+  const [uploadFile, setUploadFile] = useState<File | null>(null);
+  const [uploadCategory, setUploadCategory] = useState<string>("uncategorized");
+  const [customUploadCategory, setCustomUploadCategory] = useState<string>("");
+  const [uploadingDirect, setUploadingDirect] = useState(false);
+
+  const handleDirectUpload = async () => {
+    if (!uploadFile || uploadingDirect) return;
+    setUploadingDirect(true);
+    const toastId = toast.loading(`Uploading "${uploadFile.name}" to Cloudflare R2...`);
+    try {
+      const { uploadToR2, uploadThumbnailToR2 } = await import("@/lib/r2");
+      const { renderPageToJpegBlob } = await import("@/hooks/useThumbnail");
+      const { fileToBase64 } = await import("@/lib/file-utils");
+
+      const base64Data = await fileToBase64(uploadFile);
+      const selectedCat = uploadCategory === "custom" ? customUploadCategory.trim() : uploadCategory;
+
+      const res = await uploadToR2({
+        data: {
+          fileName: uploadFile.name,
+          contentType: uploadFile.type || "application/pdf",
+          base64Data,
+          category: selectedCat,
+        },
+      });
+
+      try {
+        const thumbBlob = await renderPageToJpegBlob(uploadFile);
+        const thumbBase64 = await fileToBase64(thumbBlob);
+        await uploadThumbnailToR2({
+          data: {
+            fileKey: res.key,
+            base64Data: thumbBase64,
+          },
+        });
+      } catch (thumbErr) {
+        console.warn("Could not generate thumbnail during direct upload:", thumbErr);
+      }
+
+      toast.success(`Successfully uploaded "${uploadFile.name}" to R2 (${res.category})!`, { id: toastId });
+      setUploadDialogOpen(false);
+      setUploadFile(null);
+      void fetchFiles(false, true);
+    } catch (e: any) {
+      console.error("Direct upload failed:", e);
+      toast.error(e?.message || "Failed to upload file to Cloudflare R2.", { id: toastId });
+    } finally {
+      setUploadingDirect(false);
+    }
+  };
 
   const fetchFiles = async (silent = false, forceRefresh = false) => {
     if (!silent) setLoading(true);
@@ -279,6 +334,19 @@ function GlobalLibraryPage() {
         <div className="flex items-center gap-2">
           {isAdmin && (
             <button
+              onClick={() => setUploadDialogOpen(true)}
+              disabled={!user || loading || syncingThumbnails || !!importingKey || !!deletingKey}
+              className="flex items-center gap-1.5 h-8 px-2.5 rounded-lg border border-primary/40 bg-primary/10 text-xs font-semibold text-primary transition-colors hover:bg-primary/20 disabled:opacity-50 cursor-pointer shadow-sm"
+              aria-label="Upload PDF to R2"
+              title="Upload PDF document to Cloudflare R2"
+            >
+              <Upload className="h-3.5 w-3.5" />
+              <span className="hidden sm:inline">Upload PDF</span>
+            </button>
+          )}
+
+          {isAdmin && (
+            <button
               onClick={() => void handleSyncAllThumbnails()}
               disabled={!user || loading || syncingThumbnails || !!importingKey || !!deletingKey}
               className="flex items-center gap-1.5 h-8 px-2.5 rounded-lg border border-border bg-surface text-xs font-medium text-muted-foreground transition-colors hover:bg-surface-2 hover:text-foreground disabled:opacity-50 cursor-pointer"
@@ -427,6 +495,21 @@ function GlobalLibraryPage() {
           )}
         </div>
       </div>
+
+      {/* Direct R2 Upload Dialog for Admin */}
+      <R2UploadDialog
+        isMobile={isMobile}
+        open={uploadDialogOpen}
+        onOpenChange={setUploadDialogOpen}
+        uploadFile={uploadFile}
+        onFileChange={setUploadFile}
+        uploadCategory={uploadCategory}
+        onCategoryChange={setUploadCategory}
+        customUploadCategory={customUploadCategory}
+        onCustomCategoryChange={setCustomUploadCategory}
+        uploadingDirect={uploadingDirect}
+        onSubmit={() => void handleDirectUpload()}
+      />
 
       {/* Delete confirmation dialog */}
       <DeleteFileDialog

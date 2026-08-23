@@ -12,7 +12,7 @@ import {
 } from "@/lib/openrouter";
 import { getPageData, upsertPageAi, type PageAi, type PageAiSummaryEntry } from "@/lib/storage";
 import { syncToSupabase } from "@/lib/sync";
-import { effective, hashFor, summarize } from "@/lib/pageAi";
+import { cleanAiText, effective, hashFor, summarize } from "@/lib/pageAi";
 
 /**
  * Throttle stream state updates to maintain 60fps rendering without choking React.
@@ -130,7 +130,7 @@ export function usePageTranslation(
         if (!mountedRef.current) return;
         if (bufferRef.current === lastUiRef.current) return;
         lastUiRef.current = bufferRef.current;
-        const snapshot = bufferRef.current;
+        const snapshot = cleanAiText(bufferRef.current);
         setStreamBufs((b) => ({ ...b, [pageNumber]: snapshot }));
       };
 
@@ -161,7 +161,8 @@ export function usePageTranslation(
 
         // Final synchronous flush before writing to IDB
         flushUi();
-        const result = bufferRef.current;
+        const rawResult = bufferRef.current;
+        const result = cleanAiText(rawResult);
 
         await upsertPageAi(docId, pageNumber, {
           status: "done",

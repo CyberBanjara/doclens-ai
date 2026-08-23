@@ -1,6 +1,7 @@
 import type { PageExtraction } from "../pdf";
 import { db, safePut, withDocLock, normalizeDoc, pageKey, pageRange, PAGES, STORE } from "./idbUtils";
 import { StorageError, type PageAi, type PageAiSummaryEntry, type PageDataRecord, type StoredPage } from "./types";
+import { cleanAiText } from "../cleanAiText";
 
 /** Persist freshly-extracted pages, splitting them into individual records. */
 export async function writePages(id: string, pages: PageExtraction[] | StoredPage[]) {
@@ -114,6 +115,9 @@ export async function upsertPageAi(docId: string, pageNumber: number, patch: Par
     };
     const prevAi: PageAi = current.pageAi ?? { pageNumber, status: "idle" };
     const { lastSentRequest: _drop, ...cleanPatch } = patch as any;
+    if (typeof cleanPatch.result === "string") {
+      cleanPatch.result = cleanAiText(cleanPatch.result);
+    }
     const wasDone = prevAi.status === "done";
     const nextAi: PageAi = { ...prevAi, ...cleanPatch, pageNumber, updatedAt: Date.now() };
     const isDone = nextAi.status === "done";

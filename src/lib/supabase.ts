@@ -9,7 +9,7 @@ async function getSupabaseClient() {
     process.env.SUPABASE_SERVICE_ROLE_KEY ||
     process.env.VITE_SUPABASE_PUBLISHABLE_KEY;
 
-  if (!url || !key) {
+  if (!url || !key || url.includes("your-project.supabase.co")) {
     return null;
   }
 
@@ -32,6 +32,9 @@ export const fetchSupabaseExtraction = createServerFn({ method: "POST" })
   .validator((input: { key: string }) => input)
   .handler(async ({ data }) => {
     "use server";
+    if (!isGlobalSyncEnabled()) {
+      return { found: false };
+    }
     try {
       const supabase = await getSupabaseClient();
       if (!supabase) {
@@ -45,7 +48,7 @@ export const fetchSupabaseExtraction = createServerFn({ method: "POST" })
         .maybeSingle();
 
       if (error) {
-        console.error("Supabase select error:", error);
+        console.warn("Supabase select warning:", error.message || error);
         return { found: false, error: error.message };
       }
 
@@ -67,7 +70,7 @@ export const fetchSupabaseExtraction = createServerFn({ method: "POST" })
         },
       };
     } catch (e: any) {
-      console.error("Supabase lookup exception:", e);
+      console.warn("Supabase lookup exception:", e?.message || String(e));
       return { found: false, error: e?.message || String(e) };
     }
   });
@@ -94,7 +97,7 @@ export const saveSupabaseExtraction = createServerFn({ method: "POST" })
     "use server";
     const isSyncEnabled = isGlobalSyncEnabled();
     if (!isSyncEnabled) {
-      throw new Error("Global sync (Supabase writes) is disabled in this environment.");
+      return { success: false, error: "Global sync (Supabase writes) is disabled in this environment." };
     }
     try {
       const supabase = await getSupabaseClient();
@@ -140,13 +143,13 @@ export const saveSupabaseExtraction = createServerFn({ method: "POST" })
         );
 
       if (error) {
-        console.error("Supabase upsert error:", error);
-        throw new Error(error.message);
+        console.warn("Supabase upsert warning:", error.message || error);
+        return { success: false, error: error.message };
       }
 
       return { success: true };
     } catch (e: any) {
-      console.error("Supabase save exception:", e);
-      throw new Error(e?.message || String(e));
+      console.warn("Supabase save exception:", e?.message || String(e));
+      return { success: false, error: e?.message || String(e) };
     }
   });

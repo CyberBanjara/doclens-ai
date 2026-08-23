@@ -12,6 +12,7 @@ export const getSyncConfig = createServerFn({ method: "GET" })
   });
 
 export async function syncFromSupabase(docId: string, fileName: string): Promise<boolean> {
+  if (!isGlobalSyncEnabled()) return false;
   try {
     const res = await fetchSupabaseExtraction({ data: { key: fileName } });
     if (!res || !res.found || !res.record) {
@@ -142,6 +143,7 @@ export async function syncFromSupabase(docId: string, fileName: string): Promise
 }
 
 export async function syncToSupabase(docId: string): Promise<void> {
+  if (!isGlobalSyncEnabled()) return;
   try {
     const docRec = await getDoc(docId);
     if (!docRec) return;

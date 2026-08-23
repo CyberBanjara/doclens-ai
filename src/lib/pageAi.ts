@@ -1,6 +1,10 @@
 import { computeSettingsHash, type PageAi, type PageAiSummaryEntry, type PageOverrides } from "@/lib/storage";
 import type { Globals } from "@/lib/openrouter";
 import { dispatchDocEvent } from "@/lib/docEvents";
+import { cleanAiText } from "./cleanAiText";
+
+export { cleanAiText };
+
 
 export function effective(globals: Globals, ov?: PageOverrides) {
   return {

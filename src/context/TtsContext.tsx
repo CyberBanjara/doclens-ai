@@ -570,7 +570,7 @@ export function TtsProvider({ children }: { children: React.ReactNode }) {
       setIsPaused(false);
       setCurrentSentenceIndex(index);
       const rawSentence = sentenceList[index];
-      const sentenceText = rawSentence.trim();
+      const sentenceText = rawSentence.replace(/[*#]/g, "").trim();
 
       if (!sentenceText) {
         if (isTransitioningRef.current) return;
