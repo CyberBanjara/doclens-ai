@@ -186,3 +186,17 @@ export function db() {
   }
   return dbPromise;
 }
+
+/** Close active database connection so indexedDB.deleteDatabase is not blocked. */
+export async function closeDb(): Promise<void> {
+  if (dbPromise) {
+    try {
+      const d = await dbPromise;
+      d.close();
+    } catch {
+      // ignore
+    }
+    dbPromise = null;
+  }
+}
+

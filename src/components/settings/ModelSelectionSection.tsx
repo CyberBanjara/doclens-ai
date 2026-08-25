@@ -1,4 +1,4 @@
-import { Brain, Cpu, Star } from "lucide-react";
+import { Brain, Cpu, Star, Loader2 } from "lucide-react";
 import type { ORModel } from "@/lib/openrouter";
 
 type FilterTab = "free" | "popular" | "all";
@@ -44,11 +44,19 @@ export function ModelSelectionSection({
         />
       </div>
 
-      {keyStatus !== "valid" ? (
+      {keyStatus === "missing" || keyStatus === "invalid" ? (
         <p className="text-sm text-muted-foreground">
-          Configure OPENROUTER_API_KEY to load models.
+          {keyStatus === "invalid"
+            ? "Invalid OpenRouter API key. Please check your key in API Key Management."
+            : "Configure OPENROUTER_API_KEY to load models."}
         </p>
+      ) : keyStatus === "checking" && filtered.length === 0 ? (
+        <div className="flex items-center gap-2 text-sm text-muted-foreground py-4">
+          <Loader2 className="h-4 w-4 animate-spin text-primary" />
+          <span>Verifying OpenRouter connection & loading models...</span>
+        </div>
       ) : (
+
         <>
           <div className="flex flex-wrap items-center gap-2">
             {(["free", "popular", "all"] as FilterTab[]).map((t) => (

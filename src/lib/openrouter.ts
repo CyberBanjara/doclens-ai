@@ -100,9 +100,13 @@ export function getKey(): string {
 export function getKeyStatus(): KeyStatus {
   if (typeof window === "undefined") return "unknown";
   const v = localStorage.getItem(KEY_STATUS_LS);
-  if (v === "valid" || v === "invalid" || v === "missing") return v;
+  if (v === "valid" || v === "invalid" || v === "missing") {
+    if (v === "missing" && getKey()) return "valid";
+    return v as KeyStatus;
+  }
   return getKey() ? "valid" : "missing";
 }
+
 
 export function setKeyStatus(s: KeyStatus): void {
   if (typeof window === "undefined") return;
@@ -333,11 +337,12 @@ export async function syncGlobalKey(): Promise<string> {
 /** Validates key directly from the browser with OpenRouter's auth API. */
 export async function validateKey(key?: string): Promise<boolean> {
   try {
-    const effectiveKey = key !== undefined ? key.trim() : getKey();
+    const effectiveKey = key && key.trim() ? key.trim() : getKey();
     if (!effectiveKey) {
       setKeyStatus("missing");
       return false;
     }
+
     const res = await fetch("https://openrouter.ai/api/v1/auth/key", {
       headers: { Authorization: `Bearer ${effectiveKey}`, ...HEADERS_BASE },
     });

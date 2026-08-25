@@ -33,6 +33,8 @@ import { OutputLanguageSection } from "@/components/settings/OutputLanguageSecti
 import { VoiceCacheManagerSection } from "@/components/settings/VoiceCacheManagerSection";
 import { ApiKeySection } from "@/components/settings/ApiKeySection";
 import { ModelSelectionSection } from "@/components/settings/ModelSelectionSection";
+import { StorageManagerSection } from "@/components/settings/StorageManagerSection";
+
 
 export const Route = createFileRoute("/settings")({
   component: SettingsPage,
@@ -168,9 +170,11 @@ function SettingsPage() {
     setTemp(globals.temperature);
     const savedKey = getCustomKey();
     setCustomKeyInput(savedKey);
+    void loadModels();
     void handleValidate(savedKey);
     void refreshTtsVoices(true);
   }, [refreshTtsVoices]);
+
 
   const loadModels = async () => {
     setLoadingModels(true);
@@ -329,7 +333,11 @@ function SettingsPage() {
             onSelectModel={handleSelectModel}
           />
         </div>
+
+        {/* Row 4: Storage Management & Reset */}
+        <StorageManagerSection />
       </div>
     </SidebarLayout>
   );
 }
+
