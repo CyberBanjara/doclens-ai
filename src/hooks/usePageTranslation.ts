@@ -190,11 +190,26 @@ export function usePageTranslation(
           const err = e instanceof Error ? e.message : "Unknown error";
           await upsertPageAi(docId, pageNumber, { status: "error", error: err });
           onPageAiChangeRef.current(pageNumber, { ...summarize(state), status: "error" });
-          if (e instanceof OpenRouterError && (e.kind === "auth" || e.kind === "quota")) {
+          const isDailyOrQuota =
+            (e instanceof OpenRouterError &&
+              (e.kind === "daily_limit" ||
+                e.kind === "rate_limit" ||
+                e.kind === "quota" ||
+                e.kind === "credits")) ||
+            /50 free pages|daily limit|rate limit|quota/i.test(err);
+
+          if (isDailyOrQuota) {
+            toast.error(err, {
+              duration: 8000,
+              action: {
+                label: "Get Free Key",
+                onClick: () => openApiKeyModal(err, true),
+              },
+            });
+            openApiKeyModal(err, true);
+          } else if (e instanceof OpenRouterError && e.kind === "auth") {
             toast.error(err);
-            openApiKeyModal(err);
-          } else if (e instanceof OpenRouterError) {
-            toast.error(err);
+            openApiKeyModal(err, false);
           } else {
             toast.error(err);
           }

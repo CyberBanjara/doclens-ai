@@ -115,6 +115,14 @@ export function setKeyStatus(s: KeyStatus): void {
   emitKeyChange();
 }
 
+export const DAILY_LIMIT_HOOK_MESSAGE =
+  "You've used your 50 free pages for today! 🚀 Continue reading without interruption by using your own free OpenRouter API key to unlock another 50 free pages every day for free.";
+
+export interface OpenApiKeyModalDetail {
+  reason?: string;
+  isDailyLimit?: boolean;
+}
+
 /** Subscribe to any key/status change (cross-tab + in-tab). */
 export function onKeyChange(cb: () => void): () => void {
   if (typeof window === "undefined") return () => {};
@@ -128,9 +136,28 @@ export function onKeyChange(cb: () => void): () => void {
 }
 
 /** Ask the app to open the API key modal (mounted in __root.tsx). */
-export function openApiKeyModal(reason?: string): void {
+export function openApiKeyModal(
+  reasonOrDetail?: string | OpenApiKeyModalDetail,
+  isDailyLimit?: boolean,
+): void {
   if (typeof window === "undefined") return;
-  window.dispatchEvent(new CustomEvent(OPEN_API_KEY_MODAL_EVT, { detail: { reason } }));
+  let detail: OpenApiKeyModalDetail;
+  if (typeof reasonOrDetail === "object" && reasonOrDetail !== null) {
+    detail = reasonOrDetail;
+  } else {
+    const isDaily =
+      isDailyLimit ||
+      (reasonOrDetail
+        ? /50 free pages|daily limit|daily free limit|rate limit|too many requests|free tier/i.test(
+            reasonOrDetail,
+          )
+        : false);
+    detail = {
+      reason: reasonOrDetail,
+      isDailyLimit: isDaily,
+    };
+  }
+  window.dispatchEvent(new CustomEvent(OPEN_API_KEY_MODAL_EVT, { detail }));
 }
 
 export function getSelectedModel(): string {
@@ -425,12 +452,11 @@ export async function fetchModels(key?: string): Promise<ORModel[]> {
   }
 }
 
-/* -------- Friendly errors -------- */
-
 export type OpenRouterErrorKind =
   | "auth"
   | "credits"
   | "rate_limit"
+  | "daily_limit"
   | "quota"
   | "server"
   | "network"
@@ -452,6 +478,10 @@ export function friendlyOpenRouterError(
   body: string,
   isCustomKey: boolean,
 ): OpenRouterError {
+  const isDailyOrRateLimit =
+    status === 429 ||
+    /rate limit|daily limit|free limit|free tier|quota|exceeded|too many requests/i.test(body);
+
   if (status === 401) {
     return new OpenRouterError(
       isCustomKey
@@ -467,18 +497,26 @@ export function friendlyOpenRouterError(
       403,
       "auth",
     );
-  if (status === 402)
+  if (status === 402) {
+    if (!isCustomKey) {
+      return new OpenRouterError(DAILY_LIMIT_HOOK_MESSAGE, 402, "daily_limit");
+    }
     return new OpenRouterError(
       "OpenRouter account is out of credits. Switch to a free model in settings or add credits.",
       402,
       "credits",
     );
-  if (status === 429)
+  }
+  if (isDailyOrRateLimit) {
+    if (!isCustomKey) {
+      return new OpenRouterError(DAILY_LIMIT_HOOK_MESSAGE, status || 429, "daily_limit");
+    }
     return new OpenRouterError(
-      "OpenRouter rate limit reached. Please wait a moment and try again.",
-      429,
+      "You've reached the free daily limit (50 requests/day) for this OpenRouter key. Add credits on OpenRouter or switch models to continue reading!",
+      status || 429,
       "rate_limit",
     );
+  }
   if (status >= 500)
     return new OpenRouterError(
       "OpenRouter service is temporarily unavailable. Please retry shortly.",
@@ -538,6 +576,7 @@ async function readSseStream(
   body: ReadableStream<Uint8Array>,
   onDelta: (text: string) => void,
   signal: AbortSignal,
+  isCustomKey: boolean,
 ): Promise<number> {
   const reader = body.getReader();
   const decoder = new TextDecoder("utf-8");
@@ -557,8 +596,13 @@ async function readSseStream(
       try {
         const parsed = JSON.parse(payload);
         if (parsed?.error) {
-          const errMsg = typeof parsed.error === "string" ? parsed.error : parsed.error.message || "Model streaming error";
-          throw new OpenRouterError(errMsg, 500, "server");
+          const errMsg =
+            typeof parsed.error === "string"
+              ? parsed.error
+              : parsed.error.message || "Model streaming error";
+          const errCode = typeof parsed.error === "object" ? parsed.error.code : undefined;
+          const statusNum = typeof errCode === "number" ? errCode : 500;
+          throw friendlyOpenRouterError(statusNum, errMsg, isCustomKey);
         }
         const delta =
           parsed?.choices?.[0]?.delta?.content ??
@@ -656,7 +700,7 @@ export async function streamCompletion(opts: StreamOpts): Promise<void> {
         throw new OpenRouterError("OpenRouter returned an empty stream.", 502, "server");
       }
 
-      const totalChars = await readSseStream(response.body, opts.onDelta, signal);
+      const totalChars = await readSseStream(response.body, opts.onDelta, signal, isCustomKey);
       if (totalChars === 0 && !signal.aborted) {
         throw new OpenRouterError(
           "The model returned an empty response. Please retry or choose a different model in settings.",
