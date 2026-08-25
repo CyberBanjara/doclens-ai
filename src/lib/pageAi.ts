@@ -1,17 +1,33 @@
 import { computeSettingsHash, type PageAi, type PageAiSummaryEntry, type PageOverrides } from "@/lib/storage";
-import type { Globals } from "@/lib/openrouter";
+import {
+  TRANSLATION_STYLES,
+  EXPLANATION_STYLES,
+  type Globals,
+} from "@/lib/openrouter";
 import { dispatchDocEvent } from "@/lib/docEvents";
 import { cleanAiText } from "./cleanAiText";
 
 export { cleanAiText };
 
-
 export function effective(globals: Globals, ov?: PageOverrides) {
+  const mode = ov?.mode ?? globals.mode;
+  let rawStyle = ov?.style ?? globals.style;
+
+  if (mode === "translate") {
+    if (!rawStyle || !TRANSLATION_STYLES.some((s) => s.id === rawStyle)) {
+      rawStyle = "Native";
+    }
+  } else {
+    if (!rawStyle || !EXPLANATION_STYLES.some((s) => s.id === rawStyle)) {
+      rawStyle = "Standard";
+    }
+  }
+
   return {
-    mode: ov?.mode ?? globals.mode,
+    mode,
     language: ov?.language ?? globals.language,
     modelId: ov?.modelId ?? globals.modelId,
-    style: ov?.style ?? globals.style,
+    style: rawStyle,
     temperature: ov?.temperature ?? globals.temperature,
   };
 }

@@ -13,9 +13,12 @@ import {
   setTemperature,
   validateKey,
   EXPLANATION_STYLES,
+  TRANSLATION_STYLES,
   getCustomKey,
   setCustomKey,
   type ExplanationStyle,
+  type TranslationStyle,
+  type ProcessingStyle,
   type GlobalMode,
   type ORModel,
 } from "@/lib/openrouter";
@@ -91,7 +94,7 @@ function SettingsPage() {
   const [search, setSearch] = useState("");
   const [tab, setTab] = useState<FilterTab>("free");
   const [mode, setModeState] = useState<GlobalMode>("explain");
-  const [style, setStyleState] = useState<ExplanationStyle>("Standard");
+  const [style, setStyleState] = useState<ProcessingStyle>("Standard");
   const [temperature, setTemp] = useState(0.3);
   const [downloadProgress, setDownloadProgress] = useState<Record<string, number>>({});
   const isOpfs = useMemo(() => isOpfsSupported(), []);
@@ -161,7 +164,7 @@ function SettingsPage() {
     });
     setLanguage(globals.language);
     setModeState(globals.mode);
-    setStyleState(globals.style as ExplanationStyle);
+    setStyleState(globals.style as ProcessingStyle);
     setTemp(globals.temperature);
     const savedKey = getCustomKey();
     setCustomKeyInput(savedKey);

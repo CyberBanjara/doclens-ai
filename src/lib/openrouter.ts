@@ -199,10 +199,15 @@ export function setMode(m: GlobalMode) {
   localStorage.setItem(MODE_LS, m);
 }
 
-export function getStyle(): ExplanationStyle {
+export function getStyle(mode?: GlobalMode): ProcessingStyle {
   if (typeof window === "undefined") return "Standard";
+  const activeMode = mode ?? getMode();
   const v = localStorage.getItem(STYLE_LS);
-  if (!v) return "Standard";
+  if (!v) return activeMode === "translate" ? "Native" : "Standard";
+  if (activeMode === "translate") {
+    if (TRANSLATION_STYLES.some((s) => s.id === v)) return v as TranslationStyle;
+    return "Native";
+  }
   if (EXPLANATION_STYLES.some((s) => s.id === v)) return v as ExplanationStyle;
   const mapped = LEGACY_STYLE_MAP[v];
   if (mapped) {
@@ -212,7 +217,7 @@ export function getStyle(): ExplanationStyle {
   return "Standard";
 }
 
-export function setStyle(s: ExplanationStyle) {
+export function setStyle(s: ProcessingStyle | string) {
   localStorage.setItem(STYLE_LS, s);
 }
 
@@ -222,7 +227,11 @@ export function hasCompletedAiPreferenceSetup(): boolean {
   const mode = normalizeMode(rawMode);
   const hasMode = rawMode === "translate" || rawMode === "explain";
   const hasLanguage = hasStoredValue(LANG_LS);
-  const hasValidStyle = mode === "translate" || EXPLANATION_STYLES.some((s) => s.id === getStyle());
+  const currentStyle = getStyle(mode);
+  const hasValidStyle =
+    mode === "translate"
+      ? TRANSLATION_STYLES.some((s) => s.id === currentStyle)
+      : EXPLANATION_STYLES.some((s) => s.id === currentStyle);
 
   return hasMode && hasLanguage && hasValidStyle;
 }
@@ -247,11 +256,12 @@ export interface Globals {
 }
 
 export function readGlobals(): Globals {
+  const mode = getMode();
   return {
-    mode: getMode(),
+    mode,
     language: getOutputLanguage(),
     modelId: getSelectedModel() || getDefaultModelSync(),
-    style: getStyle(),
+    style: getStyle(mode),
     temperature: getTemperature(),
   };
 }
@@ -265,16 +275,17 @@ export interface TranslationConfig {
   language: string;
   mode: GlobalMode;
   modelId: string;
-  style: ExplanationStyle;
+  style: ProcessingStyle | string;
   temperature: number;
 }
 
 export function getTranslationConfig(): TranslationConfig {
+  const mode = getMode();
   return {
     language: getOutputLanguage(),
-    mode: getMode(),
+    mode,
     modelId: getSelectedModel() || getDefaultModelSync(),
-    style: getStyle(),
+    style: getStyle(mode),
     temperature: getTemperature(),
   };
 }
@@ -655,27 +666,40 @@ export async function streamCompletion(opts: StreamOpts): Promise<void> {
   }
 }
 
-/** Negative-generation rules for clean, natural, plain text suitable for reading and TTS. */
-const NEGATIVE_RULES = [
-  "Do not produce markdown syntax, asterisks, hashtags, code fences, or backticks.",
-  "Do not produce emojis, decorative symbols, decorative Unicode, ASCII art, or visual separators.",
-  "Do not produce bullet decoration characters, rich-text formatting, or UI styling patterns.",
-  "Do not use excessive or decorative punctuation, decorative quotation styling, or heading markers.",
-  "Output must be clean plain text with natural readable structure suitable for both reading and text-to-speech narration.",
-  "Write smooth, natural, human-like sentences. Avoid robotic phrasing and unnecessary repetition.",
+/** Output formatting rules — clean plain text for reading and TTS. */
+const FORMAT_RULES = [
+  "Output clean plain text only. No markdown, asterisks, hashtags, code fences, backticks, emojis, decorative symbols, bullet characters, or rich formatting.",
+  "Write smooth, natural sentences suitable for reading and text-to-speech. Avoid robotic phrasing and repetition.",
 ].join(" ");
 
-const GLOBAL_RULES = [
-  "Preserve factual accuracy. Never invent information not present in the source unless clearly framed as an example, analogy, or interpretation.",
-  "Preserve important technical terminology, explaining it appropriately for the selected style.",
-  "Process one page at a time. Output only the final processed content — no preamble, no meta commentary, no closing remarks.",
+const EXPLAIN_RULES = [
+  "Preserve factual accuracy — never invent information not in the source. Preserve technical terms, explaining them as appropriate for the style.",
+  "Output only the final content. No preamble, meta commentary, or closing remarks.",
 ].join(" ");
 
-export interface ExplanationStyleSpec {
-  id: ExplanationStyle;
+export interface StyleSpec<T extends string = string> {
+  id: T;
   label: string;
   instruction: string;
 }
+
+export type TranslationStyle = "Native" | "Mixed";
+export type TranslationStyleSpec = StyleSpec<TranslationStyle>;
+
+export const TRANSLATION_STYLES: TranslationStyleSpec[] = [
+  {
+    id: "Native",
+    label: "Native",
+    instruction:
+      "Translate naturally and fluently. Preserve meaning, tone, and nuance. Do not add explanations or commentary.",
+  },
+  {
+    id: "Mixed",
+    label: "Mixed",
+    instruction:
+      "Translate by blending the target language with English as bilingual speakers naturally do (e.g., Hinglish for Hindi). Keep technical terms, acronyms, brand names, proper nouns, and commonly understood English words in English. The result should feel conversational and fluid, not like machine translation. Preserve original meaning and tone.",
+  },
+];
 
 export type ExplanationStyle =
   | "Standard"
@@ -683,6 +707,14 @@ export type ExplanationStyle =
   | "Story"
   | "Deep"
   | "AI";
+
+export type ExplanationStyleSpec = StyleSpec<ExplanationStyle>;
+
+export type ProcessingStyle = ExplanationStyle | TranslationStyle;
+
+export function getStylesForMode(mode: GlobalMode): StyleSpec[] {
+  return mode === "translate" ? TRANSLATION_STYLES : EXPLANATION_STYLES;
+}
 
 /** Maps legacy style IDs to their consolidated equivalent. */
 const LEGACY_STYLE_MAP: Record<string, ExplanationStyle> = {
@@ -707,65 +739,52 @@ export const EXPLANATION_STYLES: ExplanationStyleSpec[] = [
     id: "Standard",
     label: "Standard",
     instruction:
-      "Use balanced, neutral, clear, and easy-to-understand explanations. Maintain readability and structured flow. Present information in a well-organized manner that is accessible to a general audience.",
+      "Clear, balanced, well-organized explanations accessible to a general audience. Maintain readability and structured flow.",
   },
   {
     id: "Simple",
     label: "Simple",
     instruction:
-      "Explain as if teaching a complete beginner or young learner. Avoid jargon; if technical terms are necessary, define them immediately in simple language. " +
-      "Use analogies and comparisons with familiar real-world systems or experiences to make abstract concepts relatable. " +
-      "Break complex ideas into sequential, logical steps — each building naturally on the previous one. " +
-      "Include practical, real-world examples and use cases to show how concepts apply in reality. " +
-      "Help the learner visualize systems and relationships through mental imagery and spatial descriptions when it aids understanding. " +
-      "Use encouraging, confidence-building language that reduces intimidation around difficult concepts.",
+      "Explain as if teaching a complete beginner. Avoid jargon — define technical terms in simple language when needed. " +
+      "Use real-world analogies to make abstract concepts relatable. Break complex ideas into sequential steps, each building on the last. " +
+      "Include practical examples. Use encouraging language that reduces intimidation.",
   },
   {
     id: "Story",
     label: "Story",
     instruction:
-      "Teach concepts using narratives, scenarios, characters, or story-like progression. Make the explanation emotionally engaging and memorable. " +
-      "Weave in guided questions and progressive reasoning to encourage self-discovery and deeper engagement — pose thought-provoking questions before revealing conclusions when appropriate. " +
-      "Use relatable analogies within the narrative to anchor abstract ideas. Build the story arc so that each new concept follows naturally from the last.",
+      "Teach through narratives, scenarios, or story-like progression. Make it emotionally engaging and memorable. " +
+      "Pose thought-provoking questions before revealing conclusions. Use analogies within the narrative to anchor abstract ideas.",
   },
   {
     id: "Deep",
     label: "Deep",
     instruction:
-      "Provide advanced technical depth, nuance, complexity, edge cases, and detailed reasoning. Assume the learner already understands foundational concepts. " +
-      "Present multiple viewpoints, interpretations, arguments, strengths, weaknesses, and counterarguments where the topic warrants it — avoid oversimplifying nuanced issues. " +
-      "Include relevant historical background, evolution, key discoveries, and major contributors when they add meaningful context. " +
-      "Analyze assumptions, evaluate evidence, identify limitations, and promote analytical understanding over passive acceptance. " +
-      "Encourage critical thinking by highlighting open questions and areas of ongoing debate.",
+      "Advanced technical depth with nuance, edge cases, and detailed reasoning. Assume foundational knowledge. " +
+      "Present multiple viewpoints and counterarguments where warranted. Include relevant history and key discoveries. " +
+      "Analyze assumptions, evaluate evidence, and highlight open questions.",
   },
   {
     id: "AI",
     label: "AI Mode",
     instruction:
-      "Comprehend and synthesize all information strictly from this page into an intelligent, holistic explanation. " +
-      "Do not perform literal word-by-word translation. Instead, understand the complete context, core concepts, characters, and terminology on the page, and articulate them through your own structured reasoning and narrative explanation. " +
-      "If the page discusses comparisons, contrasting concepts, or multiple terms, clearly highlight the differences, distinctions, and relationships between them. " +
-      "Present the ideas logically from first principles with smooth narrative flow, high clarity, and natural spoken readability.",
+      "Synthesize all page information into a holistic explanation using your own structured reasoning — not word-by-word translation. " +
+      "Highlight differences and relationships between contrasting concepts. " +
+      "Present ideas logically from first principles with smooth narrative flow and natural readability.",
   },
 ];
 
-export const MODE_INSTRUCTIONS: Record<GlobalMode, { label: string; instruction: string }> = {
-  translate: {
-    label: "Translate",
-    instruction:
-      "Translate the provided content into the target language. Preserve the original meaning, structure, hierarchy, headings, lists, and logical flow. Do not add explanations, summaries, commentary, interpretation, or extra information. Output only the translated content.",
-  },
-  explain: {
-    label: "Explain",
-    instruction: "Process the provided content according to the selected Explanation Style.",
-  },
+/** UI-facing labels for each mode. */
+export const MODE_LABELS: Record<GlobalMode, string> = {
+  translate: "Translate",
+  explain: "Explain",
 };
 
 export interface BuildPagePayloadInput {
   modelId: string;
   mode: GlobalMode;
   language: string;
-  /** Explanation style — ignored when mode is "translate". */
+  /** Style for processing (TranslationStyle when mode is "translate", ExplanationStyle when mode is "explain"). */
   style: string;
   temperature: number;
   pageNumber: number;
@@ -773,23 +792,34 @@ export interface BuildPagePayloadInput {
 }
 
 export function buildPagePayload(i: BuildPagePayloadInput): Record<string, unknown> {
-  const isTranslate = i.mode === "translate";
-  const styleSpec = EXPLANATION_STYLES.find((s) => s.id === i.style) ?? EXPLANATION_STYLES[0];
+  const lang = i.language || "English";
+  let system: string;
 
-  const taskBlock = isTranslate
-    ? `TRANSLATION MODE\nTarget language: ${i.language || "English"}.\n${MODE_INSTRUCTIONS.translate.instruction}`
-    : `EXPLANATION MODE\nResponse language: ${i.language || "English"}.\nSelected Explanation Style: ${styleSpec.label}.\nStyle directive: ${styleSpec.instruction}`;
+  if (i.mode === "translate") {
+    const style =
+      TRANSLATION_STYLES.find((s) => s.id === i.style) ?? TRANSLATION_STYLES[0];
 
-  const system = [
-    "You are an advanced AI reading and teaching assistant integrated into a PDF.js-based document reader.",
-    "The user-visible content below was extracted from a PDF page and inserted into this request.",
-    taskBlock,
-    `GLOBAL RULES. ${GLOBAL_RULES}`,
-    `NEGATIVE GENERATION RULES. ${NEGATIVE_RULES}`,
-    "These restrictions must influence generation natively — do not rely on post-processing.",
-  ].join("\n\n");
+    system = [
+      "You are an expert document translator in a PDF reader.",
+      "The content below is extracted from a PDF page.",
+      `TASK: Translate into ${lang}.\nSTYLE: ${style.label} — ${style.instruction}`,
+      "RULES: Preserve the original structure, headings, lists, and logical flow. Output only the translated text — no explanations, preamble, or commentary.",
+      `FORMAT: ${FORMAT_RULES}`,
+    ].join("\n\n");
+  } else {
+    const style =
+      EXPLANATION_STYLES.find((s) => s.id === i.style) ??
+      (LEGACY_STYLE_MAP[i.style] ? EXPLANATION_STYLES.find((s) => s.id === LEGACY_STYLE_MAP[i.style]) : undefined) ??
+      EXPLANATION_STYLES[0];
 
-  const user = `--- Page ${i.pageNumber} ---\n${i.pageText}`;
+    system = [
+      "You are an AI reading assistant in a PDF reader.",
+      "The content below is extracted from a PDF page.",
+      `TASK: Explain in ${lang}.\nSTYLE: ${style.label} — ${style.instruction}`,
+      `RULES: ${EXPLAIN_RULES}`,
+      `FORMAT: ${FORMAT_RULES}`,
+    ].join("\n\n");
+  }
 
   return {
     model: i.modelId || getDefaultModelSync(),
@@ -798,7 +828,7 @@ export function buildPagePayload(i: BuildPagePayloadInput): Record<string, unkno
     max_tokens: 4000,
     messages: [
       { role: "system", content: system },
-      { role: "user", content: user },
+      { role: "user", content: `--- Page ${i.pageNumber} ---\n${i.pageText}` },
     ],
   };
 }

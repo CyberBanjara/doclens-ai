@@ -2,7 +2,8 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import {
   buildPagePayload,
   EXPLANATION_STYLES,
-  MODE_INSTRUCTIONS,
+  TRANSLATION_STYLES,
+  MODE_LABELS,
   type GlobalMode,
   type Globals,
   type ORModel,
@@ -191,7 +192,7 @@ function PageCard({
   };
 
   /* Determine button label from mode */
-  const modeLabel = MODE_INSTRUCTIONS[eff.mode]?.label || "Translate";
+  const modeLabel = MODE_LABELS[eff.mode] || "Translate";
   const hasResult = !!state.result || isRunning;
 
   return (
@@ -411,40 +412,65 @@ function OverrideControls({
 }) {
   const hasOverrides = !!overrides && Object.keys(overrides).length > 0;
 
+  const styleOptions = useMemo(() => {
+    return (eff.mode === "translate" ? TRANSLATION_STYLES : EXPLANATION_STYLES).map(
+      (s) => [s.id, s.label] as [string, string],
+    );
+  }, [eff.mode]);
+
+  const langOptions = useMemo(() => {
+    const list = QUICK_LANGS.map((l) => [l, l] as [string, string]);
+    if (eff.language && !QUICK_LANGS.includes(eff.language)) {
+      return [[eff.language, eff.language] as [string, string], ...list];
+    }
+    return list;
+  }, [eff.language]);
+
+  const modelOptions = useMemo(() => {
+    const list = models
+      .slice(0, 80)
+      .map((m) => [m.id, (m.name ?? m.id).slice(0, 32)] as [string, string]);
+    if (eff.modelId && !list.some(([id]) => id === eff.modelId)) {
+      return [[eff.modelId, eff.modelId.slice(0, 32)] as [string, string], ...list];
+    }
+    return list;
+  }, [models, eff.modelId]);
+
   return (
     <div>
       <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
         <SmallSelect
           label="Mode"
-          value={overrides?.mode ?? ""}
-          onChange={(v) => onSetOverride({ mode: (v || undefined) as GlobalMode | undefined })}
-          options={[
-            ["", MODE_INSTRUCTIONS[eff.mode].label],
-            ...Object.entries(MODE_INSTRUCTIONS).map(([k, v]) => [k, v.label] as [string, string]),
-          ]}
+          value={eff.mode}
+          onChange={(v) => {
+            const nextMode = v as GlobalMode;
+            let nextStyle = eff.style;
+            if (nextMode === "translate" && !TRANSLATION_STYLES.some((s) => s.id === nextStyle)) {
+              nextStyle = "Native";
+            } else if (nextMode === "explain" && !EXPLANATION_STYLES.some((s) => s.id === nextStyle)) {
+              nextStyle = "Standard";
+            }
+            onSetOverride({ mode: nextMode, style: nextStyle });
+          }}
+          options={Object.entries(MODE_LABELS).map(([k, v]) => [k, v] as [string, string])}
         />
         <SmallSelect
           label="Language"
-          value={overrides?.language ?? ""}
-          onChange={(v) => onSetOverride({ language: v || undefined })}
-          options={[["", eff.language], ...QUICK_LANGS.map((l) => [l, l] as [string, string])]}
+          value={eff.language}
+          onChange={(v) => onSetOverride({ language: v })}
+          options={langOptions}
         />
         <SmallSelect
           label="Style"
-          value={overrides?.style ?? ""}
-          onChange={(v) => onSetOverride({ style: v || undefined })}
-          options={[["", eff.style], ...STYLES.map((s) => [s, s] as [string, string])]}
+          value={eff.style}
+          onChange={(v) => onSetOverride({ style: v })}
+          options={styleOptions}
         />
         <SmallSelect
           label="Model"
-          value={overrides?.modelId ?? ""}
-          onChange={(v) => onSetOverride({ modelId: v || undefined })}
-          options={[
-            ["", (models.find((m) => m.id === eff.modelId)?.name ?? eff.modelId).slice(0, 32)],
-            ...models
-              .slice(0, 80)
-              .map((m) => [m.id, (m.name ?? m.id).slice(0, 32)] as [string, string]),
-          ]}
+          value={eff.modelId}
+          onChange={(v) => onSetOverride({ modelId: v })}
+          options={modelOptions}
         />
         <label className="block">
           <span className="text-[11px] font-medium text-muted-foreground">

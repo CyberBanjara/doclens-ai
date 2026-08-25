@@ -9,7 +9,7 @@ import {
   getKey,
   getKeyStatus,
   getSelectedModel,
-  MODE_INSTRUCTIONS,
+  MODE_LABELS,
   onKeyChange,
   openApiKeyModal,
   readEffectiveGlobals,
@@ -333,7 +333,7 @@ export function PageWorkstation({
   }
 
   const doneCount = Object.values(aiSummary).filter((e) => e.status === "done").length;
-  const modeLabel = MODE_INSTRUCTIONS[globals.mode]?.label || globals.mode;
+  const modeLabel = MODE_LABELS[globals.mode] || globals.mode;
 
   return (
     <div className="flex h-full flex-col">

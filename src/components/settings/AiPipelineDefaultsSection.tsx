@@ -1,11 +1,19 @@
 import { Zap } from "lucide-react";
-import { EXPLANATION_STYLES, MODE_INSTRUCTIONS, type ExplanationStyle, type GlobalMode } from "@/lib/openrouter";
+import {
+  EXPLANATION_STYLES,
+  TRANSLATION_STYLES,
+  MODE_LABELS,
+  type ExplanationStyle,
+  type TranslationStyle,
+  type ProcessingStyle,
+  type GlobalMode,
+} from "@/lib/openrouter";
 
 interface AiPipelineDefaultsSectionProps {
   mode: GlobalMode;
   onModeChange: (mode: GlobalMode) => void;
-  style: ExplanationStyle;
-  onStyleChange: (style: ExplanationStyle) => void;
+  style: ProcessingStyle | string;
+  onStyleChange: (style: ProcessingStyle) => void;
   temperature: number;
   onTemperatureChange: (temperature: number) => void;
 }
@@ -18,6 +26,21 @@ export function AiPipelineDefaultsSection({
   temperature,
   onTemperatureChange,
 }: AiPipelineDefaultsSectionProps) {
+  const currentStyles = mode === "translate" ? TRANSLATION_STYLES : EXPLANATION_STYLES;
+
+  const handleModeChange = (newMode: GlobalMode) => {
+    onModeChange(newMode);
+    if (newMode === "translate") {
+      if (!TRANSLATION_STYLES.some((s) => s.id === style)) {
+        onStyleChange("Native");
+      }
+    } else {
+      if (!EXPLANATION_STYLES.some((s) => s.id === style)) {
+        onStyleChange("Standard");
+      }
+    }
+  };
+
   return (
     <section className="glass-panel rounded-[18px] p-4 md:p-6">
       <div className="mb-6 flex items-center gap-3">
@@ -32,29 +55,28 @@ export function AiPipelineDefaultsSection({
           </label>
           <select
             value={mode}
-            onChange={(e) => onModeChange(e.target.value as GlobalMode)}
+            onChange={(e) => handleModeChange(e.target.value as GlobalMode)}
             className="w-full cursor-pointer rounded-[10px] border border-border bg-background px-3 py-2 text-sm outline-none transition-colors focus:border-primary"
           >
-            {Object.entries(MODE_INSTRUCTIONS).map(([k, v]) => (
+            {Object.entries(MODE_LABELS).map(([k, v]) => (
               <option key={k} value={k}>
-                {v.label}
+                {v}
               </option>
             ))}
           </select>
         </div>
 
-        {/* Tone Style */}
+        {/* Style */}
         <div className="flex flex-col gap-2">
           <label className="text-xs font-bold uppercase tracking-wide text-muted-foreground">
-            Tone Style {mode === "translate" ? "(ignored in translate)" : ""}
+            {mode === "translate" ? "Translation Style" : "Explanation Style"}
           </label>
           <select
             value={style}
-            disabled={mode === "translate"}
-            onChange={(e) => onStyleChange(e.target.value as ExplanationStyle)}
-            className="w-full cursor-pointer rounded-[10px] border border-border bg-background px-3 py-2 text-sm outline-none transition-colors focus:border-primary disabled:opacity-50"
+            onChange={(e) => onStyleChange(e.target.value as ProcessingStyle)}
+            className="w-full cursor-pointer rounded-[10px] border border-border bg-background px-3 py-2 text-sm outline-none transition-colors focus:border-primary"
           >
-            {EXPLANATION_STYLES.map((s) => (
+            {currentStyles.map((s) => (
               <option key={s.id} value={s.id}>
                 {s.label}
               </option>
