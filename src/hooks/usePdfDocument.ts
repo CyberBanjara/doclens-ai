@@ -47,19 +47,22 @@ export function usePdfDocument(docId: string) {
         loadedDoc = pdfDoc;
         setDoc(pdfDoc);
 
-        const metas: PageMeta[] = [];
+        // Measure baseline aspect ratio from page 1 instead of eagerly parsing
+        // every page in the document (which loads all font and page dictionaries into worker memory).
+        const page1 = await pdfDoc.getPage(1);
+        const vp1 = page1.getViewport({ scale: 1 });
+        const baseScale = TARGET_WIDTH / vp1.width;
+        const baseHeight = Math.round(vp1.height * baseScale);
+        page1.cleanup();
+
+        const metas: PageMeta[] = new Array(pdfDoc.numPages);
         for (let i = 1; i <= pdfDoc.numPages; i++) {
-          const page = await pdfDoc.getPage(i);
-          const vp = page.getViewport({ scale: 1 });
-          const scale = TARGET_WIDTH / vp.width;
-          metas.push({
+          metas[i - 1] = {
             pageNumber: i,
             cssWidth: TARGET_WIDTH,
-            cssHeight: Math.round(vp.height * scale),
-            scale,
-          });
-          // Drop the temporary PageProxy reference — we'll fetch again at render time.
-          page.cleanup();
+            cssHeight: baseHeight,
+            scale: baseScale,
+          };
         }
         if (cancelled) return;
         await pdfDoc.cleanup();

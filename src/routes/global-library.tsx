@@ -304,9 +304,14 @@ function GlobalLibraryPage() {
             toast.loading(`Generating thumbnail (${i + 1}/${files.length}): "${file.key.split("/").pop() || file.key}"...`, { id: toastId });
             const res = await downloadFromR2({ data: { key: file.key } });
             const pdfBlob = base64ToBlob(res.base64Data, res.contentType);
+            // Drop base64 string reference immediately to free heap
+            res.base64Data = "";
             const thumbBlob = await renderPageToJpegBlob(pdfBlob);
             const ok = await uploadBlobAsThumbnailToR2(file.key, thumbBlob);
             if (ok) syncedCount++;
+
+            // Brief yield to allow browser garbage collection between large files
+            await new Promise((resolve) => setTimeout(resolve, 50));
           }
         } catch (err) {
           console.warn(`Failed syncing thumbnail for ${file.key}:`, err);

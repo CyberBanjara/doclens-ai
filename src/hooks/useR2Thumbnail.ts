@@ -31,9 +31,10 @@ export async function uploadBlobAsThumbnailToR2(fileKey: string, blob: Blob): Pr
 
 /**
  * React hook to fetch a PDF thumbnail on the client side during Global Library listing.
- * 1. Checks Cloudflare R2 thumbnail store (`thumbnails/${fileKey}.jpg`).
- * 2. If missing in R2, checks local IndexedDB blob/thumbnail and uploads to R2 immediately.
- * 3. Fallback: Downloads PDF from R2, renders first page on client, displays thumbnail, and uploads to R2.
+ * 1. Checks local IndexedDB cache (`r2_thumb_${fileKey}`) first.
+ * 2. Checks Cloudflare R2 thumbnail store (`thumbnails/${fileKey}.jpg`).
+ * 3. If missing in R2 but document exists in local library, uses local thumbnail and syncs thumbnail to R2.
+ * 4. Otherwise, gracefully leaves thumbnail null so the dynamic category artwork cover is displayed.
  */
 export function useR2Thumbnail(fileKey: string, localDocId?: string | null): {
   thumbnailUrl: string | null;
@@ -50,7 +51,24 @@ export function useR2Thumbnail(fileKey: string, localDocId?: string | null): {
       setLoading(true);
       const r2CacheKey = `r2_thumb_${fileKey}`;
 
-      // 1. Check Cloudflare R2 thumbnail store (`thumbnails/${fileKey}.jpg`)
+      // 1. Check local IndexedDB cache first for instant load and zero network/memory overhead
+      try {
+        const localR2Thumb = await getThumbnail(r2CacheKey);
+        if (localR2Thumb) {
+          if (!cancelled) {
+            if (localR2Thumb.startsWith("blob:")) {
+              createdUrl = localR2Thumb;
+            }
+            setThumbnailUrl(localR2Thumb);
+            setLoading(false);
+          } else if (localR2Thumb.startsWith("blob:")) {
+            URL.revokeObjectURL(localR2Thumb);
+          }
+          return;
+        }
+      } catch {}
+
+      // 2. Check Cloudflare R2 thumbnail store (`thumbnails/${fileKey}.jpg`)
       try {
         const r2Thumb = await getThumbnailFromR2({ data: { fileKey } });
         if (r2Thumb.found) {
@@ -76,20 +94,31 @@ export function useR2Thumbnail(fileKey: string, localDocId?: string | null): {
         console.warn(`Error fetching thumbnail from R2 for ${fileKey}:`, err);
       }
 
-      // 2. R2 does NOT have the thumbnail stored yet.
-      // Check local IndexedDB blob/thumbnail if file is imported locally.
+      // 3. If R2 doesn't have thumbnail, check if document is already saved locally in IndexedDB
       if (localDocId) {
         try {
           const localCached = await getThumbnail(localDocId);
-          if (localCached && localCached.startsWith("blob:")) {
-            const res = await fetch(localCached);
-            const thumbBlob = await res.blob();
+          if (localCached) {
             if (!cancelled) {
+              if (localCached.startsWith("blob:")) {
+                createdUrl = localCached;
+              }
               setThumbnailUrl(localCached);
               setLoading(false);
+            } else if (localCached.startsWith("blob:")) {
+              URL.revokeObjectURL(localCached);
             }
-            // Upload to R2 thumbnail folder so R2 permanently has thumbnails/${fileKey}.jpg
-            void uploadBlobAsThumbnailToR2(fileKey, thumbBlob);
+
+            // Sync thumbnail to R2 in the background using the cached blob
+            if (localCached.startsWith("blob:")) {
+              fetch(localCached)
+                .then((res) => res.blob())
+                .then((thumbBlob) => {
+                  saveThumbnailBlob(r2CacheKey, thumbBlob).catch(() => {});
+                  void uploadBlobAsThumbnailToR2(fileKey, thumbBlob);
+                })
+                .catch(() => {});
+            }
             return;
           }
 
@@ -107,31 +136,13 @@ export function useR2Thumbnail(fileKey: string, localDocId?: string | null): {
             return;
           }
         } catch {
-          // Fallback to downloading R2 PDF
+          // Fallback to placeholder artwork
         }
       }
 
-      // 3. Fallback: Download PDF from R2, render page 1 on client, display, and upload to R2!
-      try {
-        const res = await downloadFromR2({ data: { key: fileKey } });
-        if (cancelled) return;
-
-        const pdfBlob = base64ToBlob(res.base64Data, res.contentType);
-        const thumbBlob = await renderPageToJpegBlob(pdfBlob);
-        if (cancelled) return;
-
-        const url = URL.createObjectURL(thumbBlob);
-        createdUrl = url;
-
-        setThumbnailUrl(url);
+      // 4. If no thumbnail exists yet, finish loading so category artwork is displayed cleanly
+      if (!cancelled) {
         setLoading(false);
-
-        // Save locally and upload thumbnail to R2 thumbnail folder so R2 retains it permanently
-        saveThumbnailBlob(r2CacheKey, thumbBlob).catch(() => {});
-        void uploadBlobAsThumbnailToR2(fileKey, thumbBlob);
-      } catch (e) {
-        console.error(`Failed generating thumbnail from R2 PDF for ${fileKey}:`, e);
-        if (!cancelled) setLoading(false);
       }
     })();
 

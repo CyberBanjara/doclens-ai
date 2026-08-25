@@ -1,12 +1,6 @@
 {
   "version": 1,
   "skills": {
-    "memory-leak-audit": {
-      "source": "microsoft/vscode",
-      "sourceType": "github",
-      "skillPath": ".github/skills/memory-leak-audit/SKILL.md",
-      "computedHash": "0da18ae5331eae3589d01ff1ae5db6dbd7c7bfadf4d07a2881961dfb81720fa9"
-    },
     "memory-optimization": {
       "source": "aj-geddes/useful-ai-prompts",
       "sourceType": "github",

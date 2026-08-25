@@ -14,6 +14,7 @@ import {
   getDoc,
   getDocBlob,
   getPageAiSummary,
+  getPageData,
   setLastOpened,
   touchDoc,
   updateDoc,
@@ -218,11 +219,17 @@ function DocPage() {
         })();
       }
 
-      // Compute isScannedPdf if not set on existing document
+      // Compute isScannedPdf if not set on existing document (sample first 5 pages)
       if (currentRec.isScannedPdf === undefined && pc > 0) {
-        const pages = await getAllPages(id);
-        const scannedCount = pages.filter((p) => checkTextQuality(p.text).isScanned).length;
-        const isScannedPdf = pages.length > 0 && scannedCount / pages.length >= 0.5;
+        const sampleLimit = Math.min(pc, 5);
+        let scannedCount = 0;
+        for (let i = 1; i <= sampleLimit; i++) {
+          const p = await getPageData(id, i);
+          if (p && checkTextQuality(p.text).isScanned) {
+            scannedCount++;
+          }
+        }
+        const isScannedPdf = sampleLimit > 0 && scannedCount / sampleLimit >= 0.5;
         await updateDoc(id, { isScannedPdf });
         currentRec.isScannedPdf = isScannedPdf;
       }

@@ -158,7 +158,7 @@ export function getDefaultModelSync(): string {
   if (typeof process !== "undefined" && process.env?.VITE_OPENROUTER_DEFAULT_MODEL) {
     return process.env.VITE_OPENROUTER_DEFAULT_MODEL.trim();
   }
-  return CURATED_MODELS[0]?.id || "google/gemini-2.0-flash-exp:free";
+  return CURATED_MODELS[0]?.id || "liquid/lfm-2.5-2.6b:free";
 }
 
 export async function getDefaultModel(): Promise<string> {
@@ -345,8 +345,14 @@ export async function validateKey(key?: string): Promise<boolean> {
 
 export const CURATED_MODELS: ORModel[] = [
   {
+    id: "liquid/lfm-2.5-2.6b:free",
+    name: "Liquid LFM 2.5 (Free, Ultra Fast)",
+    context_length: 32768,
+    description: "Liquid AI's highly efficient neural architecture optimized for rapid reasoning and streaming.",
+  },
+  {
     id: "google/gemini-2.0-flash-exp:free",
-    name: "Gemini 2.0 Flash (Free, Ultra Fast)",
+    name: "Gemini 2.0 Flash (Free, Fast)",
     context_length: 1048576,
     description: "Next-gen multimodal model by Google with near-instant streaming.",
   },
@@ -675,7 +681,8 @@ export type ExplanationStyle =
   | "Standard"
   | "Simple"
   | "Story"
-  | "Deep";
+  | "Deep"
+  | "AI";
 
 /** Maps legacy style IDs to their consolidated equivalent. */
 const LEGACY_STYLE_MAP: Record<string, ExplanationStyle> = {
@@ -691,6 +698,8 @@ const LEGACY_STYLE_MAP: Record<string, ExplanationStyle> = {
   Debate: "Deep",
   "Historical Context": "Deep",
   "Critical Thinking": "Deep",
+  "AI Mode": "AI",
+  "AI Synthesis": "AI",
 };
 
 export const EXPLANATION_STYLES: ExplanationStyleSpec[] = [
@@ -728,6 +737,15 @@ export const EXPLANATION_STYLES: ExplanationStyleSpec[] = [
       "Include relevant historical background, evolution, key discoveries, and major contributors when they add meaningful context. " +
       "Analyze assumptions, evaluate evidence, identify limitations, and promote analytical understanding over passive acceptance. " +
       "Encourage critical thinking by highlighting open questions and areas of ongoing debate.",
+  },
+  {
+    id: "AI",
+    label: "AI Mode",
+    instruction:
+      "Comprehend and synthesize all information strictly from this page into an intelligent, holistic explanation. " +
+      "Do not perform literal word-by-word translation. Instead, understand the complete context, core concepts, characters, and terminology on the page, and articulate them through your own structured reasoning and narrative explanation. " +
+      "If the page discusses comparisons, contrasting concepts, or multiple terms, clearly highlight the differences, distinctions, and relationships between them. " +
+      "Present the ideas logically from first principles with smooth narrative flow, high clarity, and natural spoken readability.",
   },
 ];
 

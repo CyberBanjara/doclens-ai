@@ -80,9 +80,11 @@ export async function getAllPages(docId: string): Promise<PageDataRecord[]> {
 /** Lightweight per-page AI summary for headers/badges (no `result` text). */
 export async function getPageAiSummary(docId: string): Promise<Record<number, PageAiSummaryEntry>> {
   const d = await db();
-  const all = (await d.getAll(PAGES, pageRange(docId))) as PageDataRecord[];
+  const tx = d.transaction(PAGES, "readonly");
   const out: Record<number, PageAiSummaryEntry> = {};
-  for (const p of all) {
+  let cur = await tx.store.openCursor(pageRange(docId));
+  while (cur) {
+    const p = cur.value as PageDataRecord;
     if (p.pageAi) {
       out[p.pageNumber] = {
         status: p.pageAi.status,
@@ -92,8 +94,8 @@ export async function getPageAiSummary(docId: string): Promise<Record<number, Pa
         updatedAt: p.pageAi.updatedAt,
       };
     }
+    cur = await cur.continue();
   }
-  all.length = 0;
   return out;
 }
 
