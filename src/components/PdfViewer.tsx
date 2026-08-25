@@ -19,45 +19,53 @@ const DPR = typeof window !== "undefined" ? Math.min(window.devicePixelRatio || 
 const MAX_RENDERED = 3;
 
 /**
- * PDF viewer with lazy canvas + text-layer rendering driven by IntersectionObserver.
- * Bitmaps for off-screen pages are released (canvas.width/height = 0) and
- * page.cleanup() is called to free the internal operator list. At most
- * MAX_RENDERED canvases hold pixel data.
+ * PDF viewer with prioritized lazy canvas + text-layer rendering.
  *
- * The native pdf.js TextLayer overlays the canvas so users can select,
- * copy, translate (via "doclens:translate-selection" event), or speak text.
- * Scanned/image-only pages get no text spans — toolbar simply never appears.
+ * GUARANTEE: The currently visible page (activePage) ALWAYS has absolute highest
+ * priority and is rendered immediately before any other page (e.g. page 99, 101).
+ * Background preloading of other intersecting pages only proceeds after the
+ * active page has finished rendering.
  */
 export function PdfViewer({ docId, activePage, setActivePage }: Props) {
   const isMobile = useIsMobile();
   const { doc, pageMetas, loading, error } = usePdfDocument(docId);
   /** Pages whose canvas has finished rendering — drives the per-page loading overlay. */
   const [loadedPageNumbers, setLoadedPageNumbers] = useState<Set<number>>(new Set());
-  // Reset per-page loaded tracking whenever the document changes (mirrors usePdfDocument's own reset).
+
+  // Reset per-page loaded tracking whenever the document changes.
   useEffect(() => {
     setLoadedPageNumbers(new Set());
   }, [docId]);
 
-  /** Ratio of actually-available page width to TARGET_WIDTH; drives the text-layer
-   *  scale transform so selectable spans (positioned in raw TARGET_WIDTH-space px by
-   *  pdf.js) stay aligned with the canvas image once it's shrunk to fit narrow
-   *  viewports. The canvas/container themselves need no such transform — CSS
-   *  aspect-ratio keeps their box proportional to the page at any width. */
+  /** Ratio of actually-available page width to TARGET_WIDTH */
   const [displayScale, setDisplayScale] = useState(1);
   const pagesColumnRef = useRef<HTMLDivElement>(null);
 
   const scrollRef = useRef<HTMLDivElement>(null);
   const canvasRefs = useRef<Map<number, HTMLCanvasElement>>(new Map());
   const textLayerRefs = useRef<Map<number, HTMLDivElement>>(new Map());
+
+  const activePageRef = useRef(activePage);
   const visiblePages = useRef<Set<number>>(new Set());
   const renderedPages = useRef<Set<number>>(new Set());
-  const renderingPages = useRef<Set<number>>(new Set());
+  const renderingPage = useRef<number | null>(null);
+  const queuedPagesRef = useRef<Set<number>>(new Set());
   const recentlyVisibleOrder = useRef<number[]>([]);
+  const isProcessingQueueRef = useRef<boolean>(false);
+  const isProgrammaticScrollRef = useRef<boolean>(false);
+  const programmaticScrollTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const observerRef = useRef<IntersectionObserver | null>(null);
+
+  /** Currently executing render task reference so low-priority renders can be cancelled */
+  const activeRenderTaskRef = useRef<{
+    pageNumber: number;
+    isHighPriority: boolean;
+    cancel: () => void;
+  } | null>(null);
 
   /** Release bitmap memory + clear text layer for an off-screen page. */
   const releasePage = useCallback((pageNumber: number) => {
-    if (renderingPages.current.has(pageNumber)) return;
+    if (renderingPage.current === pageNumber) return;
 
     const canvas = canvasRefs.current.get(pageNumber);
     if (canvas) {
@@ -68,22 +76,19 @@ export function PdfViewer({ docId, activePage, setActivePage }: Props) {
     const tl = textLayerRefs.current.get(pageNumber);
     if (tl) tl.innerHTML = "";
     renderedPages.current.delete(pageNumber);
+    queuedPagesRef.current.delete(pageNumber);
     setLoadedPageNumbers((prev) => {
       if (!prev.has(pageNumber)) return prev;
       const next = new Set(prev);
       next.delete(pageNumber);
       return next;
     });
-    // Note: We intentionally do NOT call doc.getPage(n).cleanup() here.
-    // That call re-fetches the page proxy into pdf.js's internal cache,
-    // counterproductively increasing memory. doc.destroy() on unmount
-    // handles full cleanup.
   }, []);
 
-  const renderPage = useCallback(
-    async (pageNumber: number) => {
+  /** Direct render execution for a single page */
+  const executePageRender = useCallback(
+    async (pageNumber: number, isHighPriority: boolean) => {
       if (!doc) return;
-      if (renderingPages.current.has(pageNumber)) return;
       if (renderedPages.current.has(pageNumber)) return;
 
       const canvas = canvasRefs.current.get(pageNumber);
@@ -92,8 +97,10 @@ export function PdfViewer({ docId, activePage, setActivePage }: Props) {
       const meta = pageMetas[pageNumber - 1];
       if (!meta) return;
 
-      renderingPages.current.add(pageNumber);
+      renderingPage.current = pageNumber;
       let page: PDFPageProxy | null = null;
+      let cancelled = false;
+
       try {
         page = await doc.getPage(pageNumber);
         const renderScale = meta.scale * DPR;
@@ -102,9 +109,6 @@ export function PdfViewer({ docId, activePage, setActivePage }: Props) {
 
         canvas.width = Math.max(1, Math.ceil(viewport.width));
         canvas.height = Math.max(1, Math.ceil(viewport.height));
-        // 100% of the container, which is itself clamped to the page's true
-        // aspect ratio via CSS — keeps the bitmap from being stretched when
-        // the container is narrower than TARGET_WIDTH (e.g. mobile).
         canvas.style.width = "100%";
         canvas.style.height = "100%";
         canvas.style.display = "block";
@@ -112,45 +116,69 @@ export function PdfViewer({ docId, activePage, setActivePage }: Props) {
         const ctx = canvas.getContext("2d");
         if (!ctx) return;
 
-        await page.render({ canvasContext: ctx, viewport, canvas } as never).promise;
+        const renderTask = page.render({ canvasContext: ctx, viewport, canvas } as never);
+        activeRenderTaskRef.current = {
+          pageNumber,
+          isHighPriority,
+          cancel: () => {
+            cancelled = true;
+            try {
+              renderTask.cancel();
+            } catch {}
+          },
+        };
+
+        await renderTask.promise;
 
         // Render selectable text layer aligned to the css viewport
-        if (textLayer) {
+        if (textLayer && !cancelled) {
           textLayer.innerHTML = "";
           textLayer.style.width = `${meta.cssWidth}px`;
           textLayer.style.height = `${meta.cssHeight}px`;
-          // Required by pdf.js stylesheet to size text spans correctly
           textLayer.style.setProperty("--scale-factor", String(meta.scale));
           try {
             const pdfjs = await import("pdfjs-dist");
             const textContent = await page.getTextContent();
-            const tl = new pdfjs.TextLayer({
-              textContentSource: textContent,
-              container: textLayer,
-              viewport: cssViewport,
-            });
-            await tl.render();
+            if (!cancelled) {
+              const tl = new pdfjs.TextLayer({
+                textContentSource: textContent,
+                container: textLayer,
+                viewport: cssViewport,
+              });
+              await tl.render();
+            }
           } catch (e) {
-            // Scanned / image-only pages: silently leave the text layer empty.
             console.debug("TextLayer render skipped", e);
           }
         }
 
-        renderedPages.current.add(pageNumber);
-        setLoadedPageNumbers((prev) => new Set(prev).add(pageNumber));
+        if (!cancelled) {
+          renderedPages.current.add(pageNumber);
+          setLoadedPageNumbers((prev) => new Set(prev).add(pageNumber));
 
-        // Cap rendered set: drop oldest entries past MAX_RENDERED.
-        const order = recentlyVisibleOrder.current;
-        while (renderedPages.current.size > MAX_RENDERED) {
-          const dropFrom = order.find((n) => renderedPages.current.has(n) && n !== pageNumber);
-          if (dropFrom === undefined) break;
-          releasePage(dropFrom);
-          const idx = order.indexOf(dropFrom);
-          if (idx !== -1) order.splice(idx, 1);
+          // Cap rendered set: drop oldest entries past MAX_RENDERED (except activePage and current page)
+          const currentActive = activePageRef.current;
+          const order = recentlyVisibleOrder.current;
+          while (renderedPages.current.size > MAX_RENDERED) {
+            const dropFrom = order.find(
+              (n) => renderedPages.current.has(n) && n !== currentActive && n !== pageNumber,
+            );
+            if (dropFrom === undefined) break;
+            releasePage(dropFrom);
+            const idx = order.indexOf(dropFrom);
+            if (idx !== -1) order.splice(idx, 1);
+          }
         }
-      } catch (err) {
-        if (err instanceof Error && err.message.includes("cancelled")) return;
-        console.error(`PdfViewer: render error page ${pageNumber}`, err);
+      } catch (err: any) {
+        if (err?.name === "RenderingCancelledException" || err?.message?.includes("cancelled")) {
+          if (canvas) {
+            canvas.width = 0;
+            canvas.height = 0;
+            canvas.style.display = "none";
+          }
+        } else {
+          console.error(`PdfViewer: render error page ${pageNumber}`, err);
+        }
       } finally {
         if (page) {
           try {
@@ -159,11 +187,10 @@ export function PdfViewer({ docId, activePage, setActivePage }: Props) {
             console.debug("Page cleanup failed", e);
           }
         }
-        renderingPages.current.delete(pageNumber);
-        if (renderingPages.current.size === 0) {
-          doc.cleanup().catch(() => {});
-        }
-        if (!visiblePages.current.has(pageNumber)) {
+        activeRenderTaskRef.current = null;
+        renderingPage.current = null;
+
+        if (!visiblePages.current.has(pageNumber) && pageNumber !== activePageRef.current) {
           releasePage(pageNumber);
         }
       }
@@ -171,8 +198,131 @@ export function PdfViewer({ docId, activePage, setActivePage }: Props) {
     [doc, pageMetas, releasePage],
   );
 
-  // Track available page width so the text layer can be scaled to match the
-  // aspect-ratio-clamped canvas on viewports narrower than TARGET_WIDTH.
+  /** Process the rendering queue strictly prioritizing the currently visible activePage */
+  const processQueue = useCallback(async () => {
+    if (!doc || pageMetas.length === 0) return;
+    if (isProcessingQueueRef.current) return;
+    isProcessingQueueRef.current = true;
+
+    try {
+      while (true) {
+        const currentActive = activePageRef.current;
+        const activeNeedsRender =
+          currentActive > 0 &&
+          currentActive <= pageMetas.length &&
+          !renderedPages.current.has(currentActive);
+
+        let targetPage: number | null = null;
+        let isHighPriority = false;
+
+        if (activeNeedsRender) {
+          // ACTIVE VISIBLE PAGE HAS HIGHEST PRIORITY!
+          targetPage = currentActive;
+          isHighPriority = true;
+
+          // If a low-priority render is currently in-flight, cancel it immediately
+          if (activeRenderTaskRef.current && !activeRenderTaskRef.current.isHighPriority) {
+            try {
+              activeRenderTaskRef.current.cancel();
+            } catch {}
+            // Stop and let the cancelled task clean up
+            break;
+          }
+
+          // If currently rendering something else (e.g. previous active page), wait for it
+          if (renderingPage.current !== null && renderingPage.current !== targetPage) {
+            break;
+          }
+        } else {
+          // If the active page is still in progress or not rendered, DO NOT process background pages!
+          if (currentActive > 0 && !renderedPages.current.has(currentActive)) {
+            break;
+          }
+
+          // If a render is already running, wait
+          if (renderingPage.current !== null) {
+            break;
+          }
+
+          // Active page is ready! Now we can process queued background / preload pages.
+          const candidates = Array.from(queuedPagesRef.current).filter(
+            (pn) => !renderedPages.current.has(pn) && visiblePages.current.has(pn),
+          );
+
+          if (candidates.length === 0) {
+            break;
+          }
+
+          // Sort candidates by proximity to currentActive (closest pages first)
+          candidates.sort((a, b) => Math.abs(a - currentActive) - Math.abs(b - currentActive));
+          targetPage = candidates[0];
+          isHighPriority = false;
+        }
+
+        if (targetPage === null || renderedPages.current.has(targetPage)) {
+          if (targetPage !== null) queuedPagesRef.current.delete(targetPage);
+          break;
+        }
+
+        queuedPagesRef.current.delete(targetPage);
+        await executePageRender(targetPage, isHighPriority);
+      }
+    } finally {
+      isProcessingQueueRef.current = false;
+      if (doc && renderingPage.current === null) {
+        const currentActive = activePageRef.current;
+        const hasPendingWork =
+          (!renderedPages.current.has(currentActive) && currentActive > 0) ||
+          Array.from(queuedPagesRef.current).some(
+            (pn) => !renderedPages.current.has(pn) && visiblePages.current.has(pn),
+          );
+        if (hasPendingWork) {
+          setTimeout(() => {
+            void processQueue();
+          }, 0);
+        } else {
+          doc.cleanup().catch(() => {});
+        }
+      }
+    }
+  }, [doc, pageMetas, executePageRender]);
+
+  /** Request a page render with priority indication */
+  const requestRender = useCallback(
+    (pageNumber: number, isHighPriority: boolean) => {
+      if (renderedPages.current.has(pageNumber)) return;
+
+      if (isHighPriority) {
+        // If a low-priority task is currently rendering, cancel it immediately
+        if (activeRenderTaskRef.current && !activeRenderTaskRef.current.isHighPriority) {
+          try {
+            activeRenderTaskRef.current.cancel();
+          } catch {}
+        }
+      } else {
+        queuedPagesRef.current.add(pageNumber);
+      }
+      void processQueue();
+    },
+    [processQueue],
+  );
+
+  // Keep activePageRef synchronized and trigger immediate high-priority render on page change
+  useEffect(() => {
+    activePageRef.current = activePage;
+    if (activePage > 0) {
+      const order = recentlyVisibleOrder.current;
+      const idx = order.indexOf(activePage);
+      if (idx !== -1) order.splice(idx, 1);
+      order.push(activePage);
+
+      if (!loading && doc) {
+        requestRender(activePage, true);
+      }
+    }
+  }, [activePage, loading, doc, requestRender]);
+
+  // Track available page width so the text layer can be scaled
   useEffect(() => {
     const el = pagesColumnRef.current;
     if (!el) return;
@@ -184,7 +334,7 @@ export function PdfViewer({ docId, activePage, setActivePage }: Props) {
     return () => ro.disconnect();
   }, []);
 
-  // IntersectionObserver: render on enter, release on leave.
+  // IntersectionObserver: track visible pages and queue renders
   useEffect(() => {
     const root = scrollRef.current;
     if (!root || pageMetas.length === 0) return;
@@ -200,10 +350,23 @@ export function PdfViewer({ docId, activePage, setActivePage }: Props) {
             const idx = order.indexOf(pn);
             if (idx !== -1) order.splice(idx, 1);
             order.push(pn);
-            renderPage(pn);
+
+            const isCurrentActive = pn === activePageRef.current;
+            requestRender(pn, isCurrentActive);
           } else {
             visiblePages.current.delete(pn);
-            releasePage(pn);
+            queuedPagesRef.current.delete(pn);
+            if (
+              activeRenderTaskRef.current?.pageNumber === pn &&
+              !activeRenderTaskRef.current.isHighPriority
+            ) {
+              try {
+                activeRenderTaskRef.current.cancel();
+              } catch {}
+            }
+            if (pn !== activePageRef.current) {
+              releasePage(pn);
+            }
           }
         }
       },
@@ -216,41 +379,60 @@ export function PdfViewer({ docId, activePage, setActivePage }: Props) {
       obs.disconnect();
       observerRef.current = null;
     };
-  }, [pageMetas, renderPage, releasePage]);
+  }, [pageMetas, requestRender, releasePage]);
 
-  // Cleanup all bitmaps + destroy PDF document on unmount / doc change
+  // Viewport scroll listener: track active page as user scrolls (both mobile and desktop)
   useEffect(() => {
-    return () => {
-      renderedPages.current.forEach((pn) => {
-        const c = canvasRefs.current.get(pn);
-        if (c) {
-          c.width = 0;
-          c.height = 0;
-        }
-        const tl = textLayerRefs.current.get(pn);
-        if (tl) tl.innerHTML = "";
-      });
-      renderedPages.current.clear();
-      visiblePages.current.clear();
-      renderingPages.current.clear();
-      recentlyVisibleOrder.current = [];
-      // Destroy the PDFDocumentProxy to release all native memory
-      // (decoded fonts, CMap tables, page caches, operator lists).
-      // The load effect cleanup also handles this, but this is a safety net
-      // for cases where the doc was set in state before the effect re-ran.
-      if (doc) {
-        try {
-          doc.cleanup();
-        } catch {}
-        doc.destroy();
-      }
-    };
-  }, [doc, docId]);
+    const root = scrollRef.current;
+    if (!root) return;
 
-  // Scroll to corresponding page when activePage changes from outside (e.g. right-side panel)
+    let rafId: number | null = null;
+    const handleScroll = () => {
+      if (isProgrammaticScrollRef.current) return;
+      if (rafId !== null) cancelAnimationFrame(rafId);
+
+      rafId = requestAnimationFrame(() => {
+        if (!scrollRef.current || isProgrammaticScrollRef.current) return;
+        const rootRect = scrollRef.current.getBoundingClientRect();
+        const rootCenterY = rootRect.top + rootRect.height / 2;
+
+        let closestPage = -1;
+        let minDistance = Infinity;
+
+        canvasRefs.current.forEach((canvas, pn) => {
+          const container = canvas.parentElement ?? canvas;
+          const rect = container.getBoundingClientRect();
+          if (rect.bottom > rootRect.top && rect.top < rootRect.bottom) {
+            const pageCenterY = rect.top + rect.height / 2;
+            const dist = Math.abs(pageCenterY - rootCenterY);
+            if (dist < minDistance) {
+              minDistance = dist;
+              closestPage = pn;
+            }
+          }
+        });
+
+        if (closestPage > 0 && closestPage !== activePageRef.current) {
+          setActivePage(closestPage);
+        }
+      });
+    };
+
+    root.addEventListener("scroll", handleScroll, { passive: true });
+    return () => {
+      root.removeEventListener("scroll", handleScroll);
+      if (rafId !== null) cancelAnimationFrame(rafId);
+    };
+  }, [setActivePage]);
+
+  // Scroll to corresponding page when activePage changes from outside (e.g. right-side panel, jump sheet)
   useEffect(() => {
     if (activePage > 0 && !loading) {
-      // Use requestAnimationFrame/setTimeout to ensure elements are fully mounted
+      isProgrammaticScrollRef.current = true;
+      if (programmaticScrollTimeoutRef.current) {
+        clearTimeout(programmaticScrollTimeoutRef.current);
+      }
+
       const timer = setTimeout(() => {
         const pageEl = scrollRef.current?.querySelector(`[data-page-number="${activePage}"]`);
         if (pageEl) {
@@ -264,22 +446,73 @@ export function PdfViewer({ docId, activePage, setActivePage }: Props) {
             }
           }
         }
-      }, 50);
-      return () => clearTimeout(timer);
+        programmaticScrollTimeoutRef.current = setTimeout(() => {
+          isProgrammaticScrollRef.current = false;
+        }, 400);
+      }, 30);
+
+      return () => {
+        clearTimeout(timer);
+        if (programmaticScrollTimeoutRef.current) {
+          clearTimeout(programmaticScrollTimeoutRef.current);
+        }
+      };
     }
   }, [activePage, loading]);
 
-  // Also support scroll-to-pdf event on right-side click (even if activePage hasn't changed)
+  // Also support scroll-to-pdf event on right-side click
   useEffect(() => {
     return listenDocEvent("doclens:scroll-to-pdf", (d) => {
       if (d.pageNumber && d.pageNumber > 0) {
+        isProgrammaticScrollRef.current = true;
+        if (programmaticScrollTimeoutRef.current) {
+          clearTimeout(programmaticScrollTimeoutRef.current);
+        }
         const pageEl = scrollRef.current?.querySelector(`[data-page-number="${d.pageNumber}"]`);
         if (pageEl) {
           pageEl.scrollIntoView({ behavior: "smooth", block: "start" });
         }
+        programmaticScrollTimeoutRef.current = setTimeout(() => {
+          isProgrammaticScrollRef.current = false;
+        }, 400);
       }
     });
   }, []);
+
+  // Cleanup all bitmaps + destroy PDF document on unmount / doc change
+  useEffect(() => {
+    return () => {
+      if (programmaticScrollTimeoutRef.current) {
+        clearTimeout(programmaticScrollTimeoutRef.current);
+      }
+      if (activeRenderTaskRef.current) {
+        try {
+          activeRenderTaskRef.current.cancel();
+        } catch {}
+        activeRenderTaskRef.current = null;
+      }
+      renderedPages.current.forEach((pn) => {
+        const c = canvasRefs.current.get(pn);
+        if (c) {
+          c.width = 0;
+          c.height = 0;
+        }
+        const tl = textLayerRefs.current.get(pn);
+        if (tl) tl.innerHTML = "";
+      });
+      renderedPages.current.clear();
+      visiblePages.current.clear();
+      queuedPagesRef.current.clear();
+      renderingPage.current = null;
+      recentlyVisibleOrder.current = [];
+      if (doc) {
+        try {
+          doc.cleanup();
+        } catch {}
+        doc.destroy();
+      }
+    };
+  }, [doc, docId]);
 
   const { selection, handleCopy, handleTranslate } = useTextSelectionToolbar(docId, scrollRef);
 

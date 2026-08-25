@@ -221,27 +221,28 @@ export function PageWorkstation({
     });
   }, [docId, runPageOnce]);
 
-  // ─── Auto-translate page 1 when doc is loaded and analyzed ───
-  const autoTranslatedPage1Ref = useRef<Record<string, boolean>>({});
+  // ─── Auto-translate currently visible active page when doc is loaded and analyzed ───
+  const autoTranslatedInitialPageRef = useRef<Record<string, number>>({});
   useEffect(() => {
     if (!mountedRef.current) return;
     if (pageCount <= 0) return;
     if (!keyReady || !globals.modelId) return;
     if (shouldShowExplainSetup()) return;
 
-    const page1State = aiSummary[1];
+    const targetPage = activePage > 0 ? activePage : 1;
+    const pageState = aiSummary[targetPage];
     const isIdle =
-      !page1State ||
-      (page1State.status !== "done" &&
-        page1State.status !== "running" &&
-        page1State.status !== "error");
-    const alreadyTried = autoTranslatedPage1Ref.current[docId];
+      !pageState ||
+      (pageState.status !== "done" &&
+        pageState.status !== "running" &&
+        pageState.status !== "error");
+    const lastTranslated = autoTranslatedInitialPageRef.current[docId];
 
-    if (isIdle && !alreadyTried) {
-      autoTranslatedPage1Ref.current[docId] = true;
-      void runPageOnce(1);
+    if (isIdle && lastTranslated !== targetPage) {
+      autoTranslatedInitialPageRef.current[docId] = targetPage;
+      void runPageOnce(targetPage);
     }
-  }, [docId, pageCount, keyReady, globals.modelId, aiSummary, shouldShowExplainSetup, runPageOnce]);
+  }, [docId, pageCount, keyReady, globals.modelId, aiSummary, shouldShowExplainSetup, runPageOnce, activePage]);
 
   const handleExplainSetupConfirm = async (settings: {
     language: string;
