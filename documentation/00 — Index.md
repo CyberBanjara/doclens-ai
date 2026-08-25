@@ -29,6 +29,8 @@
 - [[End-to-End Pipeline]] — Full PDF → Translation → TTS data flow
 - [[Global Library]] — Shared R2-backed document vault and cross-device sync
 - [[Authentication]] — Firebase Google Sign-In and Firestore reviews
+- [[Authorization Matrix]] — Role×Action permission matrix for all system functions
+- [[AI Response Sanitization]] — Post-processing pipeline for clean AI outputs
 - [[Memory & Storage Audit]] — Audit of large-data storage hotspots and memory optimizations
 - [[Voice Cache Layer]] — Dual-storage neural voice model caching
 - [[Read Aloud Analysis]] — Read Aloud extension architecture & integration strategy
@@ -36,4 +38,4 @@
 
 ---
 
-_Last updated: 2026-08-01_
+_Last updated: 2026-08-25_

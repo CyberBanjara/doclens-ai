@@ -74,19 +74,15 @@ The codebase is already well-optimized in several areas (per-page IDB records, l
 
 ---
 
-### 5. `getPageAiSummary()` reads all page records just to extract status
+### 5. `getPageAiSummary()` reads all page records just to extract status — ✅ RESOLVED
 
-**Files:** [getPageAiSummary](file:///home/sanskar/Downloads/doclens-ai/src/lib/storage.ts#L461-L476)
+**Files:** [getPageAiSummary](file:///home/sanskar/Desktop/doclens-ai/src/lib/storage/pages.ts#L80-L100)
 
-**Problem:** This function does `d.getAll(PAGES, pageRange(docId))` which loads **every** `PageDataRecord` (including the full `text` and `pageAi.result` fields) just to extract the lightweight `{ status, hasResult }` summary.
+**Problem:** This function previously called `d.getAll(PAGES, pageRange(docId))` which loaded **every** `PageDataRecord` (including the full `text` and `pageAi.result` fields) just to extract the lightweight `{ status, hasResult }` summary.
 
-**Impact:** For a 300-page doc with 2 KB text per page, this unnecessarily loads ~600 KB of text data that's immediately discarded. Called on every document open.
+**Resolution (commit `fee4076`):** Replaced `getAll()` with an IDB cursor (`openCursor()`) that iterates page-by-page and extracts only the `pageAi` status fields. This avoids materializing all records simultaneously and keeps peak memory to one record at a time.
 
-**Optimization:**
-
-- Use an IDB cursor with a projection pattern: iterate with `openCursor()` and extract only `pageAi.status`/`pageAi.result` existence without holding all records simultaneously.
-- Alternatively, maintain a separate lightweight `aiSummary` record in the `meta` store, updated by `upsertPageAi()`. This avoids the full scan entirely.
-- Or use the existing `aiDoneCount` on `DocRecord` more aggressively instead of reading individual page states.
+**Status:** ✅ Resolved. No further action needed.
 
 ---
 
@@ -186,11 +182,24 @@ The codebase is already well-optimized in several areas (per-page IDB records, l
 - `releasePage()` zeros canvas dimensions to free bitmap memory.
 - `PDFDocumentProxy.destroy()` is called on unmount and route change.
 - Text layer innerHTML is cleared on release.
+- **Priority render queue (commit `d840a98`):** Active visible page always renders first; background renders are preemptively cancelled when the user navigates.
+
+### PDF layout measurement optimization
+
+- **Baseline aspect ratio (commit `fee4076`):** `usePdfDocument` now measures only page 1 to derive aspect ratio, applying it uniformly to all placeholders. The old per-page `getPage()` loop was loading all font/page dictionaries into PDF.js worker memory, causing spikes up to 1 GB on large documents.
+
+### Thumbnail rendering throttle
+
+- **Concurrency limiter (commit `fee4076`):** `useThumbnail.ts` limits concurrent thumbnail renders to `MAX_CONCURRENT_THUMBNAILS = 2` via an async semaphore. Each render now properly cleans up page proxies and destroys the PDF document instance in nested `try/finally` blocks, preventing leaked bitmap memory.
 
 ### Per-page IDB storage (v6 migration)
 
 - Pages are stored individually in the `pageData` store, not as a giant array on the document record.
 - `getPageData()` loads a single page on demand.
+
+### getPageAiSummary cursor optimization
+
+- **IDB cursor (commit `fee4076`):** Replaced `getAll()` with `openCursor()` to avoid materializing all page records when only AI status summaries are needed.
 
 ### Piper engine lifecycle
 
@@ -210,14 +219,16 @@ The codebase is already well-optimized in several areas (per-page IDB records, l
 
 ## Priority Ranking
 
-| #   | Finding                       | Severity    | Effort | Impact                                 |
-| --- | ----------------------------- | ----------- | ------ | -------------------------------------- |
-| 1   | Thumbnails as data URLs       | 🔴 Critical | Low    | ~33% IDB savings + heap reduction      |
-| 2   | ONNX Blob URLs unbounded      | 🔴 Critical | Low    | 20-120 MB memory savings               |
-| 5   | `getPageAiSummary` full scan  | 🟠 High     | Medium | Faster doc open, less transient memory |
-| 6   | Extraction holds all items    | 🟠 High     | Low    | 2-10 MB peak reduction                 |
-| 3   | No PDF size warning           | 🟠 High     | Low    | Better UX for large files              |
-| 4   | Export materializes all pages | 🟠 High     | Medium | Prevents OOM on large exports          |
-| 8   | Voice catalog retains `files` | 🟡 Medium   | Low    | ~200 KB savings                        |
-| 11  | localStorage key cleanup      | 🟡 Medium   | Low    | Cleanliness                            |
-| 10  | Page select DOM bloat         | 🟢 Minor    | Low    | Minor DOM savings                      |
+| #   | Finding                       | Severity    | Effort | Impact                                 | Status  |
+| --- | ----------------------------- | ----------- | ------ | -------------------------------------- | ------- |
+| 1   | Thumbnails as data URLs       | 🔴 Critical | Low    | ~33% IDB savings + heap reduction      | Open    |
+| 2   | ONNX Blob URLs unbounded      | 🔴 Critical | Low    | 20-120 MB memory savings               | Open    |
+| 5   | `getPageAiSummary` full scan  | 🟠 High     | Medium | Faster doc open, less transient memory | ✅ Done |
+| 6   | Extraction holds all items    | 🟠 High     | Low    | 2-10 MB peak reduction                 | Open    |
+| 3   | No PDF size warning           | 🟠 High     | Low    | Better UX for large files              | Open    |
+| 4   | Export materializes all pages | 🟠 High     | Medium | Prevents OOM on large exports          | Open    |
+| 8   | Voice catalog retains `files` | 🟡 Medium   | Low    | ~200 KB savings                        | Open    |
+| 11  | localStorage key cleanup      | 🟡 Medium   | Low    | Cleanliness                            | Open    |
+| 10  | Page select DOM bloat         | 🟢 Minor    | Low    | Minor DOM savings                      | Open    |
+| —   | PDF layout per-page parsing   | 🔴 Critical | Low    | ~1 GB peak memory reduction            | ✅ Done |
+| —   | Thumbnail concurrency leak    | 🟠 High     | Low    | Prevents parallel bitmap explosions    | ✅ Done |

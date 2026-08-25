@@ -7,7 +7,7 @@
 
 ## Purpose
 
-Handles parsing, visual canvas generation, transparent text overlay layering, page synchronization, and tracks selection highlights to trigger contextual action menus.
+Handles parsing, visual canvas generation, transparent text overlay layering, page synchronization, and tracks selection highlights to trigger contextual action menus. Implements a **priority-based render queue** ensuring the currently visible page always renders first, with preemptive cancellation of background tasks.
 
 ---
 
@@ -27,9 +27,13 @@ Handles parsing, visual canvas generation, transparent text overlay layering, pa
 
 ## State & Performance Management
 
-- **Lazy Rendering Intersection Observer:** Listens to page visibility. Keeps at most 5 canvas maps active in memory. Evicts older canvases as new pages are scrolled into view.
+- **Priority Render Queue (`processQueue`):** A serialized async loop that strictly prioritizes the `activePage`. If a low-priority background render is in-flight when the active page changes, it is cancelled immediately via `RenderTask.cancel()` (preemptive cancellation). Background pages are only processed after the active page is fully rendered, sorted by proximity to the active page.
+- **`activePageRef` + RAF Scroll Sync:** A throttled `scroll` event handler using `requestAnimationFrame` determines which page is closest to the viewport center, updating `activePage` in real-time for both mobile and desktop.
+- **`activeRenderTaskRef`:** Tracks the currently in-flight render task (page number, priority flag, cancel callback), enabling instant preemption when the user navigates.
+- **Lazy Rendering Intersection Observer:** Listens to page visibility. Keeps at most 5 canvas maps active in memory. Evicts older canvases as new pages are scrolled into view, but protects the active page from eviction.
 - **`activePage` Synchronization:** Updates query parameters in the URL to sync the active page across panels.
 - **`doclens:scroll-to-pdf` listener:** Listens to custom scroll events sent from the right panel.
+- **GPU Memory Release:** Off-screen canvases are released via `canvas.width = 0; canvas.height = 0` to free GPU bitmap memory, rather than `page.cleanup()` which avoids re-triggering expensive PDF.js worker caches.
 
 ---
 

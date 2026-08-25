@@ -15,8 +15,9 @@
 
 ### AI Processing
 
-- [[AI Translation]] — Output language settings, tone profiles, OpenRouter endpoint connections, SSE streaming token parsing.
-- [[Prompt Engineering & Explanation Tones]] — 13 Explanation styles (ELI5, Storytelling, etc.), negative generation rules, system prompt architecture, and file links.
+- [[AI Translation]] — Mode-separated processing with Translation styles (Native/Mixed) and Explanation styles (Standard/Simple/Story/Deep/AI Mode), SSE streaming.
+- [[Prompt Engineering & Explanation Tones]] — Consolidated 5+2 style architecture, FORMAT_RULES, EXPLAIN_RULES, prompt pipeline, and legacy style mapping.
+- [[AI Response Sanitization]] — Post-processing sanitizer (`cleanAiText`) stripping markdown artifacts before DB storage and TTS.
 - [[Auto-Translate|Continuous Auto-Read]] — Translate-ahead + auto-advance while listening to a page.
 - [[Per-Page Overrides]] — Custom configurations (model, tone, temperature, custom prompt payload editor) per page.
 - [[API Key Management]] — Server key environment checks, client status badges, verification modal.

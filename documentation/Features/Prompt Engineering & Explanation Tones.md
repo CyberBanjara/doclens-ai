@@ -1,97 +1,109 @@
-# Prompt Engineering & Explanation Tones
+# Prompt Engineering & Processing Styles
 
-> Comprehensive documentation of prompt engineering techniques, system prompts, negative generation rules, and explanation tone profiles implemented in Anuwad.
+> Architecture of system prompts, output formatting rules, and mode-specific style profiles in Anuwad.
 
 ---
 
 ## 1. Overview
 
-Anuwad provides two primary AI processing modes for document pages:
-- **Translation Mode (`translate`):** Direct language-to-language translation preserving exact page structure and formatting without added commentary.
-- **Explanation Mode (`explain`):** Deep conceptual explanations tailored by **13 Explanation Tones (Styles)** ranging from ELI5 to Storytelling and Expert Deep-Dive.
+Anuwad provides two fully separated AI processing modes for document pages:
 
-All prompts are engineered to produce **clean, TTS-friendly plain text** directly natively via system instructions without relying on expensive post-filtering regex.
+- **Translation Mode (`translate`):** Direct language-to-language translation with **2 Translation Styles** (Native, Mixed).
+- **Explanation Mode (`explain`):** Conceptual explanations tailored by **5 Explanation Styles** (Standard, Simple, Story, Deep, AI Mode).
 
----
+Translation and Explanation modes have entirely independent prompt pipelines — no shared style definitions or overlapping rules. The style selector in the UI dynamically changes its options based on the active mode.
 
-## 2. Explanation Tones (Styles) Breakdown
-
-In **Explanation Mode**, the user can choose from 13 distinct explanation tones. Each tone modifies the AI system directive to adjust the depth, vocabulary, narrative structure, and framing of the page content:
-
-| Tone ID              | Display Label                 | Description & System Directive                                                                                                                              |
-| :------------------- | :---------------------------- | :---------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `Standard`           | **Standard**                  | Balanced, neutral, clear, and easy-to-understand explanations with structured flow.                                                                         |
-| `ELI5`               | **ELI5 (Explain Like I'm 5)** | Explains as if teaching a complete beginner or young learner. Avoids jargon; defines necessary technical terms in simple language using intuitive examples. |
-| `Storytelling`       | **Storytelling**              | Teaches concepts using narratives, real-world scenarios, characters, or story-like progression for an emotionally engaging experience.                      |
-| `Socratic`           | **Socratic**                  | Teaches through guided questions and progressive reasoning to encourage critical thinking rather than revealing conclusions immediately.                    |
-| `Step-by-Step`       | **Step-by-Step**              | Breaks explanations into sequential logical stages where each step builds naturally on the previous one.                                                    |
-| `Visual Thinking`    | **Visual Thinking**           | Uses mental imagery, hierarchy, spatial relationships, and diagram-like descriptions to help visualize complex systems.                                     |
-| `Analogical`         | **Analogical**                | Uses comparisons and analogies with familiar real-world systems to simplify abstract concepts.                                                              |
-| `Practical`          | **Practical**                 | Focuses on real-world applications, implementation methods, use cases, and concrete outcomes.                                                               |
-| `Expert Deep-Dive`   | **Expert Deep-Dive**          | Provides advanced technical depth, nuances, edge cases, and detailed reasoning, assuming prerequisite domain knowledge.                                     |
-| `Debate`             | **Debate**                    | Presents multiple viewpoints, trade-offs, arguments, strengths, weaknesses, and counterarguments without oversimplifying.                                   |
-| `Historical Context` | **Historical Context**        | Explains historical background, evolution, key discoveries, timeline, and major contributors behind the concepts.                                           |
-| `Motivational`       | **Motivational**              | Uses encouraging, confidence-building, and supportive language to reduce intimidation around complex subjects.                                              |
-| `Critical Thinking`  | **Critical Thinking**         | Analyzes underlying assumptions, evaluates evidence, identifies limitations, and promotes analytical understanding.                                         |
+All outputs are additionally sanitized by a post-processing pipeline (`cleanAiText`) that strips any residual markdown artifacts before storage and TTS consumption (see [[AI Response Sanitization]]).
 
 ---
 
-## 3. Prompt Engineering Architecture
+## 2. Translation Styles
 
-The prompt pipeline in Anuwad relies on strict native generation rules to ensure optimal rendering, high factual accuracy, and instant compatibility with text-to-speech engines.
+| Style ID | Label     | Directive Summary                                                                                 |
+| :------- | :-------- | :------------------------------------------------------------------------------------------------ |
+| `Native` | **Native** | Translate naturally and fluently. Preserve meaning, tone, and nuance. No added explanations.     |
+| `Mixed`  | **Mixed**  | Blend the target language with English as bilingual speakers naturally do (e.g., Hinglish). Keep technical terms, acronyms, proper nouns in English. |
 
-### System Prompt Structure
+---
 
+## 3. Explanation Styles
+
+The original 13 explanation tones were consolidated into 5 core styles. Legacy IDs are automatically mapped to their new equivalents:
+
+| Style ID   | Label          | Directive Summary                                                                                                      | Consolidated From (Legacy)                                                         |
+| :--------- | :------------- | :--------------------------------------------------------------------------------------------------------------------- | :--------------------------------------------------------------------------------- |
+| `Standard` | **Standard**   | Clear, balanced, well-organized explanations accessible to a general audience.                                         | —                                                                                  |
+| `Simple`   | **Simple**     | Beginner-friendly. Avoids jargon, uses real-world analogies, sequential steps, practical examples, encouraging tone.  | ELI5, Step-by-Step, Visual Thinking, Analogical, Practical, Motivational           |
+| `Story`    | **Story**      | Teaches through narratives, scenarios, or story-like progression. Emotionally engaging and memorable.                  | Storytelling, Socratic                                                             |
+| `Deep`     | **Deep**       | Advanced technical depth with nuance, edge cases, multiple viewpoints, and critical analysis.                          | Expert Deep-Dive, Debate, Historical Context, Critical Thinking                    |
+| `AI`       | **AI Mode**    | Holistic synthesis using structured reasoning — not word-by-word translation. Highlights contrasts and relationships.  | —                                                                                  |
+
+---
+
+## 4. Prompt Architecture
+
+### System Prompt Structure (Current)
+
+The `buildPagePayload()` function assembles prompts with a clean, unified structure:
+
+**Translation Mode:**
 ```
-[Assistant Role Definition]
-You are an advanced AI reading and teaching assistant integrated into a PDF.js-based document reader.
-
-[Task Specification]
-EXPLANATION MODE / TRANSLATION MODE
-Target/Response Language: {language}
-Selected Explanation Style: {style.label}
-Style directive: {style.instruction}
-
-[Global Rules]
-- Preserve factual accuracy.
-- Preserve important technical terminology.
-- Process one page at a time. Output only final processed content (no preamble/commentary).
-
-[Negative Generation Rules]
-- Do not produce markdown syntax, asterisks, hashtags, code fences, or backticks.
-- Do not produce emojis, decorative symbols, decorative Unicode, ASCII art, or visual separators.
-- Do not produce bullet decoration characters, rich-text formatting, or UI styling patterns.
-- Do not use excessive or decorative punctuation, decorative quotation styling, or heading markers.
-- Output must be clean plain text with natural readable structure suitable for reading & TTS.
-- Write smooth, natural, human-like sentences.
+[Role]       You are an expert document translator in a PDF reader.
+[Context]    The content below is extracted from a PDF page.
+[Task+Style] TASK: Translate into {language}.
+             STYLE: {style.label} — {style.instruction}
+[Rules]      Preserve the original structure, headings, lists, and logical flow.
+             Output only the translated text — no explanations, preamble, or commentary.
+[Format]     {FORMAT_RULES}
 ```
 
+**Explanation Mode:**
+```
+[Role]       You are an AI reading assistant in a PDF reader.
+[Context]    The content below is extracted from a PDF page.
+[Task+Style] TASK: Explain in {language}.
+             STYLE: {style.label} — {style.instruction}
+[Rules]      {EXPLAIN_RULES}
+[Format]     {FORMAT_RULES}
+```
+
+### Shared Format Rules (`FORMAT_RULES`)
+- Output clean plain text only. No markdown, asterisks, hashtags, code fences, backticks, emojis, decorative symbols, bullet characters, or rich formatting.
+- Write smooth, natural sentences suitable for reading and text-to-speech. Avoid robotic phrasing and repetition.
+
+### Explanation Rules (`EXPLAIN_RULES`)
+- Preserve factual accuracy — never invent information not in the source. Preserve technical terms, explaining them as appropriate for the style.
+- Output only the final content. No preamble, meta commentary, or closing remarks.
+
 ---
 
-## 4. Source Code & Codebase References
+## 5. Source Code References
 
-Below are direct clickable links to the files and code locations implementing prompt engineering, tone management, and streaming in this workspace:
+### Core Prompt & Style Engine
+- **Format rules & style definitions:** [openrouter.ts](file:///home/sanskar/Desktop/doclens-ai/src/lib/openrouter.ts#L669-L775)
+  - `FORMAT_RULES` (L669–673): Clean plain text constraints for TTS.
+  - `EXPLAIN_RULES` (L675–678): Factual accuracy & no-preamble enforcement.
+  - `TRANSLATION_STYLES` (L689–702): Native and Mixed translation style specs.
+  - `EXPLANATION_STYLES` (L737–775): 5 consolidated explanation style specs.
+  - `LEGACY_STYLE_MAP` (L720–735): Maps the original 13 tone IDs to the 5 consolidated styles.
+  - `MODE_LABELS` (L777–781): UI-facing labels for Translate vs Explain.
+  - `getStylesForMode()` (L715–717): Returns the appropriate style list based on active mode.
+  - `buildPagePayload()` (L794–834): Assembles system and user prompts into OpenRouter request format.
 
-### Core Prompt & Tone Engine
-- **Prompt definitions & Explanation Tones:** [openrouter.ts](file:///home/sanskar/Desktop/doclens-ai/src/lib/openrouter.ts#L614-L783)
-  - `EXPLANATION_STYLES` array (Lines 650–730): Contains all 13 tone specs & instructions.
-  - `MODE_INSTRUCTIONS` (Lines 731–741): Defines strict task boundaries for `translate` vs `explain`.
-  - `NEGATIVE_RULES` (Lines 614–622): Plain-text constraints for TTS compatibility.
-  - `GLOBAL_RULES` (Lines 623–627): Factual accuracy & no-preamble enforcement.
-  - `buildPagePayload()` (Lines 754–783): Assembles system and user prompts into OpenRouter request format.
+### AI Response Sanitization
+- **Post-processing sanitizer:** [cleanAiText.ts](file:///home/sanskar/Desktop/doclens-ai/src/lib/cleanAiText.ts) — Strips markdown artifacts, code fences, bold/italic markers, blockquotes, and horizontal rules from AI output before saving to IndexedDB and feeding to TTS.
 
 ### Streaming & Server Proxy
-- **Server-side SSE Proxy:** [openrouter.ts](file:///home/sanskar/Desktop/doclens-ai/src/lib/openrouter.ts#L294-L334) (`completeWithServerOpenRouter`) — Proxies LLM responses via Server-Sent Events while keeping API keys secure on the server.
-- **Client SSE Stream Handler:** [openrouter.ts](file:///home/sanskar/Desktop/doclens-ai/src/lib/openrouter.ts#L550-L608) (`streamCompletion`) — Parses `data:` SSE chunks in real-time with automatic retry and error handling.
+- **Server-side SSE Proxy:** [openrouter.ts](file:///home/sanskar/Desktop/doclens-ai/src/lib/openrouter.ts#L294-L334) — Proxies LLM responses via Server-Sent Events while keeping API keys secure on the server.
+- **Client SSE Stream Handler:** [openrouter.ts](file:///home/sanskar/Desktop/doclens-ai/src/lib/openrouter.ts#L550-L667) — Parses `data:` SSE chunks in real-time with automatic retry and error handling.
 
 ### Caching & Settings Hash
-- **Settings Hash Calculation:** [storage/types.ts](file:///home/sanskar/Desktop/doclens-ai/src/lib/storage/types.ts#L64-L78) (`computeSettingsHash`) — Hashes `(modelId, mode, language, style, temperature)` to invalidate IndexedDB cache when user changes tone or model.
-- **Effective Page Overrides:** [pageAi.ts](file:///home/sanskar/Desktop/doclens-ai/src/lib/pageAi.ts#L1-L25) (`getEffectiveSettings`) — Merges document-level defaults with per-page overrides.
+- **Settings Hash Calculation:** [storage/types.ts](file:///home/sanskar/Desktop/doclens-ai/src/lib/storage/types.ts) (`computeSettingsHash`) — Hashes `(modelId, mode, language, style, temperature)` to invalidate IndexedDB cache when user changes style or model.
 
-### User Interface & Tone Selection
-- **Explanation Tone Grid UI:** [ExplainSetupDialog.tsx](file:///home/sanskar/Desktop/doclens-ai/src/components/ExplainSetupDialog.tsx#L85-L107) — Interactive grid allowing selection of language and explanation styles.
-- **Workstation Sidebar Controls:** [PageWorkstation.tsx](file:///home/sanskar/Desktop/doclens-ai/src/components/PageWorkstation.tsx#L18-L35) — Sidebar UI hosting tone dropdowns, mode toggles, and temperature sliders.
-- **Global Preferences Modal:** [GlobalSettingsModal.tsx](file:///home/sanskar/Desktop/doclens-ai/src/components/GlobalSettingsModal.tsx) — Configures default global AI options.
+### User Interface & Style Selection
+- **Style selector in workspace:** [AiPipelineDefaultsSection.tsx](file:///home/sanskar/Desktop/doclens-ai/src/components/settings/AiPipelineDefaultsSection.tsx) — Mode-aware style dropdown that switches between translation and explanation styles.
+- **Explanation setup dialog:** [ExplainSetupDialog.tsx](file:///home/sanskar/Desktop/doclens-ai/src/components/ExplainSetupDialog.tsx) — Interactive grid allowing selection of language and explanation styles.
+- **Page override controls:** [PageWorkstation.tsx](file:///home/sanskar/Desktop/doclens-ai/src/components/PageWorkstation.tsx) — Per-page mode/style/temperature overrides.
 
 ---
 

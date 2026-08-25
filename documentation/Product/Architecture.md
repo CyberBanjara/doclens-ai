@@ -41,17 +41,21 @@ graph LR
     sync -.dynamic import.-> openrouter
     voiceLangMap[voiceLanguageMap.ts] -.type import.-> TtsContext[context/TtsContext.tsx]
     pdf[pdf.ts]
-    tts[tts.ts]
+    tts[tts.ts] --> cleanAiText[cleanAiText.ts]
+    cleanAiText
     theme[theme.ts]
     voiceCache[voiceCache.ts]
     firebase[firebase.ts]
+    pageAi[pageAi.ts] --> cleanAiText
+    storagePg[storage/pages.ts] --> cleanAiText
 ```
 
 - **`network.ts`** is the one shared leaf module — it turns offline/fetch failures into a friendly message, and `openrouter.ts` depends on it.
 - **`r2-cache.ts`** wraps `r2.ts`'s `listR2Files()` with a 10-minute in-memory TTL cache.
 - **`sync.ts`** is the integration point between the local IndexedDB layer (`storage.ts`) and the shared Supabase cache (`supabase.ts`); it also dynamically imports `openrouter.ts` for one read-model-list use.
+- **`cleanAiText.ts`** is the AI response sanitization module — consumed by `pageAi.ts` (re-export), `storage/pages.ts` (sanitize before IDB write), and `tts.ts` (sanitize before sentence splitting). Introduced to strip markdown artifacts that LLMs sometimes emit despite system prompt rules.
 - **`voiceLanguageMap.ts`** imports the `TtsVoice` type from `context/TtsContext.tsx` — a lib module depending on a context type, a minor layering inversion but not a cycle.
-- Everything else (`pdf.ts`, `tts.ts`, `theme.ts`, `voiceCache.ts`, `firebase.ts`, `utils.ts`, `models.ts`) is a leaf with no dependency on other `lib/*` modules.
+- Everything else (`pdf.ts`, `theme.ts`, `voiceCache.ts`, `firebase.ts`, `utils.ts`, `models.ts`) is a leaf with no dependency on other `lib/*` modules.
 
 There is no shared "env/config" module — the `ENABLE_GLOBAL_SYNC` feature-flag check is currently duplicated independently in `r2.ts`, `supabase.ts`, and `sync.ts`.
 
