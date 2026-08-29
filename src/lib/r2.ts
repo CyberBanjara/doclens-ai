@@ -35,9 +35,7 @@ if (typeof process !== "undefined" && typeof process.emitWarning === "function")
  * Layer 2: Write-Capable API Key Authorization (Server-side write credential verification)
  * ============================================================================
  */
-
-/**
-import type { UserRole } from "@/types/auth";
+import type { UserRole } from "./auth-client";
 
 /**
  * Layer 1 Verification: Validates JWT signature, expiry, and asserts allowed role.
