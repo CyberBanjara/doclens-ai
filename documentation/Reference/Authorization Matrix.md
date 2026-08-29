@@ -59,11 +59,11 @@
 | Export (Markdown/JSON)                   |    ✅     |   ✅   |    ✅    |     ✅      |    ✅    |   ✅    | Local IndexedDB data                                 |
 | Browse Global Library                    |    ❌     |   ✅   |    ✅    |     ✅      |    ✅    |   ✅    | Requires authenticated session                       |
 | Import from Global Library               |    ❌     |   ✅   |    ✅    |     ✅      |    ✅    |   ✅    | Requires authenticated session                       |
-| Upload PDF to Cloudflare R2 (Global Lib) |    ❌     |   ❌   |    ❌    |     ❌      |    ❌    |   ✅    | Client: `isAdmin` gate on UI button                  |
-| Sync R2 thumbnails                       |    ❌     |   ❌   |    ❌    |     ❌      |    ❌    |   ✅    | Client: `isAdmin` gate on UI button                  |
-| Delete from Global Library               |    ❌     |   ❌   |    ❌    |     ❌      |    ❌    |   ✅    | Client: `isAdmin` gate on UI action                  |
-| Upload to R2 from workspace              |    ❌     |   ❌   |    ❌    |     ❌      |    ❌    |   ✅    | Client: `isAdmin \|\| syncEnabled`                   |
-| Sync to Supabase from workspace          |    ❌     |   ❌   |    ❌    |     ❌      |    ❌    |   ✅    | Client: `isAdmin \|\| syncEnabled`                   |
+| Upload PDF to Cloudflare R2 (Global Lib) |    ❌     |   ❌   |    ❌    |     ✅      |    ✅    |   ✅    | Client: `isAdmin \|\| moderator \|\| editor`                                    |
+| Sync R2 thumbnails                       |    ❌     |   ❌   |    ❌    |     ✅      |    ✅    |   ✅    | Client: `isAdmin \|\| moderator \|\| editor`                                    |
+| Delete from Global Library               |    ❌     |   ❌   |    ❌    |     ✅      |    ❌    |   ✅    | Client: `isAdmin \|\| moderator`                                    |
+| Upload to R2 from workspace              |    ❌     |   ❌   |    ❌    |     ✅      |    ✅    |   ✅    | Client: `isAdmin \|\| moderator \|\| editor \|\| syncEnabled`                   |
+| Sync to Supabase from workspace          |    ❌     |   ❌   |    ❌    |     ✅      |    ✅    |   ✅    | Client: `isAdmin \|\| moderator \|\| editor \|\| syncEnabled`                   |
 | View admin dashboard                     |    ❌     |   ❌   |    ❌    |     ❌      |    ❌    |   ✅    | Client + server `isAdmin`                            |
 | List all users                           |    ❌     |   ❌   |    ❌    |     ❌      |    ❌    |   ✅    | Server: `requireSessionFromEvent(["admin"])`         |
 | Change user roles                        |    ❌     |   ❌   |    ❌    |     ❌      |    ❌    |   ✅    | Server: `requireSessionFromEvent(["admin"])`         |

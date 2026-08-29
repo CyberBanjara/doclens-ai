@@ -146,14 +146,18 @@ export async function syncFromSupabase(docId: string, fileName: string): Promise
   return false;
 }
 
-export async function syncToSupabase(docId: string): Promise<void> {
+export async function syncToSupabase(docId: string, customKey?: string): Promise<void> {
   if (!isGlobalSyncEnabled()) return;
   try {
     const docRec = await getDoc(docId);
-    if (!docRec) return;
+    if (!docRec) {
+      throw new Error(`Document "${docId}" not found in local storage.`);
+    }
 
     const pages = await getAllPages(docId);
-    if (pages.length === 0) return;
+    if (pages.length === 0) {
+      throw new Error("No page extractions found. Please click 'Analyze Document' first.");
+    }
 
     const { getTranslationConfig } = await import("./openrouter");
     const translationConfig = getTranslationConfig();
@@ -173,19 +177,43 @@ export async function syncToSupabase(docId: string): Promise<void> {
 
     const serializedText = JSON.stringify(payload);
     const usedOcr = pages.some((p) => p.ocrRun);
+    const targetKey = customKey || docRec.fileName;
+    const nowIso = new Date().toISOString();
 
-    await saveSupabaseExtraction({
+    const res = await saveSupabaseExtraction({
       data: {
-        key: docRec.fileName,
+        key: targetKey,
         size: docRec.fileSize,
-        lastModified: new Date(docRec.createdAt).toISOString(),
+        lastModified: nowIso,
         numPages: docRec.pageCount || pages.length,
         text: serializedText,
         usedOcr,
         translationConfig,
       },
     });
-  } catch (e) {
+
+    if (!res || !res.success) {
+      const errMsg = res?.error || "Failed to sync extraction to Supabase.";
+      console.error("Supabase sync error:", errMsg);
+      throw new Error(errMsg);
+    }
+
+    // If customKey has folder prefix, also mirror under base filename for seamless lookup
+    if (customKey && customKey !== docRec.fileName) {
+      await saveSupabaseExtraction({
+        data: {
+          key: docRec.fileName,
+          size: docRec.fileSize,
+          lastModified: nowIso,
+          numPages: docRec.pageCount || pages.length,
+          text: serializedText,
+          usedOcr,
+          translationConfig,
+        },
+      }).catch((err) => console.warn("Mirror sync note:", err?.message || err));
+    }
+  } catch (e: any) {
     console.error("Failed to sync up to Supabase:", e);
+    throw e;
   }
 }

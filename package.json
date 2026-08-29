@@ -10,7 +10,8 @@
     "preview": "vite preview",
     "lint": "eslint .",
     "format": "prettier --write .",
-    "reorganize-r2": "node scripts/reorganize-r2.mjs"
+    "reorganize-r2": "node scripts/reorganize-r2.mjs",
+    "test:security": "npx tsx --test scripts/security-suite.test.mjs"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.1090.0",

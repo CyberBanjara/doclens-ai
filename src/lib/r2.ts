@@ -1,4 +1,5 @@
 import { createServerFn } from "@tanstack/react-start";
+import { getCookie, getRequestHeader } from "@tanstack/react-start/server";
 import crypto from "crypto";
 import { isGlobalSyncEnabled } from "./env";
 
@@ -26,18 +27,113 @@ if (typeof process !== "undefined" && typeof process.emitWarning === "function")
   };
 }
 
-async function getS3Client() {
+/**
+ * ============================================================================
+ * TWO-LAYER AUTHENTICATION & AUTHORIZATION ENGINE
+ * ----------------------------------------------------------------------------
+ * Layer 1: JWT Session Verification (Cryptographic signature, expiry, claims & admin role check)
+ * Layer 2: Write-Capable API Key Authorization (Server-side write credential verification)
+ * ============================================================================
+ */
+
+/**
+import type { UserRole } from "@/types/auth";
+
+/**
+ * Layer 1 Verification: Validates JWT signature, expiry, and asserts allowed role.
+ */
+async function assertRoleSession(
+  allowedRoles: UserRole[] = ["admin", "moderator", "editor"],
+  tokenOrAuth?: string,
+) {
+  let token = tokenOrAuth;
+  if (!token) {
+    try {
+      token = getCookie("session_token");
+    } catch {
+      // getCookie may throw if called outside server request context
+    }
+  }
+  if (!token) {
+    try {
+      const header = getRequestHeader("authorization") || getRequestHeader("x-session-token");
+      if (header) {
+        token = header.startsWith("Bearer ") ? header.substring(7).trim() : header.trim();
+      }
+    } catch {
+      // getRequestHeader may throw if outside request context
+    }
+  }
+
+  if (!token) {
+    throw new Error(
+      "Unauthorized [Layer 1 Failed]: Missing authentication session. Valid JWT required.",
+    );
+  }
+
+  const { verifySessionJwt } = await import("../../server/lib/auth-server");
+  const user = await verifySessionJwt(token);
+  if (!user) {
+    throw new Error(
+      "Unauthorized [Layer 1 Failed]: Invalid or expired session token signature.",
+    );
+  }
+
+  if (!allowedRoles.includes(user.role)) {
+    throw new Error(
+      `Forbidden [Layer 1 Failed]: Operation requires one of [${allowedRoles.join(", ")}] roles (current role: '${user.role}').`,
+    );
+  }
+
+  return user;
+}
+
+/**
+ * Layer 2 Verification & Credential Separation:
+ * - Read operations: strictly use read-only R2 credentials (R2_ACCESS_KEY_ID, R2_SECRET_ACCESS_KEY).
+ * - Write operations: strictly require and use write-capable credentials (STORAGE_DISPATCH_TOKEN_ID, STORAGE_DISPATCH_TOKEN_SECRET).
+ */
+async function getS3Client({ writeAccess = false }: { writeAccess?: boolean } = {}) {
   const sdk = await import("@aws-sdk/client-s3");
   const accountId = process.env.R2_ACCOUNT_ID;
-  const accessKeyId = process.env.R2_ACCESS_KEY_ID;
-  const secretAccessKey = process.env.R2_SECRET_ACCESS_KEY;
   const bucketName = process.env.R2_BUCKET_NAME;
   const endpoint =
     process.env.R2_S3_ENDPOINT ||
     (accountId ? `https://${accountId}.r2.cloudflarestorage.com` : "");
 
-  if (!accountId || !accessKeyId || !secretAccessKey || !bucketName) {
-    throw new Error("Missing Cloudflare R2 credentials in environment variables.");
+  let accessKeyId = "";
+  let secretAccessKey = "";
+
+  if (writeAccess) {
+    // Layer 2: Dedicated write credentials (STORAGE_DISPATCH_TOKEN_*), or fallback to R2 keys
+    accessKeyId =
+      process.env.STORAGE_DISPATCH_TOKEN_ID ||
+      process.env.R2_WRITE_ACCESS_KEY_ID ||
+      process.env.R2_ACCESS_KEY_ID ||
+      "";
+    secretAccessKey =
+      process.env.STORAGE_DISPATCH_TOKEN_SECRET ||
+      process.env.R2_WRITE_SECRET_ACCESS_KEY ||
+      process.env.R2_SECRET_ACCESS_KEY ||
+      "";
+
+    if (!accessKeyId || !secretAccessKey) {
+      throw new Error(
+        "Unauthorized [Layer 2 Failed]: Missing write-capable API key credentials (STORAGE_DISPATCH_TOKEN_ID / STORAGE_DISPATCH_TOKEN_SECRET / R2_ACCESS_KEY_ID).",
+      );
+    }
+  } else {
+    // Read-only access credentials: strictly limited to reading objects
+    accessKeyId = process.env.R2_ACCESS_KEY_ID || "";
+    secretAccessKey = process.env.R2_SECRET_ACCESS_KEY || "";
+
+    if (!accessKeyId || !secretAccessKey) {
+      throw new Error("Missing Cloudflare R2 read credentials in environment variables.");
+    }
+  }
+
+  if (!accountId || !bucketName) {
+    throw new Error("Missing Cloudflare R2 account or bucket configuration in environment variables.");
   }
 
   return {
@@ -54,6 +150,7 @@ async function getS3Client() {
     sdk,
   };
 }
+
 
 export function sanitizeCategory(cat?: string): string {
   if (!cat) return "uncategorized";
@@ -97,8 +194,13 @@ export const uploadToR2 = createServerFn({ method: "POST" })
     if (!isSyncEnabled) {
       throw new Error("Global sync (R2 uploads) is disabled in this environment.");
     }
+
+    // 1. Verify role privilege before mutating R2 vault
+    await assertRoleSession(["admin", "moderator", "editor"]);
+
     try {
-      const { s3, bucketName, publicBaseUrl, sdk } = await getS3Client();
+      // 2. Use write-capable credentials
+      const { s3, bucketName, publicBaseUrl, sdk } = await getS3Client({ writeAccess: true });
       const buffer = Buffer.from(data.base64Data, "base64");
       const digest = crypto.createHash("md5").update(buffer).digest("hex");
 
@@ -139,7 +241,7 @@ export const uploadToR2 = createServerFn({ method: "POST" })
       };
     } catch (err: any) {
       if (err?.$metadata?.httpStatusCode === 412) {
-        const { publicBaseUrl } = await getS3Client();
+        const { publicBaseUrl } = await getS3Client({ writeAccess: false });
         const cleanFileName = data.fileName.includes("/")
           ? data.fileName.split("/").pop() || data.fileName
           : data.fileName;
@@ -161,7 +263,7 @@ export const uploadToR2 = createServerFn({ method: "POST" })
 export const listR2Files = createServerFn({ method: "GET" }).handler(async () => {
   "use server";
   try {
-    const { s3, bucketName, publicBaseUrl, sdk } = await getS3Client();
+    const { s3, bucketName, publicBaseUrl, sdk } = await getS3Client({ writeAccess: false });
     const files: { key: string; size: number; lastModified?: string; url?: string }[] = [];
     let continuationToken: string | undefined;
 
@@ -203,8 +305,12 @@ export const uploadThumbnailToR2 = createServerFn({ method: "POST" })
     if (!isSyncEnabled) {
       return { success: false, reason: "Sync disabled" };
     }
+
+    // 1. Verify role privilege before mutating R2 thumbnails
+    await assertRoleSession(["admin", "moderator", "editor"]);
+
     try {
-      const { s3, bucketName, sdk } = await getS3Client();
+      const { s3, bucketName, sdk } = await getS3Client({ writeAccess: true });
       const buffer = Buffer.from(data.base64Data, "base64");
       const thumbKey = `thumbnails/${data.fileKey}.jpg`;
 
@@ -229,7 +335,7 @@ export const getThumbnailFromR2 = createServerFn({ method: "POST" })
   .handler(async ({ data }) => {
     "use server";
     try {
-      const { s3, bucketName, publicBaseUrl, sdk } = await getS3Client();
+      const { s3, bucketName, publicBaseUrl, sdk } = await getS3Client({ writeAccess: false });
       const thumbKey = `thumbnails/${data.fileKey}.jpg`;
 
       // Verify if the thumbnail object actually exists in the R2 bucket
@@ -311,8 +417,11 @@ export const deleteFromR2 = createServerFn({ method: "POST" })
       throw new Error("Global sync (R2 deletions) is disabled in this environment.");
     }
 
+    // 1. Verify role privilege before mutating R2 vault (admin or moderator)
+    await assertRoleSession(["admin", "moderator"]);
+
     try {
-      const { s3, bucketName, sdk } = await getS3Client();
+      const { s3, bucketName, sdk } = await getS3Client({ writeAccess: true });
       await s3.send(
         new sdk.DeleteObjectCommand({
           Bucket: bucketName,
@@ -325,7 +434,7 @@ export const deleteFromR2 = createServerFn({ method: "POST" })
           new sdk.DeleteObjectCommand({
             Bucket: bucketName,
             Key: `thumbnails/${data.key}.jpg`,
-          }),
+          })
         );
       } catch {
         // Thumbnail cleanup error ignored
@@ -342,7 +451,7 @@ export const downloadFromR2 = createServerFn({ method: "POST" })
   .handler(async ({ data }) => {
     "use server";
     try {
-      const { s3, bucketName, sdk } = await getS3Client();
+      const { s3, bucketName, sdk } = await getS3Client({ writeAccess: false });
       const response = await s3.send(
         new sdk.GetObjectCommand({
           Bucket: bucketName,
@@ -398,8 +507,11 @@ export const downloadFromR2 = createServerFn({ method: "POST" })
 
 export const reorganizeR2Files = createServerFn({ method: "POST" }).handler(async () => {
   "use server";
+  // 1. Verify role privilege before reorganizing R2 vault (admin or moderator)
+  await assertRoleSession(["admin", "moderator"]);
+
   try {
-    const { s3, bucketName, sdk } = await getS3Client();
+    const { s3, bucketName, sdk } = await getS3Client({ writeAccess: true });
     let continuationToken: string | undefined;
     const movedFiles: { oldKey: string; newKey: string; category: string }[] = [];
 

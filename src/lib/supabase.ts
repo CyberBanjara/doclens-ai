@@ -1,30 +1,119 @@
 import { createClient } from "@supabase/supabase-js";
 import { createServerFn } from "@tanstack/react-start";
+import { getCookie, getRequestHeader } from "@tanstack/react-start/server";
 import { isGlobalSyncEnabled } from "./env";
 
-async function getSupabaseClient() {
+/**
+ * ============================================================================
+ * TWO-LAYER AUTHENTICATION & AUTHORIZATION ENGINE (DATABASE)
+ * ----------------------------------------------------------------------------
+ * Layer 1: JWT Session Verification (Cryptographic signature, expiry, claims & admin role check)
+ * Layer 2: Write-Capable API Key Authorization (Server-side write credential verification)
+ * ============================================================================
+ */
+
+import type { UserRole } from "@/types/auth";
+
+/**
+ * Layer 1 Verification: Validates JWT signature, expiry, and asserts allowed role.
+ */
+async function assertRoleSession(
+  allowedRoles: UserRole[] = ["admin", "moderator", "editor"],
+  tokenOrAuth?: string,
+) {
+  let token = tokenOrAuth;
+  if (!token) {
+    try {
+      token = getCookie("session_token");
+    } catch {
+      // getCookie may throw outside request context
+    }
+  }
+  if (!token) {
+    try {
+      const header = getRequestHeader("authorization") || getRequestHeader("x-session-token");
+      if (header) {
+        token = header.startsWith("Bearer ") ? header.substring(7).trim() : header.trim();
+      }
+    } catch {
+      // getRequestHeader may throw outside request context
+    }
+  }
+
+  if (!token) {
+    throw new Error(
+      "Unauthorized [Layer 1 Failed]: Missing authentication session. Valid JWT required.",
+    );
+  }
+
+  const { verifySessionJwt } = await import("../../server/lib/auth-server");
+  const user = await verifySessionJwt(token);
+  if (!user) {
+    throw new Error(
+      "Unauthorized [Layer 1 Failed]: Invalid or expired session token signature.",
+    );
+  }
+
+  if (!allowedRoles.includes(user.role)) {
+    throw new Error(
+      `Forbidden [Layer 1 Failed]: Database write operations require one of [${allowedRoles.join(", ")}] roles (current role: '${user.role}').`,
+    );
+  }
+
+  return user;
+}
+
+/**
+ * Layer 2 Verification & Credential Separation:
+ * - Read operations: strictly use read-only Supabase publishable key (VITE_SUPABASE_PUBLISHABLE_KEY).
+ * - Write operations: strictly require and use write-capable secret key (PIPELINE_CATALOG_SYNC_TOKEN).
+ */
+async function getSupabaseClient({ writeAccess = false }: { writeAccess?: boolean } = {}) {
   const url = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL;
-  const key =
-    process.env.SUPABASE_SECRET_KEY ||
-    process.env.SUPABASE_SERVICE_ROLE_KEY ||
-    process.env.VITE_SUPABASE_PUBLISHABLE_KEY;
+  let key = "";
+
+  if (writeAccess) {
+    // Layer 2: Verify and load dedicated server-side write credential
+    key =
+      process.env.PIPELINE_CATALOG_SYNC_TOKEN ||
+      process.env.SUPABASE_WRITE_KEY ||
+      process.env.SUPABASE_SECRET_KEY ||
+      process.env.SUPABASE_SERVICE_ROLE_KEY ||
+      "";
+
+    if (!key) {
+      throw new Error(
+        "Unauthorized [Layer 2 Failed]: Missing write-capable database token (PIPELINE_CATALOG_SYNC_TOKEN / SUPABASE_SECRET_KEY).",
+      );
+    }
+  } else {
+    // Read-only access credentials: strictly limited to reading public data
+    key = process.env.VITE_SUPABASE_PUBLISHABLE_KEY || process.env.SUPABASE_PUBLISHABLE_KEY || "";
+  }
+
 
   if (!url || !key || url.includes("your-project.supabase.co")) {
     return null;
   }
 
   // Node.js 20 WebSocket polyfill for Supabase Realtime/SDK requirements
-  if (typeof window === "undefined" && typeof globalThis.WebSocket === "undefined") {
+  let wsTransport: any = undefined;
+  if (typeof window === "undefined") {
     try {
-      const ws = await import("ws");
-      globalThis.WebSocket = ws.default as any;
+      const wsModule = await import("ws");
+      const ws = wsModule.default || wsModule;
+      if (typeof globalThis.WebSocket === "undefined") {
+        globalThis.WebSocket = ws as any;
+      }
+      wsTransport = ws;
     } catch (err) {
-      console.error("Failed to polyfill WebSocket in Supabase client:", err);
+      console.warn("WebSocket polyfill warning in Supabase client:", err);
     }
   }
 
   return createClient(url, key, {
     auth: { persistSession: false },
+    ...(wsTransport ? { realtime: { transport: wsTransport } } : {}),
   });
 }
 
@@ -36,7 +125,7 @@ export const fetchSupabaseExtraction = createServerFn({ method: "POST" })
       return { found: false };
     }
     try {
-      const supabase = await getSupabaseClient();
+      const supabase = await getSupabaseClient({ writeAccess: false });
       if (!supabase) {
         return {
           found: false,
@@ -44,10 +133,12 @@ export const fetchSupabaseExtraction = createServerFn({ method: "POST" })
         };
       }
 
+      const cleanKey = data.key.split("/").pop() || data.key;
       const { data: record, error } = await supabase
         .from("pdf_extractions")
         .select("*")
-        .eq("id", data.key)
+        .or(`id.eq."${data.key}",key.eq."${data.key}",id.eq."${cleanKey}",key.eq."${cleanKey}"`)
+        .limit(1)
         .maybeSingle();
 
       if (error) {
@@ -105,12 +196,24 @@ export const saveSupabaseExtraction = createServerFn({ method: "POST" })
         error: "Global sync (Supabase writes) is disabled in this environment.",
       };
     }
+
+    // 1. Verify role privilege before mutating Supabase extractions
     try {
-      const supabase = await getSupabaseClient();
+      await assertRoleSession(["admin", "moderator", "editor"]);
+    } catch (authErr: any) {
+      return {
+        success: false,
+        error: authErr?.message || "Unauthorized: Administrator / Editor authorization required.",
+      };
+    }
+
+    try {
+      // 2. Use write-capable credentials
+      const supabase = await getSupabaseClient({ writeAccess: true });
       if (!supabase) {
         return {
           success: false,
-          error: "Supabase URL or Key is missing from environment variables.",
+          error: "Supabase URL or write credential is missing from environment variables.",
         };
       }
 

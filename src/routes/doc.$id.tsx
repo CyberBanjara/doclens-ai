@@ -264,9 +264,35 @@ function DocPage() {
     setAiSummary(sum);
   };
 
-  const handleAnalyze = async () => {
+  const handleAnalyze = async (forceLocalOrEvent?: boolean | React.MouseEvent) => {
+    const forceLocal = typeof forceLocalOrEvent === "boolean" ? forceLocalOrEvent : false;
     if (!doc || analyzing) return;
     setAnalyzing(true);
+
+    // 1. Check Supabase extraction cache first if not forced
+    if (!forceLocal && (isAdmin || syncEnabled)) {
+      setStatus("checking Global Library cache…");
+      try {
+        const { syncFromSupabase } = await import("@/lib/sync");
+        const foundInSupabase = await syncFromSupabase(id, doc.fileName);
+        if (foundInSupabase) {
+          const updatedDoc = await getDoc(id);
+          const pc = updatedDoc?.pageCount || (await getAllPages(id)).length;
+          if (pc > 0) {
+            setDoc(updatedDoc || null);
+            setPageCount(pc);
+            await refreshSummary();
+            setStatus(`done · ${pc} pages (loaded from Supabase cache)`);
+            toast.success(`Loaded ${pc} pages from Global Library cache.`);
+            setAnalyzing(false);
+            return;
+          }
+        }
+      } catch (cacheErr) {
+        console.warn("Supabase cache check failed, falling back to local extraction:", cacheErr);
+      }
+    }
+
     setStatus("extracting…");
     try {
       const blob = await getDocBlob(id);
@@ -437,6 +463,13 @@ function DocPage() {
         toast.success(`Uploaded successfully under folder prefix "${res.category}/"!`, {
           id: toastId,
         });
+      }
+
+      // Automatically sync pages and translations to Supabase under the category key
+      if ((isAdmin || syncEnabled) && pageCount > 0) {
+        void syncToSupabase(id, res.key).catch((err) =>
+          console.warn("Auto-sync to Supabase after R2 upload failed:", err),
+        );
       }
     } catch (e: any) {
       console.error(e);

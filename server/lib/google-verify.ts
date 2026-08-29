@@ -61,27 +61,9 @@ export async function verifyGoogleIdentity(idToken: string): Promise<VerifiedGoo
       }
     }
   } catch (e) {
-    console.warn("Google tokeninfo verification failed, attempting JWT decode fallback:", e);
+    console.warn("Google tokeninfo verification failed:", e);
   }
 
-  // 3. Resilient fallback: Safe payload decode
-  try {
-    const parts = idToken.split(".");
-    if (parts.length === 3) {
-      const payloadJson = Buffer.from(parts[1], "base64").toString("utf8");
-      const payload = JSON.parse(payloadJson);
-      if (payload && (payload.sub || payload.user_id) && payload.email) {
-        return {
-          uid: payload.sub || payload.user_id,
-          email: payload.email.toLowerCase(),
-          name: payload.name || payload.email.split("@")[0] || "User",
-          photoURL: payload.picture || payload.photo_url || "",
-        };
-      }
-    }
-  } catch (decodeErr) {
-    console.error("Token payload decode error:", decodeErr);
-  }
-
+  // Strictly reject unverified tokens to prevent JWT bypass / forged identity attacks.
   return null;
 }

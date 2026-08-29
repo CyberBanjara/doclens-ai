@@ -181,7 +181,9 @@ export function usePageTranslation(
             settingsHash: hash,
           }),
         );
-        void syncToSupabase(docId);
+        void syncToSupabase(docId).catch((err) =>
+          console.warn("Background sync to Supabase skipped/failed:", err?.message || err),
+        );
         return result;
       } catch (e) {
         if ((e as Error).name === "AbortError" || ctrl.signal.aborted) {
