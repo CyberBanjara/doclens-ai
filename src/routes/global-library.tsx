@@ -1,7 +1,17 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
-import { ArrowLeft, Globe, RefreshCw, Search, X, Layers, FolderOpen, Upload } from "lucide-react";
+import {
+  ArrowLeft,
+  Globe,
+  RefreshCw,
+  Search,
+  X,
+  Layers,
+  FolderOpen,
+  Upload,
+  ExternalLink,
+} from "lucide-react";
 import { SidebarLayout } from "@/components/SidebarLayout";
 import { deleteFromR2, downloadFromR2 } from "@/lib/r2";
 import { getCachedR2Files, setCachedR2Files } from "@/lib/r2-cache";
@@ -20,6 +30,7 @@ import { DeleteFileDialog } from "@/components/DeleteFileDialog";
 import { R2UploadDialog } from "@/components/R2UploadDialog";
 import { useAuth } from "@/context/AuthContext";
 import { CategoryVerticalHeap, getCategoryMeta } from "@/components/CategoryVerticalHeap";
+import { CategoryMarqueeRow } from "@/components/CategoryMarqueeRow";
 import { GlobalLibraryCard } from "@/components/GlobalLibraryCard";
 
 export const Route = createFileRoute("/global-library")({
@@ -174,6 +185,10 @@ function GlobalLibraryPage() {
     const keys = new Set([...Object.keys(STANDARD_CATEGORIES), ...Object.keys(categoryStats)]);
     return Array.from(keys);
   }, [categoryStats]);
+
+  const allCategories = useMemo(() => {
+    return ["all", ...categoriesList.filter((c) => c !== "all")];
+  }, [categoriesList]);
 
   // Map of local doc filename -> doc id
   const localDocsMap = useMemo(() => {
@@ -388,7 +403,7 @@ function GlobalLibraryPage() {
       <div
         className={`transition-all duration-300 ${!user ? "filter blur-[5px] pointer-events-none select-none opacity-50" : ""}`}
       >
-        <div className="mx-auto max-w-7xl p-4 sm:p-6 lg:p-8 space-y-6">
+        <div className="mx-auto max-w-7xl p-3.5 sm:p-6 lg:p-8 space-y-4 sm:space-y-6">
           <h1 className="sr-only">Cloudflare R2 Global Library</h1>
 
           {errorMsg ? (
@@ -413,9 +428,9 @@ function GlobalLibraryPage() {
               <LoadingLogo size={72} label="Loading Global Library…" />
             </div>
           ) : (
-            /* Main Split Layout: Left Vertical Category Heap & Right Playcard Grid */
+            /* Main Split Layout: Left Vertical Category Heap (Desktop) & Right E-Book Grid */
             <div className="flex flex-col lg:flex-row items-start gap-6 lg:gap-8">
-              {/* Left Column: Vertical Category Heap Sidebar */}
+              {/* Left Column: Vertical Category Heap Sidebar (Desktop Only) */}
               <CategoryVerticalHeap
                 categories={categoriesList}
                 activeCategory={activeCategory}
@@ -428,68 +443,134 @@ function GlobalLibraryPage() {
                 syncEnabled={syncEnabled}
               />
 
-              {/* Right Column: Library Playcards Container */}
-              <main className="flex-1 min-w-0 w-full space-y-5">
-                {/* Active Category Banner / Toolbar */}
-                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 rounded-2xl border border-border/80 bg-surface/50 p-4 sm:p-5 backdrop-blur-xl shadow-sm">
-                  <div className="flex items-center gap-3.5">
-                    <div
-                      className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl text-2xl shadow-inner border ${activeCategoryMeta.borderAccent} bg-gradient-to-br ${activeCategoryMeta.gradient}`}
-                    >
-                      {activeCategoryMeta.icon}
-                    </div>
-                    <div>
-                      <h2 className="text-lg sm:text-xl font-bold tracking-tight text-foreground flex items-center gap-2">
-                        {activeCategoryMeta.label}
-                      </h2>
-                      <p className="text-xs text-muted-foreground mt-0.5">
-                        Showing{" "}
-                        <span className="font-bold text-foreground">{filteredFiles.length}</span>{" "}
-                        {filteredFiles.length === 1 ? "playcard" : "playcards"}
-                        {searchQuery && (
-                          <span>
-                            {" "}
-                            matching "
-                            <span className="text-primary font-medium">{searchQuery}</span>"
-                          </span>
-                        )}
-                      </p>
-                    </div>
+              {/* Right Column: Library Books Container */}
+              <main className="flex-1 min-w-0 w-full space-y-4">
+                {/* ──── Dedicated Mobile E-Book App Header (Search + Category Pills + Community CTA) ──── */}
+                <div className="lg:hidden space-y-3">
+                  {/* Mobile Search Input */}
+                  <div className="relative">
+                    <Search className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                    <input
+                      type="text"
+                      placeholder="Search books & documents..."
+                      value={searchQuery}
+                      onChange={(e) => setSearchQuery(e.target.value)}
+                      className="w-full rounded-2xl border border-border bg-surface/70 py-2.5 pl-10 pr-9 text-xs text-foreground placeholder:text-muted-foreground shadow-sm backdrop-blur-md focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary transition-all"
+                    />
+                    {searchQuery && (
+                      <button
+                        onClick={() => setSearchQuery("")}
+                        className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors p-0.5 rounded-md cursor-pointer"
+                        aria-label="Clear search"
+                      >
+                        <X className="h-3.5 w-3.5" />
+                      </button>
+                    )}
                   </div>
 
-                  <div className="flex items-center gap-2 text-xs font-medium text-muted-foreground self-end sm:self-center">
-                    <span className="rounded-xl border border-border/60 bg-surface-2/60 px-3 py-1.5 font-mono text-[11px] font-semibold text-foreground">
-                      {filteredFiles.length} / {files.length} Total
+                  {/* Auto-drifting Smooth Category Pills Marquee (Leftward motion) */}
+                  <CategoryMarqueeRow
+                    items={allCategories.map((catKey) => {
+                      const meta = getCategoryMeta(catKey);
+                      const count =
+                        catKey === "all" ? files.length : categoryStats[catKey]?.count || 0;
+                      return {
+                        key: catKey,
+                        label: meta.label,
+                        icon: meta.icon,
+                        count,
+                        active: activeCategory === catKey,
+                        onClick: () => setActiveCategory(catKey),
+                      };
+                    })}
+                  />
+
+                  {/* Modern Mobile "Request a Book" Telegram Banner */}
+                  <div className="relative overflow-hidden rounded-2xl border border-primary/25 bg-gradient-to-r from-primary/10 via-surface/80 to-surface/60 p-3 backdrop-blur-md shadow-sm flex items-center justify-between gap-3">
+                    <div className="flex items-center gap-2.5 min-w-0">
+                      <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl bg-primary/20 text-primary border border-primary/30 shadow-inner">
+                        <svg className="h-4 w-4 fill-current" viewBox="0 0 24 24">
+                          <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm4.64 6.8c-.15 1.58-.8 5.42-1.13 7.19-.14.75-.42 1-.68 1.03-.58.05-1.02-.38-1.58-.75-.88-.58-1.38-.94-2.23-1.5-.99-.65-.35-1.01.22-1.59.15-.15 2.71-2.48 2.76-2.69a.2.2 0 00-.05-.18c-.06-.05-.14-.03-.21-.02-.09.02-1.49.95-4.22 2.79-.4.27-.76.41-1.08.4-.36-.01-1.04-.2-1.55-.37-.63-.2-1.12-.31-1.08-.66.02-.18.27-.36.75-.55 2.92-1.27 4.86-2.11 5.83-2.51 2.78-1.16 3.35-1.36 3.73-1.36.08 0 .27.02.39.12.1.08.13.19.14.27-.01.06.01.24 0 .37z" />
+                        </svg>
+                      </div>
+                      <div className="min-w-0 flex-1">
+                        <div className="flex items-center gap-1.5">
+                          <h4 className="text-xs font-bold text-foreground truncate">
+                            Need a Book?
+                          </h4>
+                          <span className="rounded bg-primary/15 px-1.5 py-0.2 text-[9px] font-semibold text-primary">
+                            Community
+                          </span>
+                        </div>
+                        <p className="text-[10px] text-muted-foreground line-clamp-1">
+                          Request books from our Telegram
+                        </p>
+                      </div>
+                    </div>
+                    <a
+                      href="https://t.me/cyber_banjara"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="shrink-0 flex items-center gap-1.5 rounded-xl bg-primary px-3 py-1.5 text-[11px] font-semibold text-primary-foreground shadow-sm hover:opacity-90 active:scale-95 transition-all cursor-pointer"
+                    >
+                      <span>Request</span>
+                      <ExternalLink className="h-3 w-3 opacity-80" />
+                    </a>
+                  </div>
+
+                  {/* Section Title & Count Indicator */}
+                  <div className="flex items-center justify-between px-0.5 pt-1">
+                    <div className="flex items-center gap-1.5">
+                      <span className="text-sm">{activeCategoryMeta.icon}</span>
+                      <h3 className="text-xs font-bold uppercase tracking-wider text-foreground">
+                        {activeCategoryMeta.label}
+                      </h3>
+                    </div>
+                    <span className="text-[10px] font-mono font-bold text-muted-foreground bg-surface-2/80 border border-border/50 rounded-full px-2 py-0.5">
+                      {filteredFiles.length} {filteredFiles.length === 1 ? "book" : "books"}
                     </span>
                   </div>
                 </div>
 
-                {/* Playcard Grid */}
+                {/* E-Book Grid */}
                 {filteredFiles.length === 0 ? (
-                  <div className="rounded-3xl border border-dashed border-border/80 bg-surface/30 p-12 text-center space-y-3">
-                    <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-2xl bg-surface-2/70 text-3xl shadow-inner border border-border/60">
-                      <FolderOpen className="h-8 w-8 text-muted-foreground" />
+                  <div className="rounded-3xl border border-dashed border-border/80 bg-surface/30 p-8 sm:p-12 text-center space-y-4">
+                    <div className="mx-auto flex h-14 w-14 sm:h-16 sm:w-16 items-center justify-center rounded-2xl bg-surface-2/70 text-2xl sm:text-3xl shadow-inner border border-border/60">
+                      <FolderOpen className="h-7 w-7 sm:h-8 sm:w-8 text-muted-foreground" />
                     </div>
                     <div className="space-y-1">
-                      <p className="text-base font-bold text-foreground">No documents found</p>
+                      <p className="text-sm sm:text-base font-bold text-foreground">
+                        No documents found
+                      </p>
                       <p className="text-xs text-muted-foreground max-w-sm mx-auto leading-relaxed">
                         {searchQuery
                           ? `No documents matching "${searchQuery}" in ${activeCategoryMeta.label}.`
                           : `There are currently no document playcards in the "${activeCategoryMeta.label}" category.`}
                       </p>
                     </div>
-                    {searchQuery && (
-                      <button
-                        onClick={() => setSearchQuery("")}
-                        className="inline-flex items-center gap-1.5 rounded-xl border border-border bg-surface-2 px-4 py-2 text-xs font-semibold text-foreground transition-all hover:bg-surface hover:border-border-strong active:scale-95 cursor-pointer"
+                    <div className="flex flex-wrap items-center justify-center gap-3 pt-2">
+                      {searchQuery && (
+                        <button
+                          onClick={() => setSearchQuery("")}
+                          className="inline-flex items-center gap-1.5 rounded-xl border border-border bg-surface-2 px-4 py-2 text-xs font-semibold text-foreground transition-all hover:bg-surface hover:border-border-strong active:scale-95 cursor-pointer"
+                        >
+                          <X className="h-3.5 w-3.5" />
+                          Clear Search Filter
+                        </button>
+                      )}
+                      <a
+                        href="https://t.me/cyber_banjara"
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="inline-flex items-center gap-1.5 rounded-xl bg-primary px-4 py-2 text-xs font-semibold text-primary-foreground shadow-md shadow-primary/20 hover:opacity-95 active:scale-95 transition-all cursor-pointer"
                       >
-                        <X className="h-3.5 w-3.5" />
-                        Clear Search Filter
-                      </button>
-                    )}
+                        <span>Request a Book on Telegram</span>
+                        <ExternalLink className="h-3.5 w-3.5 opacity-80" />
+                      </a>
+                    </div>
                   </div>
                 ) : (
-                  <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-2 xl:grid-cols-3">
+                  <div className="grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-2 xl:grid-cols-3">
                     {filteredFiles.map((file) => {
                       const cleanName = file.displayName || file.key.split("/").pop() || file.key;
                       const localId =

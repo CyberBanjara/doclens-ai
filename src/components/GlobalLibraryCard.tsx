@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { FileText, HardDrive, Calendar, Trash2, Download, ExternalLink, Check } from "lucide-react";
+import { FileText, HardDrive, Calendar, Trash2, Download, Check } from "lucide-react";
 import { formatBytes, formatDate, type ParsedR2File, type R2File } from "@/lib/file-utils";
 import { getCategoryMeta } from "@/components/CategoryVerticalHeap";
 import { useR2Thumbnail } from "@/hooks/useR2Thumbnail";
@@ -34,13 +34,18 @@ export function GlobalLibraryCard({
 
   return (
     <div className="group relative flex flex-col overflow-hidden rounded-2xl border border-border/80 bg-surface/60 backdrop-blur-xl shadow-md transition-all duration-300 hover:-translate-y-1.5 hover:shadow-2xl hover:shadow-primary/10 hover:border-primary/40">
-      {/* Playcard Top Thumbnail / Preview Header */}
-      <div className="relative h-44 sm:h-48 w-full overflow-hidden bg-gradient-to-br from-surface-2/80 to-surface border-b border-border/50">
+      {/* E-Book Top Thumbnail / 3D Book Cover Header */}
+      <div className="relative h-40 sm:h-48 md:h-52 w-full overflow-hidden bg-gradient-to-br from-surface-2/80 to-surface border-b border-border/50 select-none">
+        {/* Book Spine 3D Depth Shadow Effect */}
+        <div className="pointer-events-none absolute left-0 inset-y-0 w-3 sm:w-4 bg-gradient-to-r from-black/45 via-black/20 to-transparent z-20" />
+        {/* Right Page Edge Sheen */}
+        <div className="pointer-events-none absolute right-0 inset-y-0 w-px bg-white/15 z-20" />
+
         {thumbnailUrl && !imgError ? (
           <div className="relative h-full w-full overflow-hidden bg-black/20">
             <img
               src={thumbnailUrl}
-              alt={`Preview of ${file.displayName}`}
+              alt={`Cover of ${file.displayName}`}
               onError={() => setImgError(true)}
               className="h-full w-full object-cover object-top opacity-95 transition-transform duration-500 group-hover:scale-105"
             />
@@ -51,45 +56,45 @@ export function GlobalLibraryCard({
             <div className="h-6 w-6 animate-spin rounded-full border-2 border-primary border-t-transparent" />
           </div>
         ) : (
-          /* Playcard Dynamic Artwork Cover */
+          /* E-Book Stylized Dynamic Artwork Cover */
           <div
-            className={`relative h-full w-full bg-gradient-to-br ${catMeta.gradient} flex flex-col items-center justify-center p-4 text-center select-none`}
+            className={`relative h-full w-full bg-gradient-to-br ${catMeta.gradient} flex flex-col items-center justify-center p-3 sm:p-4 text-center`}
           >
             {/* Background Pattern Grid */}
             <div className="absolute inset-0 bg-grid opacity-30" />
 
-            {/* Center Icon Artwork */}
-            <div className="relative z-10 flex h-16 w-16 items-center justify-center rounded-2xl bg-surface/70 backdrop-blur-md text-3xl shadow-lg border border-border/60 transition-transform duration-300 group-hover:scale-110 group-hover:rotate-2">
+            {/* Center Icon Badge */}
+            <div className="relative z-10 flex h-12 w-12 sm:h-16 sm:w-16 items-center justify-center rounded-2xl bg-surface/70 backdrop-blur-md text-2xl sm:text-3xl shadow-lg border border-border/60 transition-transform duration-300 group-hover:scale-110 group-hover:rotate-2">
               {catMeta.icon}
             </div>
 
-            {/* Document Watermark Title */}
-            <p className="relative z-10 mt-2.5 max-w-[180px] truncate text-[11px] font-medium text-foreground/70">
+            {/* Document Title Watermark */}
+            <p className="relative z-10 mt-2 max-w-[140px] sm:max-w-[180px] truncate text-[10px] sm:text-[11px] font-medium text-foreground/70">
               {file.displayName}
             </p>
           </div>
         )}
 
         {/* Top Badges Overlay */}
-        <div className="absolute top-3 left-3 right-3 flex items-center justify-between pointer-events-none z-10">
+        <div className="absolute top-2.5 left-2.5 right-2.5 flex items-center justify-between pointer-events-none z-20">
           {/* Category Tag */}
-          <span className="flex items-center gap-1 rounded-full border border-border/60 bg-surface/80 backdrop-blur-md px-2.5 py-1 text-[10px] font-semibold text-foreground shadow-sm">
+          <span className="flex items-center gap-1 rounded-full border border-border/60 bg-surface/85 backdrop-blur-md px-2 py-0.5 sm:px-2.5 sm:py-1 text-[9px] sm:text-[10px] font-semibold text-foreground shadow-sm max-w-[100px] truncate">
             <span>{catMeta.icon}</span>
-            <span className="capitalize">{catMeta.label}</span>
+            <span className="capitalize truncate hidden xs:inline">{catMeta.label}</span>
           </span>
 
           {/* PDF Format Tag */}
-          <span className="rounded-md border border-primary/30 bg-primary/20 backdrop-blur-md px-2 py-0.5 font-mono text-[10px] font-bold text-primary shadow-sm">
+          <span className="rounded-md border border-primary/30 bg-primary/20 backdrop-blur-md px-1.5 py-0.5 font-mono text-[9px] sm:text-[10px] font-bold text-primary shadow-sm">
             PDF
           </span>
         </div>
       </div>
 
-      {/* Playcard Body Content */}
-      <div className="flex flex-1 flex-col p-4 space-y-3">
+      {/* Book Card Body Content */}
+      <div className="flex flex-1 flex-col p-3 sm:p-4 space-y-2.5">
         <div>
           <h3
-            className="line-clamp-2 text-xs sm:text-sm font-semibold text-foreground leading-snug group-hover:text-primary transition-colors"
+            className="line-clamp-2 text-xs sm:text-sm font-bold text-foreground leading-snug group-hover:text-primary transition-colors h-8 sm:h-9"
             title={file.displayName}
           >
             {file.displayName}
@@ -97,42 +102,42 @@ export function GlobalLibraryCard({
         </div>
 
         {/* File Metadata */}
-        <div className="flex items-center justify-between text-[11px] text-muted-foreground pt-0.5">
-          <span className="flex items-center gap-1 font-medium">
-            <HardDrive className="h-3 w-3 text-muted-foreground/70" />
+        <div className="flex items-center justify-between text-[10px] sm:text-[11px] text-muted-foreground pt-0.5">
+          <span className="flex items-center gap-1 font-medium truncate">
+            <HardDrive className="h-3 w-3 shrink-0 text-muted-foreground/70" />
             {formatBytes(file.size)}
           </span>
-          <span className="flex items-center gap-1 font-medium">
-            <Calendar className="h-3 w-3 text-muted-foreground/70" />
+          <span className="hidden sm:flex items-center gap-1 font-medium">
+            <Calendar className="h-3 w-3 shrink-0 text-muted-foreground/70" />
             {formatDate(file.lastModified)}
           </span>
         </div>
 
-        {/* Playcard Footer Actions */}
-        <div className="mt-auto border-t border-border/40 pt-3 flex items-center justify-between gap-2">
+        {/* E-Book Footer Actions */}
+        <div className="mt-auto border-t border-border/40 pt-2.5 flex items-center justify-between gap-1.5 sm:gap-2">
           {isImported && localDocId ? (
             <button
               onClick={() => onOpenLocalDoc(localDocId)}
-              className="flex-1 flex items-center justify-center gap-1.5 rounded-xl border border-emerald-500/30 bg-emerald-500/10 py-1.5 px-3 text-xs font-semibold text-emerald-400 transition-all hover:bg-emerald-500/20 active:scale-95 cursor-pointer"
+              className="flex-1 flex items-center justify-center gap-1.5 rounded-xl border border-emerald-500/30 bg-emerald-500/10 py-2 sm:py-1.5 px-2.5 sm:px-3 text-xs font-semibold text-emerald-400 transition-all hover:bg-emerald-500/20 active:scale-95 cursor-pointer"
             >
               <Check className="h-3.5 w-3.5" />
-              <span>Open Document</span>
+              <span>Read</span>
             </button>
           ) : (
             <button
               onClick={() => onImport(file)}
               disabled={importing || deleting}
-              className="flex-1 flex items-center justify-center gap-1.5 rounded-xl bg-primary py-1.5 px-3 text-xs font-semibold text-primary-foreground shadow-sm shadow-primary/20 transition-all hover:opacity-95 active:scale-95 disabled:opacity-50 cursor-pointer"
+              className="flex-1 flex items-center justify-center gap-1.5 rounded-xl bg-primary py-2 sm:py-1.5 px-2.5 sm:px-3 text-xs font-semibold text-primary-foreground shadow-sm shadow-primary/20 transition-all hover:opacity-95 active:scale-95 disabled:opacity-50 cursor-pointer"
             >
               {importing ? (
                 <>
                   <span className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-primary-foreground border-t-transparent" />
-                  <span>Importing…</span>
+                  <span className="hidden sm:inline">Importing…</span>
                 </>
               ) : (
                 <>
                   <Download className="h-3.5 w-3.5" />
-                  <span>Import</span>
+                  <span>Get Book</span>
                 </>
               )}
             </button>
@@ -143,7 +148,7 @@ export function GlobalLibraryCard({
             <button
               onClick={() => onDelete(file)}
               disabled={importing || deleting}
-              className="rounded-xl border border-border/80 bg-surface/80 p-2 text-muted-foreground hover:border-destructive/40 hover:bg-destructive/10 hover:text-destructive transition-all active:scale-95 disabled:opacity-50 cursor-pointer"
+              className="rounded-xl border border-border/80 bg-surface/80 p-2 text-muted-foreground hover:border-destructive/40 hover:bg-destructive/10 hover:text-destructive transition-all active:scale-95 disabled:opacity-50 cursor-pointer shrink-0"
               title="Delete from R2"
               aria-label="Delete file from R2"
             >

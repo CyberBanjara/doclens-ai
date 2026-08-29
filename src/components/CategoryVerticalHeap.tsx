@@ -1,6 +1,5 @@
 import { useMemo } from "react";
-import { Search, X, Folder, Layers, CloudCheck, HardDrive } from "lucide-react";
-import { formatBytes } from "@/lib/file-utils";
+import { Search, X, Layers, ExternalLink } from "lucide-react";
 
 export interface CategoryMeta {
   key: string;
@@ -100,10 +99,10 @@ interface CategoryVerticalHeapProps {
   onSelectCategory: (catKey: string) => void;
   categoryStats: Record<string, { count: number; totalSize: number }>;
   totalCount: number;
-  totalSize: number;
+  totalSize?: number;
   searchQuery: string;
   onSearchChange: (query: string) => void;
-  syncEnabled: boolean;
+  syncEnabled?: boolean;
 }
 
 export function CategoryVerticalHeap({
@@ -112,17 +111,15 @@ export function CategoryVerticalHeap({
   onSelectCategory,
   categoryStats,
   totalCount,
-  totalSize,
   searchQuery,
   onSearchChange,
-  syncEnabled,
 }: CategoryVerticalHeapProps) {
   const allCategories = useMemo(() => {
     return ["all", ...categories.filter((c) => c !== "all")];
   }, [categories]);
 
   return (
-    <aside className="w-full lg:w-72 shrink-0 space-y-5">
+    <aside className="hidden lg:block w-72 shrink-0 space-y-5">
       {/* Search Input Box */}
       <div className="relative">
         <Search className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
@@ -136,7 +133,7 @@ export function CategoryVerticalHeap({
         {searchQuery && (
           <button
             onClick={() => onSearchChange("")}
-            className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors p-0.5 rounded-md"
+            className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors p-0.5 rounded-md cursor-pointer"
             aria-label="Clear search"
           >
             <X className="h-3.5 w-3.5" />
@@ -168,7 +165,7 @@ export function CategoryVerticalHeap({
             <button
               key={catKey}
               onClick={() => onSelectCategory(catKey)}
-              className={`group relative flex w-full items-center justify-between rounded-2xl p-3 text-left transition-all duration-300 ${
+              className={`group relative flex w-full items-center justify-between rounded-2xl p-3 text-left transition-all duration-300 cursor-pointer ${
                 isActive
                   ? "border border-primary/40 bg-surface-2/80 shadow-md shadow-primary/5 text-foreground ring-1 ring-primary/20 translate-x-1"
                   : "border border-border/60 bg-surface/40 text-muted-foreground hover:border-border hover:bg-surface-2/40 hover:text-foreground hover:translate-x-1"
@@ -216,28 +213,39 @@ export function CategoryVerticalHeap({
         })}
       </div>
 
-      {/* Heap Footer Stats Panel */}
-      <div className="rounded-2xl border border-border/80 bg-surface/50 p-4 backdrop-blur-md space-y-3">
-        <div className="flex items-center justify-between text-xs">
-          <span className="flex items-center gap-1.5 text-muted-foreground font-medium">
-            <HardDrive className="h-3.5 w-3.5 text-primary/70" />
-            Total Library Storage
-          </span>
-          <span className="font-mono font-bold text-foreground">{formatBytes(totalSize)}</span>
-        </div>
+      {/* Request a Book Community CTA */}
+      <div className="relative overflow-hidden rounded-2xl border border-border/80 bg-surface/50 p-4 backdrop-blur-md space-y-3 transition-all duration-300 hover:border-primary/40 hover:shadow-lg hover:shadow-primary/5">
+        {/* Subtle decorative background glow */}
+        <div className="pointer-events-none absolute -right-6 -bottom-6 h-20 w-20 rounded-full bg-primary/10 blur-xl" />
 
-        <div className="flex items-center justify-between border-t border-border/40 pt-2.5 text-xs">
-          <span className="flex items-center gap-1.5 text-muted-foreground font-medium">
-            <CloudCheck className="h-3.5 w-3.5 text-emerald-400" />
-            Cloud Sync
-          </span>
-          <span
-            className={`font-mono text-[10px] font-bold uppercase tracking-wider ${
-              syncEnabled ? "text-emerald-400" : "text-amber-400"
-            }`}
+        <div className="relative z-10 space-y-3">
+          <div className="flex items-center gap-2.5">
+            <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl bg-primary/15 text-primary border border-primary/25 shadow-inner">
+              <svg className="h-4 w-4 fill-current" viewBox="0 0 24 24">
+                <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm4.64 6.8c-.15 1.58-.8 5.42-1.13 7.19-.14.75-.42 1-.68 1.03-.58.05-1.02-.38-1.58-.75-.88-.58-1.38-.94-2.23-1.5-.99-.65-.35-1.01.22-1.59.15-.15 2.71-2.48 2.76-2.69a.2.2 0 00-.05-.18c-.06-.05-.14-.03-.21-.02-.09.02-1.49.95-4.22 2.79-.4.27-.76.41-1.08.4-.36-.01-1.04-.2-1.55-.37-.63-.2-1.12-.31-1.08-.66.02-.18.27-.36.75-.55 2.92-1.27 4.86-2.11 5.83-2.51 2.78-1.16 3.35-1.36 3.73-1.36.08 0 .27.02.39.12.1.08.13.19.14.27-.01.06.01.24 0 .37z" />
+              </svg>
+            </div>
+            <div>
+              <h4 className="text-xs font-bold text-foreground">Request a Book</h4>
+              <span className="text-[10px] text-muted-foreground font-medium">
+                Telegram Community
+              </span>
+            </div>
+          </div>
+
+          <p className="text-xs text-muted-foreground leading-relaxed">
+            Can’t find the book you’re looking for? Request it from our Telegram community.
+          </p>
+
+          <a
+            href="https://t.me/cyber_banjara"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="flex items-center justify-center gap-2 w-full rounded-xl bg-primary py-2.5 px-3 text-xs font-semibold text-primary-foreground shadow-md shadow-primary/20 transition-all hover:opacity-95 hover:shadow-lg hover:shadow-primary/30 active:scale-[0.98] cursor-pointer group/btn"
           >
-            {syncEnabled ? "R2 Active" : "Read-only"}
-          </span>
+            <span>Request a Book</span>
+            <ExternalLink className="h-3.5 w-3.5 opacity-80 transition-transform group-hover/btn:translate-x-0.5" />
+          </a>
         </div>
       </div>
     </aside>
