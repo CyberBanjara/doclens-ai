@@ -304,6 +304,10 @@ export interface FirestoreSupporter {
   id?: string;
   amount: number;
   currency: string;
+  status?: "completed" | "failed" | "pending";
+  failureReason?: string;
+  errorCode?: string;
+  errorDescription?: string;
   isAnonymous: boolean;
   supporterName: string;
   supporterEmail?: string;
@@ -311,13 +315,13 @@ export interface FirestoreSupporter {
   userPhotoURL?: string;
   message?: string;
   tier?: string;
-  razorpayPaymentId: string;
+  razorpayPaymentId?: string;
   razorpayOrderId?: string;
   createdAt: string;
 }
 
 /**
- * Record a new community contribution / supporter in Firestore.
+ * Record a community contribution or payment transaction in Firestore.
  */
 export async function createSupporterInFirestore(
   data: FirestoreSupporter,
@@ -330,6 +334,10 @@ export async function createSupporterInFirestore(
     const payload = {
       amount: data.amount,
       currency: data.currency || "INR",
+      status: data.status || "completed",
+      failureReason: data.failureReason || "",
+      errorCode: data.errorCode || "",
+      errorDescription: data.errorDescription || "",
       isAnonymous: Boolean(data.isAnonymous),
       supporterName: data.isAnonymous
         ? "Anonymous Supporter"
@@ -368,7 +376,44 @@ export async function createSupporterInFirestore(
 }
 
 /**
- * List all supporters and aggregate funding statistics from Firestore.
+ * Record a failed payment transaction in Firestore for auditing and telemetry.
+ */
+export async function recordPaymentFailureInFirestore(
+  data: Partial<FirestoreSupporter> & {
+    amount?: number;
+    currency?: string;
+    razorpayOrderId?: string;
+    razorpayPaymentId?: string;
+    failureReason?: string;
+    errorCode?: string;
+    errorDescription?: string;
+  },
+): Promise<FirestoreSupporter | null> {
+  const failureData: FirestoreSupporter = {
+    amount: data.amount || 0,
+    currency: data.currency || "INR",
+    status: "failed",
+    failureReason: data.failureReason || "Payment failed or declined",
+    errorCode: data.errorCode || "",
+    errorDescription: data.errorDescription || "",
+    isAnonymous: Boolean(data.isAnonymous),
+    supporterName: data.supporterName || "Supporter",
+    supporterEmail: data.supporterEmail || "",
+    userUid: data.userUid || "",
+    userPhotoURL: data.userPhotoURL || "",
+    message: data.message || "",
+    tier: data.tier || "Supporter",
+    razorpayPaymentId: data.razorpayPaymentId || "",
+    razorpayOrderId: data.razorpayOrderId || "",
+    createdAt: data.createdAt || new Date().toISOString(),
+  };
+
+  return await createSupporterInFirestore(failureData);
+}
+
+/**
+ * List all verified supporters and aggregate funding statistics from Firestore.
+ * Strictly excludes failed payment records from the Supporter Wall and metrics.
  */
 export async function listSupportersFromFirestore(): Promise<{
   supporters: FirestoreSupporter[];
@@ -397,6 +442,12 @@ export async function listSupportersFromFirestore(): Promise<{
     for (const doc of documents) {
       const decoded = decodeFirestoreDocument(doc);
       if (!decoded) continue;
+
+      // Filter out failed payments — never display on Supporter Wall
+      if (decoded.status === "failed") {
+        continue;
+      }
+
       const docId = doc.name ? doc.name.split("/").pop() : undefined;
       const amount =
         typeof decoded.amount === "number" ? decoded.amount : Number(decoded.amount) || 0;
@@ -406,11 +457,12 @@ export async function listSupportersFromFirestore(): Promise<{
         id: docId,
         amount,
         currency: decoded.currency || "INR",
+        status: "completed",
         isAnonymous: Boolean(decoded.isAnonymous),
         supporterName: decoded.isAnonymous
           ? "Anonymous Supporter"
           : decoded.supporterName || "Anonymous Supporter",
-        // Email is intentionally omitted / sanitized for public safety
+        // Email is intentionally omitted for public privacy
         userUid: decoded.isAnonymous ? undefined : decoded.userUid,
         userPhotoURL: decoded.isAnonymous ? undefined : decoded.userPhotoURL,
         message: decoded.message || "",

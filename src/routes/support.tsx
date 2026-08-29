@@ -26,6 +26,7 @@ import {
   SUPPORT_TIERS,
   type SupporterRecord,
   type SupportTier,
+  getStoredSupportersCache,
   fetchSupportersStats,
   recordSupportContribution,
   triggerRazorpaySupportCheckout,
@@ -108,14 +109,25 @@ function SupportPage() {
     }
   }, [user]);
 
-  // Load cached stats / fetch dynamic data
+  // Load cached stats immediately (SWR), then fetch live data from Firestore / API
   useEffect(() => {
     let mounted = true;
-    async function loadData() {
+
+    // Fast-path: display cached stats immediately if available
+    const cached = getStoredSupportersCache();
+    if (cached && cached.supporters && cached.supporters.length > 0) {
+      setSupporters(cached.supporters);
+      setTotalRaised(cached.totalRaised || 0);
+      setTotalSupportersCount(cached.totalSupporters || 0);
+      setIsLoadingStats(false);
+    } else {
       setIsLoadingStats(true);
+    }
+
+    async function syncLiveData() {
       try {
-        const stats = await fetchSupportersStats();
-        if (mounted) {
+        const stats = await fetchSupportersStats({ forceRefresh: true });
+        if (mounted && stats) {
           setSupporters(stats.supporters || []);
           setTotalRaised(stats.totalRaised || 0);
           setTotalSupportersCount(stats.totalSupporters || 0);
@@ -127,7 +139,7 @@ function SupportPage() {
       }
     }
 
-    void loadData();
+    void syncLiveData();
     return () => {
       mounted = false;
     };
@@ -200,9 +212,9 @@ function SupportPage() {
     });
   };
 
-  // Filter supporters wall
+  // Filter supporters wall (strictly exclude any failed transactions)
   const filteredSupporters = useMemo(() => {
-    const list = [...supporters];
+    const list = supporters.filter((s) => s.status !== "failed");
     if (wallFilter === "top") {
       return list.sort((a, b) => b.amount - a.amount);
     }

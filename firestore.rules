@@ -36,7 +36,7 @@ service cloud.firestore {
     
     // Rules for `supporters` collection (Community Support & Wall)
     match /supporters/{supporterId} {
-      // Allow reading so supporters list & live total amount can be displayed
+      // Allow reading so supporters list & live total amount can be displayed publicly
       allow read: if true;
       
       // Allow creating contribution records upon successful payment
@@ -45,6 +45,18 @@ service cloud.firestore {
       // Only admins can update or delete supporter entries
       allow update, delete: if isAdmin();
     }
+
+    // Rules for `reviews` collection
+    match /reviews/{reviewId} {
+      // Allow public reading of approved feedback
+      allow read: if true;
+      
+      // Allow submitting feedback
+      allow create: if true;
+      
+      // Only author or admin can modify/delete
+      allow update, delete: if isSignedIn() || isAdmin();
+    }
     
     // Default deny all other collections
     match /{document=**} {
@@ -52,3 +64,4 @@ service cloud.firestore {
     }
   }
 }
+

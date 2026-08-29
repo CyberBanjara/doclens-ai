@@ -1,4 +1,12 @@
-import { getFirebaseApp } from "./firebase";
+import {
+  collection,
+  getDocs,
+  addDoc,
+  query,
+  orderBy,
+  limit,
+} from "firebase/firestore";
+import { getFirebaseApp, getFirestoreDb } from "./firebase";
 import { getStoredAuthToken } from "./auth-client";
 
 declare const __RAZORPAY_KEY_ID__: string | undefined;
@@ -7,13 +15,15 @@ export interface SupporterRecord {
   id?: string;
   amount: number;
   currency: string;
+  status?: "completed" | "failed" | "pending";
+  failureReason?: string;
   isAnonymous: boolean;
   supporterName: string;
   userUid?: string;
   userPhotoURL?: string;
   message?: string;
   tier?: string;
-  razorpayPaymentId: string;
+  razorpayPaymentId?: string;
   createdAt: string;
 }
 
@@ -95,8 +105,9 @@ export const SUPPORT_TIERS: SupportTier[] = [
   },
 ];
 
-// Session caching constants
-const SESSION_CACHE_KEY = "anuwad_supporters_cache_v2";
+// Session caching constants (30 seconds TTL for fast navigations while ensuring background updates)
+const SESSION_CACHE_KEY = "anuwad_supporters_cache_v3";
+const CACHE_TTL_MS = 30 * 1000;
 let inMemoryStats: SupportStats | null = null;
 let inFlightFetch: Promise<SupportStats> | null = null;
 
@@ -104,14 +115,20 @@ let inFlightFetch: Promise<SupportStats> | null = null;
  * Load cached supporter statistics from memory or sessionStorage.
  */
 export function getStoredSupportersCache(): SupportStats | null {
-  if (inMemoryStats) return inMemoryStats;
+  if (inMemoryStats) {
+    const age = Date.now() - (inMemoryStats.cachedAt || 0);
+    if (age < CACHE_TTL_MS) return inMemoryStats;
+  }
   if (typeof window !== "undefined") {
     try {
       const raw = sessionStorage.getItem(SESSION_CACHE_KEY);
       if (raw) {
         const parsed = JSON.parse(raw) as SupportStats;
-        inMemoryStats = parsed;
-        return parsed;
+        const age = Date.now() - (parsed.cachedAt || 0);
+        if (age < CACHE_TTL_MS) {
+          inMemoryStats = parsed;
+          return parsed;
+        }
       }
     } catch {
       // Ignore sessionStorage parsing errors
@@ -135,8 +152,152 @@ export function setStoredSupportersCache(stats: SupportStats): void {
 }
 
 /**
+ * Direct Client-Side Firestore query fallback.
+ * Strictly excludes any documents marked with status === 'failed'.
+ */
+export async function fetchSupportersFromClientFirestore(): Promise<SupportStats | null> {
+  const db = getFirestoreDb();
+  if (!db) return null;
+
+  try {
+    const supportersCol = collection(db, "supporters");
+    const q = query(supportersCol, orderBy("createdAt", "desc"), limit(200));
+    const snapshot = await getDocs(q);
+
+    let totalRaised = 0;
+    const supporters: SupporterRecord[] = [];
+
+    snapshot.forEach((doc) => {
+      const d = doc.data() as Record<string, any>;
+      // Skip failed payments
+      if (d.status === "failed") return;
+
+      const amount = typeof d.amount === "number" ? d.amount : Number(d.amount) || 0;
+      totalRaised += amount;
+
+      supporters.push({
+        id: doc.id,
+        amount,
+        currency: d.currency || "INR",
+        status: "completed",
+        isAnonymous: Boolean(d.isAnonymous),
+        supporterName: d.isAnonymous
+          ? "Anonymous Supporter"
+          : d.supporterName || "Anonymous Supporter",
+        userUid: d.isAnonymous ? undefined : d.userUid,
+        userPhotoURL: d.isAnonymous ? undefined : d.userPhotoURL,
+        message: d.message || "",
+        tier: d.tier || "Supporter",
+        razorpayPaymentId: d.razorpayPaymentId || "",
+        createdAt: d.createdAt || new Date().toISOString(),
+      });
+    });
+
+    return {
+      supporters,
+      totalRaised,
+      totalSupporters: supporters.length,
+      cachedAt: Date.now(),
+    };
+  } catch (err) {
+    console.warn("Client Firestore direct fetch warning:", err);
+    return null;
+  }
+}
+
+/**
+ * Log payment failure to server endpoint and Firestore for tracking.
+ */
+export async function logPaymentFailure(data: {
+  amount: number;
+  tierName?: string;
+  donorName?: string;
+  donorEmail?: string;
+  isAnonymous?: boolean;
+  userUid?: string;
+  userPhotoURL?: string;
+  message?: string;
+  razorpayOrderId?: string;
+  razorpayPaymentId?: string;
+  errorCode?: string;
+  errorDescription?: string;
+  errorSource?: string;
+  errorStep?: string;
+  errorReason?: string;
+}): Promise<void> {
+  try {
+    // 1. Try logging to server endpoint
+    const res = await fetch("/api/support/log-failure", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(data),
+    });
+
+    if (!res.ok) {
+      // 2. Direct client fallback if server endpoint was unreachable
+      const db = getFirestoreDb();
+      if (db) {
+        await addDoc(collection(db, "supporters"), {
+          amount: data.amount,
+          currency: "INR",
+          status: "failed",
+          failureReason: data.errorDescription || data.errorReason || "Payment failed",
+          errorCode: data.errorCode || "PAYMENT_FAILED",
+          errorDescription: data.errorDescription || "",
+          isAnonymous: Boolean(data.isAnonymous),
+          supporterName: data.isAnonymous
+            ? "Anonymous Supporter"
+            : data.donorName || "Supporter",
+          supporterEmail: data.donorEmail || "",
+          userUid: data.userUid || "",
+          userPhotoURL: data.isAnonymous ? "" : data.userPhotoURL || "",
+          message: (data.message || "").trim().slice(0, 500),
+          tier: data.tierName || "Supporter",
+          razorpayOrderId: data.razorpayOrderId || "",
+          razorpayPaymentId: data.razorpayPaymentId || "",
+          createdAt: new Date().toISOString(),
+        });
+      }
+    }
+  } catch (err) {
+    console.warn("Telemetry warning: Could not log payment failure:", err);
+  }
+}
+
+/**
+ * Save a supporter directly to client Firestore as a self-healing fallback.
+ */
+export async function saveSupporterDirectlyToFirestore(
+  data: SupporterRecord,
+): Promise<string | null> {
+  const db = getFirestoreDb();
+  if (!db) return null;
+
+  try {
+    const docRef = await addDoc(collection(db, "supporters"), {
+      amount: data.amount,
+      currency: data.currency || "INR",
+      isAnonymous: Boolean(data.isAnonymous),
+      supporterName: data.isAnonymous
+        ? "Anonymous Supporter"
+        : data.supporterName || "Community Supporter",
+      userUid: data.userUid || "",
+      userPhotoURL: data.isAnonymous ? "" : data.userPhotoURL || "",
+      message: (data.message || "").trim().slice(0, 500),
+      tier: data.tier || "Supporter",
+      razorpayPaymentId: data.razorpayPaymentId || "",
+      createdAt: data.createdAt || new Date().toISOString(),
+    });
+    return docRef.id;
+  } catch (err) {
+    console.warn("Failed direct client write to Firestore:", err);
+    return null;
+  }
+}
+
+/**
  * Fetch supporters list and live total raised.
- * Uses client-side session caching to prevent redundant requests during navigation.
+ * Uses SWR caching with dual serverless API and client Firestore SDK fallback.
  */
 export async function fetchSupportersStats(options?: {
   forceRefresh?: boolean;
@@ -144,7 +305,7 @@ export async function fetchSupportersStats(options?: {
   const forceRefresh = options?.forceRefresh ?? false;
   const cached = getStoredSupportersCache();
 
-  if (!forceRefresh && cached && cached.supporters) {
+  if (!forceRefresh && cached && cached.supporters && cached.supporters.length > 0) {
     return cached;
   }
 
@@ -153,6 +314,7 @@ export async function fetchSupportersStats(options?: {
   }
 
   const fetchPromise = (async () => {
+    // 1. Try serverless REST API
     try {
       const res = await fetch("/api/support/supporters", {
         method: "GET",
@@ -161,28 +323,38 @@ export async function fetchSupportersStats(options?: {
 
       if (res.ok) {
         const data = await res.json();
-        if (data && data.success) {
+        if (data && data.success && Array.isArray(data.supporters) && data.supporters.length > 0) {
           const stats: SupportStats = {
             supporters: data.supporters || [],
             totalRaised: Number(data.totalRaised) || 0,
             totalSupporters: Number(data.totalSupporters) || 0,
+            cachedAt: Date.now(),
           };
           setStoredSupportersCache(stats);
           return stats;
         }
       }
     } catch (err) {
-      console.warn(
-        "Could not fetch supporters from /api/support/supporters, attempting fallback:",
-        err,
-      );
+      console.warn("API /api/support/supporters fetch error, trying client SDK fallback:", err);
     }
 
-    // Fallback: Return cached or default baseline
+    // 2. Direct Client Firestore Fallback
+    try {
+      const clientStats = await fetchSupportersFromClientFirestore();
+      if (clientStats) {
+        setStoredSupportersCache(clientStats);
+        return clientStats;
+      }
+    } catch (err) {
+      console.warn("Client Firestore fallback fetch failed:", err);
+    }
+
+    // 3. Fallback to cached or empty baseline
     const fallback: SupportStats = cached || {
       supporters: [],
       totalRaised: 0,
       totalSupporters: 0,
+      cachedAt: Date.now(),
     };
     return fallback;
   })().finally(() => {
@@ -213,18 +385,25 @@ export async function recordSupportContribution(
     body: JSON.stringify(data),
   });
 
-  if (!res.ok) {
-    const errorData = await res.json().catch(() => ({ error: "Failed to record contribution" }));
-    throw new Error(errorData.error || `Server returned error ${res.status}`);
+  let savedRecord: SupporterRecord | null = null;
+  if (res.ok) {
+    const result = await res.json().catch(() => ({}));
+    savedRecord = result.supporter || null;
   }
 
-  const result = await res.json();
-  const newSupporter: SupporterRecord = result.supporter || {
+  const newSupporter: SupporterRecord = savedRecord || {
     ...data,
     createdAt: new Date().toISOString(),
   };
 
-  // Update session cache instantly so UI reflects new total without waiting for refetch
+  // Self-healing: If server didn't return an id, try saving directly from client
+  if (!newSupporter.id) {
+    void saveSupporterDirectlyToFirestore(newSupporter).then((id) => {
+      if (id) newSupporter.id = id;
+    });
+  }
+
+  // Update session cache instantly
   const current = getStoredSupportersCache() || {
     supporters: [],
     totalRaised: 0,
@@ -238,6 +417,7 @@ export async function recordSupportContribution(
     supporters: updatedSupporters,
     totalRaised: current.totalRaised + Number(newSupporter.amount || 0),
     totalSupporters: current.totalSupporters + 1,
+    cachedAt: Date.now(),
   };
   setStoredSupportersCache(updatedStats);
 
@@ -318,6 +498,18 @@ export async function verifyRazorpayPayment(data: {
     createdAt: new Date().toISOString(),
   };
 
+  // Self-healing fallback: If server was unable to persist directly to Firestore, write directly via Client SDK
+  if (!result.savedToFirestore || !newSupporter.id) {
+    try {
+      const directId = await saveSupporterDirectlyToFirestore(newSupporter);
+      if (directId) {
+        newSupporter.id = directId;
+      }
+    } catch (e) {
+      console.warn("Client fallback save to Firestore encountered an issue:", e);
+    }
+  }
+
   // Update session cache immediately so funding statistics update seamlessly
   const current = getStoredSupportersCache() || {
     supporters: [],
@@ -332,6 +524,7 @@ export async function verifyRazorpayPayment(data: {
     supporters: updatedSupporters,
     totalRaised: current.totalRaised + Number(newSupporter.amount || 0),
     totalSupporters: current.totalSupporters + 1,
+    cachedAt: Date.now(),
   };
   setStoredSupportersCache(updatedStats);
 
@@ -484,7 +677,31 @@ export async function triggerRazorpaySupportCheckout(
 
     const rzp = new (window as any).Razorpay(rzpOptions);
     rzp.on("payment.failed", function (response: any) {
-      const desc = response?.error?.description || "Payment was declined or cancelled.";
+      const errorObj = response?.error || {};
+      const desc =
+        errorObj.description ||
+        errorObj.reason ||
+        "Payment was declined, cancelled, or failed.";
+
+      // Asynchronously log failure to Firebase for tracking/auditing
+      void logPaymentFailure({
+        amount,
+        tierName,
+        donorName,
+        donorEmail,
+        isAnonymous,
+        userUid,
+        userPhotoURL,
+        message,
+        razorpayOrderId: errorObj.metadata?.order_id || orderId,
+        razorpayPaymentId: errorObj.metadata?.payment_id || "",
+        errorCode: errorObj.code || "PAYMENT_FAILED",
+        errorDescription: errorObj.description || "",
+        errorSource: errorObj.source || "",
+        errorStep: errorObj.step || "",
+        errorReason: errorObj.reason || desc,
+      });
+
       onError(desc);
     });
     rzp.open();
