@@ -4,4 +4,3 @@ export * from "./docs";
 export * from "./pages";
 export * from "./thumbnails";
 export * from "./clearAllStorage";
-

@@ -22,6 +22,7 @@ const BASE_NAV_ITEMS = [
   { to: "/global-library", label: "Global Library", icon: "🌐" },
   { to: "/settings/appearance", label: "Appearance", icon: "🎨" },
   { to: "/settings", label: "General Settings", icon: "⚙" },
+  { to: "/support", label: "Support Us", icon: "💖" },
 ] as const;
 
 export function SidebarLayout({
@@ -139,13 +140,17 @@ export function SidebarLayout({
 
         {/* Legal Links */}
         <div className="border-t border-border px-4 py-3">
-          <div className="flex items-center justify-between px-4 text-[11px] font-medium text-muted-foreground">
+          <div className="flex items-center justify-between px-2 text-[11px] font-medium text-muted-foreground">
             <Link to="/privacy" className="hover:text-primary transition-colors">
-              Privacy Policy
+              Privacy
             </Link>
             <span>•</span>
             <Link to="/terms" className="hover:text-primary transition-colors">
-              Terms of Service
+              Terms
+            </Link>
+            <span>•</span>
+            <Link to="/support" className="hover:text-rose-400 transition-colors">
+              Support
             </Link>
           </div>
         </div>

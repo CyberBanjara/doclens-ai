@@ -79,12 +79,14 @@ function TermsOfServicePage() {
             Terms of Service
           </h1>
           <p className="mt-3 text-sm text-muted-foreground">
-            Effective Date & Last Updated: <span className="font-semibold text-foreground">{lastUpdated}</span>
+            Effective Date & Last Updated:{" "}
+            <span className="font-semibold text-foreground">{lastUpdated}</span>
           </p>
           <p className="mt-4 text-base text-foreground/80 leading-relaxed max-w-3xl">
             These Terms of Service ("Terms") govern your access to and use of the website located at{" "}
-            <strong className="text-foreground">Anuwad.com</strong> ("Anuwad", "we", "us", or "our") 
-            and all associated applications, services, and tools. By accessing or using Anuwad, you agree to comply with and be bound by these Terms.
+            <strong className="text-foreground">Anuwad.com</strong> ("Anuwad", "we", "us", or "our")
+            and all associated applications, services, and tools. By accessing or using Anuwad, you
+            agree to comply with and be bound by these Terms.
           </p>
         </div>
 
@@ -99,7 +101,10 @@ function TermsOfServicePage() {
               Acceptance of Terms
             </h2>
             <p>
-              By accessing, browsing, or using Anuwad.com or registering an account via Google OAuth, you confirm that you have read, understood, and agree to be bound by these Terms and our Privacy Policy. If you do not agree to these Terms, you must not use our services.
+              By accessing, browsing, or using Anuwad.com or registering an account via Google
+              OAuth, you confirm that you have read, understood, and agree to be bound by these
+              Terms and our Privacy Policy. If you do not agree to these Terms, you must not use our
+              services.
             </p>
           </section>
 
@@ -112,7 +117,10 @@ function TermsOfServicePage() {
               Description of Service
             </h2>
             <p>
-              Anuwad provides a browser-based AI document reading, page-by-page translation, text-to-speech audio synthesis, and document management platform. Features include local document storage, pipeline inspection, and multi-language support. We reserve the right to modify, update, or discontinue features of the service at any time.
+              Anuwad provides a browser-based AI document reading, page-by-page translation,
+              text-to-speech audio synthesis, and document management platform. Features include
+              local document storage, pipeline inspection, and multi-language support. We reserve
+              the right to modify, update, or discontinue features of the service at any time.
             </p>
           </section>
 
@@ -125,12 +133,16 @@ function TermsOfServicePage() {
               User Accounts & Google Authentication
             </h2>
             <p>
-              You may access certain features by authenticating through your Google Account via Google OAuth. You are responsible for:
+              You may access certain features by authenticating through your Google Account via
+              Google OAuth. You are responsible for:
             </p>
             <ul className="list-disc pl-6 space-y-1 text-muted-foreground">
               <li>Maintaining the security and confidentiality of your login credentials.</li>
               <li>All activities that occur under your authenticated session.</li>
-              <li>Notifying us immediately of any unauthorized use or security breach involving your account.</li>
+              <li>
+                Notifying us immediately of any unauthorized use or security breach involving your
+                account.
+              </li>
             </ul>
           </section>
 
@@ -145,7 +157,10 @@ function TermsOfServicePage() {
             <div className="rounded-xl border border-border bg-card p-5 space-y-3">
               <p className="font-semibold text-foreground">Your Documents Belong To You:</p>
               <p className="text-xs sm:text-sm text-muted-foreground">
-                You retain all intellectual property rights and ownership of all documents, PDFs, text, and files uploaded or processed using Anuwad. Anuwad claims no ownership or control over your uploaded content. You represent and warrant that you own or have the necessary licenses and permissions for any files you upload.
+                You retain all intellectual property rights and ownership of all documents, PDFs,
+                text, and files uploaded or processed using Anuwad. Anuwad claims no ownership or
+                control over your uploaded content. You represent and warrant that you own or have
+                the necessary licenses and permissions for any files you upload.
               </p>
             </div>
           </section>
@@ -160,9 +175,17 @@ function TermsOfServicePage() {
             </h2>
             <p>You agree not to use Anuwad to:</p>
             <ul className="list-disc pl-6 space-y-2 text-muted-foreground">
-              <li>Upload or process illegal, harmful, defamatory, infringing, or malicious content.</li>
-              <li>Attempt to reverse engineer, decompile, or interfere with the infrastructure or operational integrity of the site.</li>
-              <li>Automate excessive API queries that cause intentional service degradation for other users.</li>
+              <li>
+                Upload or process illegal, harmful, defamatory, infringing, or malicious content.
+              </li>
+              <li>
+                Attempt to reverse engineer, decompile, or interfere with the infrastructure or
+                operational integrity of the site.
+              </li>
+              <li>
+                Automate excessive API queries that cause intentional service degradation for other
+                users.
+              </li>
               <li>Violate applicable local, national, or international laws and regulations.</li>
             </ul>
           </section>
@@ -176,7 +199,11 @@ function TermsOfServicePage() {
               AI Translations & Accuracy Disclaimer
             </h2>
             <p>
-              Translations and text extraction provided by Anuwad rely on automated machine learning models and artificial intelligence. While we strive for accuracy, AI translations are provided for informational and convenience purposes. Anuwad does not guarantee 100% precision or accuracy in translated content and shall not be held liable for errors in machine translation.
+              Translations and text extraction provided by Anuwad rely on automated machine learning
+              models and artificial intelligence. While we strive for accuracy, AI translations are
+              provided for informational and convenience purposes. Anuwad does not guarantee 100%
+              precision or accuracy in translated content and shall not be held liable for errors in
+              machine translation.
             </p>
           </section>
 
@@ -194,7 +221,10 @@ function TermsOfServicePage() {
                 <span>Provided "AS IS"</span>
               </div>
               <p className="text-xs text-muted-foreground leading-relaxed">
-                ANUWAD IS PROVIDED ON AN "AS IS" AND "AS AVAILABLE" BASIS WITHOUT WARRANTIES OF ANY KIND, EXPRESS OR IMPLIED. TO THE MAXIMUM EXTENT PERMITTED BY LAW, ANUWAD AND ITS DEVELOPERS SHALL NOT BE LIABLE FOR ANY INDIRECT, INCIDENTAL, CONSEQUENTIAL, OR PUNITIVE DAMAGES ARISING FROM YOUR USE OF THE SERVICE.
+                ANUWAD IS PROVIDED ON AN "AS IS" AND "AS AVAILABLE" BASIS WITHOUT WARRANTIES OF ANY
+                KIND, EXPRESS OR IMPLIED. TO THE MAXIMUM EXTENT PERMITTED BY LAW, ANUWAD AND ITS
+                DEVELOPERS SHALL NOT BE LIABLE FOR ANY INDIRECT, INCIDENTAL, CONSEQUENTIAL, OR
+                PUNITIVE DAMAGES ARISING FROM YOUR USE OF THE SERVICE.
               </p>
             </div>
           </section>
@@ -208,7 +238,9 @@ function TermsOfServicePage() {
               Termination & Governing Law
             </h2>
             <p>
-              We reserve the right to suspend or terminate account access for users who violate these Terms. These Terms are governed by applicable laws without regard to conflict of law principles.
+              We reserve the right to suspend or terminate account access for users who violate
+              these Terms. These Terms are governed by applicable laws without regard to conflict of
+              law principles.
             </p>
           </section>
 
@@ -223,7 +255,9 @@ function TermsOfServicePage() {
             <div className="rounded-xl border border-border bg-surface-2/40 p-5 flex items-center justify-between flex-wrap gap-4">
               <div>
                 <p className="font-bold text-foreground">Questions about our Terms of Service?</p>
-                <p className="text-xs text-muted-foreground">Reach out to the Anuwad administrative team.</p>
+                <p className="text-xs text-muted-foreground">
+                  Reach out to the Anuwad administrative team.
+                </p>
               </div>
               <a
                 href={`mailto:${contactEmail}`}

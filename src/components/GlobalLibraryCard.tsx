@@ -52,10 +52,12 @@ export function GlobalLibraryCard({
           </div>
         ) : (
           /* Playcard Dynamic Artwork Cover */
-          <div className={`relative h-full w-full bg-gradient-to-br ${catMeta.gradient} flex flex-col items-center justify-center p-4 text-center select-none`}>
+          <div
+            className={`relative h-full w-full bg-gradient-to-br ${catMeta.gradient} flex flex-col items-center justify-center p-4 text-center select-none`}
+          >
             {/* Background Pattern Grid */}
             <div className="absolute inset-0 bg-grid opacity-30" />
-            
+
             {/* Center Icon Artwork */}
             <div className="relative z-10 flex h-16 w-16 items-center justify-center rounded-2xl bg-surface/70 backdrop-blur-md text-3xl shadow-lg border border-border/60 transition-transform duration-300 group-hover:scale-110 group-hover:rotate-2">
               {catMeta.icon}

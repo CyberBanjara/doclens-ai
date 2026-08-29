@@ -36,7 +36,10 @@ export async function uploadBlobAsThumbnailToR2(fileKey: string, blob: Blob): Pr
  * 3. If missing in R2 but document exists in local library, uses local thumbnail and syncs thumbnail to R2.
  * 4. Otherwise, gracefully leaves thumbnail null so the dynamic category artwork cover is displayed.
  */
-export function useR2Thumbnail(fileKey: string, localDocId?: string | null): {
+export function useR2Thumbnail(
+  fileKey: string,
+  localDocId?: string | null,
+): {
   thumbnailUrl: string | null;
   loading: boolean;
 } {

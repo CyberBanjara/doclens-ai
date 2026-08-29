@@ -21,10 +21,7 @@ export function HighlightableText({ text, source, pageNumber }: HighlightableTex
   const sentences = useMemo(() => splitSentences(text), [text]);
   const activeSpanRef = useRef<HTMLSpanElement | null>(null);
 
-  const isActiveText =
-    isPlaying &&
-    currentTextSource === source &&
-    activePageNumber === pageNumber;
+  const isActiveText = isPlaying && currentTextSource === source && activePageNumber === pageNumber;
 
   // Scroll active sentence into view smoothly when it changes
   useEffect(() => {
@@ -58,9 +55,7 @@ export function HighlightableText({ text, source, pageNumber }: HighlightableTex
             key={idx}
             ref={isActiveSentence ? activeSpanRef : undefined}
             onClick={() => handleSentenceClick(idx)}
-            className={`reader-chunk inline ${
-              isActiveSentence ? "reader-chunk-active" : ""
-            }`}
+            className={`reader-chunk inline ${isActiveSentence ? "reader-chunk-active" : ""}`}
             title="Click to read from here"
           >
             {sentence}

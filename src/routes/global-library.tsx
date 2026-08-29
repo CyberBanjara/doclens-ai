@@ -1,16 +1,7 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
-import {
-  ArrowLeft,
-  Globe,
-  RefreshCw,
-  Search,
-  X,
-  Layers,
-  FolderOpen,
-  Upload,
-} from "lucide-react";
+import { ArrowLeft, Globe, RefreshCw, Search, X, Layers, FolderOpen, Upload } from "lucide-react";
 import { SidebarLayout } from "@/components/SidebarLayout";
 import { deleteFromR2, downloadFromR2 } from "@/lib/r2";
 import { getCachedR2Files, setCachedR2Files } from "@/lib/r2-cache";
@@ -18,7 +9,13 @@ import { createDoc, listDocs, type DocSummary } from "@/lib/storage";
 import { LoadingLogo } from "@/components/LoadingLogo";
 import { getSyncConfig } from "@/lib/sync";
 import { useIsMobile } from "@/hooks/use-mobile";
-import { formatBytes, base64ToBlob, parseFileCategory, type R2File, type ParsedR2File } from "@/lib/file-utils";
+import {
+  formatBytes,
+  base64ToBlob,
+  parseFileCategory,
+  type R2File,
+  type ParsedR2File,
+} from "@/lib/file-utils";
 import { DeleteFileDialog } from "@/components/DeleteFileDialog";
 import { R2UploadDialog } from "@/components/R2UploadDialog";
 import { useAuth } from "@/context/AuthContext";
@@ -79,7 +76,8 @@ function GlobalLibraryPage() {
       const { fileToBase64 } = await import("@/lib/file-utils");
 
       const base64Data = await fileToBase64(uploadFile);
-      const selectedCat = uploadCategory === "custom" ? customUploadCategory.trim() : uploadCategory;
+      const selectedCat =
+        uploadCategory === "custom" ? customUploadCategory.trim() : uploadCategory;
 
       const res = await uploadToR2({
         data: {
@@ -103,7 +101,9 @@ function GlobalLibraryPage() {
         console.warn("Could not generate thumbnail during direct upload:", thumbErr);
       }
 
-      toast.success(`Successfully uploaded "${uploadFile.name}" to R2 (${res.category})!`, { id: toastId });
+      toast.success(`Successfully uploaded "${uploadFile.name}" to R2 (${res.category})!`, {
+        id: toastId,
+      });
       setUploadDialogOpen(false);
       setUploadFile(null);
       void fetchFiles(false, true);
@@ -301,7 +301,10 @@ function GlobalLibraryPage() {
         try {
           const check = await getThumbnailFromR2({ data: { fileKey: file.key } });
           if (!check.found) {
-            toast.loading(`Generating thumbnail (${i + 1}/${files.length}): "${file.key.split("/").pop() || file.key}"...`, { id: toastId });
+            toast.loading(
+              `Generating thumbnail (${i + 1}/${files.length}): "${file.key.split("/").pop() || file.key}"...`,
+              { id: toastId },
+            );
             const res = await downloadFromR2({ data: { key: file.key } });
             const pdfBlob = base64ToBlob(res.base64Data, res.contentType);
             // Drop base64 string reference immediately to free heap
@@ -319,10 +322,15 @@ function GlobalLibraryPage() {
       }
 
       if (syncedCount > 0) {
-        toast.success(`Successfully generated and saved ${syncedCount} missing thumbnails to Cloudflare R2!`, { id: toastId });
+        toast.success(
+          `Successfully generated and saved ${syncedCount} missing thumbnails to Cloudflare R2!`,
+          { id: toastId },
+        );
         void fetchFiles(true, true);
       } else {
-        toast.success("All R2 PDF thumbnails are already generated and stored in Cloudflare R2!", { id: toastId });
+        toast.success("All R2 PDF thumbnails are already generated and stored in Cloudflare R2!", {
+          id: toastId,
+        });
       }
     } catch (e: any) {
       console.error(e);
@@ -358,7 +366,9 @@ function GlobalLibraryPage() {
               aria-label="Sync R2 Thumbnails"
               title="Generate & store missing PDF thumbnails in Cloudflare R2"
             >
-              <Layers className={`h-3.5 w-3.5 ${syncingThumbnails ? "animate-spin text-primary" : ""}`} />
+              <Layers
+                className={`h-3.5 w-3.5 ${syncingThumbnails ? "animate-spin text-primary" : ""}`}
+              />
               <span className="hidden sm:inline">Sync Thumbnails</span>
             </button>
           )}
@@ -375,7 +385,9 @@ function GlobalLibraryPage() {
         </div>
       }
     >
-      <div className={`transition-all duration-300 ${!user ? "filter blur-[5px] pointer-events-none select-none opacity-50" : ""}`}>
+      <div
+        className={`transition-all duration-300 ${!user ? "filter blur-[5px] pointer-events-none select-none opacity-50" : ""}`}
+      >
         <div className="mx-auto max-w-7xl p-4 sm:p-6 lg:p-8 space-y-6">
           <h1 className="sr-only">Cloudflare R2 Global Library</h1>
 
@@ -431,9 +443,15 @@ function GlobalLibraryPage() {
                         {activeCategoryMeta.label}
                       </h2>
                       <p className="text-xs text-muted-foreground mt-0.5">
-                        Showing <span className="font-bold text-foreground">{filteredFiles.length}</span> {filteredFiles.length === 1 ? "playcard" : "playcards"}
+                        Showing{" "}
+                        <span className="font-bold text-foreground">{filteredFiles.length}</span>{" "}
+                        {filteredFiles.length === 1 ? "playcard" : "playcards"}
                         {searchQuery && (
-                          <span> matching "<span className="text-primary font-medium">{searchQuery}</span>"</span>
+                          <span>
+                            {" "}
+                            matching "
+                            <span className="text-primary font-medium">{searchQuery}</span>"
+                          </span>
                         )}
                       </p>
                     </div>
@@ -489,7 +507,9 @@ function GlobalLibraryPage() {
                           syncEnabled={syncEnabled}
                           onImport={handleImport}
                           onDelete={(f) => setDeleteTarget(f)}
-                          onOpenLocalDoc={(docId) => navigate({ to: "/doc/$id", params: { id: docId } })}
+                          onOpenLocalDoc={(docId) =>
+                            navigate({ to: "/doc/$id", params: { id: docId } })
+                          }
                         />
                       );
                     })}
@@ -536,7 +556,8 @@ function GlobalLibraryPage() {
                 Access Global Library
               </h2>
               <p className="text-xs sm:text-sm text-muted-foreground leading-relaxed max-w-xs mx-auto">
-                Sign in with your Google account to access, sync, and download shared documents from the Global Library.
+                Sign in with your Google account to access, sync, and download shared documents from
+                the Global Library.
               </p>
             </div>
 

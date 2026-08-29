@@ -1,4 +1,9 @@
-import { S3Client, ListObjectsV2Command, CopyObjectCommand, DeleteObjectCommand } from "@aws-sdk/client-s3";
+import {
+  S3Client,
+  ListObjectsV2Command,
+  CopyObjectCommand,
+  DeleteObjectCommand,
+} from "@aws-sdk/client-s3";
 import dotenv from "dotenv";
 
 dotenv.config();
@@ -8,8 +13,7 @@ const accessKeyId = process.env.R2_ACCESS_KEY_ID;
 const secretAccessKey = process.env.R2_SECRET_ACCESS_KEY;
 const bucketName = process.env.R2_BUCKET_NAME;
 const endpoint =
-  process.env.R2_S3_ENDPOINT ||
-  (accountId ? `https://${accountId}.r2.cloudflarestorage.com` : "");
+  process.env.R2_S3_ENDPOINT || (accountId ? `https://${accountId}.r2.cloudflarestorage.com` : "");
 
 if (!accountId || !accessKeyId || !secretAccessKey || !bucketName) {
   console.error("Error: Missing Cloudflare R2 credentials in environment variables.");
@@ -46,7 +50,13 @@ function inferCategoryFromKey(key) {
   if (lower.includes("econ") || lower.includes("finan")) return "economics";
   if (lower.includes("geo")) return "geography";
   if (lower.includes("civ") || lower.includes("pol") || lower.includes("gov")) return "civics";
-  if (lower.includes("sci") || lower.includes("bio") || lower.includes("chem") || lower.includes("phys")) return "science";
+  if (
+    lower.includes("sci") ||
+    lower.includes("bio") ||
+    lower.includes("chem") ||
+    lower.includes("phys")
+  )
+    return "science";
   return "uncategorized";
 }
 
@@ -60,7 +70,7 @@ async function main() {
       new ListObjectsV2Command({
         Bucket: bucketName,
         ContinuationToken: continuationToken,
-      })
+      }),
     );
 
     for (const obj of data.Contents || []) {
@@ -84,13 +94,13 @@ async function main() {
             Bucket: bucketName,
             CopySource: encodeURI(`${bucketName}/${oldKey}`),
             Key: newKey,
-          })
+          }),
         );
         await s3.send(
           new DeleteObjectCommand({
             Bucket: bucketName,
             Key: oldKey,
-          })
+          }),
         );
         totalMoved++;
       }

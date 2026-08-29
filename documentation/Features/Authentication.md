@@ -33,13 +33,13 @@ Anuwad implements a **serverless-only, zero-refresh-token authentication & autho
 
 ## Serverless Endpoints
 
-| Endpoint | Method | Access | Description |
-| :--- | :---: | :---: | :--- |
-| `/api/auth/google-login` | `POST` | Public | Verifies Google token, syncs role in Firestore, sets HttpOnly cookie |
-| `/api/auth/me` | `GET` | Session Cookie | Validates session cookie and returns filtered client user |
-| `/api/auth/logout` | `POST` | Public | Clears HttpOnly session cookie |
-| `/api/admin/users` | `GET` | Admin Only | Lists all registered users from Firestore |
-| `/api/admin/update-user-role` | `POST` | Admin Only | Modifies user roles in Firestore (`admin`, `editor`, `moderator`, `viewer`, `user`) |
+| Endpoint                      | Method |     Access     | Description                                                                         |
+| :---------------------------- | :----: | :------------: | :---------------------------------------------------------------------------------- |
+| `/api/auth/google-login`      | `POST` |     Public     | Verifies Google token, syncs role in Firestore, sets HttpOnly cookie                |
+| `/api/auth/me`                | `GET`  | Session Cookie | Validates session cookie and returns filtered client user                           |
+| `/api/auth/logout`            | `POST` |     Public     | Clears HttpOnly session cookie                                                      |
+| `/api/admin/users`            | `GET`  |   Admin Only   | Lists all registered users from Firestore                                           |
+| `/api/admin/update-user-role` | `POST` |   Admin Only   | Modifies user roles in Firestore (`admin`, `editor`, `moderator`, `viewer`, `user`) |
 
 ---
 

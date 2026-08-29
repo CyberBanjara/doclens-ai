@@ -6,16 +6,16 @@
 
 ## Notes
 
-| Note                          | Description                                                |
-| ------------------------------ | ----------------------------------------------------------- |
-| [[What is Anuwad]]            | Product definition, value proposition, core capabilities   |
-| [[Why Anuwad Exists]]         | Problem space, vision, target audience                     |
-| [[Design System]]             | Deep Ocean palette, glassmorphism, typography tokens        |
-| [[Tech Stack]]                | React, TanStack Router, Tailwind, pdf.js, Piper WASM        |
-| [[Architecture]]              | System architecture and module dependency graph             |
-| [[Folder Structure]]          | Annotated map of the repository                             |
-| [[Dependencies]]              | Every package dependency, grouped by concern                |
-| [[Development Guidelines]]    | Local setup, scripts, and coding conventions                |
+| Note                       | Description                                              |
+| -------------------------- | -------------------------------------------------------- |
+| [[What is Anuwad]]         | Product definition, value proposition, core capabilities |
+| [[Why Anuwad Exists]]      | Problem space, vision, target audience                   |
+| [[Design System]]          | Deep Ocean palette, glassmorphism, typography tokens     |
+| [[Tech Stack]]             | React, TanStack Router, Tailwind, pdf.js, Piper WASM     |
+| [[Architecture]]           | System architecture and module dependency graph          |
+| [[Folder Structure]]       | Annotated map of the repository                          |
+| [[Dependencies]]           | Every package dependency, grouped by concern             |
+| [[Development Guidelines]] | Local setup, scripts, and coding conventions             |
 
 ---
 

@@ -1,4 +1,12 @@
-import { Eye, EyeOff, ExternalLink, Sparkles, KeyRound, CheckCircle2, AlertCircle } from "lucide-react";
+import {
+  Eye,
+  EyeOff,
+  ExternalLink,
+  Sparkles,
+  KeyRound,
+  CheckCircle2,
+  AlertCircle,
+} from "lucide-react";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
 import {
@@ -187,9 +195,11 @@ export function ApiKeyModal() {
               placeholder="sk-or-v1-..."
               value={customKey}
               onChange={(e) => setCustomKeyInput(e.target.value)}
-              style={{
-                WebkitTextSecurity: showKey ? "none" : "disc",
-              } as React.CSSProperties}
+              style={
+                {
+                  WebkitTextSecurity: showKey ? "none" : "disc",
+                } as React.CSSProperties
+              }
               className="w-full rounded-xl border border-border bg-background pl-3 pr-10 py-2 text-sm font-mono outline-none focus:border-primary focus:ring-1 focus:ring-primary transition-colors"
             />
             <button
@@ -234,7 +244,11 @@ export function ApiKeyModal() {
               disabled={status === "checking"}
               className="rounded-xl bg-primary px-4 py-1.5 font-mono text-[11px] uppercase tracking-widest text-primary-foreground disabled:opacity-40 shadow-sm transition-all hover:bg-primary/90 active:scale-95 cursor-pointer"
             >
-              {status === "checking" ? "checking…" : isDailyLimit ? "save & continue" : "save & validate"}
+              {status === "checking"
+                ? "checking…"
+                : isDailyLimit
+                  ? "save & continue"
+                  : "save & validate"}
             </button>
           </div>
         </div>
@@ -255,7 +269,9 @@ function StatusLine({ status, isCustom }: { status: Status; isCustom: boolean })
     return (
       <div className="flex items-center gap-1.5 text-primary font-mono text-[11px] font-bold">
         <CheckCircle2 className="h-3.5 w-3.5" />
-        <span>connected - {isCustom ? "custom key (50 free pages/day)" : "server key"} is valid</span>
+        <span>
+          connected - {isCustom ? "custom key (50 free pages/day)" : "server key"} is valid
+        </span>
       </div>
     );
   if (status === "missing")

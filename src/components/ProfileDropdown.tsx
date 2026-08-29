@@ -1,11 +1,6 @@
 import { useState, useRef, useEffect } from "react";
 import { Link } from "@tanstack/react-router";
-import {
-  LogOut,
-  ShieldAlert,
-  Loader2,
-  ChevronDown,
-} from "lucide-react";
+import { LogOut, ShieldAlert, Loader2, ChevronDown, Heart } from "lucide-react";
 import { useAuth } from "@/context/AuthContext";
 import { UserAvatar } from "@/components/UserAvatar";
 
@@ -143,7 +138,16 @@ export function ProfileDropdown() {
           </div>
 
           {/* Links / Actions */}
-          <div className="py-1">
+          <div className="py-1 space-y-0.5">
+            <Link
+              to="/support"
+              onClick={() => setIsOpen(false)}
+              className="flex w-full items-center gap-2.5 rounded-lg px-3 py-2 text-xs font-medium text-foreground/90 transition-colors hover:bg-rose-500/10 hover:text-rose-400 group"
+            >
+              <Heart className="h-4 w-4 text-rose-500 transition-transform group-hover:scale-110 fill-rose-500/20" />
+              <span>Support Our Project</span>
+            </Link>
+
             {isAdmin && (
               <Link
                 to="/admin"

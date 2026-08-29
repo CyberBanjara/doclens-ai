@@ -17,7 +17,6 @@ import appCss from "../styles.css?url";
 import { TtsProvider } from "@/context/TtsContext";
 import { AuthProvider } from "@/context/AuthContext";
 
-
 import { NotFoundComponent } from "@/components/NotFound";
 
 export const Route = createRootRoute({
@@ -84,7 +83,9 @@ function RootShell({ children }: { children: React.ReactNode }) {
     <html lang="en">
       <head>
         <HeadContent />
-        <script dangerouslySetInnerHTML={{ __html: `
+        <script
+          dangerouslySetInnerHTML={{
+            __html: `
           (function() {
             try {
               var theme = localStorage.getItem('doclens-theme') || 'system';
@@ -108,92 +109,114 @@ function RootShell({ children }: { children: React.ReactNode }) {
               }
             } catch (e) {}
           })();
-        ` }} />
+        `,
+          }}
+        />
       </head>
       <body>
-        <div id="preloader" style={{
-          position: 'fixed',
-          top: 0,
-          left: 0,
-          width: '100%',
-          height: '100%',
-          backgroundColor: 'var(--preloader-bg, #0b1326)',
-          display: 'flex',
-          flexDirection: 'column',
-          alignItems: 'center',
-          justifyContent: 'center',
-          zIndex: 99999,
-          transition: 'opacity 0.4s ease, visibility 0.4s ease',
-          fontFamily: 'system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif'
-        }}>
-          <div style={{
-            display: 'flex',
-            flexDirection: 'column',
-            alignItems: 'center',
-            gap: '24px',
-            animation: 'preloader-fade-in 0.6s ease-out'
-          }}>
-            <div style={{
-              position: 'relative',
-              width: '96px',
-              height: '96px',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center'
-            }}>
-              <div style={{
-                position: 'absolute',
-                top: 0,
-                left: 0,
-                right: 0,
-                bottom: 0,
-                borderRadius: '50%',
-                border: '2px solid var(--preloader-color, #ffffff)',
-                opacity: 0.15,
-                animation: 'preloader-pulse 2s infinite ease-in-out'
-              }}></div>
-              <img 
-                src="/light_13746323.png" 
-                alt="Anuwad Logo" 
+        <div
+          id="preloader"
+          style={{
+            position: "fixed",
+            top: 0,
+            left: 0,
+            width: "100%",
+            height: "100%",
+            backgroundColor: "var(--preloader-bg, #0b1326)",
+            display: "flex",
+            flexDirection: "column",
+            alignItems: "center",
+            justifyContent: "center",
+            zIndex: 99999,
+            transition: "opacity 0.4s ease, visibility 0.4s ease",
+            fontFamily:
+              'system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif',
+          }}
+        >
+          <div
+            style={{
+              display: "flex",
+              flexDirection: "column",
+              alignItems: "center",
+              gap: "24px",
+              animation: "preloader-fade-in 0.6s ease-out",
+            }}
+          >
+            <div
+              style={{
+                position: "relative",
+                width: "96px",
+                height: "96px",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+              }}
+            >
+              <div
                 style={{
-                  width: '80px',
-                  height: '80px',
-                  objectFit: 'contain',
-                  animation: 'preloader-logo-pulse 2s infinite ease-in-out',
-                  zIndex: 2
+                  position: "absolute",
+                  top: 0,
+                  left: 0,
+                  right: 0,
+                  bottom: 0,
+                  borderRadius: "50%",
+                  border: "2px solid var(--preloader-color, #ffffff)",
+                  opacity: 0.15,
+                  animation: "preloader-pulse 2s infinite ease-in-out",
+                }}
+              ></div>
+              <img
+                src="/light_13746323.png"
+                alt="Anuwad Logo"
+                style={{
+                  width: "80px",
+                  height: "80px",
+                  objectFit: "contain",
+                  animation: "preloader-logo-pulse 2s infinite ease-in-out",
+                  zIndex: 2,
                 }}
               />
             </div>
-            <div style={{
-              color: 'var(--preloader-color, #ffffff)',
-              fontSize: '20px',
-              fontWeight: 600,
-              letterSpacing: '0.05em',
-              opacity: 0.9,
-              animation: 'preloader-pulse-text 2s infinite ease-in-out'
-            }}>
+            <div
+              style={{
+                color: "var(--preloader-color, #ffffff)",
+                fontSize: "20px",
+                fontWeight: 600,
+                letterSpacing: "0.05em",
+                opacity: 0.9,
+                animation: "preloader-pulse-text 2s infinite ease-in-out",
+              }}
+            >
               Anuwad
             </div>
-            <div style={{
-              width: '120px',
-              height: '3px',
-              backgroundColor: 'rgba(255, 255, 255, 0.1)',
-              borderRadius: '3px',
-              overflow: 'hidden',
-              position: 'relative'
-            }} className="preloader-progress-container">
-              <div style={{
-                position: 'absolute',
-                height: '100%',
-                width: '50%',
-                background: 'linear-gradient(90deg, transparent, var(--preloader-color, #ffffff), transparent)',
-                animation: 'preloader-loading 1.5s infinite linear'
-              }}></div>
+            <div
+              style={{
+                width: "120px",
+                height: "3px",
+                backgroundColor: "rgba(255, 255, 255, 0.1)",
+                borderRadius: "3px",
+                overflow: "hidden",
+                position: "relative",
+              }}
+              className="preloader-progress-container"
+            >
+              <div
+                style={{
+                  position: "absolute",
+                  height: "100%",
+                  width: "50%",
+                  background:
+                    "linear-gradient(90deg, transparent, var(--preloader-color, #ffffff), transparent)",
+                  animation: "preloader-loading 1.5s infinite linear",
+                }}
+              ></div>
             </div>
           </div>
         </div>
-        
-        <style dangerouslySetInnerHTML={{ __html: `
+
+        <style
+          dangerouslySetInnerHTML={{
+            __html: `
           @keyframes preloader-fade-in {
             from { opacity: 0; transform: scale(0.95); }
             to { opacity: 1; transform: scale(1); }
@@ -220,12 +243,17 @@ function RootShell({ children }: { children: React.ReactNode }) {
           html:not(.dark) .preloader-progress-container {
             background-color: rgba(0, 0, 0, 0.05) !important;
           }
-        ` }} />
+        `,
+          }}
+        />
         {/* Pre-rendered static semantic block for Google OAuth Verification & Crawlers */}
         <header className="sr-only" aria-hidden="false">
           <h1>Anuwad — AI Document Reader &amp; Translator</h1>
           <p>
-            Anuwad is a free, privacy-first document platform. Render PDFs locally in your browser, translate pages into over 90 languages using state-of-the-art AI, and convert text into natural speech. Sign in with Google to synchronize your saved document library and preferences securely across devices.
+            Anuwad is a free, privacy-first document platform. Render PDFs locally in your browser,
+            translate pages into over 90 languages using state-of-the-art AI, and convert text into
+            natural speech. Sign in with Google to synchronize your saved document library and
+            preferences securely across devices.
           </p>
           <nav>
             <a href="/privacy">Privacy Policy</a>
@@ -245,17 +273,17 @@ function RootComponent() {
 
   useEffect(() => {
     initTheme();
-    
+
     // Hide and remove preloader once React application is fully mounted, keeping it for at least 2 seconds
     const preloader = document.getElementById("preloader");
     if (!preloader) return;
 
     let removeTimer: NodeJS.Timeout;
-    
+
     const fadeTimer = setTimeout(() => {
       preloader.style.opacity = "0";
       preloader.style.visibility = "hidden";
-      
+
       removeTimer = setTimeout(() => {
         preloader.remove();
       }, 400); // Matches the 0.4s transition duration

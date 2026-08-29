@@ -35,6 +35,7 @@
 ## 🚀 Quick Start
 
 ### 1. Prerequisites
+
 - **Node.js** ≥ 18
 - **npm** or **bun**
 
@@ -53,6 +54,7 @@ cp .env.example .env
 ```
 
 Add your OpenRouter API key in `.env` (or bring your own key directly in the app UI):
+
 ```env
 OPENROUTER_API_KEY=your-openrouter-api-key
 ```

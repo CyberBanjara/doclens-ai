@@ -89,7 +89,8 @@ export function StorageManagerSection() {
           <div>
             <h3 className="text-lg font-semibold text-foreground">Local Storage & Privacy</h3>
             <p className="text-xs text-muted-foreground">
-              All documents, OCR caches, neural voices, and API keys are stored entirely inside your browser.
+              All documents, OCR caches, neural voices, and API keys are stored entirely inside your
+              browser.
             </p>
           </div>
         </div>
@@ -132,7 +133,10 @@ export function StorageManagerSection() {
             {stats ? (
               <>
                 <span className="text-primary">{formatBytes(stats.usageBytes)}</span>
-                <span className="text-muted-foreground font-normal"> of ~{formatBytes(stats.quotaBytes)}</span>
+                <span className="text-muted-foreground font-normal">
+                  {" "}
+                  of ~{formatBytes(stats.quotaBytes)}
+                </span>
               </>
             ) : (
               "Calculating..."
@@ -211,9 +215,10 @@ export function StorageManagerSection() {
         <AlertTriangle className="h-4 w-4 text-primary shrink-0 mt-0.5" />
         <p className="leading-relaxed">
           <strong className="text-foreground">Universal In-App Data Control:</strong> Clicking{" "}
-          <span className="font-semibold text-destructive">Clear All Storage</span> purges all application storage
-          across IndexedDB, OPFS, Cache Storage, localStorage, sessionStorage, and service workers using standard browser APIs
-          (Chrome, Brave, Firefox, Edge). No browser DevTools or settings inspection required.
+          <span className="font-semibold text-destructive">Clear All Storage</span> purges all
+          application storage across IndexedDB, OPFS, Cache Storage, localStorage, sessionStorage,
+          and service workers using standard browser APIs (Chrome, Brave, Firefox, Edge). No browser
+          DevTools or settings inspection required.
         </p>
       </div>
 
@@ -229,19 +234,23 @@ export function StorageManagerSection() {
             </AlertDialogTitle>
             <AlertDialogDescription className="text-sm text-muted-foreground space-y-3 pt-2 text-left">
               <span>
-                This will permanently delete all data stored by Anuwad in your browser. This action is irreversible and
-                includes:
+                This will permanently delete all data stored by Anuwad in your browser. This action
+                is irreversible and includes:
               </span>
               <ul className="list-disc pl-5 space-y-1 text-foreground/90 font-medium">
                 <li>All uploaded PDF documents, OCR texts, and AI translations (IndexedDB)</li>
                 <li>All downloaded Piper neural voice models (OPFS & Voice Cache)</li>
                 <li>All offline cached assets and Service Worker registrations (Cache API)</li>
-                <li>Your custom OpenRouter API keys, model selections, and pipeline defaults (localStorage)</li>
+                <li>
+                  Your custom OpenRouter API keys, model selections, and pipeline defaults
+                  (localStorage)
+                </li>
                 <li>All UI theme and font preferences (localStorage)</li>
                 <li>Active session states and cookies (sessionStorage & Cookies)</li>
               </ul>
               <span className="block pt-1 text-destructive font-semibold">
-                Once confirmed, all local data will be purged and the application will reload with default settings.
+                Once confirmed, all local data will be purged and the application will reload with
+                default settings.
               </span>
             </AlertDialogDescription>
           </AlertDialogHeader>

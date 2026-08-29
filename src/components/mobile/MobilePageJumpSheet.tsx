@@ -30,7 +30,9 @@ export function MobilePageJumpSheet({
       <DrawerContent>
         <DrawerHeader>
           <DrawerTitle>Jump to page</DrawerTitle>
-          <DrawerDescription>{pageCount} pages total &middot; blue dot = translated</DrawerDescription>
+          <DrawerDescription>
+            {pageCount} pages total &middot; blue dot = translated
+          </DrawerDescription>
         </DrawerHeader>
         <div className="grid grid-cols-6 gap-2 overflow-y-auto px-6 pb-8 pt-1">
           {Array.from({ length: pageCount }, (_, i) => i + 1).map((n) => {

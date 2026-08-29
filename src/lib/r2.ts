@@ -2,7 +2,6 @@ import { createServerFn } from "@tanstack/react-start";
 import crypto from "crypto";
 import { isGlobalSyncEnabled } from "./env";
 
-
 // Ensure process.env has the suppression flag set BEFORE any AWS SDK libraries are loaded.
 if (typeof process !== "undefined" && process.env) {
   process.env.AWS_SDK_JS_SUPPRESS_SUPPORT_WARNING = "1";
@@ -13,7 +12,8 @@ if (typeof process !== "undefined" && typeof process.emitWarning === "function")
   const originalEmitWarning = process.emitWarning;
   process.emitWarning = function (warning, ...args: any[]) {
     const warnStr = typeof warning === "string" ? warning : warning?.message || "";
-    const warnName = typeof warning === "object" && warning !== null ? (warning as any).name || "" : "";
+    const warnName =
+      typeof warning === "object" && warning !== null ? (warning as any).name || "" : "";
 
     if (
       warnStr.includes("NodeVersionSupportWarning") ||
@@ -76,12 +76,21 @@ export function inferCategoryFromKey(key: string): string {
   if (lower.includes("econ") || lower.includes("finan")) return "economics";
   if (lower.includes("geo")) return "geography";
   if (lower.includes("civ") || lower.includes("pol") || lower.includes("gov")) return "civics";
-  if (lower.includes("sci") || lower.includes("bio") || lower.includes("chem") || lower.includes("phys")) return "science";
+  if (
+    lower.includes("sci") ||
+    lower.includes("bio") ||
+    lower.includes("chem") ||
+    lower.includes("phys")
+  )
+    return "science";
   return "uncategorized";
 }
 
 export const uploadToR2 = createServerFn({ method: "POST" })
-  .validator((input: { fileName: string; contentType: string; base64Data: string; category?: string }) => input)
+  .validator(
+    (input: { fileName: string; contentType: string; base64Data: string; category?: string }) =>
+      input,
+  )
   .handler(async ({ data }) => {
     "use server";
     const isSyncEnabled = isGlobalSyncEnabled();
@@ -117,7 +126,7 @@ export const uploadToR2 = createServerFn({ method: "POST" })
         {
           step: "build",
           name: "addETag",
-        }
+        },
       );
 
       await s3.send(cmd);
@@ -149,43 +158,42 @@ export const uploadToR2 = createServerFn({ method: "POST" })
     }
   });
 
-export const listR2Files = createServerFn({ method: "GET" })
-  .handler(async () => {
-    "use server";
-    try {
-      const { s3, bucketName, publicBaseUrl, sdk } = await getS3Client();
-      const files: { key: string; size: number; lastModified?: string; url?: string }[] = [];
-      let continuationToken: string | undefined;
+export const listR2Files = createServerFn({ method: "GET" }).handler(async () => {
+  "use server";
+  try {
+    const { s3, bucketName, publicBaseUrl, sdk } = await getS3Client();
+    const files: { key: string; size: number; lastModified?: string; url?: string }[] = [];
+    let continuationToken: string | undefined;
 
-      do {
-        const data = await s3.send(
-          new sdk.ListObjectsV2Command({
-            Bucket: bucketName,
-            ContinuationToken: continuationToken,
-          })
-        );
+    do {
+      const data = await s3.send(
+        new sdk.ListObjectsV2Command({
+          Bucket: bucketName,
+          ContinuationToken: continuationToken,
+        }),
+      );
 
-        for (const obj of data.Contents || []) {
-          if (!obj.Key) continue;
-          // Exclude stored thumbnails from the main PDF file listing
-          if (obj.Key.startsWith("thumbnails/") || obj.Key.startsWith(".thumbnails/")) continue;
-          files.push({
-            key: obj.Key,
-            size: obj.Size || 0,
-            lastModified: obj.LastModified ? obj.LastModified.toISOString() : undefined,
-            url: publicBaseUrl ? `${publicBaseUrl}/${obj.Key}` : undefined,
-          });
-        }
+      for (const obj of data.Contents || []) {
+        if (!obj.Key) continue;
+        // Exclude stored thumbnails from the main PDF file listing
+        if (obj.Key.startsWith("thumbnails/") || obj.Key.startsWith(".thumbnails/")) continue;
+        files.push({
+          key: obj.Key,
+          size: obj.Size || 0,
+          lastModified: obj.LastModified ? obj.LastModified.toISOString() : undefined,
+          url: publicBaseUrl ? `${publicBaseUrl}/${obj.Key}` : undefined,
+        });
+      }
 
-        continuationToken = data.IsTruncated ? data.NextContinuationToken : undefined;
-      } while (continuationToken);
+      continuationToken = data.IsTruncated ? data.NextContinuationToken : undefined;
+    } while (continuationToken);
 
-      return { files };
-    } catch (err: any) {
-      console.error("R2 List error:", err);
-      throw new Error(err?.message || "Failed to list files from R2.");
-    }
-  });
+    return { files };
+  } catch (err: any) {
+    console.error("R2 List error:", err);
+    throw new Error(err?.message || "Failed to list files from R2.");
+  }
+});
 
 export const uploadThumbnailToR2 = createServerFn({ method: "POST" })
   .validator((input: { fileKey: string; base64Data: string }) => input)
@@ -207,7 +215,7 @@ export const uploadThumbnailToR2 = createServerFn({ method: "POST" })
           Body: buffer,
           ContentLength: buffer.length,
           ContentType: "image/jpeg",
-        })
+        }),
       );
       return { success: true, key: thumbKey };
     } catch (err: any) {
@@ -230,7 +238,7 @@ export const getThumbnailFromR2 = createServerFn({ method: "POST" })
           new sdk.HeadObjectCommand({
             Bucket: bucketName,
             Key: thumbKey,
-          })
+          }),
         );
       } catch {
         // Thumbnail file does not exist in R2 bucket
@@ -245,7 +253,7 @@ export const getThumbnailFromR2 = createServerFn({ method: "POST" })
         new sdk.GetObjectCommand({
           Bucket: bucketName,
           Key: thumbKey,
-        })
+        }),
       );
 
       const body = response.Body;
@@ -254,39 +262,41 @@ export const getThumbnailFromR2 = createServerFn({ method: "POST" })
       const chunks: Buffer[] = [];
       const stream = body as any;
 
-      return new Promise<{ found: boolean; base64Data?: string; contentType?: string }>((resolve) => {
-        if (typeof stream.on === "function") {
-          stream.on("data", (chunk: any) => chunks.push(Buffer.from(chunk)));
-          stream.on("error", () => resolve({ found: false }));
-          stream.on("end", () => {
-            const buffer = Buffer.concat(chunks);
-            resolve({
-              found: true,
-              base64Data: buffer.toString("base64"),
-              contentType: response.ContentType || "image/jpeg",
-            });
-          });
-        } else {
-          void (async () => {
-            try {
-              const reader = stream.getReader();
-              while (true) {
-                const { done, value } = await reader.read();
-                if (done) break;
-                chunks.push(Buffer.from(value));
-              }
+      return new Promise<{ found: boolean; base64Data?: string; contentType?: string }>(
+        (resolve) => {
+          if (typeof stream.on === "function") {
+            stream.on("data", (chunk: any) => chunks.push(Buffer.from(chunk)));
+            stream.on("error", () => resolve({ found: false }));
+            stream.on("end", () => {
               const buffer = Buffer.concat(chunks);
               resolve({
                 found: true,
                 base64Data: buffer.toString("base64"),
                 contentType: response.ContentType || "image/jpeg",
               });
-            } catch {
-              resolve({ found: false });
-            }
-          })();
-        }
-      });
+            });
+          } else {
+            void (async () => {
+              try {
+                const reader = stream.getReader();
+                while (true) {
+                  const { done, value } = await reader.read();
+                  if (done) break;
+                  chunks.push(Buffer.from(value));
+                }
+                const buffer = Buffer.concat(chunks);
+                resolve({
+                  found: true,
+                  base64Data: buffer.toString("base64"),
+                  contentType: response.ContentType || "image/jpeg",
+                });
+              } catch {
+                resolve({ found: false });
+              }
+            })();
+          }
+        },
+      );
     } catch {
       return { found: false };
     }
@@ -307,7 +317,7 @@ export const deleteFromR2 = createServerFn({ method: "POST" })
         new sdk.DeleteObjectCommand({
           Bucket: bucketName,
           Key: data.key,
-        })
+        }),
       );
       // Try to clean up separate thumbnail object if present
       try {
@@ -315,7 +325,7 @@ export const deleteFromR2 = createServerFn({ method: "POST" })
           new sdk.DeleteObjectCommand({
             Bucket: bucketName,
             Key: `thumbnails/${data.key}.jpg`,
-          })
+          }),
         );
       } catch {
         // Thumbnail cleanup error ignored
@@ -327,7 +337,6 @@ export const deleteFromR2 = createServerFn({ method: "POST" })
     }
   });
 
-
 export const downloadFromR2 = createServerFn({ method: "POST" })
   .validator((input: { key: string }) => input)
   .handler(async ({ data }) => {
@@ -338,7 +347,7 @@ export const downloadFromR2 = createServerFn({ method: "POST" })
         new sdk.GetObjectCommand({
           Bucket: bucketName,
           Key: data.key,
-        })
+        }),
       );
 
       const body = response.Body;
@@ -399,7 +408,7 @@ export const reorganizeR2Files = createServerFn({ method: "POST" }).handler(asyn
         new sdk.ListObjectsV2Command({
           Bucket: bucketName,
           ContinuationToken: continuationToken,
-        })
+        }),
       );
 
       for (const obj of data.Contents || []) {
@@ -422,13 +431,13 @@ export const reorganizeR2Files = createServerFn({ method: "POST" }).handler(asyn
               Bucket: bucketName,
               CopySource: encodeURI(`${bucketName}/${oldKey}`),
               Key: newKey,
-            })
+            }),
           );
           await s3.send(
             new sdk.DeleteObjectCommand({
               Bucket: bucketName,
               Key: oldKey,
-            })
+            }),
           );
           movedFiles.push({ oldKey, newKey, category });
         }
@@ -447,4 +456,3 @@ export const reorganizeR2Files = createServerFn({ method: "POST" }).handler(asyn
     throw new Error(err?.message || "Failed to reorganize R2 bucket files.");
   }
 });
-

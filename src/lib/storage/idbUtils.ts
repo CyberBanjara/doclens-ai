@@ -199,4 +199,3 @@ export async function closeDb(): Promise<void> {
     dbPromise = null;
   }
 }
-

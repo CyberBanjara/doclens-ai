@@ -657,7 +657,7 @@ Here's my recommended **tiered approach** for Anuwad:
 
 ## Summary
 
-| Aspect              | Read Aloud Approach                   | Your Anuwad Approach                       |
+| Aspect              | Read Aloud Approach                   | Your Anuwad Approach                        |
 | ------------------- | ------------------------------------- | ------------------------------------------- |
 | **Architecture**    | Extension (multi-context, messaging)  | Web app (single context, simple)            |
 | **TTS Engine**      | 12 engines, complex routing           | Start with Web Speech API, upgrade to Piper |

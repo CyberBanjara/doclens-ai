@@ -3,13 +3,12 @@ import { fetchSupabaseExtraction, saveSupabaseExtraction } from "./supabase";
 import { getDoc, updateDoc, db, pageKey, getAllPages, withDocLock } from "./storage";
 import { isGlobalSyncEnabled } from "./env";
 
-export const getSyncConfig = createServerFn({ method: "GET" })
-  .handler(async () => {
-    "use server";
-    return {
-      enabled: isGlobalSyncEnabled(),
-    };
-  });
+export const getSyncConfig = createServerFn({ method: "GET" }).handler(async () => {
+  "use server";
+  return {
+    enabled: isGlobalSyncEnabled(),
+  };
+});
 
 export async function syncFromSupabase(docId: string, fileName: string): Promise<boolean> {
   if (!isGlobalSyncEnabled()) return false;
@@ -85,10 +84,12 @@ export async function syncFromSupabase(docId: string, fileName: string): Promise
             shouldUpdate = true;
           } else {
             // Check if text or OCR status is different
-            if (localPage.text !== p.text ||
-                localPage.columns !== (p.columns || 1) ||
-                localPage.garbageRatio !== (p.garbageRatio || 0) ||
-                localPage.ocrRun !== (p.ocrRun || false)) {
+            if (
+              localPage.text !== p.text ||
+              localPage.columns !== (p.columns || 1) ||
+              localPage.garbageRatio !== (p.garbageRatio || 0) ||
+              localPage.ocrRun !== (p.ocrRun || false)
+            ) {
               shouldUpdate = true;
             }
             // Check if AI status / result is updated
@@ -100,7 +101,10 @@ export async function syncFromSupabase(docId: string, fileName: string): Promise
               } else if (remoteAi.status === "done" && localAi.status !== "done") {
                 shouldUpdate = true;
               } else if (remoteAi.status === "done" && localAi.status === "done") {
-                if ((remoteAi.updatedAt || 0) > (localAi.updatedAt || 0) || remoteAi.result !== localAi.result) {
+                if (
+                  (remoteAi.updatedAt || 0) > (localAi.updatedAt || 0) ||
+                  remoteAi.result !== localAi.result
+                ) {
                   shouldUpdate = true;
                 }
               } else if (remoteAi.status !== localAi.status || remoteAi.result !== localAi.result) {

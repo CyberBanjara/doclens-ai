@@ -63,12 +63,12 @@ flowchart LR
 
 ## Data Contracts
 
-| Handoff                  | Format                   | Key Fields                                                      |
-| ------------------------ | ------------------------ | --------------------------------------------------------------- |
-| Upload → Extraction      | PDF binary (ArrayBuffer) | Stored as blob in IDB                                           |
-| Extraction → Translation | `PageData` record        | `text`, `columns`, `pageNumber`                                 |
-| Translation → TTS        | `PageAi` record          | `result` (string), `status`, `settingsHash`                     |
-| Translation → Storage    | Settings hash            | `modelId`, `mode`, `language`, `style`, `temperature`            |
+| Handoff                  | Format                   | Key Fields                                            |
+| ------------------------ | ------------------------ | ----------------------------------------------------- |
+| Upload → Extraction      | PDF binary (ArrayBuffer) | Stored as blob in IDB                                 |
+| Extraction → Translation | `PageData` record        | `text`, `columns`, `pageNumber`                       |
+| Translation → TTS        | `PageAi` record          | `result` (string), `status`, `settingsHash`           |
+| Translation → Storage    | Settings hash            | `modelId`, `mode`, `language`, `style`, `temperature` |
 
 ---
 

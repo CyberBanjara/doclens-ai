@@ -242,7 +242,16 @@ export function PageWorkstation({
       autoTranslatedInitialPageRef.current[docId] = targetPage;
       void runPageOnce(targetPage);
     }
-  }, [docId, pageCount, keyReady, globals.modelId, aiSummary, shouldShowExplainSetup, runPageOnce, activePage]);
+  }, [
+    docId,
+    pageCount,
+    keyReady,
+    globals.modelId,
+    aiSummary,
+    shouldShowExplainSetup,
+    runPageOnce,
+    activePage,
+  ]);
 
   const handleExplainSetupConfirm = async (settings: {
     language: string;

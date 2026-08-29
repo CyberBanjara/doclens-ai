@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { toast } from "sonner";
-import { Github, ExternalLink, Heart, Sparkles, AlertCircle } from "lucide-react";
+import { Github, ExternalLink, Heart, Sparkles, ShieldCheck } from "lucide-react";
 import {
   Dialog,
   DialogContent,
@@ -8,6 +8,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import { triggerRazorpaySupportCheckout } from "@/lib/support";
 
 interface SupportModalProps {
   open: boolean;
@@ -44,61 +45,25 @@ export function SupportModal({ open, onOpenChange }: SupportModalProps) {
     setPaying(true);
 
     try {
-      // Dynamic load Razorpay checkout.js script
-      const loadScript = (src: string) => {
-        return new Promise<boolean>((resolve) => {
-          if (document.querySelector(`script[src="${src}"]`)) {
-            resolve(true);
-            return;
-          }
-          const script = document.createElement("script");
-          script.src = src;
-          script.onload = () => resolve(true);
-          script.onerror = () => resolve(false);
-          document.body.appendChild(script);
-        });
-      };
-
-      const loaded = await loadScript("https://checkout.razorpay.com/v1/checkout.js");
-      if (!loaded) {
-        toast.error("Failed to load Razorpay SDK. Please check your internet connection.");
-        setPaying(false);
-        return;
-      }
-
-      // Razorpay payment options
-      // Note: In real environment, replace 'rzp_test_...' with your actual Razorpay Key ID
-      const options = {
-        key: "rzp_test_YOUR_KEY_HERE",
-        amount: amount * 100, // paise
-        currency: "INR",
-        name: "Anuwad",
-        description: "Support Anuwad Development",
-        image: window.location.origin + "/light_13746323.png",
-        handler: function (response: any) {
-          toast.success(
-            `Thank you for your contribution! Payment ID: ${response.razorpay_payment_id}`,
-          );
+      await triggerRazorpaySupportCheckout({
+        amount,
+        tierName: "Community Support",
+        onSuccess: (paymentId) => {
+          toast.success(`Thank you for your contribution! Payment ID: ${paymentId}`);
+          setPaying(false);
           onOpenChange(false);
         },
-        prefill: {
-          name: "Anuwad Sponsor",
-          email: "sponsor@anuwad.com",
+        onError: (err) => {
+          toast.error("Payment failed", { description: err });
+          setPaying(false);
         },
-        theme: {
-          color: "#0066cc", // Action Blue
+        onDismiss: () => {
+          setPaying(false);
         },
-      };
-
-      const rzp = new (window as any).Razorpay(options);
-      rzp.on("payment.failed", function (response: any) {
-        toast.error(`Payment failed: ${response.error.description}`);
       });
-      rzp.open();
-    } catch (err) {
+    } catch (err: any) {
       console.error(err);
       toast.error("Failed to initialize Razorpay checkout.");
-    } finally {
       setPaying(false);
     }
   };
@@ -210,8 +175,8 @@ export function SupportModal({ open, onOpenChange }: SupportModalProps) {
               </button>
 
               <div className="mt-3 flex items-center gap-1.5 text-[10px] text-muted-foreground">
-                <AlertCircle className="h-3 w-3" />
-                <span>Runs in Razorpay Test Mode.</span>
+                <ShieldCheck className="h-3.5 w-3.5 text-emerald-400" />
+                <span>Secured with Razorpay (UPI, Cards, NetBanking).</span>
               </div>
             </div>
           </div>

@@ -135,9 +135,7 @@ function AdminPage() {
       await apiAdminUpdateUserRole(targetUid, newRole);
 
       // Optimistic update local state
-      setUsers((prev) =>
-        prev.map((u) => (u.uid === targetUid ? { ...u, role: newRole } : u)),
-      );
+      setUsers((prev) => prev.map((u) => (u.uid === targetUid ? { ...u, role: newRole } : u)));
 
       if (selectedUser && selectedUser.uid === targetUid) {
         setSelectedUser((prev) => (prev ? { ...prev, role: newRole } : null));
@@ -195,7 +193,9 @@ function AdminPage() {
           <div className="flex h-12 w-12 items-center justify-center rounded-2xl border border-primary/30 bg-primary/10 animate-pulse">
             <RefreshCw className="h-6 w-6 animate-spin text-primary" />
           </div>
-          <p className="text-sm font-medium text-muted-foreground">Verifying administrator session…</p>
+          <p className="text-sm font-medium text-muted-foreground">
+            Verifying administrator session…
+          </p>
         </div>
       </SidebarLayout>
     );
@@ -233,8 +233,8 @@ function AdminPage() {
               </button>
             ) : (
               <div className="rounded-xl border border-border/80 bg-surface-2/60 px-4 py-2.5 text-xs text-muted-foreground">
-                Signed in as <span className="font-semibold text-foreground">{user.email}</span> (Role:{" "}
-                <span className="font-semibold text-amber-400 uppercase">{user.role}</span>)
+                Signed in as <span className="font-semibold text-foreground">{user.email}</span>{" "}
+                (Role: <span className="font-semibold text-amber-400 uppercase">{user.role}</span>)
               </div>
             )}
             <Link
@@ -315,7 +315,9 @@ function AdminPage() {
                 <span>Total Users</span>
                 <Users className="h-4 w-4 text-primary" />
               </div>
-              <p className="mt-2 text-2xl font-bold tracking-tight text-foreground">{stats.total}</p>
+              <p className="mt-2 text-2xl font-bold tracking-tight text-foreground">
+                {stats.total}
+              </p>
             </div>
 
             <div className="rounded-xl border border-red-500/20 bg-red-500/5 p-3.5 backdrop-blur-md">
@@ -616,7 +618,9 @@ function AdminPage() {
                         }`}
                       >
                         <div className="flex w-full items-center justify-between">
-                          <span className={`text-xs font-bold uppercase tracking-wider ${cfg.text}`}>
+                          <span
+                            className={`text-xs font-bold uppercase tracking-wider ${cfg.text}`}
+                          >
                             {cfg.label}
                           </span>
                           {isCurrent && <Check className="h-3.5 w-3.5 text-primary" />}

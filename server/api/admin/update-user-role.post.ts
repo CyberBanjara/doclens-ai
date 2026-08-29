@@ -30,7 +30,8 @@ export default defineEventHandler(async (event) => {
     }
 
     // 2. Extract authorization token
-    const authHeader = getHeader(event, "authorization") || getHeader(event, "x-firebase-token") || "";
+    const authHeader =
+      getHeader(event, "authorization") || getHeader(event, "x-firebase-token") || "";
     const token = authHeader.startsWith("Bearer ")
       ? authHeader.substring(7)
       : authHeader || idToken || undefined;

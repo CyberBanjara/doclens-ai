@@ -128,7 +128,10 @@ export async function apiLoginWithGoogle(): Promise<ClientUser> {
       console.warn("Serverless /api/auth/google-login returned status:", res.status);
     }
   } catch (err) {
-    console.warn("Could not reach /api/auth/google-login, using authenticated client session:", err);
+    console.warn(
+      "Could not reach /api/auth/google-login, using authenticated client session:",
+      err,
+    );
   }
 
   return fallbackUser;

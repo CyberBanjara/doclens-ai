@@ -59,7 +59,11 @@ export async function clearAllIndexedDB(): Promise<void> {
   const dbNamesToDelete = new Set<string>(KNOWN_IDB_DATABASES);
 
   // 2. Query available databases if browser supports indexedDB.databases() (Chromium, Brave, Edge, newer Firefox)
-  if (typeof window !== "undefined" && window.indexedDB && typeof window.indexedDB.databases === "function") {
+  if (
+    typeof window !== "undefined" &&
+    window.indexedDB &&
+    typeof window.indexedDB.databases === "function"
+  ) {
     try {
       const dbs = await window.indexedDB.databases();
       for (const info of dbs) {

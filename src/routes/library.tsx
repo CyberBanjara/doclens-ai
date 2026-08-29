@@ -169,7 +169,8 @@ function LibraryPage() {
             <div>
               <h2 className="text-2xl font-bold tracking-tight text-foreground">Local Library</h2>
               <p className="text-xs text-muted-foreground mt-0.5">
-                {docs.length} {docs.length === 1 ? "document" : "documents"} stored locally on this device
+                {docs.length} {docs.length === 1 ? "document" : "documents"} stored locally on this
+                device
               </p>
             </div>
 

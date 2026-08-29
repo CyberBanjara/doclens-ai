@@ -10,7 +10,13 @@ import {
   type Globals,
   type ORModel,
 } from "@/lib/openrouter";
-import { getPageData, upsertPageAi, type PageAi, type PageAiSummaryEntry, type PageOverrides } from "@/lib/storage";
+import {
+  getPageData,
+  upsertPageAi,
+  type PageAi,
+  type PageAiSummaryEntry,
+  type PageOverrides,
+} from "@/lib/storage";
 import { effective, summarize } from "@/lib/pageAi";
 import { HighlightableText } from "./HighlightableText";
 import { LoadingLogo } from "@/components/LoadingLogo";
@@ -316,8 +322,9 @@ function PageCard({
       </div>
 
       {/* ─── Error banner if request failed ─── */}
-      {state.error && !isRunning && (
-        /50 free pages|daily limit|rate limit|quota/i.test(state.error) ? (
+      {state.error &&
+        !isRunning &&
+        (/50 free pages|daily limit|rate limit|quota/i.test(state.error) ? (
           <div className="mb-4 rounded-xl border border-primary/30 bg-gradient-to-br from-primary/10 via-primary/5 to-transparent p-4 text-xs">
             <div className="flex items-start gap-3">
               <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-primary/20 text-primary">
@@ -325,7 +332,9 @@ function PageCard({
               </div>
               <div className="flex-1 space-y-1.5">
                 <div className="flex items-center justify-between">
-                  <h4 className="font-semibold text-foreground text-[13px]">50 Free Pages Used Today</h4>
+                  <h4 className="font-semibold text-foreground text-[13px]">
+                    50 Free Pages Used Today
+                  </h4>
                   <span className="rounded-full bg-primary/20 px-2 py-0.5 text-[10px] font-semibold text-primary">
                     Daily Limit
                   </span>
@@ -362,8 +371,7 @@ function PageCard({
               Retry
             </button>
           </div>
-        )
-      )}
+        ))}
 
       {/* ─── Result / Streaming content ─── */}
       {(() => {
@@ -385,8 +393,8 @@ function PageCard({
               <ReadableResult text={displayResult} pageNumber={pageNumber} />
             ) : (
               <p className="text-center text-sm text-muted-foreground py-8">
-                Click <span className="font-semibold text-primary">{modeLabel}</span> to process this
-                page.
+                Click <span className="font-semibold text-primary">{modeLabel}</span> to process
+                this page.
               </p>
             )}
           </div>
@@ -479,7 +487,10 @@ function OverrideControls({
             let nextStyle = eff.style;
             if (nextMode === "translate" && !TRANSLATION_STYLES.some((s) => s.id === nextStyle)) {
               nextStyle = "Native";
-            } else if (nextMode === "explain" && !EXPLANATION_STYLES.some((s) => s.id === nextStyle)) {
+            } else if (
+              nextMode === "explain" &&
+              !EXPLANATION_STYLES.some((s) => s.id === nextStyle)
+            ) {
               nextStyle = "Standard";
             }
             onSetOverride({ mode: nextMode, style: nextStyle });

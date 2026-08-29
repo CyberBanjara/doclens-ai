@@ -33,7 +33,8 @@ export default defineConfig({
         authDomain: process.env.FIREBASE_AUTH_DOMAIN || env.FIREBASE_AUTH_DOMAIN || "",
         projectId: process.env.FIREBASE_PROJECT_ID || env.FIREBASE_PROJECT_ID || "",
         storageBucket: process.env.FIREBASE_STORAGE_BUCKET || env.FIREBASE_STORAGE_BUCKET || "",
-        messagingSenderId: process.env.FIREBASE_MESSAGING_SENDER_ID || env.FIREBASE_MESSAGING_SENDER_ID || "",
+        messagingSenderId:
+          process.env.FIREBASE_MESSAGING_SENDER_ID || env.FIREBASE_MESSAGING_SENDER_ID || "",
         appId: process.env.FIREBASE_APP_ID || env.FIREBASE_APP_ID || "",
         measurementId: process.env.FIREBASE_MEASUREMENT_ID || env.FIREBASE_MEASUREMENT_ID || "",
       }),
@@ -42,6 +43,13 @@ export default defineConfig({
       ),
       __OPENROUTER_DEFAULT_MODEL__: JSON.stringify(
         process.env.OPENROUTER_DEFAULT_MODEL || env.OPENROUTER_DEFAULT_MODEL || "",
+      ),
+      __RAZORPAY_KEY_ID__: JSON.stringify(
+        process.env.RAZORPAY_KEY_ID ||
+          env.RAZORPAY_KEY_ID ||
+          process.env.VITE_RAZORPAY_KEY_ID ||
+          env.VITE_RAZORPAY_KEY_ID ||
+          "rzp_live_TVWs5Qr4BXQH9u",
       ),
     },
     ssr: {
@@ -99,7 +107,12 @@ export default defineConfig({
                   return res;
                 };
 
-                if (req.method === "POST" || req.method === "PUT" || req.method === "PATCH" || req.method === "DELETE") {
+                if (
+                  req.method === "POST" ||
+                  req.method === "PUT" ||
+                  req.method === "PATCH" ||
+                  req.method === "DELETE"
+                ) {
                   let bodyStr = "";
                   req.on("data", (chunk: any) => {
                     bodyStr += chunk;
@@ -140,4 +153,3 @@ export default defineConfig({
       : []),
   ],
 });
-

@@ -56,7 +56,6 @@ export function ModelSelectionSection({
           <span>Verifying OpenRouter connection & loading models...</span>
         </div>
       ) : (
-
         <>
           <div className="flex flex-wrap items-center gap-2">
             {(["free", "popular", "all"] as FilterTab[]).map((t) => (

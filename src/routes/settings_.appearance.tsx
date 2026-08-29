@@ -76,10 +76,7 @@ function AppearanceSettingsPage() {
   );
 
   return (
-    <SidebarLayout
-      pageTitle="Appearance Settings"
-      onNewDocument={handleNewDocument}
-    >
+    <SidebarLayout pageTitle="Appearance Settings" onNewDocument={handleNewDocument}>
       <div className="mx-auto max-w-7xl space-y-8 p-8 pb-28">
         {/* Page Header */}
         <header className="hidden md:block">

@@ -188,7 +188,9 @@ export function CategoryVerticalHeap({
                 <div className="min-w-0 flex-1">
                   <span
                     className={`block truncate text-xs font-semibold ${
-                      isActive ? "text-foreground" : "text-foreground/80 group-hover:text-foreground"
+                      isActive
+                        ? "text-foreground"
+                        : "text-foreground/80 group-hover:text-foreground"
                     }`}
                   >
                     {meta.label}

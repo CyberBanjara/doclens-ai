@@ -181,7 +181,11 @@ export async function clearAllVoiceCache(): Promise<void> {
 }
 
 // Downloads the file from network and saves it to cache, deduplicated
-export async function fetchAndCache(filename: string, targetUrl: string, init?: RequestInit): Promise<Blob> {
+export async function fetchAndCache(
+  filename: string,
+  targetUrl: string,
+  init?: RequestInit,
+): Promise<Blob> {
   let promise = activeModelFetches.get(filename);
   if (!promise) {
     promise = (async () => {
@@ -216,7 +220,7 @@ export function initVoiceCache() {
     if (url.includes("https://huggingface.co/diffusionstudio/piper-voices/resolve/main/")) {
       targetUrl = url.replace(
         "https://huggingface.co/diffusionstudio/piper-voices/resolve/main/",
-        "https://huggingface.co/rhasspy/piper-voices/resolve/main/"
+        "https://huggingface.co/rhasspy/piper-voices/resolve/main/",
       );
     }
 
@@ -236,7 +240,9 @@ export function initVoiceCache() {
             status: 200,
             statusText: "OK",
             headers: {
-              "Content-Type": targetUrl.endsWith(".json") ? "application/json" : "application/octet-stream",
+              "Content-Type": targetUrl.endsWith(".json")
+                ? "application/json"
+                : "application/octet-stream",
               "Content-Length": String(cachedBlob.size),
             },
           });
@@ -249,7 +255,9 @@ export function initVoiceCache() {
             status: 200,
             statusText: "OK",
             headers: {
-              "Content-Type": targetUrl.endsWith(".json") ? "application/json" : "application/octet-stream",
+              "Content-Type": targetUrl.endsWith(".json")
+                ? "application/json"
+                : "application/octet-stream",
               "Content-Length": String(blob.size),
             },
           });
@@ -262,12 +270,11 @@ export function initVoiceCache() {
     // Fall back to original fetch
     return originalFetch!(input, init);
   };
-
 }
 
 export async function downloadVoice(
   voiceId: string,
-  onProgress?: (progress: number) => void
+  onProgress?: (progress: number) => void,
 ): Promise<void> {
   const fetchFn = originalFetch || window.fetch;
 

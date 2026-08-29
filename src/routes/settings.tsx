@@ -35,7 +35,6 @@ import { ApiKeySection } from "@/components/settings/ApiKeySection";
 import { ModelSelectionSection } from "@/components/settings/ModelSelectionSection";
 import { StorageManagerSection } from "@/components/settings/StorageManagerSection";
 
-
 export const Route = createFileRoute("/settings")({
   component: SettingsPage,
   head: () => ({
@@ -174,7 +173,6 @@ function SettingsPage() {
     void handleValidate(savedKey);
     void refreshTtsVoices(true);
   }, [refreshTtsVoices]);
-
 
   const loadModels = async () => {
     setLoadingModels(true);
@@ -340,4 +338,3 @@ function SettingsPage() {
     </SidebarLayout>
   );
 }
-

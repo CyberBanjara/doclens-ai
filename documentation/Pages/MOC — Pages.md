@@ -6,12 +6,12 @@
 
 ## Application Routes & Pages
 
-| Page                      | Route                   | Source File                | Purpose                                                       |
-| ------------------------- | ----------------------- | -------------------------- | ------------------------------------------------------------- |
-| [[Library Page]]          | `/`                     | `index.tsx`                | Landing experience, document upload, storage browsing          |
-| [[Workspace Page]]        | `/doc/$id`              | `doc.$id.tsx`              | Main split-panel reader, AI translation, TTS playback         |
-| [[General Settings Page]] | `/settings`             | `settings.tsx`             | AI pipeline config, output language, voice cache, API & model |
-| Appearance Settings       | `/settings/appearance`  | `settings_.appearance.tsx` | Visual theme and display preferences                          |
+| Page                      | Route                  | Source File                | Purpose                                                       |
+| ------------------------- | ---------------------- | -------------------------- | ------------------------------------------------------------- |
+| [[Library Page]]          | `/`                    | `index.tsx`                | Landing experience, document upload, storage browsing         |
+| [[Workspace Page]]        | `/doc/$id`             | `doc.$id.tsx`              | Main split-panel reader, AI translation, TTS playback         |
+| [[General Settings Page]] | `/settings`            | `settings.tsx`             | AI pipeline config, output language, voice cache, API & model |
+| Appearance Settings       | `/settings/appearance` | `settings_.appearance.tsx` | Visual theme and display preferences                          |
 
 ---
 

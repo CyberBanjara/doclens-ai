@@ -30,9 +30,7 @@ export function VoiceCacheManagerSection({
             <h3 className="text-lg font-semibold text-foreground">Natural Voice Cache Manager</h3>
             <p className="text-xs text-muted-foreground">
               Showing voices for{" "}
-              <span className="font-semibold text-primary">
-                {getLanguageEnglishName(language)}
-              </span>
+              <span className="font-semibold text-primary">{getLanguageEnglishName(language)}</span>
               . Pre-download and manage neural speech models for instant offline playback.
             </p>
           </div>

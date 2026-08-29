@@ -18,14 +18,14 @@
 
 Managed via the `idb` wrapper library. Object stores (`src/lib/storage.ts`):
 
-| Store         | Key Path      | Contents                                                                 |
-| -------------- | -------------- | --------------------------------------------------------------------------- |
-| `documents`    | `id`          | `DocRecord` — filename, page count, timestamps, last-read page             |
-| `blobs`        | (external key) | Raw PDF file binary data (`Blob`)                                          |
-| `pageData`     | `key` (`docId:pageNumber`) | Per-page extracted text + `PageAi` (AI mode/result/status/settings hash) |
-| `voicePacks`   | `voiceId`      | Metadata for downloaded neural voice packs                                  |
-| `thumbnails`   | (external key) | Generated first-page thumbnails (`Blob`)                                    |
-| `meta`         | (external key) | Misc key-value entries (e.g. last-opened document id)                       |
+| Store        | Key Path                   | Contents                                                                 |
+| ------------ | -------------------------- | ------------------------------------------------------------------------ |
+| `documents`  | `id`                       | `DocRecord` — filename, page count, timestamps, last-read page           |
+| `blobs`      | (external key)             | Raw PDF file binary data (`Blob`)                                        |
+| `pageData`   | `key` (`docId:pageNumber`) | Per-page extracted text + `PageAi` (AI mode/result/status/settings hash) |
+| `voicePacks` | `voiceId`                  | Metadata for downloaded neural voice packs                               |
+| `thumbnails` | (external key)             | Generated first-page thumbnails (`Blob`)                                 |
+| `meta`       | (external key)             | Misc key-value entries (e.g. last-opened document id)                    |
 
 A version-8 migration (v5→v6) split what used to be an embedded `pages[]` + `pageAi` array on the document record into the standalone `pageData` store, keyed per page — this is why `getPageData`/`updatePageData` operate per-page rather than rewriting a whole document record.
 

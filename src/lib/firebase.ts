@@ -13,15 +13,18 @@ declare const __FIREBASE_CONFIG__: {
   measurementId: string;
 };
 
-const firebaseConfig = typeof __FIREBASE_CONFIG__ !== "undefined" ? __FIREBASE_CONFIG__ : {
-  apiKey: "",
-  authDomain: "",
-  projectId: "",
-  storageBucket: "",
-  messagingSenderId: "",
-  appId: "",
-  measurementId: "",
-};
+const firebaseConfig =
+  typeof __FIREBASE_CONFIG__ !== "undefined"
+    ? __FIREBASE_CONFIG__
+    : {
+        apiKey: "",
+        authDomain: "",
+        projectId: "",
+        storageBucket: "",
+        messagingSenderId: "",
+        appId: "",
+        measurementId: "",
+      };
 
 // Lazy/safe initialization of Firebase App instance
 export function getFirebaseApp(): FirebaseApp {

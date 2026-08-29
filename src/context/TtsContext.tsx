@@ -1,7 +1,21 @@
-import React, { createContext, useContext, useState, useEffect, useRef, useCallback, useMemo } from "react";
+import React, {
+  createContext,
+  useContext,
+  useState,
+  useEffect,
+  useRef,
+  useCallback,
+  useMemo,
+} from "react";
 import { splitSentences, getBrowserVoices } from "@/lib/tts";
 import { toast } from "sonner";
-import { initVoiceCache, registerVoicePath, getCachedVoiceIds, downloadVoice as downloadVoiceFromCache, deleteCachedVoice } from "@/lib/voiceCache";
+import {
+  initVoiceCache,
+  registerVoicePath,
+  getCachedVoiceIds,
+  downloadVoice as downloadVoiceFromCache,
+  deleteCachedVoice,
+} from "@/lib/voiceCache";
 import { getOutputLanguage } from "@/lib/openrouter";
 import { filterVoicesByLanguage } from "@/lib/voiceLanguageMap";
 import { getFriendlyErrorMessage, isOnline, OFFLINE_MESSAGE } from "@/lib/network";
@@ -135,7 +149,9 @@ async function getNeuralTtsEngine(): Promise<{ mod: any; catalog: any[] }> {
     // Register all voice paths into PATH_MAP
     for (const v of catalog) {
       const fileKeys = Object.keys(v.files || {});
-      const onnxKey = fileKeys.find((k: string) => k.endsWith(".onnx") && !k.endsWith(".onnx.json"));
+      const onnxKey = fileKeys.find(
+        (k: string) => k.endsWith(".onnx") && !k.endsWith(".onnx.json"),
+      );
       if (onnxKey) {
         (mod.PATH_MAP as any)[v.key] = onnxKey;
         registerVoicePath(v.key, onnxKey);
@@ -154,9 +170,10 @@ async function getNeuralTtsEngine(): Promise<{ mod: any; catalog: any[] }> {
         ort.InferenceSession.originalCreate = ort.InferenceSession.create;
 
         ort.InferenceSession.create = async function (model: any, options?: any) {
-          const cacheKey = model instanceof ArrayBuffer
-            ? `${model.byteLength}-${new Uint8Array(model.slice(0, 100)).join(",")}`
-            : String(model);
+          const cacheKey =
+            model instanceof ArrayBuffer
+              ? `${model.byteLength}-${new Uint8Array(model.slice(0, 100)).join(",")}`
+              : String(model);
 
           if (ONNX_SESSION_CACHE.has(cacheKey)) {
             return ONNX_SESSION_CACHE.get(cacheKey);
@@ -222,7 +239,7 @@ export function TtsProvider({ children }: { children: React.ReactNode }) {
     setCurrentTextSourceState(val);
     currentTextSourceRef.current = val;
   }, []);
-  
+
   // Persist rate, voice, and continuous play to localStorage
   const [rate, setRateState] = useState<number>(() => {
     if (typeof window !== "undefined") {
@@ -231,7 +248,7 @@ export function TtsProvider({ children }: { children: React.ReactNode }) {
     }
     return 1.0;
   });
-  
+
   const [selectedVoiceUri, setSelectedVoiceUriState] = useState<string | null>(() => {
     if (typeof window !== "undefined") {
       return localStorage.getItem(TTS_VOICE_URI_LS);
@@ -243,7 +260,7 @@ export function TtsProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     selectedVoiceUriRef.current = selectedVoiceUri;
   }, [selectedVoiceUri]);
-  
+
   const [continuousPlay, setContinuousPlayState] = useState<boolean>(() => {
     if (typeof window !== "undefined") {
       const stored = localStorage.getItem("doclens:tts-continuous");
@@ -323,20 +340,23 @@ export function TtsProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   // Public voice refresher: on demand, optionally initializes the neural catalog
-  const refreshVoices = useCallback(async (includeNeural: boolean = false): Promise<TtsVoice[]> => {
-    let catalog = rawCatalogRef.current;
-    if (includeNeural && (!ttsRef.current || catalog.length === 0)) {
-      try {
-        const { mod, catalog: loadedCatalog } = await getNeuralTtsEngine();
-        ttsRef.current = mod;
-        rawCatalogRef.current = loadedCatalog;
-        catalog = loadedCatalog;
-      } catch (err) {
-        console.error("[TTS] Failed to load neural engine during voice refresh:", err);
+  const refreshVoices = useCallback(
+    async (includeNeural: boolean = false): Promise<TtsVoice[]> => {
+      let catalog = rawCatalogRef.current;
+      if (includeNeural && (!ttsRef.current || catalog.length === 0)) {
+        try {
+          const { mod, catalog: loadedCatalog } = await getNeuralTtsEngine();
+          ttsRef.current = mod;
+          rawCatalogRef.current = loadedCatalog;
+          catalog = loadedCatalog;
+        } catch (err) {
+          console.error("[TTS] Failed to load neural engine during voice refresh:", err);
+        }
       }
-    }
-    return await refreshVoicesInternal(catalog);
-  }, [refreshVoicesInternal]);
+      return await refreshVoicesInternal(catalog);
+    },
+    [refreshVoicesInternal],
+  );
 
   // Ensure neural engine is loaded on-demand
   const ensureNeuralEngine = useCallback(async () => {
@@ -414,7 +434,7 @@ export function TtsProvider({ children }: { children: React.ReactNode }) {
     const currentVoiceInFiltered = filteredVoices.some((v) => v.voiceURI === selectedVoiceUri);
     if (!currentVoiceInFiltered) {
       const firstNeural = filteredVoices.find((v) => v.isNeural && v.isDownloaded);
-      const fallback = firstNeural || filteredVoices.find(v => v.isNeural) || filteredVoices[0];
+      const fallback = firstNeural || filteredVoices.find((v) => v.isNeural) || filteredVoices[0];
       if (fallback) {
         setSelectedVoiceUri(fallback.voiceURI);
       }
@@ -450,87 +470,92 @@ export function TtsProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   // Multi-sentence look-ahead queue processor for zero-latency gapless playback
-  const processPreSynthesizeQueue = useCallback(
-    (currentIndex: number, sentenceList: string[]) => {
-      if (!isPlayingRef.current) return;
-      const currentSessionId = synthesisSessionIdRef.current;
-      const targetVoiceUri = selectedVoiceUriRef.current || localStorage.getItem(TTS_VOICE_URI_LS);
-      let voice = availableVoicesRef.current.find((v) => v.voiceURI === targetVoiceUri);
-      if (!voice) {
-        const matching = filterVoicesByLanguage(availableVoicesRef.current, outputLanguageRef.current);
-        voice = matching.find((v) => v.isNeural && v.isDownloaded) || matching.find((v) => v.isNeural) || matching[0];
+  const processPreSynthesizeQueue = useCallback((currentIndex: number, sentenceList: string[]) => {
+    if (!isPlayingRef.current) return;
+    const currentSessionId = synthesisSessionIdRef.current;
+    const targetVoiceUri = selectedVoiceUriRef.current || localStorage.getItem(TTS_VOICE_URI_LS);
+    let voice = availableVoicesRef.current.find((v) => v.voiceURI === targetVoiceUri);
+    if (!voice) {
+      const matching = filterVoicesByLanguage(
+        availableVoicesRef.current,
+        outputLanguageRef.current,
+      );
+      voice =
+        matching.find((v) => v.isNeural && v.isDownloaded) ||
+        matching.find((v) => v.isNeural) ||
+        matching[0];
+    }
+    const isNeural = Boolean(
+      voice?.isNeural || isNeuralVoiceUri(voice?.voiceURI || targetVoiceUri),
+    );
+    if (!isNeural || !ttsRef.current) return;
+
+    const activeVoiceId = voice?.voiceURI || targetVoiceUri;
+    const LOOKAHEAD_COUNT = 3; // Pre-synthesize up to 3 sentences ahead
+
+    // Evict entries behind current sentence index to free memory
+    preSynthesizedMapRef.current.forEach((entry, idx) => {
+      if (idx < currentIndex) {
+        if (entry.url) {
+          try {
+            URL.revokeObjectURL(entry.url);
+          } catch (e) {}
+        }
+        preSynthesizedMapRef.current.delete(idx);
       }
-      const isNeural = Boolean(voice?.isNeural || isNeuralVoiceUri(voice?.voiceURI || targetVoiceUri));
-      if (!isNeural || !ttsRef.current) return;
+    });
 
-      const activeVoiceId = voice?.voiceURI || targetVoiceUri;
-      const LOOKAHEAD_COUNT = 3; // Pre-synthesize up to 3 sentences ahead
+    // Find the next index in range that hasn't started synthesis yet
+    let nextIdxToSynthesize: number | null = null;
+    for (let i = currentIndex + 1; i <= currentIndex + LOOKAHEAD_COUNT; i++) {
+      if (i < sentenceList.length) {
+        const text = sentenceList[i]?.trim();
+        if (text && !preSynthesizedMapRef.current.has(i)) {
+          nextIdxToSynthesize = i;
+          break;
+        }
+      }
+    }
 
-      // Evict entries behind current sentence index to free memory
-      preSynthesizedMapRef.current.forEach((entry, idx) => {
-        if (idx < currentIndex) {
-          if (entry.url) {
-            try {
-              URL.revokeObjectURL(entry.url);
-            } catch (e) {}
-          }
-          preSynthesizedMapRef.current.delete(idx);
+    if (nextIdxToSynthesize === null) return;
+
+    const targetIndex = nextIdxToSynthesize;
+    const textToSynthesize = sentenceList[targetIndex].trim();
+
+    const promise: Promise<Blob> = predictWithRecovery(ttsRef.current, {
+      text: textToSynthesize,
+      voiceId: activeVoiceId,
+    });
+
+    const entry: PreSynthesizedEntry = {
+      url: null,
+      promise: promise,
+    };
+    preSynthesizedMapRef.current.set(targetIndex, entry);
+
+    promise
+      .then((wavBlob: Blob) => {
+        if (synthesisSessionIdRef.current !== currentSessionId) return;
+
+        const currentEntry = preSynthesizedMapRef.current.get(targetIndex);
+        if (currentEntry) {
+          currentEntry.url = URL.createObjectURL(wavBlob);
+        }
+        // Continue filling queue for subsequent look-ahead slots
+        if (isPlayingRef.current) {
+          processPreSynthesizeQueue(currentSentenceIndexRef.current, sentencesRef.current);
+        }
+      })
+      .catch((err: any) => {
+        if (synthesisSessionIdRef.current !== currentSessionId) return;
+
+        console.warn(`[TTS] Failed to pre-synthesize chunk ${targetIndex}:`, err);
+        preSynthesizedMapRef.current.delete(targetIndex);
+        if (isPlayingRef.current) {
+          processPreSynthesizeQueue(currentSentenceIndexRef.current, sentencesRef.current);
         }
       });
-
-      // Find the next index in range that hasn't started synthesis yet
-      let nextIdxToSynthesize: number | null = null;
-      for (let i = currentIndex + 1; i <= currentIndex + LOOKAHEAD_COUNT; i++) {
-        if (i < sentenceList.length) {
-          const text = sentenceList[i]?.trim();
-          if (text && !preSynthesizedMapRef.current.has(i)) {
-            nextIdxToSynthesize = i;
-            break;
-          }
-        }
-      }
-
-      if (nextIdxToSynthesize === null) return;
-
-      const targetIndex = nextIdxToSynthesize;
-      const textToSynthesize = sentenceList[targetIndex].trim();
-
-      const promise: Promise<Blob> = predictWithRecovery(ttsRef.current, {
-        text: textToSynthesize,
-        voiceId: activeVoiceId,
-      });
-
-      const entry: PreSynthesizedEntry = {
-        url: null,
-        promise: promise,
-      };
-      preSynthesizedMapRef.current.set(targetIndex, entry);
-
-      promise
-        .then((wavBlob: Blob) => {
-          if (synthesisSessionIdRef.current !== currentSessionId) return;
-
-          const currentEntry = preSynthesizedMapRef.current.get(targetIndex);
-          if (currentEntry) {
-            currentEntry.url = URL.createObjectURL(wavBlob);
-          }
-          // Continue filling queue for subsequent look-ahead slots
-          if (isPlayingRef.current) {
-            processPreSynthesizeQueue(currentSentenceIndexRef.current, sentencesRef.current);
-          }
-        })
-        .catch((err: any) => {
-          if (synthesisSessionIdRef.current !== currentSessionId) return;
-
-          console.warn(`[TTS] Failed to pre-synthesize chunk ${targetIndex}:`, err);
-          preSynthesizedMapRef.current.delete(targetIndex);
-          if (isPlayingRef.current) {
-            processPreSynthesizeQueue(currentSentenceIndexRef.current, sentencesRef.current);
-          }
-        });
-    },
-    [],
-  );
+  }, []);
 
   // Speaks the sentence at the specified index
   const speakSentence = useCallback(
@@ -584,17 +609,23 @@ export function TtsProvider({ children }: { children: React.ReactNode }) {
       let voice = availableVoicesRef.current.find((v) => v.voiceURI === targetVoiceUri);
 
       if (!voice) {
-        const langVoices = filterVoicesByLanguage(availableVoicesRef.current, outputLanguageRef.current);
-        voice = langVoices.find((v) => v.isNeural && v.isDownloaded) ||
-                langVoices.find((v) => v.isNeural) ||
-                langVoices[0] ||
-                availableVoicesRef.current[0];
+        const langVoices = filterVoicesByLanguage(
+          availableVoicesRef.current,
+          outputLanguageRef.current,
+        );
+        voice =
+          langVoices.find((v) => v.isNeural && v.isDownloaded) ||
+          langVoices.find((v) => v.isNeural) ||
+          langVoices[0] ||
+          availableVoicesRef.current[0];
         if (voice && !targetVoiceUri) {
           setSelectedVoiceUri(voice.voiceURI);
         }
       }
 
-      const isNeural = Boolean(voice?.isNeural || isNeuralVoiceUri(voice?.voiceURI || targetVoiceUri));
+      const isNeural = Boolean(
+        voice?.isNeural || isNeuralVoiceUri(voice?.voiceURI || targetVoiceUri),
+      );
 
       const attachAudioHandlers = (audio: HTMLAudioElement, audioUrl: string) => {
         // Apply the latest speed dynamically for the upcoming segment
@@ -689,7 +720,11 @@ export function TtsProvider({ children }: { children: React.ReactNode }) {
 
           promise
             .then((wavBlob: Blob) => {
-              if (synthesisSessionIdRef.current !== currentSessionId || loadingIndexRef.current !== index || !isPlayingRef.current) {
+              if (
+                synthesisSessionIdRef.current !== currentSessionId ||
+                loadingIndexRef.current !== index ||
+                !isPlayingRef.current
+              ) {
                 setIsNeuralLoading(false);
                 return;
               }
@@ -705,7 +740,11 @@ export function TtsProvider({ children }: { children: React.ReactNode }) {
               }
             })
             .catch((err: any) => {
-              if (synthesisSessionIdRef.current !== currentSessionId || loadingIndexRef.current !== index) return;
+              if (
+                synthesisSessionIdRef.current !== currentSessionId ||
+                loadingIndexRef.current !== index
+              )
+                return;
               setIsNeuralLoading(false);
               console.error("Neural synthesis error:", err);
               toast.error(getFriendlyErrorMessage(err, "Failed to generate neural speech"));
@@ -749,7 +788,11 @@ export function TtsProvider({ children }: { children: React.ReactNode }) {
                 void refreshVoices(true);
               }
 
-              if (synthesisSessionIdRef.current !== currentSessionId || loadingIndexRef.current !== index || !isPlayingRef.current) {
+              if (
+                synthesisSessionIdRef.current !== currentSessionId ||
+                loadingIndexRef.current !== index ||
+                !isPlayingRef.current
+              ) {
                 setIsNeuralLoading(false);
                 return;
               }
@@ -766,7 +809,11 @@ export function TtsProvider({ children }: { children: React.ReactNode }) {
             })
             .catch((err: any) => {
               if (toastId) toast.dismiss(toastId);
-              if (synthesisSessionIdRef.current !== currentSessionId || loadingIndexRef.current !== index) return;
+              if (
+                synthesisSessionIdRef.current !== currentSessionId ||
+                loadingIndexRef.current !== index
+              )
+                return;
               setIsNeuralLoading(false);
               console.error("Neural synthesis error:", err);
               toast.error(getFriendlyErrorMessage(err, "Failed to generate neural speech"));
@@ -786,7 +833,8 @@ export function TtsProvider({ children }: { children: React.ReactNode }) {
 
         if (voice) {
           const nativeVoices = window.speechSynthesis.getVoices();
-          const nativeVoice = nativeVoices.find((v) => v.voiceURI === voice.voiceURI) ||
+          const nativeVoice =
+            nativeVoices.find((v) => v.voiceURI === voice.voiceURI) ||
             nativeVoices.find((v) => v.lang.startsWith(voice.lang.slice(0, 2)));
           if (nativeVoice) {
             utterance.voice = nativeVoice;
@@ -812,7 +860,15 @@ export function TtsProvider({ children }: { children: React.ReactNode }) {
         window.speechSynthesis.speak(utterance);
       }
     },
-    [continuousPlay, processPreSynthesizeQueue, refreshVoices, setSelectedVoiceUri, setIsPlaying, setIsPaused, setCurrentSentenceIndex],
+    [
+      continuousPlay,
+      processPreSynthesizeQueue,
+      refreshVoices,
+      setSelectedVoiceUri,
+      setIsPlaying,
+      setIsPaused,
+      setCurrentSentenceIndex,
+    ],
   );
 
   // Public play control
@@ -827,13 +883,13 @@ export function TtsProvider({ children }: { children: React.ReactNode }) {
 
       const list = splitSentences(text);
       if (list.length === 0) return;
-      
+
       setSentences(list);
       setCurrentTextSource(source);
       setActivePageNumber(pageNumber);
       setIsPlaying(true);
       setIsPaused(false);
-      
+
       const targetVoiceUri = selectedVoiceUriRef.current || localStorage.getItem(TTS_VOICE_URI_LS);
       const isTargetNeural = isNeuralVoiceUri(targetVoiceUri);
 
@@ -848,7 +904,16 @@ export function TtsProvider({ children }: { children: React.ReactNode }) {
         speakSentence(startIndex, list);
       }
     },
-    [speakSentence, cleanupAudio, ensureNeuralEngine, setIsPlaying, setIsPaused, setSentences, setCurrentTextSource, setActivePageNumber],
+    [
+      speakSentence,
+      cleanupAudio,
+      ensureNeuralEngine,
+      setIsPlaying,
+      setIsPaused,
+      setSentences,
+      setCurrentTextSource,
+      setActivePageNumber,
+    ],
   );
 
   const pause = useCallback(() => {
@@ -868,7 +933,7 @@ export function TtsProvider({ children }: { children: React.ReactNode }) {
   const resume = useCallback(() => {
     setIsPaused(false);
     if (audioRef.current && !audioRef.current.ended) {
-      audioRef.current.play().catch(e => console.error("Resume failed:", e));
+      audioRef.current.play().catch((e) => console.error("Resume failed:", e));
     } else {
       speakSentence(currentSentenceIndexRef.current, sentencesRef.current);
     }
@@ -890,7 +955,15 @@ export function TtsProvider({ children }: { children: React.ReactNode }) {
     setCurrentSentenceIndex(0);
     setCurrentTextSource(null);
     setActivePageNumber(null);
-  }, [cleanupAudio, setIsPlaying, setIsPaused, setSentences, setCurrentSentenceIndex, setCurrentTextSource, setActivePageNumber]);
+  }, [
+    cleanupAudio,
+    setIsPlaying,
+    setIsPaused,
+    setSentences,
+    setCurrentSentenceIndex,
+    setCurrentTextSource,
+    setActivePageNumber,
+  ]);
 
   const nextSentence = useCallback(() => {
     if (!isPlayingRef.current) return;
@@ -910,25 +983,34 @@ export function TtsProvider({ children }: { children: React.ReactNode }) {
     speakSentence(Math.max(0, currentSentenceIndexRef.current - 1), sentencesRef.current);
   }, [speakSentence, cleanupAudio]);
 
-  const seekSentence = useCallback((index: number) => {
-    if (!isPlayingRef.current) return;
-    cleanupAudio();
-    if (typeof window !== "undefined" && window.speechSynthesis) {
-      window.speechSynthesis.cancel();
-    }
-    speakSentence(index, sentencesRef.current);
-  }, [speakSentence, cleanupAudio]);
+  const seekSentence = useCallback(
+    (index: number) => {
+      if (!isPlayingRef.current) return;
+      cleanupAudio();
+      if (typeof window !== "undefined" && window.speechSynthesis) {
+        window.speechSynthesis.cancel();
+      }
+      speakSentence(index, sentencesRef.current);
+    },
+    [speakSentence, cleanupAudio],
+  );
 
-  const downloadVoice = useCallback(async (voiceUri: string, onProgress?: (p: number) => void) => {
-    await ensureNeuralEngine();
-    await downloadVoiceFromCache(voiceUri, onProgress);
-    await refreshVoices(true);
-  }, [ensureNeuralEngine, refreshVoices]);
+  const downloadVoice = useCallback(
+    async (voiceUri: string, onProgress?: (p: number) => void) => {
+      await ensureNeuralEngine();
+      await downloadVoiceFromCache(voiceUri, onProgress);
+      await refreshVoices(true);
+    },
+    [ensureNeuralEngine, refreshVoices],
+  );
 
-  const deleteVoice = useCallback(async (voiceUri: string) => {
-    await deleteCachedVoice(voiceUri);
-    await refreshVoices(true);
-  }, [refreshVoices]);
+  const deleteVoice = useCallback(
+    async (voiceUri: string) => {
+      await deleteCachedVoice(voiceUri);
+      await refreshVoices(true);
+    },
+    [refreshVoices],
+  );
 
   // Clean up on unmount
   useEffect(() => {
@@ -960,7 +1042,7 @@ export function TtsProvider({ children }: { children: React.ReactNode }) {
         if (typeof window !== "undefined" && window.speechSynthesis) {
           window.speechSynthesis.cancel();
         }
-        
+
         // Revoke any active URL
         if (activeAudioUrlRef.current) {
           try {
@@ -968,7 +1050,7 @@ export function TtsProvider({ children }: { children: React.ReactNode }) {
           } catch (e) {}
           activeAudioUrlRef.current = null;
         }
-        
+
         // Revoke pre-synthesized queue because it was for the old voice!
         preSynthesizedMapRef.current.forEach((entry) => {
           if (entry.url) {

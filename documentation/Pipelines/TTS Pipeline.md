@@ -35,7 +35,7 @@ flowchart LR
 
 ### 3. Pre-Synthesis Pipelining
 
-- While one sentence plays, `preSynthesizeNext()` compiles the *next* sentence's neural audio in the background so playback advances without an audible gap between sentences.
+- While one sentence plays, `preSynthesizeNext()` compiles the _next_ sentence's neural audio in the background so playback advances without an audible gap between sentences.
 
 ### 4. Playback & Highlighting
 

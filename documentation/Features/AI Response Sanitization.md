@@ -7,7 +7,7 @@
 
 ## Problem
 
-Despite system prompts explicitly forbidding markdown syntax (FORMAT_RULES), many LLM models still emit markdown artifacts in their responses — heading hashes (`### Title`), bold/italic markers (`**text**`, `*text*`), code fences (`` ``` ``), blockquotes (`> quote`), and bullet asterisks (`* item`). These artifacts cause two problems:
+Despite system prompts explicitly forbidding markdown syntax (FORMAT_RULES), many LLM models still emit markdown artifacts in their responses — heading hashes (`### Title`), bold/italic markers (`**text**`, `*text*`), code fences (` ``` `), blockquotes (`> quote`), and bullet asterisks (`* item`). These artifacts cause two problems:
 
 1. **TTS mispronunciation:** The neural TTS engine reads markdown symbols aloud ("hashtag", "asterisk", "star"), producing jarring audio.
 2. **Dirty saved records:** IndexedDB and Supabase cache entries contain formatting noise rather than clean text.
@@ -20,7 +20,7 @@ A deterministic regex-based sanitizer (`cleanAiText`) is applied at three points
 
 ### Sanitization Steps (in order)
 
-1. Remove markdown code fences (`` ```lang `` and standalone `` ``` ``)
+1. Remove markdown code fences (` ```lang ` and standalone ` ``` `)
 2. Remove heading hashes at line start (`### Heading` → `Heading`)
 3. Remove bullet asterisks at line start (`* Item` → `Item`)
 4. Unwrap bold/italic/bold-italic markdown (`***text***`, `**text**`, `*text*` → `text`)
@@ -32,12 +32,12 @@ A deterministic regex-based sanitizer (`cleanAiText`) is applied at three points
 
 ### Integration Points
 
-| Point | File | When Applied |
-| :---- | :--- | :----------- |
-| **Streaming UI flush** | `usePageTranslation.ts` | Every 60fps UI flush during SSE streaming |
-| **Final IDB write** | `usePageTranslation.ts` | Before `upsertPageAi()` writes the completed result to IndexedDB |
-| **IDB write guard** | `storage/pages.ts` | Double-check sanitization inside `upsertPageAi()` before persisting |
-| **TTS sentence split** | `tts.ts` | Before `splitSentences()` processes text for audio playback |
+| Point                  | File                    | When Applied                                                        |
+| :--------------------- | :---------------------- | :------------------------------------------------------------------ |
+| **Streaming UI flush** | `usePageTranslation.ts` | Every 60fps UI flush during SSE streaming                           |
+| **Final IDB write**    | `usePageTranslation.ts` | Before `upsertPageAi()` writes the completed result to IndexedDB    |
+| **IDB write guard**    | `storage/pages.ts`      | Double-check sanitization inside `upsertPageAi()` before persisting |
+| **TTS sentence split** | `tts.ts`                | Before `splitSentences()` processes text for audio playback         |
 
 The function is re-exported through `pageAi.ts` for convenient import across the codebase.
 

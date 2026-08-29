@@ -3,8 +3,6 @@ import { isNetworkError, OFFLINE_MESSAGE } from "./network";
 declare const __OPENROUTER_DEFAULT_KEY__: string | undefined;
 declare const __OPENROUTER_DEFAULT_MODEL__: string | undefined;
 
-
-
 /** Rough heuristic: 1 token ≈ 4 characters of English text. */
 export function estimateTokens(text: string): number {
   if (!text) return 0;
@@ -107,7 +105,6 @@ export function getKeyStatus(): KeyStatus {
   return getKey() ? "valid" : "missing";
 }
 
-
 export function setKeyStatus(s: KeyStatus): void {
   if (typeof window === "undefined") return;
   if (s === "unknown") localStorage.removeItem(KEY_STATUS_LS);
@@ -177,7 +174,10 @@ export function getDefaultModelSync(): string {
   } catch {
     // Ignore ReferenceError if not defined
   }
-  if (typeof import.meta !== "undefined" && (import.meta as any).env?.VITE_OPENROUTER_DEFAULT_MODEL) {
+  if (
+    typeof import.meta !== "undefined" &&
+    (import.meta as any).env?.VITE_OPENROUTER_DEFAULT_MODEL
+  ) {
     return (import.meta as any).env.VITE_OPENROUTER_DEFAULT_MODEL.trim();
   }
   if (typeof import.meta !== "undefined" && (import.meta as any).env?.OPENROUTER_DEFAULT_MODEL) {
@@ -391,7 +391,8 @@ export const CURATED_MODELS: ORModel[] = [
     id: "liquid/lfm-2.5-2.6b:free",
     name: "Liquid LFM 2.5 (Free, Ultra Fast)",
     context_length: 32768,
-    description: "Liquid AI's highly efficient neural architecture optimized for rapid reasoning and streaming.",
+    description:
+      "Liquid AI's highly efficient neural architecture optimized for rapid reasoning and streaming.",
   },
   {
     id: "google/gemini-2.0-flash-exp:free",
@@ -409,7 +410,8 @@ export const CURATED_MODELS: ORModel[] = [
     id: "anthropic/claude-3.5-sonnet",
     name: "Claude 3.5 Sonnet",
     context_length: 200000,
-    description: "Anthropic's state-of-the-art model for nuanced explanations and reading comprehension.",
+    description:
+      "Anthropic's state-of-the-art model for nuanced explanations and reading comprehension.",
   },
   {
     id: "openai/gpt-4o-mini",
@@ -750,12 +752,7 @@ export const TRANSLATION_STYLES: TranslationStyleSpec[] = [
   },
 ];
 
-export type ExplanationStyle =
-  | "Standard"
-  | "Simple"
-  | "Story"
-  | "Deep"
-  | "AI";
+export type ExplanationStyle = "Standard" | "Simple" | "Story" | "Deep" | "AI";
 
 export type ExplanationStyleSpec = StyleSpec<ExplanationStyle>;
 
@@ -845,8 +842,7 @@ export function buildPagePayload(i: BuildPagePayloadInput): Record<string, unkno
   let system: string;
 
   if (i.mode === "translate") {
-    const style =
-      TRANSLATION_STYLES.find((s) => s.id === i.style) ?? TRANSLATION_STYLES[0];
+    const style = TRANSLATION_STYLES.find((s) => s.id === i.style) ?? TRANSLATION_STYLES[0];
 
     system = [
       "You are an expert document translator in a PDF reader.",
@@ -858,7 +854,9 @@ export function buildPagePayload(i: BuildPagePayloadInput): Record<string, unkno
   } else {
     const style =
       EXPLANATION_STYLES.find((s) => s.id === i.style) ??
-      (LEGACY_STYLE_MAP[i.style] ? EXPLANATION_STYLES.find((s) => s.id === LEGACY_STYLE_MAP[i.style]) : undefined) ??
+      (LEGACY_STYLE_MAP[i.style]
+        ? EXPLANATION_STYLES.find((s) => s.id === LEGACY_STYLE_MAP[i.style])
+        : undefined) ??
       EXPLANATION_STYLES[0];
 
     system = [

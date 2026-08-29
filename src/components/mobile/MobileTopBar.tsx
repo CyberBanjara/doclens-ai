@@ -10,7 +10,12 @@ interface MobileTopBarProps {
 
 /** Translucent, permanently fixed immersive-reader header — stays visible at
  * all times regardless of scroll position, matching MobileBottomBar. */
-export function MobileTopBar({ docName, activePage, pageCount, onOpenPageJump }: MobileTopBarProps) {
+export function MobileTopBar({
+  docName,
+  activePage,
+  pageCount,
+  onOpenPageJump,
+}: MobileTopBarProps) {
   return (
     <header className="pointer-events-none absolute inset-x-0 top-0 z-30 flex items-center gap-2 px-3 pb-4 pt-[max(0.75rem,env(safe-area-inset-top))]">
       <div className="absolute inset-0 -z-10 bg-gradient-to-b from-background/90 via-background/60 to-transparent backdrop-blur-md [mask-image:linear-gradient(to_bottom,black_60%,transparent)]" />

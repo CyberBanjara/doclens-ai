@@ -30,7 +30,7 @@ Browser (Client)
 
 ```mermaid
 graph LR
-    network[network.ts] 
+    network[network.ts]
     openrouter[openrouter.ts] --> network
     r2[r2.ts]
     r2cache[r2-cache.ts] --> r2
@@ -63,13 +63,13 @@ There is no shared "env/config" module — the `ENABLE_GLOBAL_SYNC` feature-flag
 
 ## State Ownership
 
-| Layer | Owns | Where |
-| ------ | ------ | ------- |
-| `AuthContext` | Firebase user session | `src/context/AuthContext.tsx` |
-| `TtsContext` | TTS playback state machine (native + neural), voice catalog, continuous-play | `src/context/TtsContext.tsx` |
-| `storage.ts` (IndexedDB) | Documents, per-page text + AI results, thumbnails | `src/lib/storage.ts` |
-| `localStorage` | AI defaults (model/mode/style/temperature/language), TTS preferences | scattered per-module getters/setters in `openrouter.ts`, `theme.ts`, `TtsContext.tsx` |
-| URL query params | Active page number (`?page=N`) | `src/routes/doc.$id.tsx` |
+| Layer                    | Owns                                                                         | Where                                                                                 |
+| ------------------------ | ---------------------------------------------------------------------------- | ------------------------------------------------------------------------------------- |
+| `AuthContext`            | Firebase user session                                                        | `src/context/AuthContext.tsx`                                                         |
+| `TtsContext`             | TTS playback state machine (native + neural), voice catalog, continuous-play | `src/context/TtsContext.tsx`                                                          |
+| `storage.ts` (IndexedDB) | Documents, per-page text + AI results, thumbnails                            | `src/lib/storage.ts`                                                                  |
+| `localStorage`           | AI defaults (model/mode/style/temperature/language), TTS preferences         | scattered per-module getters/setters in `openrouter.ts`, `theme.ts`, `TtsContext.tsx` |
+| URL query params         | Active page number (`?page=N`)                                               | `src/routes/doc.$id.tsx`                                                              |
 
 ---
 
@@ -77,13 +77,13 @@ There is no shared "env/config" module — the `ENABLE_GLOBAL_SYNC` feature-flag
 
 Several components that don't have a direct parent/child or context relationship coordinate via typed-by-convention (but currently untyped) `CustomEvent`s dispatched on `window`:
 
-| Event | Dispatched by | Listened by | Purpose |
-| ------ | --------------- | ------------- | --------- |
-| `doclens:page-ready` | `PageWorkstation.tsx` | `RightPanel.tsx` | A page's AI result finished generating |
-| `doclens:ensure-page-ready` | `RightPanel.tsx` | `PageWorkstation.tsx` | Request translation for a page (current or look-ahead) |
-| `doclens:translate-selection` | `PdfViewer.tsx` | `PageWorkstation.tsx` | User selected text and chose "Translate" |
+| Event                                                     | Dispatched by                            | Listened by                        | Purpose                                                    |
+| --------------------------------------------------------- | ---------------------------------------- | ---------------------------------- | ---------------------------------------------------------- |
+| `doclens:page-ready`                                      | `PageWorkstation.tsx`                    | `RightPanel.tsx`                   | A page's AI result finished generating                     |
+| `doclens:ensure-page-ready`                               | `RightPanel.tsx`                         | `PageWorkstation.tsx`              | Request translation for a page (current or look-ahead)     |
+| `doclens:translate-selection`                             | `PdfViewer.tsx`                          | `PageWorkstation.tsx`              | User selected text and chose "Translate"                   |
 | `doclens:scroll-to-pdf` / `doclens:scroll-to-workstation` | `RightPanel.tsx` / `PageWorkstation.tsx` | `PdfViewer.tsx` / `RightPanel.tsx` | Sync scroll position between the PDF pane and the AI panel |
-| `doclens:tts-next-page` | `TtsContext.tsx` | `RightPanel.tsx` | Continuous-play auto-advance to the next page |
+| `doclens:tts-next-page`                                   | `TtsContext.tsx`                         | `RightPanel.tsx`                   | Continuous-play auto-advance to the next page              |
 
 See [[End-to-End Pipeline]] for how these events chain together across a full read.
 

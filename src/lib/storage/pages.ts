@@ -1,6 +1,21 @@
 import type { PageExtraction } from "../pdf";
-import { db, safePut, withDocLock, normalizeDoc, pageKey, pageRange, PAGES, STORE } from "./idbUtils";
-import { StorageError, type PageAi, type PageAiSummaryEntry, type PageDataRecord, type StoredPage } from "./types";
+import {
+  db,
+  safePut,
+  withDocLock,
+  normalizeDoc,
+  pageKey,
+  pageRange,
+  PAGES,
+  STORE,
+} from "./idbUtils";
+import {
+  StorageError,
+  type PageAi,
+  type PageAiSummaryEntry,
+  type PageDataRecord,
+  type StoredPage,
+} from "./types";
 import { cleanAiText } from "../cleanAiText";
 
 /** Persist freshly-extracted pages, splitting them into individual records. */

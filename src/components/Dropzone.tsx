@@ -107,9 +107,7 @@ export function Dropzone({ onFile, compact = false, gridCard = false }: Dropzone
         <h3 className="text-base font-bold text-foreground group-hover:text-primary transition-colors">
           Add a PDF
         </h3>
-        <p className="mt-1.5 text-xs text-muted-foreground">
-          Drag & drop or click to upload
-        </p>
+        <p className="mt-1.5 text-xs text-muted-foreground">Drag & drop or click to upload</p>
       </div>
     );
   }

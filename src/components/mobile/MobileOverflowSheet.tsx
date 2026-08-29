@@ -112,7 +112,9 @@ export function MobileOverflowSheet({
       <DrawerContent>
         <DrawerHeader>
           <DrawerTitle>Document Actions</DrawerTitle>
-          <DrawerDescription>Analysis, export, and sync options for this document.</DrawerDescription>
+          <DrawerDescription>
+            Analysis, export, and sync options for this document.
+          </DrawerDescription>
         </DrawerHeader>
         <div className="flex flex-col gap-1 overflow-y-auto px-3 pb-4">
           {items.map((item) => (

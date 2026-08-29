@@ -1,4 +1,12 @@
-import { KeyRound, Eye, EyeOff, ExternalLink, Sparkles, CheckCircle2, AlertCircle } from "lucide-react";
+import {
+  KeyRound,
+  Eye,
+  EyeOff,
+  ExternalLink,
+  Sparkles,
+  CheckCircle2,
+  AlertCircle,
+} from "lucide-react";
 import { useState } from "react";
 
 type KeyStatus = "unknown" | "missing" | "valid" | "invalid" | "checking";
@@ -106,9 +114,11 @@ export function ApiKeySection({
             placeholder="sk-or-v1-..."
             value={customKey}
             onChange={(e) => onCustomKeyChange(e.target.value)}
-            style={{
-              WebkitTextSecurity: showKey ? "none" : "disc",
-            } as React.CSSProperties}
+            style={
+              {
+                WebkitTextSecurity: showKey ? "none" : "disc",
+              } as React.CSSProperties
+            }
             className="w-full rounded-xl border border-border bg-background pl-3 pr-10 py-2.5 text-sm font-mono outline-none focus:border-primary focus:ring-1 focus:ring-primary transition-colors"
           />
           <button

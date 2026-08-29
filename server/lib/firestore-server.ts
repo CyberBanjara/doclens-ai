@@ -151,7 +151,8 @@ export async function syncUserInFirestore(
         lastLoginAt: nowIso,
         updatedAt: nowIso,
       };
-      const mask = "updateMask.fieldPaths=name&updateMask.fieldPaths=photoURL&updateMask.fieldPaths=lastLoginAt&updateMask.fieldPaths=updatedAt";
+      const mask =
+        "updateMask.fieldPaths=name&updateMask.fieldPaths=photoURL&updateMask.fieldPaths=lastLoginAt&updateMask.fieldPaths=updatedAt";
       const url = `${config.baseUrl}/users/${encodeURIComponent(googleUser.uid)}?${mask}&key=${config.apiKey}`;
 
       const res = await fetch(url, {
@@ -296,5 +297,139 @@ export async function updateUserRoleInFirestore(
   } catch (err) {
     console.error(`Error updating role for ${targetUid}:`, err);
     return false;
+  }
+}
+
+export interface FirestoreSupporter {
+  id?: string;
+  amount: number;
+  currency: string;
+  isAnonymous: boolean;
+  supporterName: string;
+  supporterEmail?: string;
+  userUid?: string;
+  userPhotoURL?: string;
+  message?: string;
+  tier?: string;
+  razorpayPaymentId: string;
+  razorpayOrderId?: string;
+  createdAt: string;
+}
+
+/**
+ * Record a new community contribution / supporter in Firestore.
+ */
+export async function createSupporterInFirestore(
+  data: FirestoreSupporter,
+): Promise<FirestoreSupporter | null> {
+  const config = getFirestoreBaseUrl();
+  if (!config) return null;
+
+  try {
+    const url = `${config.baseUrl}/supporters?key=${config.apiKey}`;
+    const payload = {
+      amount: data.amount,
+      currency: data.currency || "INR",
+      isAnonymous: Boolean(data.isAnonymous),
+      supporterName: data.isAnonymous
+        ? "Anonymous Supporter"
+        : data.supporterName || "Community Supporter",
+      supporterEmail: data.supporterEmail || "",
+      userUid: data.userUid || "",
+      userPhotoURL: data.isAnonymous ? "" : data.userPhotoURL || "",
+      message: data.message || "",
+      tier: data.tier || "Supporter",
+      razorpayPaymentId: data.razorpayPaymentId || "",
+      razorpayOrderId: data.razorpayOrderId || "",
+      createdAt: data.createdAt || new Date().toISOString(),
+    };
+
+    const res = await fetch(url, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ fields: encodeFirestoreFields(payload) }),
+    });
+
+    if (!res.ok) {
+      console.error("Firestore create supporter failed:", await res.text());
+      return null;
+    }
+
+    const resData = await res.json();
+    const docId = resData.name ? resData.name.split("/").pop() : undefined;
+    return {
+      ...payload,
+      id: docId,
+    };
+  } catch (err) {
+    console.error("Error creating supporter in Firestore:", err);
+    return null;
+  }
+}
+
+/**
+ * List all supporters and aggregate funding statistics from Firestore.
+ */
+export async function listSupportersFromFirestore(): Promise<{
+  supporters: FirestoreSupporter[];
+  totalRaised: number;
+  totalSupporters: number;
+}> {
+  const config = getFirestoreBaseUrl();
+  if (!config) {
+    return { supporters: [], totalRaised: 0, totalSupporters: 0 };
+  }
+
+  try {
+    const url = `${config.baseUrl}/supporters?pageSize=200&key=${config.apiKey}`;
+    const res = await fetch(url);
+    if (!res.ok) {
+      console.warn("Firestore list supporters warning:", await res.text());
+      return { supporters: [], totalRaised: 0, totalSupporters: 0 };
+    }
+
+    const data = await res.json();
+    const documents = data.documents || [];
+
+    let totalRaised = 0;
+    const supporters: FirestoreSupporter[] = [];
+
+    for (const doc of documents) {
+      const decoded = decodeFirestoreDocument(doc);
+      if (!decoded) continue;
+      const docId = doc.name ? doc.name.split("/").pop() : undefined;
+      const amount =
+        typeof decoded.amount === "number" ? decoded.amount : Number(decoded.amount) || 0;
+      totalRaised += amount;
+
+      supporters.push({
+        id: docId,
+        amount,
+        currency: decoded.currency || "INR",
+        isAnonymous: Boolean(decoded.isAnonymous),
+        supporterName: decoded.isAnonymous
+          ? "Anonymous Supporter"
+          : decoded.supporterName || "Anonymous Supporter",
+        // Email is intentionally omitted / sanitized for public safety
+        userUid: decoded.isAnonymous ? undefined : decoded.userUid,
+        userPhotoURL: decoded.isAnonymous ? undefined : decoded.userPhotoURL,
+        message: decoded.message || "",
+        tier: decoded.tier || "Supporter",
+        razorpayPaymentId: decoded.razorpayPaymentId || "",
+        createdAt: decoded.createdAt || new Date().toISOString(),
+      });
+    }
+
+    // Sort by createdAt descending (most recent first)
+    supporters.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+
+    return {
+      supporters,
+      totalRaised,
+      totalSupporters: supporters.length,
+    };
+  } catch (err) {
+    console.error("Failed to query supporters from Firestore:", err);
+    return { supporters: [], totalRaised: 0, totalSupporters: 0 };
   }
 }

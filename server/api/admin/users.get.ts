@@ -8,7 +8,8 @@ export default defineEventHandler(async (event) => {
     await requireSessionFromEvent(event, ["admin"]);
 
     // 2. Extract client authorization token for Firestore security rules
-    const authHeader = getHeader(event, "authorization") || getHeader(event, "x-firebase-token") || "";
+    const authHeader =
+      getHeader(event, "authorization") || getHeader(event, "x-firebase-token") || "";
     const token = authHeader.startsWith("Bearer ")
       ? authHeader.substring(7)
       : authHeader || undefined;

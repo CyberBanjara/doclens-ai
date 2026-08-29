@@ -49,14 +49,15 @@ function splitLineByPunctuation(text: string): string[] {
   // We exclude commas (,) to let the native TTS engine handle them continuously with a natural micro-pause.
   const delimiterRegex = /([.|!?\u0964\u0965]+(?:\s+|$))/;
   const tokens = text.split(delimiterRegex);
-  
+
   const chunks: string[] = [];
-  const nonSentenceEndingAbbrev = /\b(?:[A-Za-z]|Adm|Assn|Ave|Blvd|Bldg|Brig|Capt|Cmdr|Col|Comdr|Corp|Cpl|Ct|Dept|Dr|Drs|Fig|Figs|Fig|Fr|Ft|Gen|Gov|Hon|Inc|Jr|Lieut|Ln|Lt|Ltd|Maj|Messrs|Mmes|Mr|Mrs|Ms|Mt|Mx|No|Nos|Pl|Pres|Prof|Rd|Rep|Reps|Rev|Sen|Sens|Sgt|Sr|St|Ste|Univ|Jan|Feb|Mar|Apr|Aug|Sep|Sept|Oct|Nov|Dec|dept|ed|eds|est|fig|figs|misc|pp|ref|refs|vol|vols|vs)\.$/;
+  const nonSentenceEndingAbbrev =
+    /\b(?:[A-Za-z]|Adm|Assn|Ave|Blvd|Bldg|Brig|Capt|Cmdr|Col|Comdr|Corp|Cpl|Ct|Dept|Dr|Drs|Fig|Figs|Fig|Fr|Ft|Gen|Gov|Hon|Inc|Jr|Lieut|Ln|Lt|Ltd|Maj|Messrs|Mmes|Mr|Mrs|Ms|Mt|Mx|No|Nos|Pl|Pres|Prof|Rd|Rep|Reps|Rev|Sen|Sens|Sgt|Sr|St|Ste|Univ|Jan|Feb|Mar|Apr|Aug|Sep|Sept|Oct|Nov|Dec|dept|ed|eds|est|fig|figs|misc|pp|ref|refs|vol|vols|vs)\.$/;
 
   for (let i = 0; i < tokens.length; i += 2) {
     const part = tokens[i];
     const sep = tokens[i + 1] || "";
-    
+
     if (part) {
       const fullPart = part + sep;
       // If the previous chunk ended with an abbreviation, merge them

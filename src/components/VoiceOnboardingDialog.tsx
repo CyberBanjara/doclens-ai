@@ -30,8 +30,14 @@ interface VoiceOnboardingDialogProps {
 
 export function VoiceOnboardingDialog({ open, onOpenChange, onReady }: VoiceOnboardingDialogProps) {
   const isMobile = useIsMobile();
-  const { outputLanguage, availableVoices, setOutputLanguage, setSelectedVoiceUri, downloadVoice, refreshVoices } =
-    useTts();
+  const {
+    outputLanguage,
+    availableVoices,
+    setOutputLanguage,
+    setSelectedVoiceUri,
+    downloadVoice,
+    refreshVoices,
+  } = useTts();
 
   const [pickedLanguage, setPickedLanguage] = useState(outputLanguage);
   const [pickedVoiceUri, setPickedVoiceUri] = useState<string | null>(null);

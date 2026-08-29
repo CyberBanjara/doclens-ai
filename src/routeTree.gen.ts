@@ -11,6 +11,7 @@
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as TermsOfServiceRouteImport } from './routes/terms-of-service'
 import { Route as TermsRouteImport } from './routes/terms'
+import { Route as SupportRouteImport } from './routes/support'
 import { Route as SettingsRouteImport } from './routes/settings'
 import { Route as PrivacyPolicyRouteImport } from './routes/privacy-policy'
 import { Route as PrivacyRouteImport } from './routes/privacy'
@@ -29,6 +30,11 @@ const TermsOfServiceRoute = TermsOfServiceRouteImport.update({
 const TermsRoute = TermsRouteImport.update({
   id: '/terms',
   path: '/terms',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const SupportRoute = SupportRouteImport.update({
+  id: '/support',
+  path: '/support',
   getParentRoute: () => rootRouteImport,
 } as any)
 const SettingsRoute = SettingsRouteImport.update({
@@ -85,6 +91,7 @@ export interface FileRoutesByFullPath {
   '/privacy': typeof PrivacyRoute
   '/privacy-policy': typeof PrivacyPolicyRoute
   '/settings': typeof SettingsRoute
+  '/support': typeof SupportRoute
   '/terms': typeof TermsRoute
   '/terms-of-service': typeof TermsOfServiceRoute
   '/doc/$id': typeof DocIdRoute
@@ -98,6 +105,7 @@ export interface FileRoutesByTo {
   '/privacy': typeof PrivacyRoute
   '/privacy-policy': typeof PrivacyPolicyRoute
   '/settings': typeof SettingsRoute
+  '/support': typeof SupportRoute
   '/terms': typeof TermsRoute
   '/terms-of-service': typeof TermsOfServiceRoute
   '/doc/$id': typeof DocIdRoute
@@ -112,6 +120,7 @@ export interface FileRoutesById {
   '/privacy': typeof PrivacyRoute
   '/privacy-policy': typeof PrivacyPolicyRoute
   '/settings': typeof SettingsRoute
+  '/support': typeof SupportRoute
   '/terms': typeof TermsRoute
   '/terms-of-service': typeof TermsOfServiceRoute
   '/doc/$id': typeof DocIdRoute
@@ -127,6 +136,7 @@ export interface FileRouteTypes {
     | '/privacy'
     | '/privacy-policy'
     | '/settings'
+    | '/support'
     | '/terms'
     | '/terms-of-service'
     | '/doc/$id'
@@ -140,6 +150,7 @@ export interface FileRouteTypes {
     | '/privacy'
     | '/privacy-policy'
     | '/settings'
+    | '/support'
     | '/terms'
     | '/terms-of-service'
     | '/doc/$id'
@@ -153,6 +164,7 @@ export interface FileRouteTypes {
     | '/privacy'
     | '/privacy-policy'
     | '/settings'
+    | '/support'
     | '/terms'
     | '/terms-of-service'
     | '/doc/$id'
@@ -167,6 +179,7 @@ export interface RootRouteChildren {
   PrivacyRoute: typeof PrivacyRoute
   PrivacyPolicyRoute: typeof PrivacyPolicyRoute
   SettingsRoute: typeof SettingsRoute
+  SupportRoute: typeof SupportRoute
   TermsRoute: typeof TermsRoute
   TermsOfServiceRoute: typeof TermsOfServiceRoute
   DocIdRoute: typeof DocIdRoute
@@ -187,6 +200,13 @@ declare module '@tanstack/react-router' {
       path: '/terms'
       fullPath: '/terms'
       preLoaderRoute: typeof TermsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/support': {
+      id: '/support'
+      path: '/support'
+      fullPath: '/support'
+      preLoaderRoute: typeof SupportRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/settings': {
@@ -263,6 +283,7 @@ const rootRouteChildren: RootRouteChildren = {
   PrivacyRoute: PrivacyRoute,
   PrivacyPolicyRoute: PrivacyPolicyRoute,
   SettingsRoute: SettingsRoute,
+  SupportRoute: SupportRoute,
   TermsRoute: TermsRoute,
   TermsOfServiceRoute: TermsOfServiceRoute,
   DocIdRoute: DocIdRoute,

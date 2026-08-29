@@ -89,10 +89,7 @@ export const Route = createFileRoute("/doc/$id")({
     return { page: p > 0 && Number.isFinite(p) ? Math.floor(p) : undefined };
   },
   head: () => ({
-    meta: [
-      { title: "Anuwad — Document Reader" },
-      { name: "robots", content: "noindex, nofollow" },
-    ],
+    meta: [{ title: "Anuwad — Document Reader" }, { name: "robots", content: "noindex, nofollow" }],
   }),
 });
 
@@ -386,7 +383,9 @@ function DocPage() {
         return;
       }
 
-      toast.loading(`Uploading to Cloudflare R2 (${finalCategory || "uncategorized"})...`, { id: toastId });
+      toast.loading(`Uploading to Cloudflare R2 (${finalCategory || "uncategorized"})...`, {
+        id: toastId,
+      });
 
       const reader = new FileReader();
       const base64Promise = new Promise<string>((resolve, reject) => {
@@ -420,7 +419,9 @@ function DocPage() {
             if (result) {
               const thumbBase64 = result.split(",")[1];
               if (thumbBase64) {
-                uploadThumbnailToR2({ data: { fileKey: res.key, base64Data: thumbBase64 } }).catch(() => {});
+                uploadThumbnailToR2({ data: { fileKey: res.key, base64Data: thumbBase64 } }).catch(
+                  () => {},
+                );
               }
             }
           };
@@ -433,7 +434,9 @@ function DocPage() {
       if (res.alreadyExists) {
         toast.warning(`Document is already uploaded in "${res.key}".`, { id: toastId });
       } else {
-        toast.success(`Uploaded successfully under folder prefix "${res.category}/"!`, { id: toastId });
+        toast.success(`Uploaded successfully under folder prefix "${res.category}/"!`, {
+          id: toastId,
+        });
       }
     } catch (e: any) {
       console.error(e);
@@ -456,7 +459,10 @@ function DocPage() {
       console.error(e);
       const msg = e?.message || String(e);
       if (msg.includes("relation") && msg.includes("does not exist")) {
-        toast.error("Table pdf_extractions does not exist in Supabase. Please run the SQL schema migration.", { id: toastId, duration: 8000 });
+        toast.error(
+          "Table pdf_extractions does not exist in Supabase. Please run the SQL schema migration.",
+          { id: toastId, duration: 8000 },
+        );
       } else {
         toast.error(msg, { id: toastId });
       }
@@ -522,140 +528,140 @@ function DocPage() {
     <div className="flex h-dvh flex-col bg-background text-foreground">
       {/* ─── Slim Document Header (desktop only — mobile uses the floating MobileTopBar overlay) ─── */}
       {!isMobile && (
-      <header className="relative z-40 flex h-12 flex-shrink-0 items-center justify-between border-b border-border bg-surface/80 backdrop-blur-md px-4">
-        {/* Left: Back + Title */}
-        <div className="flex items-center gap-3 min-w-0">
-          <Link
-            to="/"
-            className="flex h-8 w-8 items-center justify-center rounded-lg transition-colors hover:bg-surface-2"
-            title="Home"
-          >
-            <img
-              src="/light_13746323.png"
-              alt="Anuwad Logo"
-              className="h-7 w-7 object-contain rounded-md"
-            />
-          </Link>
-          <div className="min-w-0">
-            <h1 className="truncate text-sm font-semibold text-foreground">{docName}</h1>
-          </div>
-        </div>
-
-        {/* Center: Page Navigation */}
-        {pageCount > 0 && (
-          <div className="flex items-center gap-2">
-            <button
-              onClick={() => setActivePage(Math.max(1, activePage - 1))}
-              disabled={activePage <= 1}
-              className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-surface-2 hover:text-foreground disabled:opacity-30"
-              aria-label="Previous page"
+        <header className="relative z-40 flex h-12 flex-shrink-0 items-center justify-between border-b border-border bg-surface/80 backdrop-blur-md px-4">
+          {/* Left: Back + Title */}
+          <div className="flex items-center gap-3 min-w-0">
+            <Link
+              to="/"
+              className="flex h-8 w-8 items-center justify-center rounded-lg transition-colors hover:bg-surface-2"
+              title="Home"
             >
-              <ChevronLeft className="h-4 w-4" />
-            </button>
-            <div className="flex h-8 items-center gap-2 rounded-md bg-surface-2/60 px-3">
-              <select
-                value={activePage}
-                onChange={(e) => setActivePage(Number(e.target.value))}
-                className="cursor-pointer bg-transparent pl-1 pr-6 text-center text-xs font-medium tabular-nums text-foreground outline-none"
-                style={{ minWidth: `${Math.max(4.25, String(pageCount).length + 3.5)}rem` }}
-                aria-label="Select page"
-              >
-                {Array.from({ length: pageCount }, (_, i) => i + 1).map((n) => {
-                  const hasAi = aiSummary[n]?.status === "done";
-                  return (
-                    <option key={n} value={n} className="bg-surface">
-                      {n} {hasAi ? "🔵" : ""}
-                    </option>
-                  );
-                })}
-              </select>
-              <span className="whitespace-nowrap text-xs tabular-nums text-muted-foreground">
-                / {pageCount}
-              </span>
+              <img
+                src="/light_13746323.png"
+                alt="Anuwad Logo"
+                className="h-7 w-7 object-contain rounded-md"
+              />
+            </Link>
+            <div className="min-w-0">
+              <h1 className="truncate text-sm font-semibold text-foreground">{docName}</h1>
             </div>
-            <button
-              onClick={() => setActivePage(Math.min(pageCount, activePage + 1))}
-              disabled={activePage >= pageCount}
-              className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-surface-2 hover:text-foreground disabled:opacity-30"
-              aria-label="Next page"
-            >
-              <ChevronRight className="h-4 w-4" />
-            </button>
-            {doneCount > 0 && (
+          </div>
+
+          {/* Center: Page Navigation */}
+          {pageCount > 0 && (
+            <div className="flex items-center gap-2">
               <button
-                onClick={goToLastTranslatedPage}
-                className="ml-1 rounded bg-primary/10 px-1.5 py-0.5 text-[10px] font-semibold text-primary transition-colors hover:bg-primary/20 hover:underline"
-                title="Go to last translated page"
+                onClick={() => setActivePage(Math.max(1, activePage - 1))}
+                disabled={activePage <= 1}
+                className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-surface-2 hover:text-foreground disabled:opacity-30"
+                aria-label="Previous page"
               >
-                {doneCount} translated
+                <ChevronLeft className="h-4 w-4" />
+              </button>
+              <div className="flex h-8 items-center gap-2 rounded-md bg-surface-2/60 px-3">
+                <select
+                  value={activePage}
+                  onChange={(e) => setActivePage(Number(e.target.value))}
+                  className="cursor-pointer bg-transparent pl-1 pr-6 text-center text-xs font-medium tabular-nums text-foreground outline-none"
+                  style={{ minWidth: `${Math.max(4.25, String(pageCount).length + 3.5)}rem` }}
+                  aria-label="Select page"
+                >
+                  {Array.from({ length: pageCount }, (_, i) => i + 1).map((n) => {
+                    const hasAi = aiSummary[n]?.status === "done";
+                    return (
+                      <option key={n} value={n} className="bg-surface">
+                        {n} {hasAi ? "🔵" : ""}
+                      </option>
+                    );
+                  })}
+                </select>
+                <span className="whitespace-nowrap text-xs tabular-nums text-muted-foreground">
+                  / {pageCount}
+                </span>
+              </div>
+              <button
+                onClick={() => setActivePage(Math.min(pageCount, activePage + 1))}
+                disabled={activePage >= pageCount}
+                className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-surface-2 hover:text-foreground disabled:opacity-30"
+                aria-label="Next page"
+              >
+                <ChevronRight className="h-4 w-4" />
+              </button>
+              {doneCount > 0 && (
+                <button
+                  onClick={goToLastTranslatedPage}
+                  className="ml-1 rounded bg-primary/10 px-1.5 py-0.5 text-[10px] font-semibold text-primary transition-colors hover:bg-primary/20 hover:underline"
+                  title="Go to last translated page"
+                >
+                  {doneCount} translated
+                </button>
+              )}
+            </div>
+          )}
+
+          {/* Right: Actions */}
+          <div className="flex items-center gap-1.5">
+            {!pageCount && (
+              <button
+                onClick={handleAnalyze}
+                disabled={analyzing}
+                className="rounded-lg bg-primary px-3 py-1.5 text-xs font-semibold text-primary-foreground transition-opacity hover:opacity-90 disabled:opacity-50"
+              >
+                {analyzing ? "Analyzing…" : "Analyze Document"}
               </button>
             )}
+            {pageCount > 0 && (
+              <button
+                onClick={handleAnalyze}
+                disabled={analyzing}
+                className="flex h-8 w-8 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-surface-2 hover:text-foreground disabled:opacity-40"
+                title={analyzing ? status : "Re-extract pages"}
+              >
+                {analyzing ? (
+                  <span className="inline-block h-3.5 w-3.5 rounded-full border-2 border-primary border-t-transparent spin-slow" />
+                ) : (
+                  <RefreshCw className="h-3.5 w-3.5" />
+                )}
+              </button>
+            )}
+            {pageCount > 0 && (isAdmin || syncEnabled) && (
+              <button
+                onClick={handleUploadToR2}
+                disabled={uploading}
+                className="flex h-8 w-8 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-surface-2 hover:text-foreground disabled:opacity-40 cursor-pointer"
+                title={uploading ? "Uploading to R2..." : "Upload to Cloudflare R2"}
+              >
+                {uploading ? (
+                  <span className="inline-block h-3.5 w-3.5 rounded-full border-2 border-primary border-t-transparent spin-slow" />
+                ) : (
+                  <Cloud className="h-3.5 w-3.5" />
+                )}
+              </button>
+            )}
+            {pageCount > 0 && (isAdmin || syncEnabled) && (
+              <button
+                onClick={handleSyncToSupabase}
+                disabled={syncingSupabase}
+                className="flex h-8 w-8 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-surface-2 hover:text-foreground disabled:opacity-40 cursor-pointer"
+                title={syncingSupabase ? "Syncing to Supabase..." : "Sync to Supabase"}
+              >
+                {syncingSupabase ? (
+                  <span className="inline-block h-3.5 w-3.5 rounded-full border-2 border-primary border-t-transparent spin-slow" />
+                ) : (
+                  <Zap className="h-3.5 w-3.5" />
+                )}
+              </button>
+            )}
+            <Link
+              to="/settings"
+              className="flex h-8 w-8 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-surface-2 hover:text-foreground"
+              title="Settings"
+            >
+              <Settings className="h-3.5 w-3.5" />
+            </Link>
+            <ProfileDropdown />
           </div>
-        )}
-
-        {/* Right: Actions */}
-        <div className="flex items-center gap-1.5">
-          {!pageCount && (
-            <button
-              onClick={handleAnalyze}
-              disabled={analyzing}
-              className="rounded-lg bg-primary px-3 py-1.5 text-xs font-semibold text-primary-foreground transition-opacity hover:opacity-90 disabled:opacity-50"
-            >
-              {analyzing ? "Analyzing…" : "Analyze Document"}
-            </button>
-          )}
-          {pageCount > 0 && (
-            <button
-              onClick={handleAnalyze}
-              disabled={analyzing}
-              className="flex h-8 w-8 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-surface-2 hover:text-foreground disabled:opacity-40"
-              title={analyzing ? status : "Re-extract pages"}
-            >
-              {analyzing ? (
-                <span className="inline-block h-3.5 w-3.5 rounded-full border-2 border-primary border-t-transparent spin-slow" />
-              ) : (
-                <RefreshCw className="h-3.5 w-3.5" />
-              )}
-            </button>
-          )}
-          {pageCount > 0 && (isAdmin || syncEnabled) && (
-            <button
-              onClick={handleUploadToR2}
-              disabled={uploading}
-              className="flex h-8 w-8 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-surface-2 hover:text-foreground disabled:opacity-40 cursor-pointer"
-              title={uploading ? "Uploading to R2..." : "Upload to Cloudflare R2"}
-            >
-              {uploading ? (
-                <span className="inline-block h-3.5 w-3.5 rounded-full border-2 border-primary border-t-transparent spin-slow" />
-              ) : (
-                <Cloud className="h-3.5 w-3.5" />
-              )}
-            </button>
-          )}
-          {pageCount > 0 && (isAdmin || syncEnabled) && (
-            <button
-              onClick={handleSyncToSupabase}
-              disabled={syncingSupabase}
-              className="flex h-8 w-8 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-surface-2 hover:text-foreground disabled:opacity-40 cursor-pointer"
-              title={syncingSupabase ? "Syncing to Supabase..." : "Sync to Supabase"}
-            >
-              {syncingSupabase ? (
-                <span className="inline-block h-3.5 w-3.5 rounded-full border-2 border-primary border-t-transparent spin-slow" />
-              ) : (
-                <Zap className="h-3.5 w-3.5" />
-              )}
-            </button>
-          )}
-          <Link
-            to="/settings"
-            className="flex h-8 w-8 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-surface-2 hover:text-foreground"
-            title="Settings"
-          >
-            <Settings className="h-3.5 w-3.5" />
-          </Link>
-          <ProfileDropdown />
-        </div>
-      </header>
+        </header>
       )}
 
       {/* ─── Main Content ─── */}
@@ -745,7 +751,8 @@ function DocPage() {
             <DrawerHeader>
               <DrawerTitle>Select R2 Category Folder</DrawerTitle>
               <DrawerDescription>
-                Choose a category folder prefix to store this PDF in the shared Cloudflare R2 bucket.
+                Choose a category folder prefix to store this PDF in the shared Cloudflare R2
+                bucket.
               </DrawerDescription>
             </DrawerHeader>
             <div className="space-y-4 overflow-y-auto px-6 pb-2">
@@ -768,7 +775,9 @@ function DocPage() {
               </div>
               {categoryChoice === "custom" && (
                 <div className="space-y-1">
-                  <label className="text-xs font-medium text-foreground">Custom Category Name</label>
+                  <label className="text-xs font-medium text-foreground">
+                    Custom Category Name
+                  </label>
                   <input
                     type="text"
                     placeholder="e.g. mathematics, philosophy"
@@ -797,62 +806,65 @@ function DocPage() {
           </DrawerContent>
         </Drawer>
       ) : (
-      <Dialog open={showUploadCategoryModal} onOpenChange={setShowUploadCategoryModal}>
-        <DialogContent className="sm:max-w-md">
-          <DialogHeader>
-            <DialogTitle>Select R2 Category Folder</DialogTitle>
-            <DialogDescription>
-              Choose a category folder prefix to store this PDF in the shared Cloudflare R2 bucket.
-            </DialogDescription>
-          </DialogHeader>
-          <div className="space-y-4 py-3">
-            <div className="grid grid-cols-2 gap-2">
-              {UPLOAD_CATEGORIES.map((cat) => (
-                <button
-                  key={cat.id}
-                  type="button"
-                  onClick={() => setCategoryChoice(cat.id)}
-                  className={`flex flex-col items-start rounded-lg border p-3 text-left transition-all ${
-                    categoryChoice === cat.id
-                      ? "border-primary bg-primary/10 text-foreground ring-1 ring-primary"
-                      : "border-border bg-surface hover:bg-surface-2 text-muted-foreground"
-                  }`}
-                >
-                  <span className="font-semibold text-sm">{cat.label}</span>
-                  <span className="text-[11px] font-mono text-muted-foreground">{cat.desc}</span>
-                </button>
-              ))}
-            </div>
-            {categoryChoice === "custom" && (
-              <div className="space-y-1">
-                <label className="text-xs font-medium text-foreground">Custom Category Name</label>
-                <input
-                  type="text"
-                  placeholder="e.g. mathematics, philosophy"
-                  value={customCategoryInput}
-                  onChange={(e) => setCustomCategoryInput(e.target.value)}
-                  className="w-full rounded-md border border-border bg-surface px-3 py-2 text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-primary"
-                />
+        <Dialog open={showUploadCategoryModal} onOpenChange={setShowUploadCategoryModal}>
+          <DialogContent className="sm:max-w-md">
+            <DialogHeader>
+              <DialogTitle>Select R2 Category Folder</DialogTitle>
+              <DialogDescription>
+                Choose a category folder prefix to store this PDF in the shared Cloudflare R2
+                bucket.
+              </DialogDescription>
+            </DialogHeader>
+            <div className="space-y-4 py-3">
+              <div className="grid grid-cols-2 gap-2">
+                {UPLOAD_CATEGORIES.map((cat) => (
+                  <button
+                    key={cat.id}
+                    type="button"
+                    onClick={() => setCategoryChoice(cat.id)}
+                    className={`flex flex-col items-start rounded-lg border p-3 text-left transition-all ${
+                      categoryChoice === cat.id
+                        ? "border-primary bg-primary/10 text-foreground ring-1 ring-primary"
+                        : "border-border bg-surface hover:bg-surface-2 text-muted-foreground"
+                    }`}
+                  >
+                    <span className="font-semibold text-sm">{cat.label}</span>
+                    <span className="text-[11px] font-mono text-muted-foreground">{cat.desc}</span>
+                  </button>
+                ))}
               </div>
-            )}
-          </div>
-          <DialogFooter>
-            <button
-              onClick={() => setShowUploadCategoryModal(false)}
-              className="rounded-lg border border-border px-4 py-2 text-xs font-semibold text-muted-foreground hover:bg-surface-2 transition-colors"
-            >
-              Cancel
-            </button>
-            <button
-              onClick={confirmCategoryUpload}
-              disabled={categoryChoice === "custom" && !customCategoryInput.trim()}
-              className="rounded-lg bg-primary px-4 py-2 text-xs font-semibold text-primary-foreground hover:opacity-90 disabled:opacity-50 transition-opacity"
-            >
-              Upload to Category
-            </button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+              {categoryChoice === "custom" && (
+                <div className="space-y-1">
+                  <label className="text-xs font-medium text-foreground">
+                    Custom Category Name
+                  </label>
+                  <input
+                    type="text"
+                    placeholder="e.g. mathematics, philosophy"
+                    value={customCategoryInput}
+                    onChange={(e) => setCustomCategoryInput(e.target.value)}
+                    className="w-full rounded-md border border-border bg-surface px-3 py-2 text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-primary"
+                  />
+                </div>
+              )}
+            </div>
+            <DialogFooter>
+              <button
+                onClick={() => setShowUploadCategoryModal(false)}
+                className="rounded-lg border border-border px-4 py-2 text-xs font-semibold text-muted-foreground hover:bg-surface-2 transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={confirmCategoryUpload}
+                disabled={categoryChoice === "custom" && !customCategoryInput.trim()}
+                className="rounded-lg bg-primary px-4 py-2 text-xs font-semibold text-primary-foreground hover:opacity-90 disabled:opacity-50 transition-opacity"
+              >
+                Upload to Category
+              </button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
       )}
     </div>
   );

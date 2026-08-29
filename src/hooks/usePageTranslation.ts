@@ -28,7 +28,9 @@ const STREAM_FLUSH_MS = 60;
 export function usePageTranslation(
   docId: string,
   globalsRef: React.RefObject<Globals>,
-  onPageAiChangeRef: React.RefObject<(pageNumber: number, entry: PageAiSummaryEntry | null) => void>,
+  onPageAiChangeRef: React.RefObject<
+    (pageNumber: number, entry: PageAiSummaryEntry | null) => void
+  >,
   mountedRef: React.RefObject<boolean>,
   ensureKeyReady: () => boolean,
 ) {

@@ -79,7 +79,11 @@ export function MobileMiniPlayer({ onOpenReader }: MobileMiniPlayerProps) {
             className="transition-all duration-300"
           />
         </svg>
-        {isPaused ? <Play className="h-4 w-4 fill-current ml-0.5" /> : <Pause className="h-4 w-4 fill-current" />}
+        {isPaused ? (
+          <Play className="h-4 w-4 fill-current ml-0.5" />
+        ) : (
+          <Pause className="h-4 w-4 fill-current" />
+        )}
       </button>
 
       <button

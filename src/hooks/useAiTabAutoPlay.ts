@@ -81,5 +81,13 @@ export function useAiTabAutoPlay({
         play(d.result, "ai", d.pageNumber, 0);
       }
     });
-  }, [docId, activePage, isPlaying, activePageNumber, currentTextSource, play, requestVoiceOnboarding]);
+  }, [
+    docId,
+    activePage,
+    isPlaying,
+    activePageNumber,
+    currentTextSource,
+    play,
+    requestVoiceOnboarding,
+  ]);
 }

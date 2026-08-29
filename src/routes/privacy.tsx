@@ -79,13 +79,15 @@ function PrivacyPolicyPage() {
             Privacy Policy
           </h1>
           <p className="mt-3 text-sm text-muted-foreground">
-            Effective Date & Last Updated: <span className="font-semibold text-foreground">{lastUpdated}</span>
+            Effective Date & Last Updated:{" "}
+            <span className="font-semibold text-foreground">{lastUpdated}</span>
           </p>
           <p className="mt-4 text-base text-foreground/80 leading-relaxed max-w-3xl">
-            Welcome to <strong className="text-foreground">Anuwad.com</strong> ("Anuwad", "we", "us", or "our"). 
-            We respect your privacy and are committed to protecting your personal data and uploaded documents. 
-            This Privacy Policy explains how we collect, use, store, and safeguard your information when you access or use 
-            our application, including logins performed via <strong className="text-foreground">Google OAuth</strong>.
+            Welcome to <strong className="text-foreground">Anuwad.com</strong> ("Anuwad", "we",
+            "us", or "our"). We respect your privacy and are committed to protecting your personal
+            data and uploaded documents. This Privacy Policy explains how we collect, use, store,
+            and safeguard your information when you access or use our application, including logins
+            performed via <strong className="text-foreground">Google OAuth</strong>.
           </p>
         </div>
 
@@ -100,7 +102,8 @@ function PrivacyPolicyPage() {
                 Google API Services User Data Policy Compliance
               </h3>
               <p className="text-xs sm:text-sm text-foreground/85 leading-relaxed">
-                Anuwad's use and transfer to any other app of information received from Google APIs will adhere to the{" "}
+                Anuwad's use and transfer to any other app of information received from Google APIs
+                will adhere to the{" "}
                 <a
                   href="https://developers.google.com/terms/api-services-user-data-policy"
                   target="_blank"
@@ -110,7 +113,9 @@ function PrivacyPolicyPage() {
                   Google API Services User Data Policy
                   <ExternalLink className="h-3 w-3 inline ml-0.5" />
                 </a>
-                , including the <strong className="text-foreground font-semibold">Limited Use requirements</strong>. We do not sell, share, or monetize your Google OAuth data or uploaded documents.
+                , including the{" "}
+                <strong className="text-foreground font-semibold">Limited Use requirements</strong>.
+                We do not sell, share, or monetize your Google OAuth data or uploaded documents.
               </p>
             </div>
           </div>
@@ -127,17 +132,27 @@ function PrivacyPolicyPage() {
               Information We Collect
             </h2>
             <p>
-              When you interact with Anuwad.com, we collect limited information necessary to authenticate your account and provide our AI document reading and translation services:
+              When you interact with Anuwad.com, we collect limited information necessary to
+              authenticate your account and provide our AI document reading and translation
+              services:
             </p>
             <ul className="list-disc pl-6 space-y-2 text-muted-foreground">
               <li>
-                <strong className="text-foreground">Google OAuth Data:</strong> When you sign in using Google, we retrieve basic profile details provided by Google OAuth, including your email address, full name, and profile avatar URL.
+                <strong className="text-foreground">Google OAuth Data:</strong> When you sign in
+                using Google, we retrieve basic profile details provided by Google OAuth, including
+                your email address, full name, and profile avatar URL.
               </li>
               <li>
-                <strong className="text-foreground">Document & Content Files:</strong> PDFs and documents uploaded to Anuwad are stored in your browser's local IndexedDB database. If you are signed in, document configurations and translation records may be synced to secure cloud storage (Firebase Firestore/Storage) associated with your authenticated account.
+                <strong className="text-foreground">Document & Content Files:</strong> PDFs and
+                documents uploaded to Anuwad are stored in your browser's local IndexedDB database.
+                If you are signed in, document configurations and translation records may be synced
+                to secure cloud storage (Firebase Firestore/Storage) associated with your
+                authenticated account.
               </li>
               <li>
-                <strong className="text-foreground">Technical & Usage Data:</strong> We may collect standard client metadata (browser type, device type, page view analytics) to optimize application performance and diagnose technical issues.
+                <strong className="text-foreground">Technical & Usage Data:</strong> We may collect
+                standard client metadata (browser type, device type, page view analytics) to
+                optimize application performance and diagnose technical issues.
               </li>
             </ul>
           </section>
@@ -158,7 +173,8 @@ function PrivacyPolicyPage() {
                   <span>Authentication</span>
                 </div>
                 <p className="text-xs text-muted-foreground">
-                  To securely identify your account and grant access to your saved document library across sessions.
+                  To securely identify your account and grant access to your saved document library
+                  across sessions.
                 </p>
               </div>
 
@@ -168,7 +184,8 @@ function PrivacyPolicyPage() {
                   <span>Translation & TTS</span>
                 </div>
                 <p className="text-xs text-muted-foreground">
-                  To process PDF page text for AI translation and synthesize text-to-speech audio upon your request.
+                  To process PDF page text for AI translation and synthesize text-to-speech audio
+                  upon your request.
                 </p>
               </div>
 
@@ -178,7 +195,8 @@ function PrivacyPolicyPage() {
                   <span>Cloud Synchronization</span>
                 </div>
                 <p className="text-xs text-muted-foreground">
-                  To synchronize user settings, document metadata, and review ratings attached to your user ID.
+                  To synchronize user settings, document metadata, and review ratings attached to
+                  your user ID.
                 </p>
               </div>
 
@@ -188,7 +206,8 @@ function PrivacyPolicyPage() {
                   <span>Product Improvement</span>
                 </div>
                 <p className="text-xs text-muted-foreground">
-                  To analyze application performance, debug crashes, and enhance feature functionality.
+                  To analyze application performance, debug crashes, and enhance feature
+                  functionality.
                 </p>
               </div>
             </div>
@@ -207,9 +226,21 @@ function PrivacyPolicyPage() {
                 We maintain a strict policy against data monetization:
               </p>
               <ul className="list-disc pl-6 space-y-1 text-muted-foreground">
-                <li>We <strong className="text-foreground">DO NOT sell, rent, trade, or transfer</strong> your personal data or Google account information to any third parties or ad brokers.</li>
-                <li>We <strong className="text-foreground">DO NOT use</strong> your Google account data or uploaded document content to train generalized artificial intelligence or machine learning models.</li>
-                <li>We <strong className="text-foreground">DO NOT serve advertisements</strong> using tracking pixels based on your personal information.</li>
+                <li>
+                  We{" "}
+                  <strong className="text-foreground">DO NOT sell, rent, trade, or transfer</strong>{" "}
+                  your personal data or Google account information to any third parties or ad
+                  brokers.
+                </li>
+                <li>
+                  We <strong className="text-foreground">DO NOT use</strong> your Google account
+                  data or uploaded document content to train generalized artificial intelligence or
+                  machine learning models.
+                </li>
+                <li>
+                  We <strong className="text-foreground">DO NOT serve advertisements</strong> using
+                  tracking pixels based on your personal information.
+                </li>
               </ul>
             </div>
           </section>
@@ -223,17 +254,22 @@ function PrivacyPolicyPage() {
               Third-Party Service Providers
             </h2>
             <p>
-              Anuwad utilizes trusted third-party infrastructure providers solely to host, authenticate, and run the service:
+              Anuwad utilizes trusted third-party infrastructure providers solely to host,
+              authenticate, and run the service:
             </p>
             <ul className="list-disc pl-6 space-y-2 text-muted-foreground">
               <li>
-                <strong className="text-foreground">Google Firebase / Cloud:</strong> Used for secure user authentication (Google Sign-In) and storing application backend data.
+                <strong className="text-foreground">Google Firebase / Cloud:</strong> Used for
+                secure user authentication (Google Sign-In) and storing application backend data.
               </li>
               <li>
-                <strong className="text-foreground">OpenRouter:</strong> Used to interface with AI models for document translation. Only the extracted text of the specific page being translated is transmitted to OpenRouter endpoints.
+                <strong className="text-foreground">OpenRouter:</strong> Used to interface with AI
+                models for document translation. Only the extracted text of the specific page being
+                translated is transmitted to OpenRouter endpoints.
               </li>
               <li>
-                <strong className="text-foreground">Vercel & Analytics:</strong> Used for web application hosting, speed insights, and anonymous telemetry.
+                <strong className="text-foreground">Vercel & Analytics:</strong> Used for web
+                application hosting, speed insights, and anonymous telemetry.
               </li>
             </ul>
           </section>
@@ -247,11 +283,16 @@ function PrivacyPolicyPage() {
               Data Sovereignty, Control & Deletion
             </h2>
             <p>
-              You maintain full sovereignty over your data. You can delete individual documents or clear local browser storage at any time directly through the application settings.
+              You maintain full sovereignty over your data. You can delete individual documents or
+              clear local browser storage at any time directly through the application settings.
             </p>
             <p>
-              To request full deletion of your user account, Google OAuth authentication tokens, and any stored cloud data, please send an email to{" "}
-              <a href={`mailto:${contactEmail}`} className="font-semibold text-primary hover:underline">
+              To request full deletion of your user account, Google OAuth authentication tokens, and
+              any stored cloud data, please send an email to{" "}
+              <a
+                href={`mailto:${contactEmail}`}
+                className="font-semibold text-primary hover:underline"
+              >
                 {contactEmail}
               </a>
               . We will process data deletion requests within 30 days.
@@ -268,8 +309,12 @@ function PrivacyPolicyPage() {
             </h2>
             <div className="rounded-xl border border-border bg-surface-2/40 p-5 flex items-center justify-between flex-wrap gap-4">
               <div>
-                <p className="font-bold text-foreground">Have questions about this Privacy Policy?</p>
-                <p className="text-xs text-muted-foreground">Contact the Anuwad development & privacy team directly.</p>
+                <p className="font-bold text-foreground">
+                  Have questions about this Privacy Policy?
+                </p>
+                <p className="text-xs text-muted-foreground">
+                  Contact the Anuwad development & privacy team directly.
+                </p>
               </div>
               <a
                 href={`mailto:${contactEmail}`}

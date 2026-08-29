@@ -1,4 +1,16 @@
-import { db, safePut, uuid, withDocLock, normalizeDoc, pageRange, STORE, BLOBS, META, PAGES, THUMBNAILS } from "./idbUtils";
+import {
+  db,
+  safePut,
+  uuid,
+  withDocLock,
+  normalizeDoc,
+  pageRange,
+  STORE,
+  BLOBS,
+  META,
+  PAGES,
+  THUMBNAILS,
+} from "./idbUtils";
 import type { DocRecord, DocSummary } from "./types";
 
 export async function listDocs(): Promise<DocSummary[]> {

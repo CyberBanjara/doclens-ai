@@ -46,208 +46,208 @@ export const LANGUAGES: LanguageInfo[] = [
  */
 const LANGUAGE_ALIASES: Record<string, string[]> = {
   // Hindi variants
-  "hindi": ["hi"],
-  "हिंदी": ["hi"],
-  "हिन्दी": ["hi"],
+  hindi: ["hi"],
+  हिंदी: ["hi"],
+  हिन्दी: ["hi"],
 
   // Bengali variants
-  "bengali": ["bn"],
-  "bangla": ["bn"],
-  "বাংলা": ["bn"],
+  bengali: ["bn"],
+  bangla: ["bn"],
+  বাংলা: ["bn"],
 
   // Telugu variants
-  "telugu": ["te"],
-  "తెలుగు": ["te"],
+  telugu: ["te"],
+  తెలుగు: ["te"],
 
   // Malayalam variants
-  "malayalam": ["ml"],
-  "മലയാളം": ["ml"],
+  malayalam: ["ml"],
+  മലയാളം: ["ml"],
 
   // Tamil variants
-  "tamil": ["ta"],
-  "தமிழ்": ["ta"],
+  tamil: ["ta"],
+  தமிழ்: ["ta"],
 
   // English
-  "english": ["en"],
+  english: ["en"],
 
   // Spanish
-  "spanish": ["es"],
-  "español": ["es"],
+  spanish: ["es"],
+  español: ["es"],
 
   // Mandarin / Chinese
-  "mandarin": ["zh"],
-  "chinese": ["zh"],
-  "中文": ["zh"],
-  "普通话": ["zh"],
+  mandarin: ["zh"],
+  chinese: ["zh"],
+  中文: ["zh"],
+  普通话: ["zh"],
 
   // French
-  "french": ["fr"],
-  "français": ["fr"],
+  french: ["fr"],
+  français: ["fr"],
 
   // German
-  "german": ["de"],
-  "deutsch": ["de"],
+  german: ["de"],
+  deutsch: ["de"],
 
   // Japanese
-  "japanese": ["ja"],
-  "日本語": ["ja"],
+  japanese: ["ja"],
+  日本語: ["ja"],
 
   // Korean
-  "korean": ["ko"],
-  "한국어": ["ko"],
+  korean: ["ko"],
+  한국어: ["ko"],
 
   // Arabic
-  "arabic": ["ar"],
-  "العربية": ["ar"],
+  arabic: ["ar"],
+  العربية: ["ar"],
 
   // Russian
-  "russian": ["ru"],
-  "русский": ["ru"],
+  russian: ["ru"],
+  русский: ["ru"],
 
   // Portuguese
-  "portuguese": ["pt"],
-  "português": ["pt"],
+  portuguese: ["pt"],
+  português: ["pt"],
 
   // Italian
-  "italian": ["it"],
-  "italiano": ["it"],
+  italian: ["it"],
+  italiano: ["it"],
 
   // Dutch
-  "dutch": ["nl"],
-  "nederlands": ["nl"],
+  dutch: ["nl"],
+  nederlands: ["nl"],
 
   // Turkish
-  "turkish": ["tr"],
-  "türkçe": ["tr"],
+  turkish: ["tr"],
+  türkçe: ["tr"],
 
   // Polish
-  "polish": ["pl"],
-  "polski": ["pl"],
+  polish: ["pl"],
+  polski: ["pl"],
 
   // Vietnamese
-  "vietnamese": ["vi"],
+  vietnamese: ["vi"],
   "tiếng việt": ["vi"],
 
   // Czech
-  "czech": ["cs"],
-  "čeština": ["cs"],
+  czech: ["cs"],
+  čeština: ["cs"],
 
   // Danish
-  "danish": ["da"],
-  "dansk": ["da"],
+  danish: ["da"],
+  dansk: ["da"],
 
   // Finnish
-  "finnish": ["fi"],
-  "suomi": ["fi"],
+  finnish: ["fi"],
+  suomi: ["fi"],
 
   // Greek
-  "greek": ["el"],
-  "ελληνικά": ["el"],
+  greek: ["el"],
+  ελληνικά: ["el"],
 
   // Hungarian
-  "hungarian": ["hu"],
-  "magyar": ["hu"],
+  hungarian: ["hu"],
+  magyar: ["hu"],
 
   // Nepali
-  "nepali": ["ne"],
-  "नेपाली": ["ne"],
+  nepali: ["ne"],
+  नेपाली: ["ne"],
 
   // Norwegian
-  "norwegian": ["no", "nb", "nn"],
-  "norsk": ["no", "nb", "nn"],
+  norwegian: ["no", "nb", "nn"],
+  norsk: ["no", "nb", "nn"],
 
   // Romanian
-  "romanian": ["ro"],
-  "română": ["ro"],
+  romanian: ["ro"],
+  română: ["ro"],
 
   // Slovak
-  "slovak": ["sk"],
-  "slovenčina": ["sk"],
+  slovak: ["sk"],
+  slovenčina: ["sk"],
 
   // Slovenian
-  "slovenian": ["sl"],
-  "slovenščina": ["sl"],
+  slovenian: ["sl"],
+  slovenščina: ["sl"],
 
   // Swedish
-  "swedish": ["sv"],
-  "svenska": ["sv"],
+  swedish: ["sv"],
+  svenska: ["sv"],
 
   // Ukrainian
-  "ukrainian": ["uk"],
-  "українська": ["uk"],
+  ukrainian: ["uk"],
+  українська: ["uk"],
 
   // Catalan
-  "catalan": ["ca"],
-  "català": ["ca"],
+  catalan: ["ca"],
+  català: ["ca"],
 
   // Persian / Farsi
-  "persian": ["fa"],
-  "farsi": ["fa"],
-  "فارسی": ["fa"],
+  persian: ["fa"],
+  farsi: ["fa"],
+  فارسی: ["fa"],
 
   // Swahili
-  "swahili": ["sw"],
-  "kiswahili": ["sw"],
+  swahili: ["sw"],
+  kiswahili: ["sw"],
 
   // Kazakh
-  "kazakh": ["kk"],
-  "қазақша": ["kk"],
+  kazakh: ["kk"],
+  қазақша: ["kk"],
 
   // Georgian
-  "georgian": ["ka"],
-  "ქართული": ["ka"],
+  georgian: ["ka"],
+  ქართული: ["ka"],
 
   // Icelandic
-  "icelandic": ["is"],
-  "íslenska": ["is"],
+  icelandic: ["is"],
+  íslenska: ["is"],
 
   // Serbian
-  "serbian": ["sr"],
-  "српски": ["sr"],
+  serbian: ["sr"],
+  српски: ["sr"],
 
   // Luxembourgish
-  "luxembourgish": ["lb"],
-  "lëtzebuergesch": ["lb"],
+  luxembourgish: ["lb"],
+  lëtzebuergesch: ["lb"],
 
   // Kannada
-  "kannada": ["kn"],
-  "ಕನ್ನಡ": ["kn"],
+  kannada: ["kn"],
+  ಕನ್ನಡ: ["kn"],
 
   // Marathi
-  "marathi": ["mr"],
-  "मराठी": ["mr"],
+  marathi: ["mr"],
+  मराठी: ["mr"],
 
   // Gujarati
-  "gujarati": ["gu"],
-  "ગુજરાતી": ["gu"],
+  gujarati: ["gu"],
+  ગુજરાતી: ["gu"],
 
   // Punjabi
-  "punjabi": ["pa"],
-  "ਪੰਜਾਬੀ": ["pa"],
-  "پنجابی": ["pa"],
+  punjabi: ["pa"],
+  ਪੰਜਾਬੀ: ["pa"],
+  پنجابی: ["pa"],
 
   // Urdu
-  "urdu": ["ur"],
-  "اردو": ["ur"],
+  urdu: ["ur"],
+  اردو: ["ur"],
 
   // Odia
-  "odia": ["or"],
-  "ଓଡ଼ିଆ": ["or"],
+  odia: ["or"],
+  ଓଡ଼ିଆ: ["or"],
 
   // Assamese
-  "assamese": ["as"],
-  "অসমীয়া": ["as"],
+  assamese: ["as"],
+  অসমীয়া: ["as"],
 
   // Thai
-  "thai": ["th"],
-  "ไทย": ["th"],
+  thai: ["th"],
+  ไทย: ["th"],
 
   // Indonesian
-  "indonesian": ["id"],
+  indonesian: ["id"],
   "bahasa indonesia": ["id"],
 
   // Malay
-  "malay": ["ms"],
+  malay: ["ms"],
   "bahasa melayu": ["ms"],
 };
 
@@ -287,10 +287,7 @@ function voiceMatchesPrefixes(voiceLang: string, prefixes: string[]): boolean {
  * If no alias mapping is found, falls back to substring matching against
  * the voice's lang or name fields for future-proofing.
  */
-export function filterVoicesByLanguage(
-  voices: TtsVoice[],
-  language: string,
-): TtsVoice[] {
+export function filterVoicesByLanguage(voices: TtsVoice[], language: string): TtsVoice[] {
   if (!language || !language.trim()) return voices;
 
   const prefixes = resolveLanguagePrefixes(language);
@@ -301,11 +298,7 @@ export function filterVoicesByLanguage(
 
   // Fuzzy fallback: match against voice lang or name
   const q = language.trim().toLowerCase();
-  return voices.filter(
-    (v) =>
-      v.lang.toLowerCase().includes(q) ||
-      v.name.toLowerCase().includes(q),
-  );
+  return voices.filter((v) => v.lang.toLowerCase().includes(q) || v.name.toLowerCase().includes(q));
 }
 
 /**
@@ -334,7 +327,13 @@ export function filterPiperCatalogByLanguage(
       const code = v.language.code.toLowerCase().replace("_", "-");
       return prefixes.some((p) => {
         const pl = p.toLowerCase();
-        return code === pl || code.startsWith(pl + "-") || code.startsWith(pl + "_") || code.split("_")[0] === pl || code.split("-")[0] === pl;
+        return (
+          code === pl ||
+          code.startsWith(pl + "-") ||
+          code.startsWith(pl + "_") ||
+          code.split("_")[0] === pl ||
+          code.split("-")[0] === pl
+        );
       });
     });
   }

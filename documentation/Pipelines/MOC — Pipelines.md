@@ -6,11 +6,11 @@
 
 ## Processing Pipelines
 
-| Pipeline                    | Input                     | Hand-off Format            | Consumer               |
-| ---------------------------- | -------------------------- | --------------------------- | ----------------------- |
+| Pipeline                    | Input                      | Hand-off Format                       | Consumer                 |
+| --------------------------- | -------------------------- | ------------------------------------- | ------------------------ |
 | [[PDF Extraction Pipeline]] | PDF binary (`ArrayBuffer`) | `PageData` record (`text`, `columns`) | [[Translation Pipeline]] |
 | [[Translation Pipeline]]    | `PageData` record          | `PageAi` record (`result`, `status`)  | [[TTS Pipeline]]         |
-| [[TTS Pipeline]]            | `PageAi.result` text       | Synthesized audio chunks    | Browser Player           |
+| [[TTS Pipeline]]            | `PageAi.result` text       | Synthesized audio chunks              | Browser Player           |
 
 ---
 

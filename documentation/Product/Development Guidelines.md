@@ -12,15 +12,15 @@
 
 ## Scripts (`package.json`)
 
-| Script | Purpose |
-| ------- | -------- |
-| `npm run dev` | Vite dev server |
-| `npm run build` | Production build (`NODE_OPTIONS='--max-old-space-size=4096'` — the dependency graph is large enough to need the extra heap) |
-| `npm run build:dev` | Development-mode build |
-| `npm run preview` | Preview a production build locally |
-| `npm run lint` | ESLint over the whole repo |
-| `npm run format` | Prettier, write mode |
-| `npm run reorganize-r2` | Runs `scripts/reorganize-r2.mjs`, a CLI wrapper around the `reorganizeR2Files` server function |
+| Script                  | Purpose                                                                                                                     |
+| ----------------------- | --------------------------------------------------------------------------------------------------------------------------- |
+| `npm run dev`           | Vite dev server                                                                                                             |
+| `npm run build`         | Production build (`NODE_OPTIONS='--max-old-space-size=4096'` — the dependency graph is large enough to need the extra heap) |
+| `npm run build:dev`     | Development-mode build                                                                                                      |
+| `npm run preview`       | Preview a production build locally                                                                                          |
+| `npm run lint`          | ESLint over the whole repo                                                                                                  |
+| `npm run format`        | Prettier, write mode                                                                                                        |
+| `npm run reorganize-r2` | Runs `scripts/reorganize-r2.mjs`, a CLI wrapper around the `reorganizeR2Files` server function                              |
 
 ## Formatting & Linting
 

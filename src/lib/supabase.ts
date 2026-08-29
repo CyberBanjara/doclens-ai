@@ -38,7 +38,10 @@ export const fetchSupabaseExtraction = createServerFn({ method: "POST" })
     try {
       const supabase = await getSupabaseClient();
       if (!supabase) {
-        return { found: false, error: "Supabase URL or Key is missing from environment variables." };
+        return {
+          found: false,
+          error: "Supabase URL or Key is missing from environment variables.",
+        };
       }
 
       const { data: record, error } = await supabase
@@ -91,18 +94,24 @@ export const saveSupabaseExtraction = createServerFn({ method: "POST" })
         style?: string;
         temperature?: number;
       };
-    }) => input
+    }) => input,
   )
   .handler(async ({ data }) => {
     "use server";
     const isSyncEnabled = isGlobalSyncEnabled();
     if (!isSyncEnabled) {
-      return { success: false, error: "Global sync (Supabase writes) is disabled in this environment." };
+      return {
+        success: false,
+        error: "Global sync (Supabase writes) is disabled in this environment.",
+      };
     }
     try {
       const supabase = await getSupabaseClient();
       if (!supabase) {
-        return { success: false, error: "Supabase URL or Key is missing from environment variables." };
+        return {
+          success: false,
+          error: "Supabase URL or Key is missing from environment variables.",
+        };
       }
 
       let finalText = data.text;
@@ -126,21 +135,19 @@ export const saveSupabaseExtraction = createServerFn({ method: "POST" })
         }
       }
 
-      const { error } = await supabase
-        .from("pdf_extractions")
-        .upsert(
-          {
-            id: data.key,
-            key: data.key,
-            size: data.size,
-            last_modified: data.lastModified || "",
-            num_pages: data.numPages,
-            text: finalText,
-            used_ocr: data.usedOcr,
-            extracted_at: new Date().toISOString(),
-          },
-          { onConflict: "id" }
-        );
+      const { error } = await supabase.from("pdf_extractions").upsert(
+        {
+          id: data.key,
+          key: data.key,
+          size: data.size,
+          last_modified: data.lastModified || "",
+          num_pages: data.numPages,
+          text: finalText,
+          used_ocr: data.usedOcr,
+          extracted_at: new Date().toISOString(),
+        },
+        { onConflict: "id" },
+      );
 
       if (error) {
         console.warn("Supabase upsert warning:", error.message || error);

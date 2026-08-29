@@ -7,15 +7,15 @@
 
 ## 🗺️ Start Here
 
-| Area                 | Description                                                      |
-| -------------------- | ---------------------------------------------------------------- |
+| Area                 | Description                                                     |
+| -------------------- | --------------------------------------------------------------- |
 | [[MOC — Product]]    | What Anuwad is, why it exists, design system, tech stack        |
-| [[MOC — User Flows]] | How users interact with the product end-to-end                   |
-| [[MOC — Pages]]      | The application pages and their UI/UX design                     |
-| [[MOC — Features]]   | Every feature in detail — PDF viewer, AI translation, TTS, etc.  |
-| [[MOC — Components]] | Reusable React components powering the UI                        |
-| [[MOC — Pipelines]]  | The three core data pipelines: Extract → Translate → Speak       |
-| [[MOC — APIs]]       | External services and browser APIs the app depends on            |
+| [[MOC — User Flows]] | How users interact with the product end-to-end                  |
+| [[MOC — Pages]]      | The application pages and their UI/UX design                    |
+| [[MOC — Features]]   | Every feature in detail — PDF viewer, AI translation, TTS, etc. |
+| [[MOC — Components]] | Reusable React components powering the UI                       |
+| [[MOC — Pipelines]]  | The three core data pipelines: Extract → Translate → Speak      |
+| [[MOC — APIs]]       | External services and browser APIs the app depends on           |
 
 ---
 
