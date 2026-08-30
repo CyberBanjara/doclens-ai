@@ -17,8 +17,10 @@ import {
   Sparkles,
   Info,
   Clock,
-  Mail,
   Fingerprint,
+  ArrowUpDown,
+  ArrowUp,
+  ArrowDown,
 } from "lucide-react";
 import { useAuth } from "@/context/AuthContext";
 import {
@@ -96,12 +98,25 @@ function formatDate(dateStr?: string) {
   }
 }
 
+type SortField = "user" | "role" | "lastLogin" | "created";
+type SortDirection = "asc" | "desc";
+
+const ROLE_WEIGHT: Record<UserRole, number> = {
+  admin: 5,
+  editor: 4,
+  moderator: 3,
+  viewer: 2,
+  user: 1,
+};
+
 function AdminPage() {
   const { user, loading: authLoading, isAdmin, signInWithGoogle } = useAuth();
   const [users, setUsers] = useState<AdminUserProfile[]>([]);
   const [loading, setLoading] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const [roleFilter, setRoleFilter] = useState<string>("all");
+  const [sortField, setSortField] = useState<SortField | null>("created");
+  const [sortDirection, setSortDirection] = useState<SortDirection>("desc");
   const [updatingUid, setUpdatingUid] = useState<string | null>(null);
   const [selectedUser, setSelectedUser] = useState<AdminUserProfile | null>(null);
   const [copiedId, setCopiedId] = useState<string | null>(null);
@@ -163,9 +178,31 @@ function AdminPage() {
     setTimeout(() => setCopiedId(null), 2000);
   };
 
-  // Filtered users
+  const handleSort = (field: SortField) => {
+    if (sortField === field) {
+      setSortDirection((prev) => (prev === "asc" ? "desc" : "asc"));
+    } else {
+      setSortField(field);
+      setSortDirection(field === "lastLogin" || field === "created" ? "desc" : "asc");
+    }
+  };
+
+  const renderSortIcon = (field: SortField) => {
+    if (sortField !== field) {
+      return (
+        <ArrowUpDown className="h-3 w-3 text-muted-foreground/30 transition-colors group-hover:text-muted-foreground" />
+      );
+    }
+    return sortDirection === "asc" ? (
+      <ArrowUp className="h-3 w-3 text-primary animate-in fade-in-50 duration-150" />
+    ) : (
+      <ArrowDown className="h-3 w-3 text-primary animate-in fade-in-50 duration-150" />
+    );
+  };
+
+  // Filtered and sorted users
   const filteredUsers = useMemo(() => {
-    return users.filter((u) => {
+    const filtered = users.filter((u) => {
       const matchesSearch =
         u.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
         u.email.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -173,7 +210,35 @@ function AdminPage() {
       const matchesRole = roleFilter === "all" || u.role === roleFilter;
       return matchesSearch && matchesRole;
     });
-  }, [users, searchQuery, roleFilter]);
+
+    if (!sortField) return filtered;
+
+    return [...filtered].sort((a, b) => {
+      let comp = 0;
+      if (sortField === "user") {
+        const nameA = (a.name || a.email || "").toLowerCase();
+        const nameB = (b.name || b.email || "").toLowerCase();
+        comp = nameA.localeCompare(nameB);
+      } else if (sortField === "role") {
+        const weightA = ROLE_WEIGHT[a.role] ?? 0;
+        const weightB = ROLE_WEIGHT[b.role] ?? 0;
+        comp = weightA - weightB;
+        if (comp === 0) {
+          comp = (a.name || a.email || "").localeCompare(b.name || b.email || "");
+        }
+      } else if (sortField === "lastLogin") {
+        const timeA = a.lastLoginAt ? new Date(a.lastLoginAt).getTime() : 0;
+        const timeB = b.lastLoginAt ? new Date(b.lastLoginAt).getTime() : 0;
+        comp = timeA - timeB;
+      } else if (sortField === "created") {
+        const timeA = a.createdAt ? new Date(a.createdAt).getTime() : 0;
+        const timeB = b.createdAt ? new Date(b.createdAt).getTime() : 0;
+        comp = timeA - timeB;
+      }
+
+      return sortDirection === "asc" ? comp : -comp;
+    });
+  }, [users, searchQuery, roleFilter, sortField, sortDirection]);
 
   // Statistics
   const stats = useMemo(() => {
@@ -389,11 +454,57 @@ function AdminPage() {
             <table className="w-full text-left text-sm">
               <thead className="border-b border-border/80 bg-surface-2/50 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
                 <tr>
-                  <th className="px-6 py-3.5">User</th>
-                  <th className="px-6 py-3.5">Role</th>
-                  <th className="px-6 py-3.5 hidden md:table-cell">Last Login</th>
-                  <th className="px-6 py-3.5 hidden lg:table-cell">Created</th>
-                  <th className="px-6 py-3.5 text-right">Actions</th>
+                  <th className="px-6 py-3.5">
+                    <button
+                      type="button"
+                      onClick={() => handleSort("user")}
+                      className="group flex items-center gap-1.5 font-semibold text-[11px] uppercase tracking-wider transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-primary/40 rounded cursor-pointer select-none"
+                      title="Sort by User name / email"
+                    >
+                      <span className={sortField === "user" ? "text-foreground" : ""}>User</span>
+                      {renderSortIcon("user")}
+                    </button>
+                  </th>
+                  <th className="px-6 py-3.5">
+                    <button
+                      type="button"
+                      onClick={() => handleSort("role")}
+                      className="group flex items-center gap-1.5 font-semibold text-[11px] uppercase tracking-wider transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-primary/40 rounded cursor-pointer select-none"
+                      title="Sort by Role priority"
+                    >
+                      <span className={sortField === "role" ? "text-foreground" : ""}>Role</span>
+                      {renderSortIcon("role")}
+                    </button>
+                  </th>
+                  <th className="px-6 py-3.5 hidden md:table-cell">
+                    <button
+                      type="button"
+                      onClick={() => handleSort("lastLogin")}
+                      className="group flex items-center gap-1.5 font-semibold text-[11px] uppercase tracking-wider transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-primary/40 rounded cursor-pointer select-none"
+                      title="Sort by Last Login time"
+                    >
+                      <span className={sortField === "lastLogin" ? "text-foreground" : ""}>
+                        Last Login
+                      </span>
+                      {renderSortIcon("lastLogin")}
+                    </button>
+                  </th>
+                  <th className="px-6 py-3.5 hidden lg:table-cell">
+                    <button
+                      type="button"
+                      onClick={() => handleSort("created")}
+                      className="group flex items-center gap-1.5 font-semibold text-[11px] uppercase tracking-wider transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-primary/40 rounded cursor-pointer select-none"
+                      title="Sort by Account Creation time"
+                    >
+                      <span className={sortField === "created" ? "text-foreground" : ""}>
+                        Created
+                      </span>
+                      {renderSortIcon("created")}
+                    </button>
+                  </th>
+                  <th className="px-6 py-3.5 text-right font-semibold text-[11px] uppercase tracking-wider text-muted-foreground">
+                    Actions
+                  </th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-border/60">
