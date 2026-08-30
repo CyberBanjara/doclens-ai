@@ -14,6 +14,8 @@ import {
   Calendar,
   AlertCircle,
   X,
+  CreditCard,
+  Image as ImageIcon,
 } from "lucide-react";
 import {
   Dialog,
@@ -30,7 +32,10 @@ import {
   computeSlotAvailabilities,
   uploadAdCreative,
   submitPendingAd,
+  createAdPaymentOrder,
+  verifyAdPayment,
 } from "@/lib/ads";
+import { loadRazorpayScript } from "@/lib/support";
 import { fileToBase64 } from "@/lib/file-utils";
 
 interface AdSubmissionModalProps {
@@ -68,7 +73,7 @@ export function AdSubmissionModal({
   activeAds = [],
   onSuccess,
 }: AdSubmissionModalProps) {
-  const [selectedPackage, setSelectedPackage] = useState<AdPackage>(AD_PACKAGES[1]); // Default 7 Days
+  const [selectedPackage, setSelectedPackage] = useState<AdPackage>(AD_PACKAGES[0]); // Default 24 Hours Spotlight
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [company, setCompany] = useState("");
@@ -79,16 +84,17 @@ export function AdSubmissionModal({
   // Mode: standard vs waitlist
   const [isWaitlistMode, setIsWaitlistMode] = useState(initialMode === "waitlist");
 
-  // Image upload states
+  // Local image file selection (Held locally in memory until verified payment)
   const [imageFile, setImageFile] = useState<File | null>(null);
   const [imagePreview, setImagePreview] = useState<string>("");
-  const [uploadedR2Url, setUploadedR2Url] = useState<string>("");
-  const [isUploadingImage, setIsUploadingImage] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  // Form submission state
+  // Form & Payment processing states
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isPaymentModalOpen, setIsPaymentModalOpen] = useState(false);
+  const [submittingStep, setSubmittingStep] = useState<string>("");
   const [isSubmittedSuccess, setIsSubmittedSuccess] = useState(false);
+  const [completedPaymentId, setCompletedPaymentId] = useState<string>("");
 
   useEffect(() => {
     setIsWaitlistMode(initialMode === "waitlist");
@@ -128,24 +134,30 @@ export function AdSubmissionModal({
     setTargetUrl("");
     setImageFile(null);
     setImagePreview("");
-    setUploadedR2Url("");
-    setIsUploadingImage(false);
     setIsSubmitting(false);
+    setIsPaymentModalOpen(false);
+    setSubmittingStep("");
     setIsSubmittedSuccess(false);
+    setCompletedPaymentId("");
     setSelectedPackage(AD_PACKAGES[1]);
   }, []);
 
   const handleClose = (newOpen: boolean) => {
+    // If Razorpay is currently active, do NOT close or reset the modal
+    if (!newOpen && (isPaymentModalOpen || isSubmitting)) {
+      return;
+    }
     if (!newOpen) {
       setTimeout(resetForm, 300);
     }
     onOpenChange(newOpen);
   };
 
-  const handleImageSelect = async (file: File) => {
+  // Select local image file (No R2 upload occurs here)
+  const handleImageSelect = (file: File) => {
     if (!file) return;
     if (!file.type.startsWith("image/")) {
-      toast.error("Please upload an image file (PNG, JPG, WebP, SVG).");
+      toast.error("Please upload a valid image file (PNG, JPG, WebP, SVG).");
       return;
     }
     if (file.size > 5 * 1024 * 1024) {
@@ -156,38 +168,16 @@ export function AdSubmissionModal({
     setImageFile(file);
     const localPreviewUrl = URL.createObjectURL(file);
     setImagePreview(localPreviewUrl);
-
-    // Upload immediately to Cloudflare R2
-    setIsUploadingImage(true);
-    const toastId = toast.loading("Uploading creative banner to Cloudflare R2...");
-
-    try {
-      const base64Data = await fileToBase64(file);
-      const res = await uploadAdCreative({
-        data: {
-          fileName: file.name,
-          contentType: file.type,
-          base64Data,
-        },
-      });
-
-      if (res?.url) {
-        setUploadedR2Url(res.url);
-        toast.success("Creative banner uploaded to R2!", { id: toastId });
-      } else {
-        throw new Error("Did not receive public asset URL.");
-      }
-    } catch (err: any) {
-      console.error("Creative upload error:", err);
-      toast.error("Failed to upload image to R2", {
-        id: toastId,
-        description: err?.message || "Please try again or use another image.",
-      });
-    } finally {
-      setIsUploadingImage(false);
-    }
   };
 
+  const handleClearImage = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    setImageFile(null);
+    setImagePreview("");
+    if (fileInputRef.current) fileInputRef.current.value = "";
+  };
+
+  // Submit flow: Opens Razorpay -> Verifies payment signature -> Uploads to R2 -> Submits pending ad to Supabase
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
@@ -207,56 +197,203 @@ export function AdSubmissionModal({
       toast.error("Please provide your destination URL.");
       return;
     }
-    if (!uploadedR2Url) {
-      toast.error("Please upload your brand logo or creative banner.");
+    if (!imageFile) {
+      toast.error("Please select a brand logo or creative banner image.");
       return;
     }
 
     setIsSubmitting(true);
-    const toastId = toast.loading(
-      isWaitlistMode
-        ? "Submitting your reservation to the waiting list..."
-        : "Submitting advertisement for review...",
-    );
+    setSubmittingStep("Opening payment gateway...");
+    const toastId = toast.loading("Initializing Razorpay checkout...");
 
     try {
-      await submitPendingAd({
+      // 1. Ensure Razorpay Checkout SDK script is loaded
+      const isScriptLoaded = await loadRazorpayScript();
+      if (!isScriptLoaded) {
+        throw new Error("Unable to load Razorpay payment gateway. Please check your connection.");
+      }
+
+      // 2. Create Razorpay Order on server
+      const orderRes = await createAdPaymentOrder({
         data: {
+          amountInINR: selectedPackage.priceINR,
+          packageId: selectedPackage.id,
+          packageName: selectedPackage.name,
           advertiserName: name.trim(),
           advertiserEmail: email.trim(),
-          advertiserCompany: company.trim() || undefined,
-          title: title.trim(),
-          description: description.trim() || undefined,
-          imageUrl: uploadedR2Url,
-          targetUrl: targetUrl.trim(),
-          packageName: selectedPackage.name,
-          durationDays: selectedPackage.durationDays,
-          amountPaid: selectedPackage.priceINR,
         },
       });
 
-      toast.success(
-        isWaitlistMode
-          ? "Waiting list reservation submitted!"
-          : "Ad campaign submitted successfully!",
-        { id: toastId },
-      );
-      setIsSubmittedSuccess(true);
-      if (onSuccess) onSuccess();
-    } catch (err: any) {
-      console.error("Submission failed:", err);
-      toast.error("Ad submission failed", {
-        id: toastId,
-        description: err?.message || "Could not save your ad. Please try again.",
+      if (!orderRes?.orderId || !orderRes?.keyId) {
+        throw new Error("Failed to initialize payment order.");
+      }
+
+      toast.dismiss(toastId);
+      setIsPaymentModalOpen(true);
+      setSubmittingStep("Awaiting payment in Razorpay...");
+
+      // 3. Open Razorpay Checkout Modal
+      const rzpOptions = {
+        key: orderRes.keyId,
+        amount: orderRes.amount,
+        currency: orderRes.currency || "INR",
+        name: "Anuwad AI Reader",
+        description: `${selectedPackage.name} Ad Slot Sponsorship`,
+        image: "/light_13746323.png",
+        order_id: orderRes.orderId,
+        prefill: {
+          name: name.trim(),
+          email: email.trim(),
+        },
+        theme: {
+          color: "#7c3aed",
+        },
+        modal: {
+          backdropclose: false,
+          escape: false,
+          handleback: true,
+          confirm_close: true,
+          ondismiss: () => {
+            setIsSubmitting(false);
+            setIsPaymentModalOpen(false);
+            setSubmittingStep("");
+            toast.info("Payment cancelled. Your campaign details are saved and ready to retry.");
+          },
+        },
+        handler: async (response: {
+          razorpay_payment_id: string;
+          razorpay_order_id: string;
+          razorpay_signature: string;
+        }) => {
+          setIsPaymentModalOpen(false);
+          const progressToastId = toast.loading("Verifying payment signature with Razorpay...");
+
+          try {
+            setSubmittingStep("Verifying payment signature...");
+
+            // Step A: Verify Razorpay HMAC-SHA256 signature on backend
+            const verifyRes = await verifyAdPayment({
+              data: {
+                razorpay_order_id: response.razorpay_order_id,
+                razorpay_payment_id: response.razorpay_payment_id,
+                razorpay_signature: response.razorpay_signature,
+                amountInINR: selectedPackage.priceINR,
+              },
+            });
+
+            if (!verifyRes?.success || !verifyRes?.verified) {
+              throw new Error("Payment signature verification failed. Campaign was not submitted.");
+            }
+
+            // Step B: Only after verified payment -> Upload Banner/Icon image to Cloudflare R2
+            setSubmittingStep("Uploading creative asset to Cloudflare R2...");
+            toast.loading("Payment verified! Uploading creative banner to R2...", {
+              id: progressToastId,
+            });
+
+            const base64Data = await fileToBase64(imageFile);
+            const r2Res = await uploadAdCreative({
+              data: {
+                fileName: imageFile.name,
+                contentType: imageFile.type,
+                base64Data,
+              },
+            });
+
+            if (!r2Res?.url) {
+              throw new Error("Failed to store creative banner asset in Cloudflare R2.");
+            }
+
+            // Step C: Submit campaign to Supabase for admin approval
+            setSubmittingStep("Submitting campaign for admin approval...");
+            toast.loading("Submitting ad for admin review...", { id: progressToastId });
+
+            await submitPendingAd({
+              data: {
+                advertiserName: name.trim(),
+                advertiserEmail: email.trim(),
+                advertiserCompany: company.trim() || undefined,
+                title: title.trim(),
+                description: description.trim() || undefined,
+                imageUrl: r2Res.url,
+                targetUrl: targetUrl.trim(),
+                packageName: selectedPackage.name,
+                durationDays: selectedPackage.durationDays,
+                amountPaid: selectedPackage.priceINR,
+                paymentStatus: "paid",
+              },
+            });
+
+            setCompletedPaymentId(response.razorpay_payment_id);
+            setIsSubmittedSuccess(true);
+            toast.success(
+              isWaitlistMode
+                ? "Payment confirmed! Waiting list reservation submitted."
+                : "Payment confirmed! Ad campaign submitted for review.",
+              { id: progressToastId },
+            );
+
+            if (onSuccess) onSuccess();
+          } catch (err: any) {
+            console.error("Post-payment processing failed:", err);
+            toast.error("Payment processing error", {
+              id: progressToastId,
+              description:
+                err?.message ||
+                `Please contact support with payment ID: ${response.razorpay_payment_id}`,
+            });
+          } finally {
+            setIsSubmitting(false);
+            setSubmittingStep("");
+          }
+        },
+      };
+
+      const rzp = new (window as any).Razorpay(rzpOptions);
+      rzp.on("payment.failed", (response: any) => {
+        setIsSubmitting(false);
+        setIsPaymentModalOpen(false);
+        setSubmittingStep("");
+        toast.error("Payment failed", {
+          description:
+            response.error?.description || "Transaction was declined by payment gateway.",
+        });
       });
-    } finally {
+
+      rzp.open();
+    } catch (err: any) {
+      console.error("Payment initialization error:", err);
+      toast.error("Could not initiate checkout", {
+        id: toastId,
+        description: err?.message || "Please check your network and try again.",
+      });
       setIsSubmitting(false);
+      setIsPaymentModalOpen(false);
+      setSubmittingStep("");
     }
   };
 
   return (
     <Dialog open={open} onOpenChange={handleClose}>
-      <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto rounded-3xl border border-border/80 bg-background/95 p-6 sm:p-8 shadow-2xl backdrop-blur-2xl">
+      <DialogContent
+        onPointerDownOutside={(e) => {
+          // If Razorpay or payment is active, prevent outside click dismissal
+          if (isSubmitting || isPaymentModalOpen || document.querySelector(".razorpay-container")) {
+            e.preventDefault();
+          }
+        }}
+        onInteractOutside={(e) => {
+          if (isSubmitting || isPaymentModalOpen || document.querySelector(".razorpay-container")) {
+            e.preventDefault();
+          }
+        }}
+        onEscapeKeyDown={(e) => {
+          if (isSubmitting || isPaymentModalOpen || document.querySelector(".razorpay-container")) {
+            e.preventDefault();
+          }
+        }}
+        className="max-w-2xl max-h-[90vh] overflow-y-auto rounded-3xl border border-border/80 bg-background/95 p-6 sm:p-8 shadow-2xl backdrop-blur-2xl"
+      >
         <DialogHeader className="space-y-2 text-left">
           <div className="flex items-center gap-3">
             <span
@@ -288,13 +425,14 @@ export function AdSubmissionModal({
             </div>
             <h3 className="text-xl font-bold text-foreground">
               {isWaitlistMode
-                ? "Waiting List Reservation Confirmed!"
-                : "Campaign Submitted for Review!"}
+                ? "Payment Verified & Waiting List Reservation Confirmed!"
+                : "Payment Verified & Campaign Submitted for Review!"}
             </h3>
             <p className="max-w-md text-sm text-muted-foreground leading-relaxed">
-              Thank you, <span className="font-semibold text-foreground">{name}</span>! Your
-              advertisement for <span className="font-semibold text-foreground">{title}</span> (
-              {selectedPackage.name}) has been saved.
+              Thank you, <span className="font-semibold text-foreground">{name}</span>! Your payment
+              has been processed and your ad for{" "}
+              <span className="font-semibold text-foreground">{title}</span> ({selectedPackage.name}
+              ) has been uploaded.
               {selectedSlotAvailability.isOccupied ? (
                 <>
                   {" "}
@@ -311,7 +449,20 @@ export function AdSubmissionModal({
 
             <div className="w-full max-w-md rounded-2xl border border-border/70 bg-surface-2/60 p-4 text-left text-xs space-y-2 mt-4">
               <div className="flex justify-between">
-                <span className="text-muted-foreground">Status</span>
+                <span className="text-muted-foreground">Payment Status</span>
+                <span className="font-semibold text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded-full border border-emerald-500/20 flex items-center gap-1">
+                  <CheckCircle2 className="h-3 w-3" />
+                  <span>Paid (₹{selectedPackage.priceINR.toLocaleString()})</span>
+                </span>
+              </div>
+              {completedPaymentId && (
+                <div className="flex justify-between">
+                  <span className="text-muted-foreground">Payment ID</span>
+                  <span className="font-mono text-foreground">{completedPaymentId}</span>
+                </div>
+              )}
+              <div className="flex justify-between">
+                <span className="text-muted-foreground">Campaign Status</span>
                 <span className="font-semibold text-amber-400 bg-amber-500/10 px-2 py-0.5 rounded-full border border-amber-500/20">
                   {isWaitlistMode ? "Queued on Waiting List" : "Pending Admin Review"}
                 </span>
@@ -343,7 +494,7 @@ export function AdSubmissionModal({
           <form onSubmit={handleSubmit} className="space-y-6 mt-4">
             {/* 1. Exactly 3 Ad Duration Slots */}
             <div className="space-y-2.5">
-              <label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground flex items-center justify-between">
+              <label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground flex items-between justify-between">
                 <span className="flex items-center gap-1.5">
                   <Tag className="h-3.5 w-3.5 text-primary" />
                   <span>1. Select Ad Duration Slot</span>
@@ -445,13 +596,13 @@ export function AdSubmissionModal({
                       <strong className="text-foreground">
                         {formatSlotDate(selectedSlotAvailability.expiresAt)}
                       </strong>{" "}
-                      ({selectedSlotAvailability.relativeTimeStr}). When you submit now, your ad
-                      will be scheduled and uploaded to go live right after.
+                      ({selectedSlotAvailability.relativeTimeStr}). When you complete payment, your
+                      ad will be verified, stored in R2, and scheduled to go live right after.
                     </p>
                   ) : (
                     <p className="text-muted-foreground">
-                      This slot has no queue. Submit your creative and your campaign will go live
-                      immediately upon admin approval for the full {selectedPackage.name} duration.
+                      This slot has no queue. Complete payment to upload your creative and submit
+                      for immediate review for the full {selectedPackage.name} duration.
                     </p>
                   )}
                 </div>
@@ -535,7 +686,7 @@ export function AdSubmissionModal({
                 </div>
               </div>
 
-              {/* R2 Image / Logo Upload */}
+              {/* Local Image / Logo Selection */}
               <div className="space-y-2 pt-1">
                 <span className="text-[11px] text-muted-foreground">
                   Banner / Icon Image (Square aspect ratio, max 5MB) *
@@ -548,7 +699,7 @@ export function AdSubmissionModal({
                   className="hidden"
                   onChange={(e) => {
                     const f = e.target.files?.[0];
-                    if (f) void handleImageSelect(f);
+                    if (f) handleImageSelect(f);
                   }}
                 />
 
@@ -564,13 +715,15 @@ export function AdSubmissionModal({
                         : "Click to select logo/banner image (PNG, JPG, WebP)"}
                     </span>
                     <span className="text-[10px] text-muted-foreground mt-0.5">
-                      Uploaded directly to Cloudflare R2
+                      {imageFile
+                        ? "Asset ready for secure upload upon payment"
+                        : "Will be uploaded to R2 only after payment is confirmed"}
                     </span>
                   </div>
 
-                  {/* Logo Preview */}
+                  {/* Local Image Preview */}
                   {imagePreview && (
-                    <div className="relative flex-shrink-0 flex items-center justify-center h-16 w-16 rounded-2xl border border-border/80 bg-surface-2 p-1 shadow-md overflow-hidden">
+                    <div className="relative flex-shrink-0 flex items-center justify-center h-16 w-16 rounded-2xl border border-border/80 bg-surface-2 p-1 shadow-md overflow-hidden group">
                       <span className="absolute top-1 left-1 rounded-md bg-amber-400 px-1 py-0.2 text-[8px] font-black text-black z-10 leading-tight">
                         AD
                       </span>
@@ -579,15 +732,29 @@ export function AdSubmissionModal({
                         alt="Creative preview"
                         className="h-full w-full object-cover rounded-xl"
                       />
-                      {isUploadingImage && (
-                        <div className="absolute inset-0 bg-background/80 flex items-center justify-center text-[10px] font-semibold text-primary animate-pulse">
-                          R2...
-                        </div>
-                      )}
+                      <button
+                        type="button"
+                        onClick={handleClearImage}
+                        className="absolute inset-0 bg-background/70 opacity-0 group-hover:opacity-100 flex items-center justify-center text-xs text-red-400 transition-opacity font-semibold"
+                        title="Remove image"
+                      >
+                        <X className="h-4 w-4" />
+                      </button>
                     </div>
                   )}
                 </div>
               </div>
+            </div>
+
+            {/* Payment Guarantee Notice */}
+            <div className="rounded-2xl border border-border/70 bg-surface-2/50 p-3.5 flex items-center justify-between text-xs text-muted-foreground">
+              <div className="flex items-center gap-2">
+                <CreditCard className="h-4 w-4 text-primary flex-shrink-0" />
+                <span>Secured by Razorpay. Creative assets are uploaded only upon payment.</span>
+              </div>
+              <span className="font-semibold text-foreground">
+                ₹{selectedPackage.priceINR.toLocaleString()}
+              </span>
             </div>
 
             {/* Footer Actions */}
@@ -595,26 +762,27 @@ export function AdSubmissionModal({
               <button
                 type="button"
                 onClick={() => handleClose(false)}
-                className="rounded-xl border border-border bg-surface px-4 py-2 text-sm font-medium text-foreground transition-all hover:bg-surface-2 cursor-pointer"
+                disabled={isSubmitting || isPaymentModalOpen}
+                className="rounded-xl border border-border bg-surface px-4 py-2 text-sm font-medium text-foreground transition-all hover:bg-surface-2 cursor-pointer disabled:opacity-50"
               >
                 Cancel
               </button>
 
               <button
                 type="submit"
-                disabled={isSubmitting || isUploadingImage || !uploadedR2Url}
+                disabled={isSubmitting || !imageFile}
                 className="inline-flex items-center justify-center gap-2 rounded-xl bg-primary px-6 py-2.5 text-sm font-semibold text-primary-foreground shadow-lg shadow-primary/20 transition-all hover:bg-primary/90 active:scale-95 disabled:opacity-50 cursor-pointer"
               >
                 {isSubmitting ? (
                   <>
                     <span className="h-4 w-4 rounded-full border-2 border-primary-foreground border-t-transparent animate-spin" />
-                    <span>Submitting...</span>
+                    <span>{submittingStep || "Processing..."}</span>
                   </>
                 ) : (
                   <>
                     <Sparkles className="h-4 w-4" />
                     <span>
-                      {selectedSlotAvailability.isOccupied
+                      {isWaitlistMode
                         ? `Join Waiting List (₹${selectedPackage.priceINR.toLocaleString()})`
                         : `Submit Campaign (₹${selectedPackage.priceINR.toLocaleString()})`}
                     </span>

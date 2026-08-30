@@ -1,5 +1,4 @@
-@import "tailwindcss" source(none);
-@source "../src";
+@import "tailwindcss";
 @import "tw-animate-css";
 
 /* pdf.js TextLayer minimal styles — keeps selectable text spans pixel-aligned with the canvas */
@@ -39,7 +38,7 @@
   background: rgba(64, 128, 255, 0.35);
 }
 
-@custom-variant dark (&:is(.dark *));
+@variant dark (&:is(.dark *));
 
 @theme inline {
   --radius-sm: calc(var(--radius) - 4px);
@@ -495,5 +494,12 @@
   }
   .collapsible-content > div {
     overflow: hidden;
+  }
+
+  /* ─── Razorpay Checkout Frame & Container ─── */
+  .razorpay-container,
+  .razorpay-checkout-frame {
+    z-index: 2147483647 !important;
+    pointer-events: auto !important;
   }
 }

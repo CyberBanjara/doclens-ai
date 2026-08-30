@@ -10,7 +10,7 @@ const AD_SLOTS = [
     id: "slot-24h",
     name: "24 Hours Spotlight",
     durationDays: 1,
-    priceINR: 1500,
+    priceINR: 11,
     label: "24h",
   },
   {
@@ -34,7 +34,7 @@ export function AdBannerWidget() {
   const [loading, setLoading] = useState(true);
   const [submissionOpen, setSubmissionOpen] = useState(false);
   const [submissionMode, setSubmissionMode] = useState<"standard" | "waitlist">("standard");
-  const [selectedPackageId, setSelectedPackageId] = useState<string>("slot-7d");
+  const [selectedPackageId, setSelectedPackageId] = useState<string>("slot-24h");
   const [isDismissed, setIsDismissed] = useState(false);
 
   const location = useLocation();
@@ -91,7 +91,7 @@ export function AdBannerWidget() {
       return (
         <button
           onClick={() => setIsDismissed(false)}
-          className="fixed bottom-4 right-4 z-40 flex items-center gap-1.5 rounded-full border border-border/80 bg-background/90 px-3 py-1.5 text-xs font-semibold text-foreground shadow-xl backdrop-blur-md transition-all hover:bg-surface-2 hover:border-primary/40 hover:scale-105 active:scale-95 cursor-pointer"
+          className="fixed bottom-[calc(4.5rem+env(safe-area-inset-bottom))] left-4 md:left-auto md:bottom-4 md:right-4 z-40 flex items-center gap-1.5 rounded-full border border-border/80 bg-background/90 px-3 py-1.5 text-xs font-semibold text-foreground shadow-xl backdrop-blur-md transition-all hover:bg-surface-2 hover:border-primary/40 hover:scale-105 active:scale-95 cursor-pointer"
           title="Show sponsor showcase"
         >
           <Megaphone className="h-3.5 w-3.5 text-amber-400" />
@@ -116,11 +116,11 @@ export function AdBannerWidget() {
 
   return (
     <>
-      {/* Floating Bottom Dock Container */}
-      <div className="fixed bottom-4 left-1/2 -translate-x-1/2 z-40 w-auto max-w-[96vw] animate-in fade-in slide-in-from-bottom-5 duration-300">
-        <div className="relative overflow-hidden rounded-3xl border border-border/80 bg-background/95 p-2 sm:p-2.5 shadow-2xl backdrop-blur-2xl transition-all hover:border-primary/30">
+      {/* Floating Bottom Dock Container — Shifted above the mobile tab bar on mobile screens */}
+      <div className="fixed bottom-[calc(4.5rem+env(safe-area-inset-bottom))] md:bottom-4 left-1/2 -translate-x-1/2 z-40 w-auto max-w-[96vw] animate-in fade-in slide-in-from-bottom-5 duration-300">
+        <div className="relative overflow-hidden rounded-3xl border border-border/80 bg-background/95 p-1.5 sm:p-2.5 shadow-2xl backdrop-blur-2xl transition-all hover:border-primary/30">
           {/* Main Horizontal Strip rendering the 3 slots */}
-          <div className="flex items-center gap-2 sm:gap-2.5 overflow-x-auto scrollbar-none">
+          <div className="flex items-center gap-1.5 sm:gap-2.5 overflow-x-auto scrollbar-none">
             {AD_SLOTS.map((slot) => {
               const now = Date.now();
               // Find active approved ad for this slot duration
@@ -142,11 +142,11 @@ export function AdBannerWidget() {
                         href={activeAd.target_url}
                         target="_blank"
                         rel="noopener noreferrer"
-                        className="group relative flex-shrink-0 flex items-center justify-center h-14 w-14 sm:h-16 sm:w-16 rounded-2xl overflow-hidden border border-border/80 bg-surface shadow-sm transition-all duration-200 hover:border-primary hover:scale-[1.03] hover:shadow-lg hover:shadow-primary/10 active:scale-95 cursor-pointer"
+                        className="group relative flex-shrink-0 flex items-center justify-center h-12 w-12 sm:h-16 sm:w-16 rounded-2xl overflow-hidden border border-border/80 bg-surface shadow-sm transition-all duration-200 hover:border-primary hover:scale-[1.03] hover:shadow-lg hover:shadow-primary/10 active:scale-95 cursor-pointer"
                         title={`${activeAd.title} — ${slot.name}`}
                       >
                         {/* Yellow AD Badge */}
-                        <span className="absolute top-1.5 left-1.5 rounded-md bg-amber-400/95 px-1 py-0.2 text-[8px] sm:text-[9px] font-black text-black z-20 leading-tight shadow-sm tracking-tight select-none">
+                        <span className="absolute top-1 left-1 sm:top-1.5 sm:left-1.5 rounded-md bg-amber-400/95 px-1 py-0.2 text-[7px] sm:text-[9px] font-black text-black z-20 leading-tight shadow-sm tracking-tight select-none">
                           AD
                         </span>
 
@@ -163,7 +163,7 @@ export function AdBannerWidget() {
 
                         {/* Fallback in case of image load error */}
                         <div className="absolute inset-0 bg-gradient-to-br from-zinc-800 to-zinc-900 flex items-center justify-center p-1 text-center -z-10">
-                          <span className="text-[10px] font-bold text-zinc-300 line-clamp-2">
+                          <span className="text-[9px] sm:text-[10px] font-bold text-zinc-300 line-clamp-2">
                             {activeAd.advertiser_company || activeAd.title}
                           </span>
                         </div>
@@ -173,12 +173,11 @@ export function AdBannerWidget() {
                       <button
                         type="button"
                         onClick={() => handleOpenWaitlist(slot.id)}
-                        className="group flex-shrink-0 flex items-center justify-center w-7 sm:w-8 h-14 sm:h-16 rounded-2xl border-2 border-dashed border-orange-500/50 bg-orange-500/10 text-orange-400 hover:border-orange-400 hover:bg-orange-500/20 transition-all hover:scale-105 active:scale-95 cursor-pointer select-none"
+                        className="group flex-shrink-0 flex items-center justify-center w-6 sm:w-8 h-12 sm:h-16 rounded-2xl border-2 border-dashed border-orange-500/50 bg-orange-500/10 text-orange-400 hover:border-orange-400 hover:bg-orange-500/20 transition-all hover:scale-105 active:scale-95 cursor-pointer select-none"
                         title={`Join waiting list for the ${slot.name} slot`}
                       >
-                        <div className="flex flex-col items-center justify-center text-[9px] sm:text-[10px] font-black uppercase tracking-wider -rotate-90 whitespace-nowrap">
+                        <div className="flex flex-col items-center justify-center text-[8px] sm:text-[10px] font-black uppercase tracking-wider -rotate-90 whitespace-nowrap">
                           <span className="flex items-center gap-0.5 text-orange-400 group-hover:text-orange-300 transition-colors">
-                            <span>⚡</span>
                             <span>waitlist</span>
                           </span>
                         </div>
@@ -189,13 +188,13 @@ export function AdBannerWidget() {
                     <button
                       type="button"
                       onClick={() => handleOpenPromote(slot.id)}
-                      className="group flex-shrink-0 flex flex-col items-center justify-center h-14 w-24 sm:h-16 sm:w-28 rounded-2xl border-2 border-dashed border-border/80 bg-surface/40 px-2 text-center transition-all hover:border-primary/60 hover:bg-primary/5 hover:scale-[1.02] active:scale-95 cursor-pointer select-none"
+                      className="group flex-shrink-0 flex flex-col items-center justify-center h-12 w-20 sm:h-16 sm:w-28 rounded-2xl border-2 border-dashed border-border/80 bg-surface/40 px-1.5 sm:px-2 text-center transition-all hover:border-primary/60 hover:bg-primary/5 hover:scale-[1.02] active:scale-95 cursor-pointer select-none"
                       title={`Promote your startup in the ${slot.name} slot (Available Immediately)`}
                     >
-                      <span className="text-[10px] sm:text-[11px] font-bold text-muted-foreground group-hover:text-primary transition-colors leading-tight">
-                        Promote startup
+                      <span className="text-[9px] sm:text-[11px] font-bold text-muted-foreground group-hover:text-primary transition-colors leading-tight">
+                        Promote
                       </span>
-                      <span className="text-[9px] sm:text-[10px] font-semibold text-muted-foreground/70 mt-0.5">
+                      <span className="text-[8px] sm:text-[10px] font-semibold text-muted-foreground/70 mt-0.5">
                         ₹{slot.priceINR.toLocaleString()} / {slot.label}
                       </span>
                     </button>
@@ -208,11 +207,11 @@ export function AdBannerWidget() {
             <button
               type="button"
               onClick={() => setIsDismissed(true)}
-              className="flex-shrink-0 flex items-center justify-center h-7 w-7 rounded-full text-muted-foreground/60 hover:text-foreground hover:bg-surface-2 transition-colors ml-0.5 cursor-pointer"
+              className="flex-shrink-0 flex items-center justify-center h-6 w-6 sm:h-7 sm:w-7 rounded-full text-muted-foreground/60 hover:text-foreground hover:bg-surface-2 transition-colors ml-0.5 cursor-pointer"
               aria-label="Dismiss sponsor dock"
               title="Dismiss sponsor dock"
             >
-              <X className="h-4 w-4" />
+              <X className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
             </button>
           </div>
         </div>

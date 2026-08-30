@@ -52,7 +52,7 @@ export const AD_PACKAGES: AdPackage[] = [
     id: "slot-24h",
     name: "24 Hours Spotlight",
     durationDays: 1,
-    priceINR: 1500,
+    priceINR: 11,
     badge: "24 Hours",
     description: "Quick 24-hour flash placement for product launches and announcements.",
     features: [
@@ -376,9 +376,10 @@ export const submitPendingAd = createServerFn({ method: "POST" })
       description?: string;
       imageUrl: string;
       targetUrl: string;
-      packageName: string;
+      packageName?: string;
       durationDays: number;
       amountPaid: number;
+      paymentStatus?: "pending" | "paid" | "waived" | "failed";
     }) => input,
   )
   .handler(async ({ data }) => {
@@ -412,10 +413,10 @@ export const submitPendingAd = createServerFn({ method: "POST" })
         description: data.description?.trim() || null,
         image_url: data.imageUrl.trim(),
         target_url: finalTargetUrl,
-        package_name: data.packageName || "Startup Showcase (7 Days)",
+        package_name: data.packageName || "7 Days Showcase",
         duration_days: Math.max(1, Number(data.durationDays) || 7),
         amount_paid: Number(data.amountPaid) || 5000,
-        payment_status: "pending",
+        payment_status: data.paymentStatus || "paid",
         approval_status: "pending",
         approved_at: null,
         expires_at: null,
@@ -441,6 +442,113 @@ export const submitPendingAd = createServerFn({ method: "POST" })
     } catch (err: any) {
       console.error("submitPendingAd error:", err);
       throw new Error(err?.message || "Failed to submit advertisement.");
+    }
+  });
+
+/**
+ * Public: Create a Razorpay Order specifically for ad slot sponsorship
+ */
+export const createAdPaymentOrder = createServerFn({ method: "POST" })
+  .validator(
+    (input: {
+      amountInINR: number;
+      packageId: string;
+      packageName: string;
+      advertiserName: string;
+      advertiserEmail: string;
+    }) => input,
+  )
+  .handler(async ({ data }) => {
+    "use server";
+    try {
+      const key_id = process.env.RAZORPAY_KEY_ID;
+      const key_secret = process.env.RAZORPAY_KEY_SECRET;
+
+      if (!key_id || !key_secret) {
+        throw new Error("Razorpay API credentials are not configured on the server.");
+      }
+
+      const { default: Razorpay } = await import("razorpay");
+      const razorpay = new Razorpay({ key_id, key_secret });
+
+      const amountInPaise = Math.round(data.amountInINR * 100);
+      const receipt = `ad_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
+
+      const order = await razorpay.orders.create({
+        amount: amountInPaise,
+        currency: "INR",
+        receipt,
+        notes: {
+          purpose: "Anuwad Sponsorship Slot",
+          packageId: data.packageId,
+          packageName: data.packageName,
+          advertiserName: data.advertiserName,
+          advertiserEmail: data.advertiserEmail,
+        },
+      });
+
+      return {
+        success: true,
+        orderId: order.id,
+        amount: order.amount,
+        currency: order.currency,
+        keyId: key_id,
+      };
+    } catch (err: any) {
+      console.error("createAdPaymentOrder error:", err);
+      throw new Error(err?.message || "Failed to create payment order.");
+    }
+  });
+
+/**
+ * Public: Verify Razorpay payment signature for ad campaigns
+ */
+export const verifyAdPayment = createServerFn({ method: "POST" })
+  .validator(
+    (input: {
+      razorpay_order_id: string;
+      razorpay_payment_id: string;
+      razorpay_signature: string;
+      amountInINR: number;
+    }) => input,
+  )
+  .handler(async ({ data }) => {
+    "use server";
+    try {
+      const key_secret = process.env.RAZORPAY_KEY_SECRET;
+      if (!key_secret) {
+        throw new Error("Razorpay secret key is not configured.");
+      }
+
+      const { razorpay_order_id, razorpay_payment_id, razorpay_signature } = data;
+      if (!razorpay_order_id || !razorpay_payment_id || !razorpay_signature) {
+        throw new Error("Missing required payment verification parameters.");
+      }
+
+      const body = `${razorpay_order_id}|${razorpay_payment_id}`;
+      const expectedSignature = crypto
+        .createHmac("sha256", key_secret)
+        .update(body.toString())
+        .digest("hex");
+
+      const isValid = crypto.timingSafeEqual(
+        Buffer.from(expectedSignature, "utf-8"),
+        Buffer.from(razorpay_signature, "utf-8"),
+      );
+
+      if (!isValid) {
+        throw new Error("Payment signature verification failed. Invalid signature.");
+      }
+
+      return {
+        success: true,
+        verified: true,
+        paymentId: razorpay_payment_id,
+        orderId: razorpay_order_id,
+      };
+    } catch (err: any) {
+      console.error("verifyAdPayment error:", err);
+      throw new Error(err?.message || "Failed to verify payment signature.");
     }
   });
 
