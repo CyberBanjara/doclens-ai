@@ -1,11 +1,4 @@
-import {
-  collection,
-  getDocs,
-  addDoc,
-  query,
-  orderBy,
-  limit,
-} from "firebase/firestore";
+import { collection, getDocs, addDoc, query, orderBy, limit } from "firebase/firestore";
 import { getFirebaseApp, getFirestoreDb } from "./firebase";
 import { getStoredAuthToken } from "./auth-client";
 
@@ -245,9 +238,7 @@ export async function logPaymentFailure(data: {
           errorCode: data.errorCode || "PAYMENT_FAILED",
           errorDescription: data.errorDescription || "",
           isAnonymous: Boolean(data.isAnonymous),
-          supporterName: data.isAnonymous
-            ? "Anonymous Supporter"
-            : data.donorName || "Supporter",
+          supporterName: data.isAnonymous ? "Anonymous Supporter" : data.donorName || "Supporter",
           supporterEmail: data.donorEmail || "",
           userUid: data.userUid || "",
           userPhotoURL: data.isAnonymous ? "" : data.userPhotoURL || "",
@@ -679,9 +670,7 @@ export async function triggerRazorpaySupportCheckout(
     rzp.on("payment.failed", function (response: any) {
       const errorObj = response?.error || {};
       const desc =
-        errorObj.description ||
-        errorObj.reason ||
-        "Payment was declined, cancelled, or failed.";
+        errorObj.description || errorObj.reason || "Payment was declined, cancelled, or failed.";
 
       // Asynchronously log failure to Firebase for tracking/auditing
       void logPaymentFailure({

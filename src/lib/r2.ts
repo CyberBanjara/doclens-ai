@@ -72,9 +72,7 @@ async function assertRoleSession(
   const { verifySessionJwt } = await import("../../server/lib/auth-server");
   const user = await verifySessionJwt(token);
   if (!user) {
-    throw new Error(
-      "Unauthorized [Layer 1 Failed]: Invalid or expired session token signature.",
-    );
+    throw new Error("Unauthorized [Layer 1 Failed]: Invalid or expired session token signature.");
   }
 
   if (!allowedRoles.includes(user.role)) {
@@ -131,7 +129,9 @@ async function getS3Client({ writeAccess = false }: { writeAccess?: boolean } = 
   }
 
   if (!accountId || !bucketName) {
-    throw new Error("Missing Cloudflare R2 account or bucket configuration in environment variables.");
+    throw new Error(
+      "Missing Cloudflare R2 account or bucket configuration in environment variables.",
+    );
   }
 
   return {
@@ -148,7 +148,6 @@ async function getS3Client({ writeAccess = false }: { writeAccess?: boolean } = 
     sdk,
   };
 }
-
 
 export function sanitizeCategory(cat?: string): string {
   if (!cat) return "uncategorized";
@@ -432,7 +431,7 @@ export const deleteFromR2 = createServerFn({ method: "POST" })
           new sdk.DeleteObjectCommand({
             Bucket: bucketName,
             Key: `thumbnails/${data.key}.jpg`,
-          })
+          }),
         );
       } catch {
         // Thumbnail cleanup error ignored

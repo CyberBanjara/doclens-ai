@@ -48,7 +48,6 @@ const {
 const { verifyGoogleIdentity } = await import("../server/lib/google-verify.ts");
 const { H3Event } = await import("h3");
 
-
 describe("🔐 1. JWT Cryptographic Verification & Alg 'none' Bypass", () => {
   it("should reject unsigned tokens with alg: 'none'", async () => {
     // Construct unsigned JWT (alg: none)
@@ -142,7 +141,11 @@ describe("📋 3. Token Claims & Role Validation", () => {
       .setProtectedHeader({ alg: "HS256" })
       .setExpirationTime("1h")
       .sign(secretKey);
-    assert.equal(await verifySessionJwt(noEmailToken), null, "Missing email claim must be rejected");
+    assert.equal(
+      await verifySessionJwt(noEmailToken),
+      null,
+      "Missing email claim must be rejected",
+    );
 
     // Missing uid
     const noUidToken = await new SignJWT({ email: "user@test.com", role: "user" })
@@ -202,7 +205,6 @@ describe("📋 3. Token Claims & Role Validation", () => {
 
 describe("🛡️ 4. Privilege Escalation Across Authorization Matrix", () => {
   function createMockEvent(opts = {}) {
-
     const headers = new Headers();
     if (opts.headers) {
       for (const [k, v] of Object.entries(opts.headers)) {
@@ -214,7 +216,6 @@ describe("🛡️ 4. Privilege Escalation Across Authorization Matrix", () => {
     });
     return new H3Event(req);
   }
-
 
   it("should reject anonymous requests to admin endpoints with 401 Unauthorized", async () => {
     const event = createMockEvent();
@@ -326,31 +327,25 @@ describe("🗄️ 5. Unauthorized Storage Write Access & 2-Layer Credential Sepa
     assert.ok(user);
     assert.notEqual(user.role, "admin", "User must not be admin");
 
-    assert.throws(
-      () => {
-        if (user.role !== "admin") {
-          throw new Error("Forbidden [Layer 1 Failed]: Operation requires administrator role.");
-        }
-      },
-      /Forbidden \[Layer 1 Failed\]/,
-    );
+    assert.throws(() => {
+      if (user.role !== "admin") {
+        throw new Error("Forbidden [Layer 1 Failed]: Operation requires administrator role.");
+      }
+    }, /Forbidden \[Layer 1 Failed\]/);
   });
 
   it("should enforce Layer 2: reject write operations if write API key credential is missing", () => {
     const savedKey = process.env.STORAGE_DISPATCH_TOKEN_ID;
     delete process.env.STORAGE_DISPATCH_TOKEN_ID;
 
-    assert.throws(
-      () => {
-        const writeKey = process.env.STORAGE_DISPATCH_TOKEN_ID;
-        if (!writeKey) {
-          throw new Error(
-            "Unauthorized [Layer 2 Failed]: Missing write-capable API key credentials.",
-          );
-        }
-      },
-      /Unauthorized \[Layer 2 Failed\]/,
-    );
+    assert.throws(() => {
+      const writeKey = process.env.STORAGE_DISPATCH_TOKEN_ID;
+      if (!writeKey) {
+        throw new Error(
+          "Unauthorized [Layer 2 Failed]: Missing write-capable API key credentials.",
+        );
+      }
+    }, /Unauthorized \[Layer 2 Failed\]/);
 
     // Restore
     process.env.STORAGE_DISPATCH_TOKEN_ID = savedKey;
@@ -394,46 +389,42 @@ describe("⚡ 6. Unauthorized Database Write Access & 2-Layer Credential Separat
     assert.ok(editorUser);
     assert.notEqual(editorUser.role, "admin");
 
-    assert.throws(
-      () => {
-        if (editorUser.role !== "admin") {
-          throw new Error(
-            "Forbidden [Layer 1 Failed]: Database write operations require administrator role.",
-          );
-        }
-      },
-      /Forbidden \[Layer 1 Failed\]/,
-    );
+    assert.throws(() => {
+      if (editorUser.role !== "admin") {
+        throw new Error(
+          "Forbidden [Layer 1 Failed]: Database write operations require administrator role.",
+        );
+      }
+    }, /Forbidden \[Layer 1 Failed\]/);
   });
 
   it("should enforce Layer 2: reject database write operations if write token is missing", () => {
     const savedToken = process.env.PIPELINE_CATALOG_SYNC_TOKEN;
     delete process.env.PIPELINE_CATALOG_SYNC_TOKEN;
 
-    assert.throws(
-      () => {
-        const token = process.env.PIPELINE_CATALOG_SYNC_TOKEN;
-        if (!token) {
-          throw new Error(
-            "Unauthorized [Layer 2 Failed]: Missing write-capable database token.",
-          );
-        }
-      },
-      /Unauthorized \[Layer 2 Failed\]/,
-    );
+    assert.throws(() => {
+      const token = process.env.PIPELINE_CATALOG_SYNC_TOKEN;
+      if (!token) {
+        throw new Error("Unauthorized [Layer 2 Failed]: Missing write-capable database token.");
+      }
+    }, /Unauthorized \[Layer 2 Failed\]/);
 
     process.env.PIPELINE_CATALOG_SYNC_TOKEN = savedToken;
   });
 });
 
-
 describe("🔍 7. Google ID Token Forgery & Identity Bypass", () => {
   it("should reject unverified/forged Google ID tokens (no bypass allowed)", async () => {
     // Construct forged Google ID Token with arbitrary sub/email
-    const fakeToken = "eyJhbGciOiJub25lIn0.eyJzdWIiOiJmb3JnZWQtZ29vZ2xlLXVpZCIsImVtYWlsIjoiZm9yZ2VkQGdvb2dsZS5jb20ifQ.";
+    const fakeToken =
+      "eyJhbGciOiJub25lIn0.eyJzdWIiOiJmb3JnZWQtZ29vZ2xlLXVpZCIsImVtYWlsIjoiZm9yZ2VkQGdvb2dsZS5jb20ifQ.";
 
     const verified = await verifyGoogleIdentity(fakeToken);
-    assert.equal(verified, null, "Forged Google ID token must be rejected without signature verification");
+    assert.equal(
+      verified,
+      null,
+      "Forged Google ID token must be rejected without signature verification",
+    );
   });
 
   it("should reject empty or non-string Google ID tokens", async () => {

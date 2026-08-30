@@ -18,6 +18,7 @@ import { TtsProvider } from "@/context/TtsContext";
 import { AuthProvider } from "@/context/AuthContext";
 
 import { NotFoundComponent } from "@/components/NotFound";
+import { AdBannerWidget } from "@/components/AdBannerWidget";
 
 export const Route = createRootRoute({
   head: () => ({
@@ -301,6 +302,7 @@ function RootComponent() {
     <AuthProvider>
       <TtsProvider>
         <Outlet />
+        <AdBannerWidget />
         <ApiKeyModal />
         <Analytics />
         <SpeedInsights />

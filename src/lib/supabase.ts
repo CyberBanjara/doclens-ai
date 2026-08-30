@@ -49,9 +49,7 @@ async function assertRoleSession(
   const { verifySessionJwt } = await import("../../server/lib/auth-server");
   const user = await verifySessionJwt(token);
   if (!user) {
-    throw new Error(
-      "Unauthorized [Layer 1 Failed]: Invalid or expired session token signature.",
-    );
+    throw new Error("Unauthorized [Layer 1 Failed]: Invalid or expired session token signature.");
   }
 
   if (!allowedRoles.includes(user.role)) {
@@ -90,7 +88,6 @@ async function getSupabaseClient({ writeAccess = false }: { writeAccess?: boolea
     // Read-only access credentials: strictly limited to reading public data
     key = process.env.VITE_SUPABASE_PUBLISHABLE_KEY || process.env.SUPABASE_PUBLISHABLE_KEY || "";
   }
-
 
   if (!url || !key || url.includes("your-project.supabase.co")) {
     return null;

@@ -49,4 +49,3 @@ export function getFirestoreDb(): Firestore | null {
 }
 
 export { firebaseConfig };
-

@@ -50,23 +50,23 @@
 
 ### Client-Side Feature Actions
 
-| Action                                   | Anonymous | `user` | `viewer` | `moderator` | `editor` | `admin` | Enforcement                                          |
-| :--------------------------------------- | :-------: | :----: | :------: | :---------: | :------: | :-----: | :--------------------------------------------------- |
-| Upload PDF to local library              |    ✅     |   ✅   |    ✅    |     ✅      |    ✅    |   ✅    | Local IndexedDB — no auth needed                     |
-| Read/open local documents                |    ✅     |   ✅   |    ✅    |     ✅      |    ✅    |   ✅    | Local IndexedDB                                      |
-| AI translate/explain pages               |    ✅     |   ✅   |    ✅    |     ✅      |    ✅    |   ✅    | Requires valid API key (server env or user-provided) |
-| TTS playback (native + neural)           |    ✅     |   ✅   |    ✅    |     ✅      |    ✅    |   ✅    | Client-side, no auth                                 |
-| Export (Markdown/JSON)                   |    ✅     |   ✅   |    ✅    |     ✅      |    ✅    |   ✅    | Local IndexedDB data                                 |
-| Browse Global Library                    |    ❌     |   ✅   |    ✅    |     ✅      |    ✅    |   ✅    | Requires authenticated session                       |
-| Import from Global Library               |    ❌     |   ✅   |    ✅    |     ✅      |    ✅    |   ✅    | Requires authenticated session                       |
-| Upload PDF to Cloudflare R2 (Global Lib) |    ❌     |   ❌   |    ❌    |     ✅      |    ✅    |   ✅    | Client: `isAdmin \|\| moderator \|\| editor`                                    |
-| Sync R2 thumbnails                       |    ❌     |   ❌   |    ❌    |     ✅      |    ✅    |   ✅    | Client: `isAdmin \|\| moderator \|\| editor`                                    |
-| Delete from Global Library               |    ❌     |   ❌   |    ❌    |     ✅      |    ❌    |   ✅    | Client: `isAdmin \|\| moderator`                                    |
-| Upload to R2 from workspace              |    ❌     |   ❌   |    ❌    |     ✅      |    ✅    |   ✅    | Client: `isAdmin \|\| moderator \|\| editor \|\| syncEnabled`                   |
-| Sync to Supabase from workspace          |    ❌     |   ❌   |    ❌    |     ✅      |    ✅    |   ✅    | Client: `isAdmin \|\| moderator \|\| editor \|\| syncEnabled`                   |
-| View admin dashboard                     |    ❌     |   ❌   |    ❌    |     ❌      |    ❌    |   ✅    | Client + server `isAdmin`                            |
-| List all users                           |    ❌     |   ❌   |    ❌    |     ❌      |    ❌    |   ✅    | Server: `requireSessionFromEvent(["admin"])`         |
-| Change user roles                        |    ❌     |   ❌   |    ❌    |     ❌      |    ❌    |   ✅    | Server: `requireSessionFromEvent(["admin"])`         |
+| Action                                   | Anonymous | `user` | `viewer` | `moderator` | `editor` | `admin` | Enforcement                                                   |
+| :--------------------------------------- | :-------: | :----: | :------: | :---------: | :------: | :-----: | :------------------------------------------------------------ |
+| Upload PDF to local library              |    ✅     |   ✅   |    ✅    |     ✅      |    ✅    |   ✅    | Local IndexedDB — no auth needed                              |
+| Read/open local documents                |    ✅     |   ✅   |    ✅    |     ✅      |    ✅    |   ✅    | Local IndexedDB                                               |
+| AI translate/explain pages               |    ✅     |   ✅   |    ✅    |     ✅      |    ✅    |   ✅    | Requires valid API key (server env or user-provided)          |
+| TTS playback (native + neural)           |    ✅     |   ✅   |    ✅    |     ✅      |    ✅    |   ✅    | Client-side, no auth                                          |
+| Export (Markdown/JSON)                   |    ✅     |   ✅   |    ✅    |     ✅      |    ✅    |   ✅    | Local IndexedDB data                                          |
+| Browse Global Library                    |    ❌     |   ✅   |    ✅    |     ✅      |    ✅    |   ✅    | Requires authenticated session                                |
+| Import from Global Library               |    ❌     |   ✅   |    ✅    |     ✅      |    ✅    |   ✅    | Requires authenticated session                                |
+| Upload PDF to Cloudflare R2 (Global Lib) |    ❌     |   ❌   |    ❌    |     ✅      |    ✅    |   ✅    | Client: `isAdmin \|\| moderator \|\| editor`                  |
+| Sync R2 thumbnails                       |    ❌     |   ❌   |    ❌    |     ✅      |    ✅    |   ✅    | Client: `isAdmin \|\| moderator \|\| editor`                  |
+| Delete from Global Library               |    ❌     |   ❌   |    ❌    |     ✅      |    ❌    |   ✅    | Client: `isAdmin \|\| moderator`                              |
+| Upload to R2 from workspace              |    ❌     |   ❌   |    ❌    |     ✅      |    ✅    |   ✅    | Client: `isAdmin \|\| moderator \|\| editor \|\| syncEnabled` |
+| Sync to Supabase from workspace          |    ❌     |   ❌   |    ❌    |     ✅      |    ✅    |   ✅    | Client: `isAdmin \|\| moderator \|\| editor \|\| syncEnabled` |
+| View admin dashboard                     |    ❌     |   ❌   |    ❌    |     ❌      |    ❌    |   ✅    | Client + server `isAdmin`                                     |
+| List all users                           |    ❌     |   ❌   |    ❌    |     ❌      |    ❌    |   ✅    | Server: `requireSessionFromEvent(["admin"])`                  |
+| Change user roles                        |    ❌     |   ❌   |    ❌    |     ❌      |    ❌    |   ✅    | Server: `requireSessionFromEvent(["admin"])`                  |
 
 ---
 
