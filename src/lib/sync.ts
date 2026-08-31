@@ -1,6 +1,6 @@
 import { createServerFn } from "@tanstack/react-start";
 import { fetchSupabaseExtraction, saveSupabaseExtraction } from "./supabase";
-import { getDoc, updateDoc, db, pageKey, getAllPages, withDocLock } from "./storage";
+import { getDoc, updateDoc, db, pageKey, getAllPages, withDocLock, type PageAi } from "./storage";
 import { isGlobalSyncEnabled } from "./env";
 
 export const getSyncConfig = createServerFn({ method: "GET" }).handler(async () => {
@@ -19,15 +19,11 @@ export async function syncFromSupabase(docId: string, fileName: string): Promise
     }
 
     const record = res.record;
-    const { text, numPages, usedOcr } = record;
+    const { text } = record;
 
     let pagesData: {
       pageNumber: number;
-      text: string;
-      columns: number;
-      garbageRatio: number;
-      ocrRun: boolean;
-      pageAi?: any;
+      pageAi?: PageAi;
     }[] = [];
 
     try {
@@ -42,20 +38,7 @@ export async function syncFromSupabase(docId: string, fileName: string): Promise
         }
       }
     } catch {
-      // Not JSON, fallback to plain text
-    }
-
-    if (pagesData.length === 0 && numPages > 0) {
-      const splitPages = text.split("\n\n");
-      for (let i = 0; i < numPages; i++) {
-        pagesData.push({
-          pageNumber: i + 1,
-          text: splitPages[i] || "",
-          columns: 1,
-          garbageRatio: 0,
-          ocrRun: usedOcr,
-        });
-      }
+      // Not JSON or legacy format - ignore
     }
 
     if (pagesData.length > 0) {
@@ -78,23 +61,16 @@ export async function syncFromSupabase(docId: string, fileName: string): Promise
           if (isDone) aiDoneCount++;
 
           const localPage = localPagesMap.get(p.pageNumber);
+          const remoteAi = p.pageAi;
 
           let shouldUpdate = false;
           if (!localPage) {
-            shouldUpdate = true;
-          } else {
-            // Check if text or OCR status is different
-            if (
-              localPage.text !== p.text ||
-              localPage.columns !== (p.columns || 1) ||
-              localPage.garbageRatio !== (p.garbageRatio || 0) ||
-              localPage.ocrRun !== (p.ocrRun || false)
-            ) {
+            if (remoteAi) {
               shouldUpdate = true;
             }
-            // Check if AI status / result is updated
+          } else {
+            // Check if AI status / result is updated. We NEVER overwrite localPage.text from Supabase.
             const localAi = localPage.pageAi;
-            const remoteAi = p.pageAi;
             if (remoteAi) {
               if (!localAi) {
                 shouldUpdate = true;
@@ -119,11 +95,11 @@ export async function syncFromSupabase(docId: string, fileName: string): Promise
               key: pageKey(docId, p.pageNumber),
               docId,
               pageNumber: p.pageNumber,
-              text: p.text,
-              columns: p.columns || 1,
-              garbageRatio: p.garbageRatio || 0,
-              ocrRun: p.ocrRun || false,
-              pageAi: p.pageAi || undefined,
+              text: localPage?.text || "",
+              columns: localPage?.columns || 1,
+              garbageRatio: localPage?.garbageRatio || 0,
+              ocrRun: localPage?.ocrRun || false,
+              pageAi: remoteAi || undefined,
             };
             await tx.store.put(rec);
           }
@@ -131,10 +107,8 @@ export async function syncFromSupabase(docId: string, fileName: string): Promise
         await tx.done;
       });
 
-      // A separate (non-nested) lock acquisition — updateDoc acquires withDocLock
-      // itself, so it must run after the block above releases it.
+      // Maintain aiDoneCount on the doc. Do NOT update pageCount here so local extraction state is preserved.
       await updateDoc(docId, {
-        pageCount: pagesData.length,
         aiDoneCount,
       });
 
@@ -162,21 +136,18 @@ export async function syncToSupabase(docId: string, customKey?: string): Promise
     const { getTranslationConfig } = await import("./openrouter");
     const translationConfig = getTranslationConfig();
 
+    // Supabase stores ONLY page-number-wise translated text and translation config/settings.
+    // It NEVER stores extracted/original text.
     const payload = {
       version: 1,
       translationConfig,
       pages: pages.map((p) => ({
         pageNumber: p.pageNumber,
-        text: p.text,
-        columns: p.columns,
-        garbageRatio: p.garbageRatio,
-        ocrRun: p.ocrRun,
         pageAi: p.pageAi,
       })),
     };
 
     const serializedText = JSON.stringify(payload);
-    const usedOcr = pages.some((p) => p.ocrRun);
     const targetKey = customKey || docRec.fileName;
     const nowIso = new Date().toISOString();
 
@@ -187,7 +158,7 @@ export async function syncToSupabase(docId: string, customKey?: string): Promise
         lastModified: nowIso,
         numPages: docRec.pageCount || pages.length,
         text: serializedText,
-        usedOcr,
+        usedOcr: false,
         translationConfig,
       },
     });
@@ -207,7 +178,7 @@ export async function syncToSupabase(docId: string, customKey?: string): Promise
           lastModified: nowIso,
           numPages: docRec.pageCount || pages.length,
           text: serializedText,
-          usedOcr,
+          usedOcr: false,
           translationConfig,
         },
       }).catch((err) => console.warn("Mirror sync note:", err?.message || err));

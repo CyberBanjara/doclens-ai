@@ -26,13 +26,19 @@ export async function writePages(id: string, pages: PageExtraction[] | StoredPag
     if (!existing) return;
     const tx = d.transaction(PAGES, "readwrite");
     try {
-      // Drop any previous page records for this doc.
+      // Collect any existing pageAi (translations) before overwriting, so translations are never lost when freshly extracting text
+      const existingAiMap = new Map<number, PageAi>();
       let cur = await tx.store.openCursor(pageRange(id));
       while (cur) {
+        const val = cur.value as PageDataRecord;
+        if (val.pageAi) {
+          existingAiMap.set(val.pageNumber, val.pageAi);
+        }
         await cur.delete();
         cur = await cur.continue();
       }
       for (const p of pages) {
+        const pageAi = existingAiMap.get(p.pageNumber) || (p as any).pageAi;
         const rec: PageDataRecord = {
           key: pageKey(id, p.pageNumber),
           docId: id,
@@ -41,6 +47,7 @@ export async function writePages(id: string, pages: PageExtraction[] | StoredPag
           columns: (p as StoredPage).columns ?? 1,
           garbageRatio: (p as StoredPage).garbageRatio ?? 0,
           ocrRun: (p as any).ocrRun ?? false,
+          pageAi: pageAi || undefined,
         };
         await tx.store.put(rec);
       }

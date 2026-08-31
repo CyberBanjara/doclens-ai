@@ -4,6 +4,8 @@ import { toast } from "sonner";
 import { ExplainSetupDialog } from "@/components/ExplainSetupDialog";
 import {
   fetchModels,
+  fetchOmniRouterModels,
+  isOmniRouterConfigured,
   getEffectiveSelectedModel,
   hasCompletedAiPreferenceSetup,
   getKey,
@@ -53,6 +55,7 @@ export function PageWorkstation({
 }: Props) {
   const [globals, setGlobals] = useState<Globals>(readGlobals);
   const [models, setModels] = useState<ORModel[]>([]);
+  const [omniModels, setOmniModels] = useState<ORModel[]>([]);
 
   const [explainSetupOpen, setExplainSetupOpen] = useState(false);
   const [pendingExplainAction, setPendingExplainAction] = useState<PendingExplainAction | null>(
@@ -125,10 +128,16 @@ export function PageWorkstation({
 
   useEffect(() => {
     const k = getKey();
-    if (!k) return;
-    fetchModels(k)
-      .then(setModels)
-      .catch(() => {});
+    if (k) {
+      fetchModels(k)
+        .then(setModels)
+        .catch(() => {});
+    }
+    if (isOmniRouterConfigured()) {
+      fetchOmniRouterModels()
+        .then(setOmniModels)
+        .catch(() => {});
+    }
   }, []);
 
   const [keyStatus, setKeyStatusState] = useState<KeyStatus>("unknown");
@@ -388,6 +397,7 @@ export function PageWorkstation({
           pageNumber={activePage}
           globals={globals}
           models={models}
+          omniModels={omniModels}
           summary={aiSummary[activePage]}
           isRunning={runningPages.has(activePage)}
           streamBuf={streamBufs[activePage] ?? ""}

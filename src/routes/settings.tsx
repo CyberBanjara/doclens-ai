@@ -16,11 +16,20 @@ import {
   TRANSLATION_STYLES,
   getCustomKey,
   setCustomKey,
+  getAiProvider,
+  setAiProvider,
+  isOmniRouterConfigured,
+  fetchOmniRouterModels,
+  validateOmniRouterConnection,
+  getOmniSelectedModel,
+  setOmniSelectedModel,
+  getOmniDefaultModelSync,
   type ExplanationStyle,
   type TranslationStyle,
   type ProcessingStyle,
   type GlobalMode,
   type ORModel,
+  type AiProvider,
 } from "@/lib/openrouter";
 import { createDoc, StorageError } from "@/lib/storage";
 import { toast } from "sonner";
@@ -32,6 +41,7 @@ import { AiPipelineDefaultsSection } from "@/components/settings/AiPipelineDefau
 import { OutputLanguageSection } from "@/components/settings/OutputLanguageSection";
 import { VoiceCacheManagerSection } from "@/components/settings/VoiceCacheManagerSection";
 import { ApiKeySection } from "@/components/settings/ApiKeySection";
+import { OmniRouterStatusSection } from "@/components/settings/OmniRouterStatusSection";
 import { ModelSelectionSection } from "@/components/settings/ModelSelectionSection";
 import { StorageManagerSection } from "@/components/settings/StorageManagerSection";
 
@@ -82,6 +92,8 @@ function isTextToText(m: ORModel): boolean {
 function SettingsPage() {
   const navigate = useNavigate();
 
+  const isOmniConfigured = useMemo(() => isOmniRouterConfigured(), []);
+  const [provider, setProvider] = useState<AiProvider>("openrouter");
   const [keyStatus, setKeyStatus] = useState<
     "unknown" | "missing" | "valid" | "invalid" | "checking"
   >("unknown");
@@ -90,6 +102,14 @@ function SettingsPage() {
   const [loadingModels, setLoadingModels] = useState(false);
   const [modelError, setModelError] = useState("");
   const [selected, setSelected] = useState("");
+
+  // OmniRouter state
+  const [omniModels, setOmniModels] = useState<ORModel[]>([]);
+  const [loadingOmni, setLoadingOmni] = useState(false);
+  const [omniStatus, setOmniStatus] = useState<"connected" | "disconnected" | "checking">("checking");
+  const [omniError, setOmniError] = useState("");
+  const [omniSelected, setOmniSelected] = useState("");
+
   const [language, setLanguage] = useState("हिंदी");
   const [customLang, setCustomLang] = useState("");
   const [search, setSearch] = useState("");
@@ -157,9 +177,43 @@ function SettingsPage() {
     }
   };
 
+  const loadOmniModels = async () => {
+    if (!isOmniRouterConfigured()) return;
+    setLoadingOmni(true);
+    setOmniError("");
+    setOmniStatus("checking");
+    try {
+      const res = await validateOmniRouterConnection();
+      if (res.ok) {
+        setOmniStatus("connected");
+        const m = await fetchOmniRouterModels();
+        setOmniModels(m);
+        const stored = getOmniSelectedModel();
+        if (stored && m.some((x) => x.id === stored)) {
+          setOmniSelected(stored);
+        } else if (m.length > 0) {
+          const def = getOmniDefaultModelSync();
+          const chosen = def && m.some((x) => x.id === def) ? def : m[0].id;
+          setOmniSelected(chosen);
+          setOmniSelectedModel(chosen);
+        }
+      } else {
+        setOmniStatus("disconnected");
+        setOmniError(res.error || "Could not connect to OmniRouter.");
+      }
+    } catch (e) {
+      setOmniStatus("disconnected");
+      setOmniError(getFriendlyErrorMessage(e, "Connection test failed"));
+    } finally {
+      setLoadingOmni(false);
+    }
+  };
+
   useEffect(() => {
     const globals = readGlobals();
+    setProvider(globals.provider ?? "openrouter");
     setSelected(globals.modelId);
+    setOmniSelected(globals.omniModelId || getOmniSelectedModel() || getOmniDefaultModelSync());
     void readEffectiveGlobals().then((eff) => {
       if (!globals.modelId) setSelected(eff.modelId);
     });
@@ -171,8 +225,11 @@ function SettingsPage() {
     setCustomKeyInput(savedKey);
     void loadModels();
     void handleValidate(savedKey);
+    if (isOmniConfigured) {
+      void loadOmniModels();
+    }
     void refreshTtsVoices(true);
-  }, [refreshTtsVoices]);
+  }, [refreshTtsVoices, isOmniConfigured]);
 
   const loadModels = async () => {
     setLoadingModels(true);
@@ -202,8 +259,13 @@ function SettingsPage() {
   };
 
   const handleSelectModel = (id: string) => {
-    setSelected(id);
-    setSelectedModel(id);
+    if (provider === "omnirouter") {
+      setOmniSelected(id);
+      setOmniSelectedModel(id);
+    } else {
+      setSelected(id);
+      setSelectedModel(id);
+    }
   };
 
   const handleLangSelect = (l: string) => {
@@ -221,10 +283,12 @@ function SettingsPage() {
     setCustomLang("");
   };
 
+  const activeModelList = provider === "omnirouter" ? omniModels : models;
+
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
     // 1) text→text only across all tabs
-    let list = models.filter(isTextToText);
+    let list = activeModelList.filter(isTextToText);
     if (q)
       list = list.filter(
         (m) => m.id.toLowerCase().includes(q) || m.name?.toLowerCase().includes(q),
@@ -239,7 +303,7 @@ function SettingsPage() {
       list = list.filter((m) => POPULAR_RX.test(m.id));
     }
     return list.slice(0, 200);
-  }, [models, search, tab]);
+  }, [activeModelList, search, tab]);
 
   return (
     <SidebarLayout
@@ -271,6 +335,11 @@ function SettingsPage() {
 
         {/* Row 1: AI Pipeline Defaults (full width) at the top */}
         <AiPipelineDefaultsSection
+          provider={provider}
+          onProviderChange={(p) => {
+            setProvider(p);
+            setAiProvider(p);
+          }}
           mode={mode}
           onModeChange={(v) => {
             setModeState(v);
@@ -309,25 +378,45 @@ function SettingsPage() {
           />
         </div>
 
-        {/* Row 3: API Key Management + Model Selection */}
+        {/* Row 3: Provider Gateway/API Key Management + Model Selection */}
         <div className="grid grid-cols-1 gap-6 md:grid-cols-12">
-          <ApiKeySection
-            customKey={customKey}
-            onCustomKeyChange={setCustomKeyInput}
-            keyStatus={keyStatus}
-            onValidate={() => handleValidate()}
-          />
+          {provider === "omnirouter" ? (
+            <OmniRouterStatusSection
+              status={omniStatus}
+              modelCount={omniModels.length}
+              error={omniError}
+              onRefresh={loadOmniModels}
+              selectedModel={omniSelected}
+              onSelectModel={handleSelectModel}
+              models={omniModels}
+            />
+          ) : (
+            <ApiKeySection
+              customKey={customKey}
+              onCustomKeyChange={setCustomKeyInput}
+              keyStatus={keyStatus}
+              onValidate={() => handleValidate()}
+            />
+          )}
 
           <ModelSelectionSection
             search={search}
             onSearchChange={setSearch}
-            keyStatus={keyStatus}
+            keyStatus={
+              provider === "omnirouter"
+                ? omniStatus === "connected"
+                  ? "valid"
+                  : omniStatus === "checking"
+                    ? "checking"
+                    : "invalid"
+                : keyStatus
+            }
             tab={tab}
             onTabChange={setTab}
-            loadingModels={loadingModels}
-            modelError={modelError}
+            loadingModels={provider === "omnirouter" ? loadingOmni : loadingModels}
+            modelError={provider === "omnirouter" ? omniError : modelError}
             filtered={filtered}
-            selected={selected}
+            selected={provider === "omnirouter" ? omniSelected : selected}
             onSelectModel={handleSelectModel}
           />
         </div>

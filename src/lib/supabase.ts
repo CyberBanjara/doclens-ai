@@ -214,26 +214,35 @@ export const saveSupabaseExtraction = createServerFn({ method: "POST" })
         };
       }
 
-      let finalText = data.text;
-      if (data.translationConfig) {
-        try {
-          const parsed = JSON.parse(finalText);
-          if (parsed && typeof parsed === "object") {
-            parsed.translationConfig = {
-              ...(parsed.translationConfig || {}),
-              ...data.translationConfig,
-            };
-            finalText = JSON.stringify(parsed);
+      let payloadObj: {
+        version: number;
+        translationConfig?: any;
+        pages: { pageNumber: number; pageAi?: any }[];
+      } = {
+        version: 1,
+        translationConfig: data.translationConfig || {},
+        pages: [],
+      };
+
+      try {
+        const parsed = JSON.parse(data.text);
+        if (parsed && typeof parsed === "object") {
+          payloadObj.translationConfig = {
+            ...(parsed.translationConfig || {}),
+            ...(data.translationConfig || {}),
+          };
+          if (Array.isArray(parsed.pages)) {
+            payloadObj.pages = parsed.pages.map((p: any) => ({
+              pageNumber: p.pageNumber,
+              pageAi: p.pageAi,
+            }));
           }
-        } catch {
-          finalText = JSON.stringify({
-            version: 1,
-            text: data.text,
-            pages: [],
-            translationConfig: data.translationConfig,
-          });
         }
+      } catch {
+        // If data.text is not JSON, ignore raw string and keep empty pages with config
       }
+
+      const finalText = JSON.stringify(payloadObj);
 
       const { error } = await supabase.from("pdf_extractions").upsert(
         {

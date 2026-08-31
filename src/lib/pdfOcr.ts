@@ -25,7 +25,7 @@ export async function terminateOcrWorker(): Promise<void> {
     try {
       const worker = await ocrWorkerPromise;
       await worker.terminate();
-    } catch {}
+    } catch { }
     ocrWorkerPromise = null;
   }
 }
@@ -141,12 +141,12 @@ export async function ocrPageById(blob: Blob, pageNumber: number, columns = 1): 
     } finally {
       try {
         page.cleanup();
-      } catch {}
+      } catch { }
     }
   } finally {
     try {
       await pdf.destroy();
-    } catch {}
+    } catch { }
   }
 }
 
@@ -198,7 +198,7 @@ export async function runOcrOnGarbledPages(
         } finally {
           try {
             page.cleanup();
-          } catch {}
+          } catch { }
         }
       }
     }
@@ -206,9 +206,9 @@ export async function runOcrOnGarbledPages(
   } finally {
     try {
       await pdf.destroy();
-    } catch {}
+    } catch { }
     try {
       await terminateOcrWorker();
-    } catch {}
+    } catch { }
   }
 }

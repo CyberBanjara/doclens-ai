@@ -1,4 +1,14 @@
 import { isNetworkError, OFFLINE_MESSAGE } from "./network";
+import type { AiProvider } from "./storage/types";
+import {
+  getOmniDefaultModelSync,
+  getOmniSelectedModel,
+  setOmniSelectedModel,
+  isOmniRouterConfigured,
+} from "./omnirouter";
+
+export type { AiProvider } from "./storage/types";
+export * from "./omnirouter";
 
 declare const __OPENROUTER_DEFAULT_KEY__: string | undefined;
 declare const __OPENROUTER_DEFAULT_MODEL__: string | undefined;
@@ -18,6 +28,7 @@ export interface ORModel {
   top_provider?: { context_length?: number };
 }
 
+const PROVIDER_LS = "doclens.ai.provider";
 const MODEL_LS = "doclens.openrouter.model";
 const LANG_LS = "doclens.outputLanguage";
 const MODE_LS = "doclens.mode";
@@ -30,6 +41,25 @@ const CUSTOM_KEY_LS = "doclens.openrouter.customKey";
 const GLOBAL_KEY_LS = "doclens.openrouter.globalKey";
 
 export type KeyStatus = "missing" | "valid" | "invalid" | "unknown";
+
+export function getAiProvider(): AiProvider {
+  if (typeof window === "undefined") return "openrouter";
+  const saved = localStorage.getItem(PROVIDER_LS);
+  if (saved === "omnirouter" && isOmniRouterConfigured()) {
+    return "omnirouter";
+  }
+  return "openrouter";
+}
+
+export function setAiProvider(p: AiProvider) {
+  if (typeof window === "undefined") return;
+  if (p === "omnirouter" && isOmniRouterConfigured()) {
+    localStorage.setItem(PROVIDER_LS, "omnirouter");
+  } else {
+    localStorage.removeItem(PROVIDER_LS);
+  }
+  emitKeyChange();
+}
 
 function emitKeyChange() {
   if (typeof window !== "undefined") {
@@ -279,9 +309,11 @@ export function setTemperature(t: number) {
 
 /** The user's global AI defaults, as persisted in localStorage. */
 export interface Globals {
+  provider?: AiProvider;
   mode: GlobalMode;
   language: string;
   modelId: string;
+  omniModelId?: string;
   style: string;
   temperature: number;
 }
@@ -289,9 +321,11 @@ export interface Globals {
 export function readGlobals(): Globals {
   const mode = getMode();
   return {
+    provider: getAiProvider(),
     mode,
     language: getOutputLanguage(),
     modelId: getSelectedModel() || getDefaultModelSync(),
+    omniModelId: getOmniSelectedModel() || getOmniDefaultModelSync(),
     style: getStyle(mode),
     temperature: getTemperature(),
   };
@@ -303,9 +337,11 @@ export async function readEffectiveGlobals(): Promise<Globals> {
 }
 
 export interface TranslationConfig {
+  provider?: AiProvider;
   language: string;
   mode: GlobalMode;
   modelId: string;
+  omniModelId?: string;
   style: ProcessingStyle | string;
   temperature: number;
 }
@@ -313,17 +349,37 @@ export interface TranslationConfig {
 export function getTranslationConfig(): TranslationConfig {
   const mode = getMode();
   return {
+    provider: getAiProvider(),
     language: getOutputLanguage(),
     mode,
     modelId: getSelectedModel() || getDefaultModelSync(),
+    omniModelId: getOmniSelectedModel() || getOmniDefaultModelSync(),
     style: getStyle(mode),
     temperature: getTemperature(),
   };
 }
 
-export function applyTranslationConfig(config: Partial<TranslationConfig>, docId?: string): void {
+export function applyTranslationConfig(
+  config: Partial<TranslationConfig>,
+  docId?: string,
+  force = false,
+): void {
   if (typeof window === "undefined") return;
 
+  if (docId) {
+    const initialKey = `doclens.supabase.defaults_applied.${docId}`;
+    // Supabase provides initial default model/settings only once when the PDF is first loaded.
+    // After that, any local or global user overrides persist and continue to be used.
+    if (!force && localStorage.getItem(initialKey)) {
+      return;
+    }
+    localStorage.setItem(initialKey, "1");
+    localStorage.setItem(`doclens.explain.setup.${docId}`, "1");
+  }
+
+  if (config.provider) {
+    setAiProvider(config.provider);
+  }
   if (config.language) {
     setOutputLanguage(config.language);
   }
@@ -333,15 +389,14 @@ export function applyTranslationConfig(config: Partial<TranslationConfig>, docId
   if (config.modelId) {
     setSelectedModel(config.modelId);
   }
+  if (config.omniModelId) {
+    setOmniSelectedModel(config.omniModelId);
+  }
   if (config.style) {
     setStyle(config.style);
   }
   if (typeof config.temperature === "number" && !isNaN(config.temperature)) {
     setTemperature(config.temperature);
-  }
-
-  if (docId) {
-    localStorage.setItem(`doclens.explain.setup.${docId}`, "1");
   }
 }
 

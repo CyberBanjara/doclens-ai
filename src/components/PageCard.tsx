@@ -6,9 +6,11 @@ import {
   TRANSLATION_STYLES,
   MODE_LABELS,
   openApiKeyModal,
+  isOmniRouterConfigured,
   type GlobalMode,
   type Globals,
   type ORModel,
+  type AiProvider,
 } from "@/lib/openrouter";
 import {
   getPageData,
@@ -41,6 +43,7 @@ interface CardLoaderProps {
   pageNumber: number;
   globals: Globals;
   models: ORModel[];
+  omniModels?: ORModel[];
   summary?: PageAiSummaryEntry;
   isRunning: boolean;
   streamBuf: string;
@@ -112,6 +115,7 @@ export function PageCardLoader(props: CardLoaderProps) {
       state={pageAi}
       eff={effective(props.globals, pageAi.overrides)}
       models={props.models}
+      omniModels={props.omniModels}
       streamBuf={streamBuf}
       fallbackResult={streamCacheRef.current}
       isRunning={isRunning}
@@ -132,6 +136,7 @@ interface CardProps {
   state: PageAi;
   eff: ReturnType<typeof effective>;
   models: ORModel[];
+  omniModels?: ORModel[];
   streamBuf: string;
   fallbackResult?: string;
   isRunning: boolean;
@@ -146,6 +151,7 @@ function PageCard({
   state,
   eff,
   models,
+  omniModels,
   streamBuf,
   fallbackResult,
   isRunning,
@@ -287,6 +293,7 @@ function PageCard({
             <OverrideControls
               eff={eff}
               models={models}
+              omniModels={omniModels}
               overrides={state.overrides}
               onSetOverride={setOverride}
               onClearOverrides={() => onUpdate({ overrides: undefined })}
@@ -440,16 +447,19 @@ function SmallSelect({
 function OverrideControls({
   eff,
   models,
+  omniModels,
   overrides,
   onSetOverride,
   onClearOverrides,
 }: {
   eff: ReturnType<typeof effective>;
   models: ORModel[];
+  omniModels?: ORModel[];
   overrides?: PageOverrides;
   onSetOverride: (patch: Partial<PageOverrides>) => void;
   onClearOverrides: () => void;
 }) {
+  const isOmniConfigured = isOmniRouterConfigured();
   const hasOverrides = !!overrides && Object.keys(overrides).length > 0;
 
   const styleOptions = useMemo(() => {
@@ -466,19 +476,40 @@ function OverrideControls({
     return list;
   }, [eff.language]);
 
+  const activeModelList = useMemo(() => {
+    if (eff.provider === "omnirouter") {
+      return omniModels && omniModels.length > 0 ? omniModels : models;
+    }
+    return models;
+  }, [eff.provider, omniModels, models]);
+
   const modelOptions = useMemo(() => {
-    const list = models
-      .slice(0, 80)
-      .map((m) => [m.id, (m.name ?? m.id).slice(0, 32)] as [string, string]);
+    const list = activeModelList
+      .slice(0, 100)
+      .map((m) => [m.id, (m.name ?? m.id).slice(0, 36)] as [string, string]);
     if (eff.modelId && !list.some(([id]) => id === eff.modelId)) {
-      return [[eff.modelId, eff.modelId.slice(0, 32)] as [string, string], ...list];
+      return [[eff.modelId, eff.modelId.slice(0, 36)] as [string, string], ...list];
     }
     return list;
-  }, [models, eff.modelId]);
+  }, [activeModelList, eff.modelId]);
 
   return (
     <div>
       <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
+        {isOmniConfigured && (
+          <SmallSelect
+            label="Provider"
+            value={eff.provider}
+            onChange={(v) => {
+              const nextProvider = v as AiProvider;
+              onSetOverride({ provider: nextProvider, modelId: undefined });
+            }}
+            options={[
+              ["openrouter", "OpenRouter (Default)"],
+              ["omnirouter", "OmniRouter (Local)"],
+            ]}
+          />
+        )}
         <SmallSelect
           label="Mode"
           value={eff.mode}

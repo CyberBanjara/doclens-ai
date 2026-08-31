@@ -3,14 +3,27 @@ import {
   type PageAi,
   type PageAiSummaryEntry,
   type PageOverrides,
+  type AiProvider,
 } from "@/lib/storage";
-import { TRANSLATION_STYLES, EXPLANATION_STYLES, type Globals } from "@/lib/openrouter";
+import {
+  TRANSLATION_STYLES,
+  EXPLANATION_STYLES,
+  type Globals,
+  isOmniRouterConfigured,
+  getOmniSelectedModel,
+  getOmniDefaultModelSync,
+} from "@/lib/openrouter";
 import { dispatchDocEvent } from "@/lib/docEvents";
 import { cleanAiText } from "./cleanAiText";
 
 export { cleanAiText };
 
 export function effective(globals: Globals, ov?: PageOverrides) {
+  const omniAvailable = isOmniRouterConfigured();
+  const rawProvider = ov?.provider ?? globals.provider ?? "openrouter";
+  const provider: AiProvider =
+    rawProvider === "omnirouter" && omniAvailable ? "omnirouter" : "openrouter";
+
   const mode = ov?.mode ?? globals.mode;
   let rawStyle = ov?.style ?? globals.style;
 
@@ -24,19 +37,25 @@ export function effective(globals: Globals, ov?: PageOverrides) {
     }
   }
 
+  let defaultModelForProvider = globals.modelId;
+  if (provider === "omnirouter") {
+    defaultModelForProvider =
+      globals.omniModelId || getOmniSelectedModel() || getOmniDefaultModelSync();
+  }
+
   return {
+    provider,
     mode,
     language: ov?.language ?? globals.language,
-    modelId: ov?.modelId ?? globals.modelId,
+    modelId: ov?.modelId ?? defaultModelForProvider,
     style: rawStyle,
     temperature: ov?.temperature ?? globals.temperature,
   };
 }
 
-/** Settings hash for an effective (post-override) settings set — used to detect stale cached results. */
+/** Settings hash for an effective (post-override) settings set — used to detect stale cached results. Excludes model & provider. */
 export function hashFor(eff: ReturnType<typeof effective>): string {
   return computeSettingsHash({
-    modelId: eff.modelId,
     mode: eff.mode,
     language: eff.language,
     style: eff.style,

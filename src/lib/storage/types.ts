@@ -1,3 +1,4 @@
+export type AiProvider = "openrouter" | "omnirouter";
 export type AiMode = "translate" | "explain";
 export type PageStatus = "idle" | "ready" | "running" | "done" | "error";
 
@@ -13,6 +14,7 @@ export interface AiResult {
 }
 
 export interface PageOverrides {
+  provider?: AiProvider;
   mode?: AiMode;
   language?: string;
   modelId?: string;
@@ -61,14 +63,16 @@ export interface PageAiSummaryEntry {
 }
 
 export function computeSettingsHash(input: {
-  modelId: string;
   mode: string;
   language: string;
   style: string;
   temperature: number;
+  modelId?: string;
+  provider?: string;
 }): string {
+  // Model selection and AI provider are intentionally excluded from the hash
+  // so that switching models or providers never invalidates or deletes existing translations.
   return [
-    input.modelId,
     input.mode,
     input.language,
     input.style,

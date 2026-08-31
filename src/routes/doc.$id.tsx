@@ -20,7 +20,6 @@ import {
   updateDoc,
   writePages,
   updatePageData,
-  getAllPages,
   StorageError,
   type DocRecord,
   type PageAiSummaryEntry,
@@ -179,23 +178,11 @@ function DocPage() {
         return;
       }
 
-      let currentRec = rec;
-      let pc = currentRec.pageCount ?? 0;
+      const currentRec = rec;
+      const pc = currentRec.pageCount ?? 0;
 
-      // Check if we need to sync from Supabase first (if page count is 0)
-      if (pc === 0) {
-        setStatus("checking cloud cache…");
-        const synced = await syncFromSupabase(id, currentRec.fileName);
-        if (synced && !cancelled) {
-          const updatedRec = await getDoc(id);
-          if (updatedRec) {
-            currentRec = updatedRec;
-            pc = currentRec.pageCount ?? 0;
-            toast.success("Loaded page text and translations from shared cloud vault!");
-          }
-        }
-      } else if (configEnabled) {
-        // If we already have the pages locally, check Supabase for updates in the background
+      if (configEnabled) {
+        // Sync translations from Supabase in the background
         void (async () => {
           try {
             const updated = await syncFromSupabase(id, currentRec.fileName);
@@ -206,7 +193,6 @@ function DocPage() {
                 const sum = await getPageAiSummary(id);
                 if (!cancelled) {
                   setAiSummary(sum);
-                  toast.success("Sync: updated translations fetched from cloud!");
                 }
               }
             }
@@ -264,35 +250,9 @@ function DocPage() {
     setAiSummary(sum);
   };
 
-  const handleAnalyze = async (forceLocalOrEvent?: boolean | React.MouseEvent) => {
-    const forceLocal = typeof forceLocalOrEvent === "boolean" ? forceLocalOrEvent : false;
+  const handleAnalyze = async () => {
     if (!doc || analyzing) return;
     setAnalyzing(true);
-
-    // 1. Check Supabase extraction cache first if not forced
-    if (!forceLocal && (isAdmin || syncEnabled)) {
-      setStatus("checking Global Library cache…");
-      try {
-        const { syncFromSupabase } = await import("@/lib/sync");
-        const foundInSupabase = await syncFromSupabase(id, doc.fileName);
-        if (foundInSupabase) {
-          const updatedDoc = await getDoc(id);
-          const pc = updatedDoc?.pageCount || (await getAllPages(id)).length;
-          if (pc > 0) {
-            setDoc(updatedDoc || null);
-            setPageCount(pc);
-            await refreshSummary();
-            setStatus(`done · ${pc} pages (loaded from Supabase cache)`);
-            toast.success(`Loaded ${pc} pages from Global Library cache.`);
-            setAnalyzing(false);
-            return;
-          }
-        }
-      } catch (cacheErr) {
-        console.warn("Supabase cache check failed, falling back to local extraction:", cacheErr);
-      }
-    }
-
     setStatus("extracting…");
     try {
       const blob = await getDocBlob(id);
@@ -446,7 +406,7 @@ function DocPage() {
               const thumbBase64 = result.split(",")[1];
               if (thumbBase64) {
                 uploadThumbnailToR2({ data: { fileKey: res.key, base64Data: thumbBase64 } }).catch(
-                  () => {},
+                  () => { },
                 );
               }
             }
@@ -795,11 +755,10 @@ function DocPage() {
                     key={cat.id}
                     type="button"
                     onClick={() => setCategoryChoice(cat.id)}
-                    className={`flex flex-col items-start rounded-lg border p-3 text-left transition-all ${
-                      categoryChoice === cat.id
+                    className={`flex flex-col items-start rounded-lg border p-3 text-left transition-all ${categoryChoice === cat.id
                         ? "border-primary bg-primary/10 text-foreground ring-1 ring-primary"
                         : "border-border bg-surface hover:bg-surface-2 text-muted-foreground"
-                    }`}
+                      }`}
                   >
                     <span className="font-semibold text-sm">{cat.label}</span>
                     <span className="text-[11px] font-mono text-muted-foreground">{cat.desc}</span>
@@ -855,11 +814,10 @@ function DocPage() {
                     key={cat.id}
                     type="button"
                     onClick={() => setCategoryChoice(cat.id)}
-                    className={`flex flex-col items-start rounded-lg border p-3 text-left transition-all ${
-                      categoryChoice === cat.id
+                    className={`flex flex-col items-start rounded-lg border p-3 text-left transition-all ${categoryChoice === cat.id
                         ? "border-primary bg-primary/10 text-foreground ring-1 ring-primary"
                         : "border-border bg-surface hover:bg-surface-2 text-muted-foreground"
-                    }`}
+                      }`}
                   >
                     <span className="font-semibold text-sm">{cat.label}</span>
                     <span className="text-[11px] font-mono text-muted-foreground">{cat.desc}</span>

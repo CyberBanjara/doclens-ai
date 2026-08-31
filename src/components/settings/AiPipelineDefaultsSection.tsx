@@ -3,13 +3,17 @@ import {
   EXPLANATION_STYLES,
   TRANSLATION_STYLES,
   MODE_LABELS,
+  isOmniRouterConfigured,
   type ExplanationStyle,
   type TranslationStyle,
   type ProcessingStyle,
   type GlobalMode,
+  type AiProvider,
 } from "@/lib/openrouter";
 
 interface AiPipelineDefaultsSectionProps {
+  provider?: AiProvider;
+  onProviderChange?: (provider: AiProvider) => void;
   mode: GlobalMode;
   onModeChange: (mode: GlobalMode) => void;
   style: ProcessingStyle | string;
@@ -19,6 +23,8 @@ interface AiPipelineDefaultsSectionProps {
 }
 
 export function AiPipelineDefaultsSection({
+  provider = "openrouter",
+  onProviderChange,
   mode,
   onModeChange,
   style,
@@ -27,6 +33,7 @@ export function AiPipelineDefaultsSection({
   onTemperatureChange,
 }: AiPipelineDefaultsSectionProps) {
   const currentStyles = mode === "translate" ? TRANSLATION_STYLES : EXPLANATION_STYLES;
+  const isOmniConfigured = isOmniRouterConfigured();
 
   const handleModeChange = (newMode: GlobalMode) => {
     onModeChange(newMode);
@@ -43,11 +50,32 @@ export function AiPipelineDefaultsSection({
 
   return (
     <section className="glass-panel rounded-[18px] p-4 md:p-6">
-      <div className="mb-6 flex items-center gap-3">
-        <Zap className="h-5 w-5 text-accent" />
-        <h3 className="text-lg font-semibold text-foreground">Translation & Processing Defaults</h3>
+      <div className="mb-6 flex items-center justify-between">
+        <div className="flex items-center gap-3">
+          <Zap className="h-5 w-5 text-accent" />
+          <h3 className="text-lg font-semibold text-foreground">Translation & Processing Defaults</h3>
+        </div>
       </div>
-      <div className="grid grid-cols-1 gap-6 md:grid-cols-3">
+      <div
+        className={`grid grid-cols-1 gap-6 ${isOmniConfigured ? "sm:grid-cols-2 lg:grid-cols-4" : "md:grid-cols-3"}`}
+      >
+        {/* AI Provider (Only when OmniRouter is configured) */}
+        {isOmniConfigured && (
+          <div className="flex flex-col gap-2">
+            <label className="text-xs font-bold uppercase tracking-wide text-muted-foreground">
+              AI Provider
+            </label>
+            <select
+              value={provider}
+              onChange={(e) => onProviderChange?.(e.target.value as AiProvider)}
+              className="w-full cursor-pointer rounded-[10px] border border-border bg-background px-3 py-2 text-sm outline-none transition-colors focus:border-primary"
+            >
+              <option value="openrouter">OpenRouter (Default)</option>
+              <option value="omnirouter">OmniRouter (Local)</option>
+            </select>
+          </div>
+        )}
+
         {/* Default Mode */}
         <div className="flex flex-col gap-2">
           <label className="text-xs font-bold uppercase tracking-wide text-muted-foreground">

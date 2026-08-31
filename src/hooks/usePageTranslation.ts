@@ -8,6 +8,9 @@ import {
   openApiKeyModal,
   readGlobals,
   streamCompletion,
+  streamOmniRouterCompletion,
+  isOmniRouterConfigured,
+  OmniRouterError,
   type Globals,
 } from "@/lib/openrouter";
 import { getPageData, upsertPageAi, type PageAi, type PageAiSummaryEntry } from "@/lib/storage";
@@ -22,7 +25,7 @@ const STREAM_FLUSH_MS = 60;
 
 /**
  * The per-page AI translation/explain engine: runs direct client streaming requests to
- * OpenRouter, updates live text buffers in real-time, persists progress to IndexedDB,
+ * OpenRouter or OmniRouter, updates live text buffers in real-time, persists progress to IndexedDB,
  * and de-dupes concurrent requests for the same page.
  */
 export function usePageTranslation(
@@ -51,21 +54,6 @@ export function usePageTranslation(
 
   const runPage = useCallback(
     async (pageNumber: number): Promise<string | undefined> => {
-      const key = getKey();
-      if (!key) {
-        ensureKeyReady();
-        await upsertPageAi(docId, pageNumber, {
-          status: "error",
-          error: "No OpenRouter API key configured.",
-        });
-        onPageAiChangeRef.current(pageNumber, {
-          status: "error",
-          hasResult: false,
-          isCustom: false,
-        });
-        return undefined;
-      }
-
       // Read fresh page text + state from IDB
       const pageRec = await getPageData(docId, pageNumber);
       if (!pageRec || !pageRec.text?.trim()) {
@@ -83,7 +71,36 @@ export function usePageTranslation(
       const currentGlobals = globalsRef.current || readGlobals();
       const state: PageAi = pageRec.pageAi ?? { pageNumber, status: "idle" };
       const eff = effective(currentGlobals, state.overrides);
-      const modelId = eff.modelId || getDefaultModelSync();
+      const isOmni = eff.provider === "omnirouter";
+
+      const key = getKey();
+      if (!isOmni && !key) {
+        ensureKeyReady();
+        await upsertPageAi(docId, pageNumber, {
+          status: "error",
+          error: "No OpenRouter API key configured.",
+        });
+        onPageAiChangeRef.current(pageNumber, {
+          status: "error",
+          hasResult: false,
+          isCustom: false,
+        });
+        return undefined;
+      }
+
+      if (isOmni && !isOmniRouterConfigured()) {
+        const msg = "OmniRouter base URL or API key is not configured in environment.";
+        toast.error(msg);
+        await upsertPageAi(docId, pageNumber, { status: "error", error: msg });
+        onPageAiChangeRef.current(pageNumber, {
+          status: "error",
+          hasResult: false,
+          isCustom: false,
+        });
+        return undefined;
+      }
+
+      const modelId = eff.modelId || (isOmni ? "" : getDefaultModelSync());
 
       // One-shot selection override (from PDF text selection → "Translate")
       const selOverride = selectionOverridesRef.current.get(pageNumber);
@@ -146,20 +163,30 @@ export function usePageTranslation(
       };
 
       try {
-        await streamCompletion({
-          key,
-          payload,
-          signal: ctrl.signal,
-          onDelta: (d) => {
-            bufferRef.current += d;
-            // Immediate update on first chunk for zero perceived latency
-            if (!lastUiRef.current) {
-              flushUi();
-            } else {
-              scheduleFlush();
-            }
-          },
-        });
+        const onDeltaHandler = (d: string) => {
+          bufferRef.current += d;
+          // Immediate update on first chunk for zero perceived latency
+          if (!lastUiRef.current) {
+            flushUi();
+          } else {
+            scheduleFlush();
+          }
+        };
+
+        if (isOmni) {
+          await streamOmniRouterCompletion({
+            payload,
+            signal: ctrl.signal,
+            onDelta: onDeltaHandler,
+          });
+        } else {
+          await streamCompletion({
+            key,
+            payload,
+            signal: ctrl.signal,
+            onDelta: onDeltaHandler,
+          });
+        }
 
         // Final synchronous flush before writing to IDB
         flushUi();
@@ -194,28 +221,33 @@ export function usePageTranslation(
           const err = e instanceof Error ? e.message : "Unknown error";
           await upsertPageAi(docId, pageNumber, { status: "error", error: err });
           onPageAiChangeRef.current(pageNumber, { ...summarize(state), status: "error" });
-          const isDailyOrQuota =
-            (e instanceof OpenRouterError &&
-              (e.kind === "daily_limit" ||
-                e.kind === "rate_limit" ||
-                e.kind === "quota" ||
-                e.kind === "credits")) ||
-            /50 free pages|daily limit|rate limit|quota/i.test(err);
 
-          if (isDailyOrQuota) {
-            toast.error(err, {
-              duration: 8000,
-              action: {
-                label: "Get Free Key",
-                onClick: () => openApiKeyModal(err, true),
-              },
-            });
-            openApiKeyModal(err, true);
-          } else if (e instanceof OpenRouterError && e.kind === "auth") {
+          if (isOmni || e instanceof OmniRouterError) {
             toast.error(err);
-            openApiKeyModal(err, false);
           } else {
-            toast.error(err);
+            const isDailyOrQuota =
+              (e instanceof OpenRouterError &&
+                (e.kind === "daily_limit" ||
+                  e.kind === "rate_limit" ||
+                  e.kind === "quota" ||
+                  e.kind === "credits")) ||
+              /50 free pages|daily limit|rate limit|quota/i.test(err);
+
+            if (isDailyOrQuota) {
+              toast.error(err, {
+                duration: 8000,
+                action: {
+                  label: "Get Free Key",
+                  onClick: () => openApiKeyModal(err, true),
+                },
+              });
+              openApiKeyModal(err, true);
+            } else if (e instanceof OpenRouterError && e.kind === "auth") {
+              toast.error(err);
+              openApiKeyModal(err, false);
+            } else {
+              toast.error(err);
+            }
           }
         }
         return undefined;

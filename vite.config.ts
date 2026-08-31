@@ -44,6 +44,15 @@ export default defineConfig({
       __OPENROUTER_DEFAULT_MODEL__: JSON.stringify(
         process.env.OPENROUTER_DEFAULT_MODEL || env.OPENROUTER_DEFAULT_MODEL || "",
       ),
+      __OMNIROUTER_BASE_URL__: JSON.stringify(
+        process.env.OMNIROUTER_BASE_URL || env.OMNIROUTER_BASE_URL || "",
+      ),
+      __OMNIROUTER_API_KEY__: JSON.stringify(
+        process.env.OMNIROUTER_API_KEY || env.OMNIROUTER_API_KEY || "",
+      ),
+      __OMNIROUTER_DEFAULT_MODEL__: JSON.stringify(
+        process.env.OMNIROUTER_DEFAULT_MODEL || env.OMNIROUTER_DEFAULT_MODEL || "",
+      ),
       __RAZORPAY_KEY_ID__: JSON.stringify(
         process.env.RAZORPAY_KEY_ID ||
           env.RAZORPAY_KEY_ID ||
