@@ -103,10 +103,14 @@ function GlobalLibraryPage() {
     };
   }, []);
 
-  const handleDirectUpload = async () => {
+  const handleDirectUpload = async (customFileName?: string) => {
     if (!uploadFile || uploadingDirect) return;
     setUploadingDirect(true);
-    const toastId = toast.loading(`Uploading "${uploadFile.name}" to Cloudflare R2...`);
+    const targetFileName = customFileName?.trim() || uploadFile.name || "document.pdf";
+    const normalizedFileName = targetFileName.toLowerCase().endsWith(".pdf")
+      ? targetFileName
+      : `${targetFileName}.pdf`;
+    const toastId = toast.loading(`Uploading "${normalizedFileName}" to Cloudflare R2...`);
     try {
       const { uploadToR2, uploadThumbnailToR2 } = await import("@/lib/r2");
       const { renderPageToJpegBlob } = await import("@/hooks/useThumbnail");
@@ -116,7 +120,7 @@ function GlobalLibraryPage() {
 
       const res = await uploadToR2({
         data: {
-          fileName: uploadFile.name,
+          fileName: normalizedFileName,
           contentType: uploadFile.type || "application/pdf",
           base64Data,
           subject: uploadCategory,
@@ -137,7 +141,7 @@ function GlobalLibraryPage() {
         console.warn("Could not generate thumbnail during direct upload:", thumbErr);
       }
 
-      toast.success(`Successfully uploaded "${uploadFile.name}" to R2 (${res.category})!`, {
+      toast.success(`Successfully uploaded "${normalizedFileName}" to R2 (${res.category})!`, {
         id: toastId,
       });
       setUploadDialogOpen(false);
@@ -638,7 +642,7 @@ function GlobalLibraryPage() {
         uploadEducationLevel={uploadEducationLevel}
         onEducationLevelChange={setUploadEducationLevel}
         uploadingDirect={uploadingDirect}
-        onSubmit={() => void handleDirectUpload()}
+        onSubmit={(customFileName) => void handleDirectUpload(customFileName)}
       />
 
       {/* Delete confirmation dialog */}

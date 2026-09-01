@@ -447,7 +447,7 @@ function DocPage() {
     setShowUploadCategoryModal(true);
   };
 
-  const confirmCategoryUpload = async () => {
+  const confirmCategoryUpload = async (customFileName?: string) => {
     if (uploading || !doc) return;
     setShowUploadCategoryModal(false);
     setUploading(true);
@@ -476,10 +476,15 @@ function DocPage() {
       reader.readAsDataURL(blob);
       const base64Data = await base64Promise;
 
+      const targetFileName = customFileName?.trim() || doc.fileName || "document.pdf";
+      const normalizedFileName = targetFileName.toLowerCase().endsWith(".pdf")
+        ? targetFileName
+        : `${targetFileName}.pdf`;
+
       const { uploadToR2, uploadThumbnailToR2 } = await import("@/lib/r2");
       const res = await uploadToR2({
         data: {
-          fileName: doc.fileName,
+          fileName: normalizedFileName,
           contentType: blob.type || "application/pdf",
           base64Data,
           subject: uploadSubject,
@@ -840,7 +845,7 @@ function DocPage() {
         uploadEducationLevel={uploadEducationLevel}
         onEducationLevelChange={setUploadEducationLevel}
         uploadingDirect={uploading}
-        onSubmit={() => void confirmCategoryUpload()}
+        onSubmit={(customFileName) => void confirmCategoryUpload(customFileName)}
       />
 
       {/* First-time Translation Language Selection Popup */}
