@@ -1,3 +1,5 @@
+import { convertLegacyHindiIfNeeded, isLegacyHindiText } from "./devanagari";
+
 /**
  * Regex matching Unicode Private Use Area (PUA) characters.
  * These appear as garbled glyphs when fonts lack proper ToUnicode mappings.
@@ -18,21 +20,25 @@ const GARBAGE_REGEX = /[\uFFFD\uFFFE\uFFFF]|[\u0000-\u0008\u000B\u000C\u000E-\u0
 const SYMBOL_FONT_CHARS = /[\u2600-\u27BF]|[\uD83C-\uD83F][\uDC00-\uDFFF]/g;
 
 /**
- * Clean extracted text by stripping unmappable PUA glyphs and garbage characters.
+ * Clean extracted text by decoding legacy font mappings (such as Kruti Dev / DevLys Hindi)
+ * and stripping unmappable PUA glyphs and garbage characters.
  * Returns the cleaned string plus a ratio of how much was garbage (0–1).
  */
 export function cleanExtractedText(raw: string): { text: string; garbageRatio: number } {
   if (!raw) return { text: "", garbageRatio: 0 };
 
-  const puaMatches = raw.match(PUA_REGEX);
-  const garbageMatches = raw.match(GARBAGE_REGEX);
-  const symbolMatches = raw.match(SYMBOL_FONT_CHARS);
+  // Convert legacy Devanagari font text (Kruti Dev / DevLys) if detected
+  const sourceText = convertLegacyHindiIfNeeded(raw);
+
+  const puaMatches = sourceText.match(PUA_REGEX);
+  const garbageMatches = sourceText.match(GARBAGE_REGEX);
+  const symbolMatches = sourceText.match(SYMBOL_FONT_CHARS);
   const totalGarbage =
     (puaMatches?.length ?? 0) + (garbageMatches?.length ?? 0) + (symbolMatches?.length ?? 0);
-  const nonSpaceChars = raw.replace(/\s/g, "").length;
+  const nonSpaceChars = sourceText.replace(/\s/g, "").length;
   const garbageRatio = nonSpaceChars > 0 ? totalGarbage / nonSpaceChars : 0;
 
-  let cleaned = raw.replace(PUA_REGEX, "").replace(GARBAGE_REGEX, "");
+  let cleaned = sourceText.replace(PUA_REGEX, "").replace(GARBAGE_REGEX, "");
 
   // Collapse whitespace artifacts left after stripping
   cleaned = cleaned
@@ -47,6 +53,11 @@ export function cleanExtractedText(raw: string): { text: string; garbageRatio: n
 function isGarbageLine(line: string): boolean {
   const trimmed = line.trim();
   if (trimmed.length === 0) return false;
+
+  // Protect Devanagari text from English Latin-specific vowel and casing heuristics
+  if (/[\u0900-\u097F]/.test(trimmed)) {
+    return false;
+  }
 
   const words = trimmed.split(/\s+/);
   let score = 0;

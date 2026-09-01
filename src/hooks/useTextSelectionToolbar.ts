@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import { dispatchDocEvent } from "@/lib/docEvents";
+import { convertLegacyHindiIfNeeded } from "@/lib/devanagari";
 
 export interface SelectionInfo {
   pageNumber: number;
@@ -28,11 +29,12 @@ export function useTextSelectionToolbar(
         setSelection(null);
         return;
       }
-      const text = sel.toString().trim();
-      if (!text) {
+      const rawText = sel.toString().trim();
+      if (!rawText) {
         setSelection(null);
         return;
       }
+      const text = convertLegacyHindiIfNeeded(rawText);
       // Verify selection lives inside one of our text layers
       const anchor = sel.anchorNode as Node | null;
       if (!anchor) {

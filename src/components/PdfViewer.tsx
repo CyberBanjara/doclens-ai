@@ -138,8 +138,24 @@ export function PdfViewer({ docId, activePage, setActivePage }: Props) {
           textLayer.style.setProperty("--scale-factor", String(meta.scale));
           try {
             const pdfjs = await import("pdfjs-dist");
+            const { convertLegacyHindiIfNeeded, isLegacyHindiText } = await import("@/lib/devanagari");
             const textContent = await page.getTextContent();
+
             if (!cancelled) {
+              // If text items contain legacy Kruti Dev / DevLys Hindi text, convert str items for DOM selection
+              const rawSample = (textContent.items as { str?: string }[])
+                .slice(0, 30)
+                .map((it) => it.str || "")
+                .join(" ");
+
+              if (isLegacyHindiText(rawSample)) {
+                for (const it of textContent.items as { str?: string }[]) {
+                  if (it && typeof it.str === "string") {
+                    it.str = convertLegacyHindiIfNeeded(it.str);
+                  }
+                }
+              }
+
               const tl = new pdfjs.TextLayer({
                 textContentSource: textContent,
                 container: textLayer,
