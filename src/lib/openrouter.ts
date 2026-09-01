@@ -193,7 +193,9 @@ export function getSelectedModel(): string {
 }
 
 export function setSelectedModel(id: string) {
+  if (typeof window === "undefined") return;
   localStorage.setItem(MODEL_LS, id);
+  window.dispatchEvent(new CustomEvent(GLOBALS_CHANGE_EVT, { detail: { modelId: id } }));
 }
 
 export function getDefaultModelSync(): string {
@@ -231,6 +233,7 @@ export async function getEffectiveSelectedModel(): Promise<string> {
 }
 
 export const OUTPUT_LANGUAGE_CHANGE_EVT = "doclens:output-language-changed";
+export const GLOBALS_CHANGE_EVT = "doclens:globals-changed";
 
 export function getOutputLanguage(): string {
   if (typeof window === "undefined") return "हिंदी";
@@ -241,6 +244,7 @@ export function setOutputLanguage(lang: string) {
   if (typeof window === "undefined") return;
   localStorage.setItem(LANG_LS, lang);
   window.dispatchEvent(new CustomEvent(OUTPUT_LANGUAGE_CHANGE_EVT, { detail: lang }));
+  window.dispatchEvent(new CustomEvent(GLOBALS_CHANGE_EVT, { detail: { language: lang } }));
 }
 
 function hasStoredValue(key: string): boolean {
@@ -261,7 +265,9 @@ export function getMode(): GlobalMode {
 }
 
 export function setMode(m: GlobalMode) {
+  if (typeof window === "undefined") return;
   localStorage.setItem(MODE_LS, m);
+  window.dispatchEvent(new CustomEvent(GLOBALS_CHANGE_EVT, { detail: { mode: m } }));
 }
 
 export function getStyle(mode?: GlobalMode): ProcessingStyle {
@@ -283,7 +289,9 @@ export function getStyle(mode?: GlobalMode): ProcessingStyle {
 }
 
 export function setStyle(s: ProcessingStyle | string) {
+  if (typeof window === "undefined") return;
   localStorage.setItem(STYLE_LS, s);
+  window.dispatchEvent(new CustomEvent(GLOBALS_CHANGE_EVT, { detail: { style: s } }));
 }
 
 export function hasCompletedAiPreferenceSetup(): boolean {

@@ -173,29 +173,43 @@ export async function syncToSupabase(
     }
 
     // Explicit priority: targetLanguage -> docRec.selectedLanguage -> openrouter outputLanguage -> "हिंदी"
-    const language = targetLanguage || docRec.selectedLanguage || getOutputLanguage() || "हिंदी";
+    const defaultLanguage = targetLanguage || docRec.selectedLanguage || getOutputLanguage() || "हिंदी";
     const targetKey = customKey || docRec.bookId || docRec.fileName;
 
-    // Filter only completed pages
-    const completedPages = pages
-      .filter((p) => p.pageAi?.status === "done" && p.pageAi.result && p.pageAi.result.trim())
-      .map((p) => ({
-        pageNumber: p.pageNumber,
-        content: p.pageAi!.result!,
-      }));
+    // Group completed standard translation pages by their effective language (respecting per-page language overrides)
+    const pagesByLanguage = new Map<string, { pageNumber: number; content: string }[]>();
 
-    if (completedPages.length > 0) {
-      const res = await batchSaveSupabaseLanguagePages({
-        data: {
-          language,
-          bookId: targetKey,
-          pages: completedPages,
-          docId,
-        },
-      });
+    for (const p of pages) {
+      if (p.pageAi?.status === "done" && p.pageAi.result && p.pageAi.result.trim()) {
+        // Skip pages that are non-standard translations (e.g. explain mode or custom styles)
+        if (p.pageAi.overrides?.mode && p.pageAi.overrides.mode !== "translate") continue;
+        if (p.pageAi.overrides?.style && p.pageAi.overrides.style !== "Native") continue;
 
-      if (!res || !res.success) {
-        throw new Error(res?.error || `Failed to sync ${language} pages to Supabase.`);
+        const pageLang = p.pageAi.overrides?.language || defaultLanguage;
+        if (!pagesByLanguage.has(pageLang)) {
+          pagesByLanguage.set(pageLang, []);
+        }
+        pagesByLanguage.get(pageLang)!.push({
+          pageNumber: p.pageNumber,
+          content: p.pageAi.result.trim(),
+        });
+      }
+    }
+
+    for (const [lang, langPages] of pagesByLanguage.entries()) {
+      if (langPages.length > 0) {
+        const res = await batchSaveSupabaseLanguagePages({
+          data: {
+            language: lang,
+            bookId: targetKey,
+            pages: langPages,
+            docId,
+          },
+        });
+
+        if (!res || !res.success) {
+          throw new Error(res?.error || `Failed to sync ${lang} pages to Supabase.`);
+        }
       }
     }
   } catch (e: any) {

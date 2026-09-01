@@ -94,7 +94,13 @@ export function PageWorkstation({
       });
     };
     window.addEventListener("focus", onFocus);
-    return () => window.removeEventListener("focus", onFocus);
+    window.addEventListener("doclens:globals-changed", onFocus);
+    window.addEventListener("doclens:output-language-changed", onFocus);
+    return () => {
+      window.removeEventListener("focus", onFocus);
+      window.removeEventListener("doclens:globals-changed", onFocus);
+      window.removeEventListener("doclens:output-language-changed", onFocus);
+    };
   }, []);
 
   const shouldShowExplainSetup = useCallback(() => {
@@ -225,19 +231,15 @@ export function PageWorkstation({
         const state: PageAi = pageRec?.pageAi ?? { pageNumber, status: "idle" };
 
         if (state.status === "done" && !!state.result) {
-          if (state.isCustom) {
-            dispatchPageReady(docId, pageNumber, state.result);
-            return;
-          }
-          const eff = effective(globalsRef.current, state.overrides);
-          if (state.settingsHash === hashFor(eff)) {
-            dispatchPageReady(docId, pageNumber, state.result);
-            return;
-          }
+          // If page already has generated content, dispatch it for audio/UI without auto re-generating
+          dispatchPageReady(docId, pageNumber, state.result);
+          return;
         }
 
-        const result = await runPageOnce(pageNumber);
-        if (result) dispatchPageReady(docId, pageNumber, result);
+        if (!state.result && state.status !== "running") {
+          const result = await runPageOnce(pageNumber);
+          if (result) dispatchPageReady(docId, pageNumber, result);
+        }
       })();
     });
   }, [docId, runPageOnce, analyzing]);

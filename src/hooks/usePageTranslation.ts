@@ -81,10 +81,19 @@ export function usePageTranslation(
       // ─────────────────────────────────────────────────────────────────
       // 1. SUPABASE MULTI-TABLE REUSE CHECK: Same book + Same language = Instant Reuse
       // ─────────────────────────────────────────────────────────────────
-      // If we don't have custom text overrides (e.g. user selected arbitrary snippet),
-      // check if this page already exists in the dedicated language table in Supabase.
+      // Supabase translation tables store canonical standard translations (mode: translate, style: Native).
+      // If the user changed mode (e.g. explain), changed style (e.g. Detailed, Simplified, ELI5),
+      // set custom overrides, or has a text selection override, skip Supabase reuse so that a fresh
+      // AI response is generated using the newly selected settings.
       const selOverride = selectionOverridesRef.current.get(pageNumber);
-      if (!selOverride && !state.isCustom) {
+      const isDefaultTranslation =
+        eff.mode === "translate" &&
+        eff.style === "Native" &&
+        !state.isCustom &&
+        !state.overrides?.style &&
+        !state.overrides?.mode;
+
+      if (!selOverride && isDefaultTranslation) {
         try {
           const supabaseLookup = await fetchSupabaseLanguagePage({
             data: {
@@ -263,17 +272,29 @@ export function usePageTranslation(
         );
 
         // 2. Save newly generated page exclusively to dedicated Supabase language table & book_languages
-        void saveSupabaseLanguagePage({
-          data: {
-            language: eff.language,
-            bookId,
-            pageNumber,
-            content: result,
-            docId,
-          },
-        }).catch((err) =>
-          console.warn(`Auto-saving page to Supabase table translations_${eff.language} note:`, err?.message || err),
-        );
+        // (Only canonical default translations are saved to the shared Supabase table)
+        if (
+          eff.mode === "translate" &&
+          eff.style === "Native" &&
+          !state.isCustom &&
+          !state.overrides?.style &&
+          !state.overrides?.mode
+        ) {
+          void saveSupabaseLanguagePage({
+            data: {
+              language: eff.language,
+              bookId,
+              pageNumber,
+              content: result,
+              docId,
+            },
+          }).catch((err) =>
+            console.warn(
+              `Auto-saving page to Supabase table translations_${eff.language} note:`,
+              err?.message || err,
+            ),
+          );
+        }
 
         return result;
       } catch (e) {
