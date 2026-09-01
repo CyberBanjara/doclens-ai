@@ -13,9 +13,9 @@ import {
   OmniRouterError,
   type Globals,
 } from "@/lib/openrouter";
-import { getPageData, upsertPageAi, type PageAi, type PageAiSummaryEntry } from "@/lib/storage";
-import { syncToSupabase } from "@/lib/sync";
-import { cleanAiText, effective, hashFor, summarize } from "@/lib/pageAi";
+import { getDoc, getPageData, upsertPageAi, type PageAi, type PageAiSummaryEntry } from "@/lib/storage";
+import { cleanAiText, effective, hashFor, summarize, dispatchPageReady } from "@/lib/pageAi";
+import { fetchSupabaseLanguagePage, saveSupabaseLanguagePage } from "@/lib/supabase";
 
 /**
  * Throttle stream state updates to maintain 60fps rendering without choking React.
@@ -72,7 +72,62 @@ export function usePageTranslation(
       const state: PageAi = pageRec.pageAi ?? { pageNumber, status: "idle" };
       const eff = effective(currentGlobals, state.overrides);
       const isOmni = eff.provider === "omnirouter";
+      const hash = hashFor(eff);
 
+      // Get doc record for book_id identification
+      const docRec = await getDoc(docId);
+      const bookId = docRec?.bookId || docRec?.fileName || docId;
+
+      // ─────────────────────────────────────────────────────────────────
+      // 1. SUPABASE MULTI-TABLE REUSE CHECK: Same book + Same language = Instant Reuse
+      // ─────────────────────────────────────────────────────────────────
+      // If we don't have custom text overrides (e.g. user selected arbitrary snippet),
+      // check if this page already exists in the dedicated language table in Supabase.
+      const selOverride = selectionOverridesRef.current.get(pageNumber);
+      if (!selOverride && !state.isCustom) {
+        try {
+          const supabaseLookup = await fetchSupabaseLanguagePage({
+            data: {
+              language: eff.language,
+              bookId,
+              pageNumber,
+              docId,
+            },
+          });
+
+          if (supabaseLookup && supabaseLookup.found && supabaseLookup.content) {
+            const result = cleanAiText(supabaseLookup.content);
+
+            // Persist to local IndexedDB and update UI
+            await upsertPageAi(docId, pageNumber, {
+              status: "done",
+              result,
+              error: undefined,
+              settingsHash: hash,
+            });
+
+            onPageAiChangeRef.current(
+              pageNumber,
+              summarize({
+                ...state,
+                status: "done",
+                result,
+                settingsHash: hash,
+              }),
+            );
+
+            // Notify UI & TTS workstation
+            dispatchPageReady(docId, pageNumber, result);
+            return result;
+          }
+        } catch (lookupErr) {
+          console.warn("Supabase language cache lookup note:", lookupErr);
+        }
+      }
+
+      // ─────────────────────────────────────────────────────────────────
+      // 2. PAGE GENERATION (Only runs if page is missing from Supabase)
+      // ─────────────────────────────────────────────────────────────────
       const key = getKey();
       if (!isOmni && !key) {
         ensureKeyReady();
@@ -103,7 +158,6 @@ export function usePageTranslation(
       const modelId = eff.modelId || (isOmni ? "" : getDefaultModelSync());
 
       // One-shot selection override (from PDF text selection → "Translate")
-      const selOverride = selectionOverridesRef.current.get(pageNumber);
       if (selOverride) selectionOverridesRef.current.delete(pageNumber);
       const effectiveText = selOverride ?? pageRec.text;
 
@@ -121,8 +175,6 @@ export function usePageTranslation(
           pageText: effectiveText,
         });
       }
-
-      const hash = hashFor(eff);
 
       const ctrl = new AbortController();
       abortMap.current.set(pageNumber, ctrl);
@@ -193,6 +245,7 @@ export function usePageTranslation(
         const rawResult = bufferRef.current;
         const result = cleanAiText(rawResult);
 
+        // 1. Save to local IndexedDB
         await upsertPageAi(docId, pageNumber, {
           status: "done",
           result,
@@ -208,9 +261,20 @@ export function usePageTranslation(
             settingsHash: hash,
           }),
         );
-        void syncToSupabase(docId).catch((err) =>
-          console.warn("Background sync to Supabase skipped/failed:", err?.message || err),
+
+        // 2. Save newly generated page exclusively to dedicated Supabase language table & book_languages
+        void saveSupabaseLanguagePage({
+          data: {
+            language: eff.language,
+            bookId,
+            pageNumber,
+            content: result,
+            docId,
+          },
+        }).catch((err) =>
+          console.warn(`Auto-saving page to Supabase table translations_${eff.language} note:`, err?.message || err),
         );
+
         return result;
       } catch (e) {
         if ((e as Error).name === "AbortError" || ctrl.signal.aborted) {

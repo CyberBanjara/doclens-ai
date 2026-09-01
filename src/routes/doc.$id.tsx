@@ -25,6 +25,12 @@ import {
   type PageAiSummaryEntry,
 } from "@/lib/storage";
 import { syncFromSupabase, syncToSupabase, getSyncConfig } from "@/lib/sync";
+import { fetchAvailableLanguagesForBook } from "@/lib/supabase";
+import { getOutputLanguage, setOutputLanguage } from "@/lib/openrouter";
+import {
+  LanguageSelectionModal,
+  type AvailableLanguageOption,
+} from "@/components/LanguageSelectionModal";
 import { useAuth } from "@/context/AuthContext";
 import { checkTextQuality } from "@/lib/textCleaning";
 import { R2UploadDialog } from "@/components/R2UploadDialog";
@@ -95,6 +101,11 @@ function DocPage() {
   const [activePage, setActivePageRaw] = useState<number>(urlPage ?? 1);
   const [syncEnabled, setSyncEnabled] = useState(true);
 
+  // First-time Language Selection states
+  const [languageModalOpen, setLanguageModalOpen] = useState(false);
+  const [availableLanguages, setAvailableLanguages] = useState<AvailableLanguageOption[]>([]);
+  const [loadingAvailableLangs, setLoadingAvailableLangs] = useState(false);
+
   /** Sync page changes to the URL query param (?page=N) */
   const setActivePage = useCallback(
     (p: number) => {
@@ -141,6 +152,32 @@ function DocPage() {
     }
   }, [aiSummary, setActivePage]);
 
+  // Handle language confirmation from the first-time modal
+  const handleSelectLanguage = async (chosenLang: string) => {
+    setLanguageModalOpen(false);
+    setOutputLanguage(chosenLang);
+    await updateDoc(id, {
+      hasChosenLanguage: true,
+      selectedLanguage: chosenLang,
+    });
+    setDoc((prev) =>
+      prev ? { ...prev, hasChosenLanguage: true, selectedLanguage: chosenLang } : null,
+    );
+
+    if (syncEnabled && doc) {
+      const toastId = toast.loading(`Loading ${chosenLang} translations...`);
+      try {
+        await syncFromSupabase(id, doc.fileName, chosenLang, true);
+        const sum = await getPageAiSummary(id);
+        setAiSummary(sum);
+        toast.success(`Active translation language: ${chosenLang}`, { id: toastId });
+      } catch (e) {
+        console.warn("Language sync note:", e);
+        toast.dismiss(toastId);
+      }
+    }
+  };
+
   useEffect(() => {
     let cancelled = false;
     (async () => {
@@ -165,11 +202,33 @@ function DocPage() {
       const currentRec = rec;
       const pc = currentRec.pageCount ?? 0;
 
-      if (configEnabled) {
-        // Sync translations from Supabase in the background
+      // Check if this document needs first-time language selection popup
+      if (!currentRec.hasChosenLanguage && configEnabled) {
+        setLoadingAvailableLangs(true);
+        setLanguageModalOpen(true);
+        try {
+          const availRes = await fetchAvailableLanguagesForBook({
+            data: {
+              bookId: currentRec.bookId || currentRec.fileName,
+              docId: id,
+            },
+          });
+          if (!cancelled && availRes && availRes.languageDetails) {
+            setAvailableLanguages(availRes.languageDetails);
+          }
+        } catch (langErr) {
+          console.warn("Could not query available book languages from Supabase:", langErr);
+        } finally {
+          if (!cancelled) {
+            setLoadingAvailableLangs(false);
+          }
+        }
+      } else if (configEnabled) {
+        // Already chose a language or sync enabled: sync dedicated language table
+        const activeLang = currentRec.selectedLanguage || getOutputLanguage() || "हिंदी";
         void (async () => {
           try {
-            const updated = await syncFromSupabase(id, currentRec.fileName);
+            const updated = await syncFromSupabase(id, currentRec.fileName, activeLang, false);
             if (updated && !cancelled) {
               const updatedRec = await getDoc(id);
               if (updatedRec) {
@@ -185,6 +244,33 @@ function DocPage() {
           }
         })();
       }
+
+      // Sync translations when user changes language in the workspace
+      const handleLangChange = (e: any) => {
+        if (!configEnabled) return;
+        const newLang = e?.detail;
+        if (!newLang) return;
+        void (async () => {
+          try {
+            await updateDoc(id, { selectedLanguage: newLang });
+            await syncFromSupabase(id, currentRec.fileName, newLang, true);
+            if (!cancelled) {
+              const updatedRec = await getDoc(id);
+              if (updatedRec) {
+                setDoc(updatedRec);
+                const sum = await getPageAiSummary(id);
+                if (!cancelled) {
+                  setAiSummary(sum);
+                }
+              }
+            }
+          } catch (err) {
+            console.warn("Language sync check note:", err);
+          }
+        })();
+      };
+
+      window.addEventListener("doclens:output-language-changed" as any, handleLangChange);
 
       // Compute isScannedPdf if not set on existing document (sample first 5 pages)
       if (currentRec.isScannedPdf === undefined && pc > 0) {
@@ -225,6 +311,7 @@ function DocPage() {
     })();
     return () => {
       cancelled = true;
+      window.removeEventListener("doclens:output-language-changed" as any, () => {});
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id]);
@@ -274,8 +361,8 @@ function DocPage() {
         await refreshSummary();
         setStatus(`done · ${collected.length} pages`);
         toast.success(`Extracted ${collected.length} pages successfully.`);
-        if (syncEnabled) {
-          void syncToSupabase(id);
+        if (syncEnabled && doc) {
+          void syncToSupabase(id, undefined, doc.selectedLanguage);
         }
       } catch (e) {
         console.error("Failed to save extracted pages:", e);
@@ -308,8 +395,8 @@ function DocPage() {
           },
         );
         setStatus(`done · ${collected.length} pages`);
-        if (syncEnabled) {
-          void syncToSupabase(id);
+        if (syncEnabled && doc) {
+          void syncToSupabase(id, undefined, doc.selectedLanguage);
         }
       } catch (ocrErr) {
         console.warn("OCR fallback failed:", ocrErr);
@@ -411,7 +498,7 @@ function DocPage() {
 
       // Automatically sync pages and translations to Supabase under the category key
       if ((isAdmin || syncEnabled) && pageCount > 0) {
-        void syncToSupabase(id, res.key).catch((err) =>
+        void syncToSupabase(id, res.key, doc.selectedLanguage).catch((err) =>
           console.warn("Auto-sync to Supabase after R2 upload failed:", err),
         );
       }
@@ -428,16 +515,16 @@ function DocPage() {
   const handleSyncToSupabase = async () => {
     if (syncingSupabase || !doc) return;
     setSyncingSupabase(true);
-    const toastId = toast.loading("Syncing pages and translations to Supabase...");
+    const toastId = toast.loading("Syncing translations to Supabase...");
     try {
-      await syncToSupabase(id);
-      toast.success("Successfully synced pages and translations to Supabase!", { id: toastId });
+      await syncToSupabase(id, undefined, doc.selectedLanguage);
+      toast.success("Successfully synced translations to Supabase!", { id: toastId });
     } catch (e: any) {
       console.error(e);
       const msg = e?.message || String(e);
       if (msg.includes("relation") && msg.includes("does not exist")) {
         toast.error(
-          "Table pdf_extractions does not exist in Supabase. Please run the SQL schema migration.",
+          "Translation table or book_languages does not exist in Supabase. Please run the SQL schema migration.",
           { id: toastId, duration: 8000 },
         );
       } else {
@@ -733,6 +820,16 @@ function DocPage() {
         onEducationLevelChange={setUploadEducationLevel}
         uploadingDirect={uploading}
         onSubmit={() => void confirmCategoryUpload()}
+      />
+
+      {/* First-time Translation Language Selection Popup */}
+      <LanguageSelectionModal
+        open={languageModalOpen}
+        bookTitle={doc?.fileName?.replace(/\.pdf$/i, "")}
+        availableLanguages={availableLanguages}
+        loadingAvailable={loadingAvailableLangs}
+        currentLanguage={doc?.selectedLanguage || getOutputLanguage() || "हिंदी"}
+        onSelectLanguage={handleSelectLanguage}
       />
     </div>
   );

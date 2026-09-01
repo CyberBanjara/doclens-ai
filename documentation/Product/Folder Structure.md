@@ -19,7 +19,7 @@ doclens-ai/
 │   └── reorganize-r2.mjs           # CLI wrapper for the `reorganizeR2Files` server function
 ├── dist/                          # Production build output (gitignored)
 ├── .agents/                       # Claude Code skills configuration (not app code)
-├── supabase_schema.sql            # Reference SQL schema for the Supabase `pdf_extractions` table
+├── supabase_schema.sql            # Reference SQL schema for dedicated language tables and `book_languages` table
 ├── sample.pdf                     # Test fixture PDF
 ├── DESIGN.md                      # Design-token specification (colors, type scale)
 ├── components.json                # shadcn/ui codegen config

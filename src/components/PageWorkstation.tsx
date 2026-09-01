@@ -35,6 +35,7 @@ import { dispatchDocEvent, listenDocEvent } from "@/lib/docEvents";
 interface Props {
   docId: string;
   pageCount: number;
+  analyzing?: boolean;
   aiSummary: Record<number, PageAiSummaryEntry>;
   onPageAiChange: (pageNumber: number, entry: PageAiSummaryEntry | null) => void;
   activePage: number;
@@ -48,6 +49,7 @@ type PendingExplainAction =
 export function PageWorkstation({
   docId,
   pageCount,
+  analyzing = false,
   aiSummary,
   onPageAiChange,
   activePage,
@@ -234,7 +236,8 @@ export function PageWorkstation({
   const autoTranslatedInitialPageRef = useRef<Record<string, number>>({});
   useEffect(() => {
     if (!mountedRef.current) return;
-    if (pageCount <= 0) return;
+    // Strictly do not run AI translation while document is still extracting or has 0 pages
+    if (analyzing || pageCount <= 0) return;
     if (!keyReady || !globals.modelId) return;
     if (shouldShowExplainSetup()) return;
 
@@ -254,6 +257,7 @@ export function PageWorkstation({
   }, [
     docId,
     pageCount,
+    analyzing,
     keyReady,
     globals.modelId,
     aiSummary,

@@ -99,6 +99,12 @@ export interface DocRecord {
   aiDoneCount?: number;
   lastReadPage?: number;
   isScannedPdf?: boolean;
+  /** Unique book identifier for Supabase multi-table tracking */
+  bookId?: string;
+  /** Language chosen by the user for translation */
+  selectedLanguage?: string;
+  /** Tracks whether the user has been prompted to choose a translation language */
+  hasChosenLanguage?: boolean;
 }
 
 export interface DocSummary {
@@ -112,6 +118,9 @@ export interface DocSummary {
   aiResultCount: number;
   lastReadPage?: number;
   isScannedPdf?: boolean;
+  bookId?: string;
+  selectedLanguage?: string;
+  hasChosenLanguage?: boolean;
 }
 
 export class StorageError extends Error {

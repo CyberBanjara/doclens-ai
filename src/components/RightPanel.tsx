@@ -144,6 +144,7 @@ export function RightPanel({
         <PageWorkstation
           docId={docId}
           pageCount={pageCount}
+          analyzing={analyzing}
           aiSummary={aiSummary}
           onPageAiChange={onPageAiChange}
           activePage={activePage}

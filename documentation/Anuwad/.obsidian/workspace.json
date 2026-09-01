@@ -1,14 +1,14 @@
 {
   "main": {
-    "id": "fd6cc03f1a404f4a",
+    "id": "1fff3b73b817a6c7",
     "type": "split",
     "children": [
       {
-        "id": "27820771e7351c85",
+        "id": "2f4f80c4e69742d1",
         "type": "tabs",
         "children": [
           {
-            "id": "391d965250148b86",
+            "id": "d235b4587c63e3c9",
             "type": "leaf",
             "state": {
               "type": "empty",
@@ -23,15 +23,15 @@
     "direction": "vertical"
   },
   "left": {
-    "id": "27c391266b99becf",
+    "id": "fe1c11319ed13f37",
     "type": "split",
     "children": [
       {
-        "id": "d074c32087b76fa9",
+        "id": "66ed3545ccf72814",
         "type": "tabs",
         "children": [
           {
-            "id": "b248bf60572248d7",
+            "id": "6c8a5ee26d1427e0",
             "type": "leaf",
             "state": {
               "type": "file-explorer",
@@ -46,7 +46,7 @@
             }
           },
           {
-            "id": "7111508de56c9a3d",
+            "id": "76035a52852df430",
             "type": "leaf",
             "state": {
               "type": "search",
@@ -63,78 +63,38 @@
             }
           },
           {
-            "id": "e973b550da50f6c6",
+            "id": "8b223579e9fb0bfb",
             "type": "leaf",
             "state": {
               "type": "bookmarks",
-              "state": {},
+              "state": {
+                "showSearch": false,
+                "searchQuery": ""
+              },
               "icon": "lucide-bookmark",
               "title": "Bookmarks"
-            }
-          }
-        ]
-      },
-      {
-        "id": "2226663308e9f055",
-        "type": "tabs",
-        "children": [
-          {
-            "id": "53c60569b0b6d188",
-            "type": "leaf",
-            "state": {
-              "type": "localgraph",
-              "state": {
-                "options": {
-                  "collapse-filter": true,
-                  "search": "",
-                  "localJumps": 1,
-                  "localBacklinks": true,
-                  "localForelinks": true,
-                  "localInterlinks": false,
-                  "showTags": false,
-                  "showAttachments": false,
-                  "hideUnresolved": false,
-                  "collapse-color-groups": true,
-                  "colorGroups": [],
-                  "collapse-display": true,
-                  "showArrow": false,
-                  "textFadeMultiplier": 0,
-                  "nodeSizeMultiplier": 1,
-                  "lineSizeMultiplier": 1,
-                  "collapse-forces": true,
-                  "centerStrength": 0.518713248970312,
-                  "repelStrength": 10,
-                  "linkStrength": 1,
-                  "linkDistance": 250,
-                  "scale": 1.0534980272552341,
-                  "close": true
-                }
-              },
-              "icon": "lucide-git-fork",
-              "title": "Local graph"
             }
           }
         ]
       }
     ],
     "direction": "horizontal",
-    "width": 470.5026054382324
+    "width": 300
   },
   "right": {
-    "id": "c93e9a4bb6d08fa8",
+    "id": "e953c3d1c90837b7",
     "type": "split",
     "children": [
       {
-        "id": "07ecff8caffdaf43",
+        "id": "bcd65cb743019f4b",
         "type": "tabs",
         "children": [
           {
-            "id": "9898b31f73aa2148",
+            "id": "e200692f92c7d7f2",
             "type": "leaf",
             "state": {
               "type": "backlink",
               "state": {
-                "file": "Components/ExplainSetupDialog.md",
                 "collapseAll": false,
                 "extraContext": false,
                 "sortOrder": "alphabetical",
@@ -144,25 +104,24 @@
                 "unlinkedCollapsed": true
               },
               "icon": "links-coming-in",
-              "title": "Backlinks for ExplainSetupDialog"
+              "title": "Backlinks"
             }
           },
           {
-            "id": "9f3d6b949c0f152d",
+            "id": "32acb532d43418ee",
             "type": "leaf",
             "state": {
               "type": "outgoing-link",
               "state": {
-                "file": "Components/ExplainSetupDialog.md",
                 "linksCollapsed": false,
                 "unlinkedCollapsed": true
               },
               "icon": "links-going-out",
-              "title": "Outgoing links from ExplainSetupDialog"
+              "title": "Outgoing links"
             }
           },
           {
-            "id": "5a78ab3ab15fb6b0",
+            "id": "1fc27dfe1d3fd66a",
             "type": "leaf",
             "state": {
               "type": "tag",
@@ -177,7 +136,7 @@
             }
           },
           {
-            "id": "0fc9eaa05adc232e",
+            "id": "4ff98bce24f7e97d",
             "type": "leaf",
             "state": {
               "type": "all-properties",
@@ -191,18 +150,17 @@
             }
           },
           {
-            "id": "42ed47b4d701f073",
+            "id": "10ce23d3f017a917",
             "type": "leaf",
             "state": {
               "type": "outline",
               "state": {
-                "file": "Components/ExplainSetupDialog.md",
                 "followCursor": false,
                 "showSearch": false,
                 "searchQuery": ""
               },
               "icon": "lucide-list",
-              "title": "Outline of ExplainSetupDialog"
+              "title": "Outline"
             }
           }
         ]
@@ -223,35 +181,8 @@
       "bases:Create new base": false
     }
   },
-  "active": "391d965250148b86",
+  "active": "d235b4587c63e3c9",
   "lastOpenFiles": [
-    "Pipelines/MOC — Pipelines.md",
-    "Pipelines/TTS Pipeline.md",
-    "Pipelines/Translation Pipeline.md",
-    "Pipelines/PDF Extraction Pipeline.md",
-    "APIs/IndexedDB Storage.md",
-    "Features/Prompt Engineering & Explanation Tones.md",
-    "Product/Architecture.md",
-    "Features/AI Translation.md",
-    "User Flows/PDF to Translation Workflow.md",
-    "Features/Text Selection Toolbar.md",
-    "Features/Memory Diagnostics.md",
-    "Features/Memory & Storage Audit.md",
-    "Untitled.base",
-    "Product/What is Anuwad.md",
-    "Product/Folder Structure.md.tmp.75128.f260c0dcd71e",
-    "Product/MOC — Product.md",
-    "00 — Index.md",
-    "Product/Development Guidelines.md",
-    "Product/Design System.md",
-    "Product/Dependencies.md",
-    "Reference/Read Aloud Analysis.md",
-    "Reference/Glossary.md",
-    "User Flows/Upload and Manage Documents.md",
-    "User Flows/Translation to TTS Workflow.md",
-    "User Flows/MOC — User Flows.md",
-    "User Flows/First Time Setup.md",
-    "User Flows/End-to-End Pipeline.md",
-    "Components/LoadingLogo.md"
+    "Welcome.md"
   ]
 }

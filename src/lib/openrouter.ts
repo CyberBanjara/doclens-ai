@@ -230,13 +230,17 @@ export async function getEffectiveSelectedModel(): Promise<string> {
   return getSelectedModel() || getDefaultModelSync();
 }
 
+export const OUTPUT_LANGUAGE_CHANGE_EVT = "doclens:output-language-changed";
+
 export function getOutputLanguage(): string {
   if (typeof window === "undefined") return "हिंदी";
   return localStorage.getItem(LANG_LS) ?? "हिंदी";
 }
 
 export function setOutputLanguage(lang: string) {
+  if (typeof window === "undefined") return;
   localStorage.setItem(LANG_LS, lang);
+  window.dispatchEvent(new CustomEvent(OUTPUT_LANGUAGE_CHANGE_EVT, { detail: lang }));
 }
 
 function hasStoredValue(key: string): boolean {

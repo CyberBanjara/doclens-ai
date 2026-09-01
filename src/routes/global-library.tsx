@@ -266,37 +266,7 @@ function GlobalLibraryPage() {
       const docFile = new File([blob], cleanName, { type: res.contentType });
       const arrayBuffer = await docFile.arrayBuffer();
 
-      const docRec = await createDoc(docFile, arrayBuffer);
-
-      // Retrieve saved translation config from Supabase or active settings & sync
-      try {
-        const { fetchSupabaseExtraction } = await import("@/lib/supabase");
-        const { applyTranslationConfig, getTranslationConfig } = await import("@/lib/openrouter");
-        const { syncFromSupabase } = await import("@/lib/sync");
-
-        const supaRes = await fetchSupabaseExtraction({ data: { key: file.key } });
-        if (supaRes && supaRes.found && supaRes.record?.text) {
-          try {
-            const parsed = JSON.parse(supaRes.record.text);
-            if (parsed && typeof parsed === "object" && parsed.translationConfig) {
-              applyTranslationConfig(parsed.translationConfig, docRec.id);
-            } else {
-              applyTranslationConfig(getTranslationConfig(), docRec.id);
-            }
-          } catch {
-            applyTranslationConfig(getTranslationConfig(), docRec.id);
-          }
-        } else {
-          applyTranslationConfig(getTranslationConfig(), docRec.id);
-        }
-
-        // Sync pages & AI outputs from Supabase
-        await syncFromSupabase(docRec.id, file.key);
-      } catch (syncErr) {
-        console.warn("Error loading translation settings from Supabase:", syncErr);
-        const { applyTranslationConfig, getTranslationConfig } = await import("@/lib/openrouter");
-        applyTranslationConfig(getTranslationConfig(), docRec.id);
-      }
+      const docRec = await createDoc(docFile, arrayBuffer, file.key);
 
       toast.success(`Successfully imported "${cleanName}" to your local library!`, { id: toastId });
 

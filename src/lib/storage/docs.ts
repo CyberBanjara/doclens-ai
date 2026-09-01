@@ -30,6 +30,9 @@ export async function listDocs(): Promise<DocSummary[]> {
       aiResultCount: (r.aiResults?.length ?? 0) + (r.aiDoneCount ?? 0),
       lastReadPage: r.lastReadPage,
       isScannedPdf: r.isScannedPdf,
+      bookId: r.bookId || r.fileName,
+      selectedLanguage: r.selectedLanguage,
+      hasChosenLanguage: r.hasChosenLanguage ?? false,
     }))
     .sort((a, b) => b.lastOpenedAt - a.lastOpenedAt);
 }
@@ -55,7 +58,11 @@ export async function getDocBlob(id: string): Promise<Blob | null> {
   return null;
 }
 
-export async function createDoc(file: File, data: ArrayBuffer | Blob): Promise<DocRecord> {
+export async function createDoc(
+  file: File,
+  data: ArrayBuffer | Blob,
+  customBookId?: string,
+): Promise<DocRecord> {
   const d = await db();
   const id = uuid();
   const now = Date.now();
@@ -73,6 +80,8 @@ export async function createDoc(file: File, data: ArrayBuffer | Blob): Promise<D
     lastOpenedAt: now,
     aiResults: [],
     aiDoneCount: 0,
+    bookId: customBookId || file.name,
+    hasChosenLanguage: false,
   };
   await safePut(d, STORE, rec);
   await setLastOpened(id);

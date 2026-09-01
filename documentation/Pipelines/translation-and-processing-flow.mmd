@@ -1,0 +1,224 @@
+%% ====================================================================
+%% DOCLENS AI - TRANSLATION & PROCESSING COMPLETE PIPELINE & OPTION FLOWS
+%% ====================================================================
+%% Demonstrates all available language slots, processing modes,
+%% translation styles, explanation styles, model fleets, and execution flows.
+%% ====================================================================
+
+flowchart TB
+
+    %% ─────────────────────────────────────────────────────────────────
+    %% SLOT 1: AVAILABLE TARGET LANGUAGES
+    %% ─────────────────────────────────────────────────────────────────
+    subgraph SLOT_1["🌐 SLOT 1: AVAILABLE TARGET LANGUAGES"]
+        direction TB
+        
+        subgraph LANG_INDIC["🇮🇳 Indic Languages (Native Scripts & BCP-47)"]
+            L_HI["<b>हिंदी (Hindi)</b><br/><code>id: 'हिंदी' | alias: 'hi'</code>"]
+            L_BN["<b>বাংলা (Bengali)</b><br/><code>id: 'বাংলা' | alias: 'bn'</code>"]
+            L_TE["<b>తెలుగు (Telugu)</b><br/><code>id: 'తెలుగు' | alias: 'te'</code>"]
+            L_ML["<b>മലയാളം (Malayalam)</b><br/><code>id: 'മലയാളം' | alias: 'ml'</code>"]
+            L_TA["<b>தமிழ் (Tamil)</b><br/><code>id: 'தமிழ்' | alias: 'ta'</code>"]
+        end
+
+        subgraph LANG_GLOBAL["🌍 Global & European Languages"]
+            L_EN["<b>English</b><br/><code>id: 'English' | alias: 'en'</code>"]
+            L_ES["<b>Español (Spanish)</b><br/><code>id: 'Spanish' | alias: 'es'</code>"]
+            L_FR["<b>Français (French)</b><br/><code>id: 'French' | alias: 'fr'</code>"]
+            L_DE["<b>Deutsch (German)</b><br/><code>id: 'German' | alias: 'de'</code>"]
+        end
+
+        subgraph LANG_ASIAN_ME["🌏 East Asian & Middle Eastern"]
+            L_ZH["<b>中文 (Mandarin)</b><br/><code>id: 'Mandarin' | alias: 'zh'</code>"]
+            L_JA["<b>日本語 (Japanese)</b><br/><code>id: 'Japanese' | alias: 'ja'</code>"]
+            L_KO["<b>한국어 (Korean)</b><br/><code>id: 'Korean' | alias: 'ko'</code>"]
+            L_AR["<b>العربية (Arabic)</b><br/><code>id: 'Arabic' | alias: 'ar'</code>"]
+        end
+
+        subgraph LANG_CUSTOM["✏️ Dynamic Custom Target"]
+            L_CUST["<b>User-Specified Custom Language</b><br/><i>Any language entered in Explain Setup / Settings</i>"]
+        end
+    end
+
+    %% ─────────────────────────────────────────────────────────────────
+    %% SLOT 2: CORE PROCESSING MODES
+    %% ─────────────────────────────────────────────────────────────────
+    subgraph SLOT_2["⚙️ SLOT 2: CORE PROCESSING MODES (getMode() / GlobalMode)"]
+        direction LR
+        MODE_TRANS["<b>MODE: TRANSLATE</b><br/><code>'translate'</code><br/>Faithful document translation preserving structure & lists"]
+        MODE_EXPL["<b>MODE: EXPLAIN</b><br/><code>'explain'</code><br/>AI reading comprehension, context-building & pedagogical reasoning"]
+    end
+
+    %% Connect Languages to Modes
+    SLOT_1 -->|Target Language Selection| MODE_TRANS
+    SLOT_1 -->|Target Language Selection| MODE_EXPL
+
+    %% ─────────────────────────────────────────────────────────────────
+    %% SLOT 3: TRANSLATION STYLES
+    %% ─────────────────────────────────────────────────────────────────
+    subgraph SLOT_3["🎨 SLOT 3: TRANSLATION STYLES (TRANSLATION_STYLES)"]
+        direction TB
+        STYLE_NATIVE["<b>1. Native Style ('Native')</b><br/>• Pure, natural, and fluent translation<br/>• Preserves exact tone, nuance, and meaning<br/>• Zero extraneous commentary or notes"]
+        STYLE_MIXED["<b>2. Mixed / Bilingual Blend ('Mixed')</b><br/>• Conversational hybrid (e.g., Hinglish for Hindi)<br/>• Keeps technical jargon, acronyms, and proper nouns in English<br/>• Maximum readability for bilingual readers"]
+    end
+
+    MODE_TRANS -->|Style Configuration| STYLE_NATIVE
+    MODE_TRANS -->|Style Configuration| STYLE_MIXED
+
+    %% ─────────────────────────────────────────────────────────────────
+    %% SLOT 4: EXPLANATION STYLES
+    %% ─────────────────────────────────────────────────────────────────
+    subgraph SLOT_4["🧠 SLOT 4: EXPLANATION STYLES (EXPLANATION_STYLES)"]
+        direction TB
+        STYLE_STD["<b>1. Standard ('Standard')</b><br/>• Clear, balanced, structured overview<br/>• Designed for general audience reading"]
+        
+        STYLE_SMP["<b>2. Simple ('Simple')</b><br/>• Beginner-friendly, jargon-free definitions<br/>• Real-world relatable analogies & step-by-step breakdown<br/>• <i>(Maps legacy: ELI5, Visual Thinking, Practical)</i>"]
+        
+        STYLE_STY["<b>3. Story ('Story')</b><br/>• Narrative-driven, emotionally engaging scenarios<br/>• Socratic questioning before revealing conclusions<br/>• <i>(Maps legacy: Storytelling, Socratic)</i>"]
+        
+        STYLE_DEP["<b>4. Deep ('Deep')</b><br/>• Advanced technical depth, edge cases & nuance<br/>• Historical context, debate, counterarguments & proofs<br/>• <i>(Maps legacy: Expert Deep-Dive, Debate, Critical)</i>"]
+        
+        STYLE_AIM["<b>5. AI Mode ('AI')</b><br/>• Holistic first-principles synthesis & logical overview<br/>• Contrasts concepts instead of verbatim translation<br/>• <i>(Maps legacy: AI Synthesis)</i>"]
+    end
+
+    MODE_EXPL -->|Style Configuration| STYLE_STD
+    MODE_EXPL -->|Style Configuration| STYLE_SMP
+    MODE_EXPL -->|Style Configuration| STYLE_STY
+    MODE_EXPL -->|Style Configuration| STYLE_DEP
+    MODE_EXPL -->|Style Configuration| STYLE_AIM
+
+    %% ─────────────────────────────────────────────────────────────────
+    %% SLOT 5: AI PROVIDERS & MODEL FLEET
+    %% ─────────────────────────────────────────────────────────────────
+    subgraph SLOT_5["🚀 SLOT 5: AI PROVIDERS & MODEL FLEET"]
+        direction TB
+
+        subgraph PROV_OR["☁️ OpenRouter API Gateway (streamCompletion)"]
+            OR_MOD1["<b>Liquid LFM 2.5</b><br/><code>liquid/lfm-2.5-2.6b:free</code><br/>Ultra-fast neural reasoning (Default Free)"]
+            OR_MOD2["<b>Gemini 2.0 Flash</b><br/><code>google/gemini-2.0-flash-exp:free</code><br/>Next-gen multimodal, 1M context window"]
+            OR_MOD3["<b>Llama 3.3 70B Instruct</b><br/><code>meta-llama/llama-3.3-70b-instruct:free</code><br/>Flagship reasoning & high-grade translation"]
+            OR_MOD4["<b>Claude 3.5 Sonnet</b><br/><code>anthropic/claude-3.5-sonnet</code><br/>State-of-the-art nuanced comprehension"]
+            OR_MOD5["<b>GPT-4o Mini</b><br/><code>openai/gpt-4o-mini</code><br/>High-speed, affordable document processor"]
+            OR_MOD6["<b>DeepSeek V3</b><br/><code>deepseek/deepseek-chat</code><br/>Strong multilingual open-weights model"]
+            OR_CUST["<b>Custom OpenRouter Model ID</b><br/><i>Any model ID fetched dynamically from OpenRouter</i>"]
+        end
+
+        subgraph PROV_OMNI["🏠 OmniRouter Self-Hosted Gateway (streamOmniRouterCompletion)"]
+            OMNI_LOCAL["<b>Self-Hosted / Local LLM Endpoint</b><br/><code>getOmniRouterBaseUrl() + API Key</code><br/>Enterprise / Offline private inference"]
+        end
+    end
+
+    STYLE_NATIVE --> MODEL_COMBINE((Model Dispatcher))
+    STYLE_MIXED --> MODEL_COMBINE
+    STYLE_STD --> MODEL_COMBINE
+    STYLE_SMP --> MODEL_COMBINE
+    STYLE_STY --> MODEL_COMBINE
+    STYLE_DEP --> MODEL_COMBINE
+    STYLE_AIM --> MODEL_COMBINE
+
+    MODEL_COMBINE --> PROV_OR
+    MODEL_COMBINE --> PROV_OMNI
+
+    %% ─────────────────────────────────────────────────────────────────
+    %% SLOT 6: END-TO-END EXECUTION & PROCESSING PIPELINE
+    %% ─────────────────────────────────────────────────────────────────
+    subgraph SLOT_6["⚡ SLOT 6: END-TO-END PROCESSING & RUNTIME PIPELINE"]
+        direction TB
+
+        subgraph STAGE_INGEST["1. Extraction & Input Trigger"]
+            INP_PDF["📄 PDF Document Uploaded"] --> EXTRACT_ENGINE["PDF.js Parsing & Layout Detection<br/><code>detectColumns() → sortByColumns()</code>"]
+            EXTRACT_ENGINE --> CHECK_GARBLE{"Text Garbled / Scanned?"}
+            CHECK_GARBLE -->|Yes| OCR_RUN["Tesseract.js OCR Worker<br/><code>ocrPdfPage() → cleanOcrText()</code>"]
+            CHECK_GARBLE -->|No| EXTRACT_OK["Clean Extracted Text<br/><code>cleanExtractedText()</code>"]
+            OCR_RUN --> IDB_PAGE_DATA[("IndexedDB: pageData Store<br/>{ pageNumber, text, columns }")]
+            EXTRACT_OK --> IDB_PAGE_DATA
+            
+            TRIG_SEL["✂️ User Text Selection Toolbar<br/><code>selectionOverridesRef.set()</code>"] -.->|One-shot selection text| RUN_HOOK
+        end
+
+        subgraph STAGE_PAYLOAD["2. Language Table Lookup & Instant Reuse Engine"]
+            IDB_PAGE_DATA --> RUN_HOOK["usePageTranslation Engine<br/><code>runPageOnce(pageNumber)</code>"]
+            RUN_HOOK --> RESOLVE_EFF["Resolve Effective Settings<br/><code>effective(globals, pageOverrides)</code>"]
+            RESOLVE_EFF --> SUPA_LOOKUP["🔍 Check Dedicated Language Table in Supabase<br/><code>fetchSupabaseLanguagePage(language, bookId, pageNumber)</code><br/><i>Table: translations_hindi, translations_telugu, etc.</i>"]
+            SUPA_LOOKUP --> CACHE_CHECK{"Content exists in<br/>translations_[lang] for<br/>(book_id, page_number)?"}
+            
+            CACHE_CHECK -->|⚡ Yes: Reuse Page| USE_CACHE["⚡ Instant Reuse Hit (Zero AI tokens)<br/>Fetch existing Supabase page content"]
+            CACHE_CHECK -->|❌ No: Missing Page| BUILD_PAYLOAD["Construct System Prompt & Payload<br/><code>buildPagePayload(model, mode, lang, style, temp)</code><br/><i>Process ONLY this missing page</i>"]
+        end
+
+        subgraph STAGE_STREAM["3. Direct Client SSE Streaming"]
+            BUILD_PAYLOAD --> STREAM_EXEC{"Active Provider?"}
+            STREAM_EXEC -->|OpenRouter| SSE_OR["streamCompletion()<br/>SSE stream from openrouter.ai/api/v1"]
+            STREAM_EXEC -->|OmniRouter| SSE_OMNI["streamOmniRouterCompletion()<br/>SSE stream from custom endpoint"]
+            
+            SSE_OR --> STREAM_PARSER["readSseStream() Chunk Parser<br/>Extracts delta.content incrementally"]
+            SSE_OMNI --> STREAM_PARSER
+            
+            STREAM_PARSER --> UI_THROTTLE["60ms Throttled UI Buffer<br/>Smooth 60fps React state rendering"]
+        end
+
+        subgraph STAGE_SANITIZE["4. AI Output Sanitization & Cleansing"]
+            UI_THROTTLE --> CLEAN_TEXT["cleanAiText(rawAiResponse)<br/>• Strips markdown fences, hashes, asterisks<br/>• Unwraps bold/italic markers & quotes<br/>• Prevents TTS from pronouncing 'hashtag/star'"]
+        end
+
+        subgraph STAGE_PERSIST["5. Storage & Multi-Table Cloud Synchronization"]
+            CLEAN_TEXT --> SAVE_SUPA_LANG[("☁️ Auto-Save to Dedicated Language Table<br/><code>saveSupabaseLanguagePage(language, bookId, pageNumber, content)</code><br/><i>Table: translations_hindi, translations_telugu, etc.</i>")]
+            CLEAN_TEXT --> SAVE_IDB[("Save to IndexedDB<br/><code>upsertPageAi(docId, pageNumber, result)</code>")]
+            USE_CACHE --> SAVE_IDB
+            SAVE_IDB --> EVT_READY["📢 Dispatch 'doclens:page-ready'<br/>Notifies UI workstation & RightPanel"]
+            SAVE_SUPA_LANG -.-> SYNC_SUPA["☁️ Catalog Sync<br/><code>syncToSupabase(docId)</code>"]
+        end
+
+        subgraph STAGE_DOWNSTREAM["6. Downstream TTS & Output Workflows"]
+            EVT_READY --> TTS_SPLIT["Sentence Segmenter<br/><code>splitSentences()</code> using punctuation rules"]
+            TTS_SPLIT --> TTS_ROUTER{"Voice Engine"}
+            TTS_ROUTER -->|Neural WASM| PIPER_ENG["Piper ONNX / WASM Engine<br/><code>@diffusionstudio/vits-web</code> + Voice Cache"]
+            TTS_ROUTER -->|Native Browser| SPEECH_API["Web Speech API<br/><code>SpeechSynthesisUtterance</code>"]
+            PIPER_ENG --> AUDIO_OUT["🔊 Audio Playback + Real-time Sentence Highlighting<br/><code>HighlightableText</code>"]
+            SPEECH_API --> AUDIO_OUT
+            
+            AUDIO_OUT --> CONT_CHECK{"Continuous Auto-Read<br/>Enabled?"}
+            CONT_CHECK -->|Yes & Last Sentence| NEXT_PAGE["Prefetch & Trigger Next Page<br/><code>doclens:tts-next-page</code>"]
+            
+            EVT_READY --> EXPORT_SYS["💾 Export Menu<br/>(Markdown / PDF / JSON)"]
+        end
+    end
+
+    PROV_OR --> STAGE_STREAM
+    PROV_OMNI --> STAGE_STREAM
+
+    %% ─────────────────────────────────────────────────────────────────
+    %% SLOT 7: ERROR, QUOTA & FALLBACK HANDLING FLOW
+    %% ─────────────────────────────────────────────────────────────────
+    subgraph SLOT_7["🛡️ ERROR HANDLING, RATE LIMIT & QUOTA LIFECYCLE"]
+        direction LR
+        ERR_401["401 Unauthorized<br/>Invalid API Key"] --> ACT_401["setKeyStatus('invalid')<br/>Open API Key Modal"]
+        ERR_429["429 / 402 Daily Limit<br/>(50 Free Pages Reached)"] --> ACT_429["Show Daily Limit Toast<br/>Prompt Custom Free Key Dialog"]
+        ERR_NET["500/503 Network Glitch"] --> ACT_RETRY["Automatic 1s Exponential Backoff Retry (MAX_RETRIES=1)"]
+        ERR_ABORT["User Navigates / Cancels"] --> ACT_ABORT["AbortController.abort()<br/>Cleanup In-flight SSE Stream"]
+    end
+
+    STAGE_STREAM -.->|Exception Catch| SLOT_7
+
+    %% ─────────────────────────────────────────────────────────────────
+    %% STYLES & THEMING
+    %% ─────────────────────────────────────────────────────────────────
+    classDef slotStyle fill:#0f172a,stroke:#3b82f6,stroke-width:2px,color:#f8fafc;
+    classDef langStyle fill:#1e293b,stroke:#0ea5e9,stroke-width:1px,color:#e2e8f0;
+    classDef modeStyle fill:#1e1b4b,stroke:#818cf8,stroke-width:2px,color:#f8fafc;
+    classDef styleTrans fill:#064e3b,stroke:#10b981,stroke-width:2px,color:#ecfdf5;
+    classDef styleExpl fill:#451a03,stroke:#f59e0b,stroke-width:2px,color:#fffbeb;
+    classDef modelStyle fill:#312e81,stroke:#6366f1,stroke-width:1px,color:#e0e7ff;
+    classDef flowStage fill:#111827,stroke:#64748b,stroke-width:2px,color:#f1f5f9;
+    classDef actionNode fill:#1e293b,stroke:#a855f7,stroke-width:1px,color:#f3e8ff;
+    classDef errStyle fill:#450a0a,stroke:#ef4444,stroke-width:1px,color:#fee2e2;
+
+    class SLOT_1,SLOT_2,SLOT_3,SLOT_4,SLOT_5,SLOT_6,SLOT_7 slotStyle;
+    class L_HI,L_BN,L_TE,L_ML,L_TA,L_EN,L_ES,L_FR,L_DE,L_ZH,L_JA,L_KO,L_AR,L_CUST langStyle;
+    class MODE_TRANS,MODE_EXPL modeStyle;
+    class STYLE_NATIVE,STYLE_MIXED styleTrans;
+    class STYLE_STD,STYLE_SMP,STYLE_STY,STYLE_DEP,STYLE_AIM styleExpl;
+    class OR_MOD1,OR_MOD2,OR_MOD3,OR_MOD4,OR_MOD5,OR_MOD6,OR_CUST,OMNI_LOCAL modelStyle;
+    class INP_PDF,EXTRACT_ENGINE,OCR_RUN,EXTRACT_OK,RUN_HOOK,BUILD_PAYLOAD,STREAM_PARSER,CLEAN_TEXT,TTS_SPLIT flowStage;
+    class USE_CACHE,SAVE_IDB,EVT_READY,AUDIO_OUT,EXPORT_SYS actionNode;
+    class ERR_401,ERR_429,ERR_NET,ERR_ABORT,ACT_401,ACT_429,ACT_RETRY,ACT_ABORT errStyle;
