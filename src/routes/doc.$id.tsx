@@ -223,8 +223,10 @@ function DocPage() {
             setLoadingAvailableLangs(false);
           }
         }
-      } else if (configEnabled) {
-        // Already chose a language or sync enabled: sync dedicated language table
+      } else if (configEnabled && pc > 0) {
+        // Only run background sync check if document was already extracted previously (pc > 0).
+        // For newly opened documents (pc === 0), handleAnalyze sequentially executes
+        // Stage 1 (PDF.js) -> Stage 2 (OCR) -> Stage 3 (Supabase Check/Fetch) -> Stage 4 (AI Translation).
         const activeLang = currentRec.selectedLanguage || getOutputLanguage() || "हिंदी";
         void (async () => {
           try {
@@ -321,10 +323,19 @@ function DocPage() {
     setAiSummary(sum);
   };
 
-  const handleAnalyze = async () => {
-    if (!doc || analyzing) return;
+  /**
+   * 4-Stage Document Processing Pipeline:
+   * 1. PDF.js Text Extraction (extract layout & text)
+   * 2. OCR Processing (identify missing/unusable/garbled pages and run OCR to completion)
+   * 3. Supabase Check / Fetch (sync existing translation data for book + language)
+   * 4. AI Translation Ready (unblocks AI translation to run on final extracted text)
+   */
+  const handleAnalyze = async (forcedDoc?: DocRecord) => {
+    const currentDoc = forcedDoc || doc;
+    if (!currentDoc || analyzing) return;
     setAnalyzing(true);
-    setStatus("extracting…");
+    setStatus("Stage 1/4: PDF text extraction…");
+
     try {
       const blob = await getDocBlob(id);
       if (!blob) {
@@ -332,6 +343,10 @@ function DocPage() {
         setAnalyzing(false);
         return;
       }
+
+      // ─────────────────────────────────────────────────────────────────
+      // STAGE 1: PDF.js Text Extraction
+      // ─────────────────────────────────────────────────────────────────
       let lastTotal = 0;
       const collected: {
         pageNumber: number;
@@ -339,6 +354,7 @@ function DocPage() {
         columns: number;
         garbageRatio: number;
       }[] = [];
+
       await extractPdfPagesClient(blob, (page, total) => {
         lastTotal = total;
         collected.push({
@@ -348,42 +364,28 @@ function DocPage() {
           garbageRatio: page.garbageRatio,
         });
         setPageCount(total);
-        setStatus(`page ${page.pageNumber}/${total}`);
+        setStatus(`Stage 1/4: PDF extraction (page ${page.pageNumber}/${total})`);
       });
-      try {
-        const scannedCount = collected.filter((p) => checkTextQuality(p.text).isScanned).length;
-        const isScannedPdf = collected.length > 0 && scannedCount / collected.length >= 0.5;
 
-        await writePages(id, collected);
-        await updateDoc(id, { pageCount: collected.length, isScannedPdf });
-        setDoc((prev) => (prev ? { ...prev, pageCount: collected.length, isScannedPdf } : null));
-        setPageCount(collected.length || lastTotal);
-        await refreshSummary();
-        setStatus(`done · ${collected.length} pages`);
-        toast.success(`Extracted ${collected.length} pages successfully.`);
-        if (syncEnabled && doc) {
-          void syncToSupabase(id, undefined, doc.selectedLanguage);
-        }
-      } catch (e) {
-        console.error("Failed to save extracted pages:", e);
-        if (e instanceof StorageError && e.code === "QUOTA_EXCEEDED") {
-          toast.error(e.message);
-        } else {
-          const detail = e instanceof Error ? e.message : String(e);
-          toast.error(`Extraction complete but failed to save: ${detail}`);
-        }
-        setAnalyzing(false);
-        return;
-      }
+      const scannedCount = collected.filter((p) => checkTextQuality(p.text).isScanned).length;
+      const isScannedPdf = collected.length > 0 && scannedCount / collected.length >= 0.5;
 
-      // Fallback OCR checks and execution on garbled pages
-      setStatus("OCR Processing: Page 1 of " + collected.length);
+      await writePages(id, collected);
+      await updateDoc(id, { pageCount: collected.length, isScannedPdf });
+      setDoc((prev) => (prev ? { ...prev, pageCount: collected.length, isScannedPdf } : null));
+      setPageCount(collected.length || lastTotal);
+      await refreshSummary();
+
+      // ─────────────────────────────────────────────────────────────────
+      // STAGE 2: OCR Processing
+      // ─────────────────────────────────────────────────────────────────
+      setStatus("Stage 2/4: Checking text quality & running OCR…");
       try {
         await runOcrOnGarbledPagesClient(
           blob,
           collected,
           (pageNumber, total) => {
-            setStatus(`OCR Processing: Page ${pageNumber} of ${total}`);
+            setStatus(`Stage 2/4: OCR Processing (page ${pageNumber}/${total})`);
           },
           async (pageNumber, ocrText, garbageRatio) => {
             await updatePageData(id, pageNumber, {
@@ -394,20 +396,39 @@ function DocPage() {
             await refreshSummary();
           },
         );
-        setStatus(`done · ${collected.length} pages`);
-        if (syncEnabled && doc) {
-          void syncToSupabase(id, undefined, doc.selectedLanguage);
-        }
       } catch (ocrErr) {
-        console.warn("OCR fallback failed:", ocrErr);
+        console.warn("OCR fallback note:", ocrErr);
         toast.error(
-          "OCR fallback failed: " + (ocrErr instanceof Error ? ocrErr.message : "unknown"),
+          "OCR check completed with note: " + (ocrErr instanceof Error ? ocrErr.message : "unknown"),
         );
-      } finally {
-        collected.length = 0;
       }
+
+      // ─────────────────────────────────────────────────────────────────
+      // STAGE 3: Supabase Check / Fetch
+      // ─────────────────────────────────────────────────────────────────
+      setStatus("Stage 3/4: Checking translations in Supabase…");
+      if (syncEnabled) {
+        try {
+          const freshDoc = (await getDoc(id)) || currentDoc;
+          const activeLang = freshDoc.selectedLanguage || getOutputLanguage() || "हिंदी";
+          await syncFromSupabase(id, freshDoc.fileName, activeLang, false);
+          const updatedRec = await getDoc(id);
+          if (updatedRec) {
+            setDoc(updatedRec);
+          }
+          await refreshSummary();
+        } catch (syncErr) {
+          console.warn("Supabase initial translation check note:", syncErr);
+        }
+      }
+
+      // ─────────────────────────────────────────────────────────────────
+      // STAGE 4: AI Translation Ready
+      // ─────────────────────────────────────────────────────────────────
+      setStatus(`done · ${collected.length} pages`);
+      toast.success(`Document processed (${collected.length} pages ready).`);
     } catch (err) {
-      console.error(err);
+      console.error("Document processing error:", err);
       const msg = err instanceof Error ? err.message : "unknown";
       setStatus("error: " + msg);
       toast.error(`Extraction failed: ${msg}`);
@@ -667,7 +688,7 @@ function DocPage() {
           <div className="flex items-center gap-1.5">
             {!pageCount && (
               <button
-                onClick={handleAnalyze}
+                onClick={() => handleAnalyze()}
                 disabled={analyzing}
                 className="rounded-lg bg-primary px-3 py-1.5 text-xs font-semibold text-primary-foreground transition-opacity hover:opacity-90 disabled:opacity-50"
               >
@@ -676,7 +697,7 @@ function DocPage() {
             )}
             {pageCount > 0 && (
               <button
-                onClick={handleAnalyze}
+                onClick={() => handleAnalyze()}
                 disabled={analyzing}
                 className="flex h-8 w-8 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-surface-2 hover:text-foreground disabled:opacity-40"
                 title={analyzing ? status : "Re-extract pages"}

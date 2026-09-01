@@ -184,13 +184,21 @@ export function PageWorkstation({
   useEffect(() => {
     return listenDocEvent("doclens:translate-selection", (d) => {
       if (d.docId !== docId || !d.text) return;
+      if (analyzing) {
+        toast.info("Please wait for document text extraction & OCR to finish.");
+        return;
+      }
       selectionOverridesRef.current.set(d.pageNumber, d.text);
       void runPageOnceRef.current(d.pageNumber);
     });
-  }, [docId, selectionOverridesRef]);
+  }, [docId, selectionOverridesRef, analyzing]);
 
   const runPageWithSetup = useCallback(
     (pageNumber: number) => {
+      if (analyzing) {
+        toast.info("Document is currently processing. Please wait.");
+        return;
+      }
       if (shouldShowExplainSetup()) {
         setPendingExplainAction({ type: "page", pageNumber });
         setExplainSetupOpen(true);
@@ -198,7 +206,7 @@ export function PageWorkstation({
       }
       void runPageOnce(pageNumber);
     },
-    [runPageOnce, shouldShowExplainSetup],
+    [runPageOnce, shouldShowExplainSetup, analyzing],
   );
 
   // Handle "ensure this page's AI content is ready" requests from RightPanel —
@@ -208,6 +216,8 @@ export function PageWorkstation({
   useEffect(() => {
     return listenDocEvent("doclens:ensure-page-ready", (d) => {
       if (d.docId !== docId) return;
+      // Do not auto-generate while document is still extracting/running OCR/syncing
+      if (analyzing) return;
       const { pageNumber } = d;
 
       void (async () => {
@@ -230,7 +240,7 @@ export function PageWorkstation({
         if (result) dispatchPageReady(docId, pageNumber, result);
       })();
     });
-  }, [docId, runPageOnce]);
+  }, [docId, runPageOnce, analyzing]);
 
   // ─── Auto-translate currently visible active page when doc is loaded and analyzed ───
   const autoTranslatedInitialPageRef = useRef<Record<string, number>>({});
@@ -347,7 +357,24 @@ export function PageWorkstation({
     );
   }
 
-  if (pageCount === 0) {
+  if (pageCount === 0 || analyzing) {
+    if (analyzing) {
+      return (
+        <div className="flex h-full items-center justify-center px-6 text-center">
+          <div className="max-w-xs space-y-3 rounded-2xl border border-primary/20 bg-surface/50 backdrop-blur-md p-6 shadow-sm">
+            <div className="mx-auto flex h-10 w-10 items-center justify-center rounded-full bg-primary/10 text-primary">
+              <span className="inline-block h-5 w-5 rounded-full border-2 border-primary border-t-transparent spin-slow" />
+            </div>
+            <div className="space-y-1">
+              <div className="text-sm font-semibold text-foreground">Processing Document</div>
+              <p className="text-xs text-muted-foreground leading-relaxed">
+                Extracting text, running OCR, and syncing translations before AI translation begins.
+              </p>
+            </div>
+          </div>
+        </div>
+      );
+    }
     return (
       <div className="flex h-full items-center justify-center px-6 text-center text-sm text-muted-foreground">
         Analyze the document to get started with AI translations.
