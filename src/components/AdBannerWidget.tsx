@@ -84,10 +84,11 @@ export function AdBannerWidget() {
     };
   }, [loadAds]);
 
-  // Don't render inside reader view or if dismissed
+  // Don't render inside reader view, Global Library, or if dismissed
   const isReaderView = location.pathname.startsWith("/doc/");
-  if (isReaderView || isDismissed) {
-    if (isDismissed && !isReaderView) {
+  const isGlobalLibrary = location.pathname.startsWith("/global-library");
+  if (isReaderView || isGlobalLibrary || isDismissed) {
+    if (isDismissed && !isReaderView && !isGlobalLibrary) {
       return (
         <button
           onClick={() => setIsDismissed(false)}

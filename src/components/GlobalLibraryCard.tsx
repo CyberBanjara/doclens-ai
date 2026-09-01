@@ -1,11 +1,15 @@
 import { useState } from "react";
-import { FileText, HardDrive, Calendar, Trash2, Download, Check } from "lucide-react";
-import { formatBytes, formatDate, type ParsedR2File, type R2File } from "@/lib/file-utils";
-import { getCategoryMeta } from "@/components/CategoryVerticalHeap";
+import { HardDrive, Calendar, Trash2, Download, Check } from "lucide-react";
+import { formatBytes, formatDate, type R2File } from "@/lib/file-utils";
+import {
+  getSubjectCategoryMeta,
+  getEducationLevelMeta,
+  type ClassifiedBook,
+} from "@/lib/classification";
 import { useR2Thumbnail } from "@/hooks/useR2Thumbnail";
 
 interface GlobalLibraryCardProps {
-  file: ParsedR2File;
+  file: ClassifiedBook;
   localDocId?: string | null;
   importing: boolean;
   deleting: boolean;
@@ -25,7 +29,8 @@ export function GlobalLibraryCard({
   onDelete,
   onOpenLocalDoc,
 }: GlobalLibraryCardProps) {
-  const catMeta = getCategoryMeta(file.category);
+  const catMeta = getSubjectCategoryMeta(file.category);
+  const levelMeta = getEducationLevelMeta(file.educationLevel);
   const { thumbnailUrl, loading: thumbLoading } = useR2Thumbnail(file.key, localDocId);
 
   const [imgError, setImgError] = useState(false);
@@ -76,17 +81,21 @@ export function GlobalLibraryCard({
         )}
 
         {/* Top Badges Overlay */}
-        <div className="absolute top-2.5 left-2.5 right-2.5 flex items-center justify-between pointer-events-none z-20">
+        <div className="absolute top-2.5 left-2.5 right-2.5 flex items-center justify-between pointer-events-none z-20 gap-1.5">
           {/* Category Tag */}
-          <span className="flex items-center gap-1 rounded-full border border-border/60 bg-surface/85 backdrop-blur-md px-2 py-0.5 sm:px-2.5 sm:py-1 text-[9px] sm:text-[10px] font-semibold text-foreground shadow-sm max-w-[100px] truncate">
+          <span className="flex items-center gap-1 rounded-full border border-border/60 bg-surface/90 backdrop-blur-md px-2 py-0.5 sm:px-2.5 sm:py-1 text-[9px] sm:text-[10px] font-bold text-foreground shadow-sm truncate">
             <span>{catMeta.icon}</span>
-            <span className="capitalize truncate hidden xs:inline">{catMeta.label}</span>
+            <span className="truncate">{catMeta.label}</span>
           </span>
 
-          {/* PDF Format Tag */}
-          <span className="rounded-md border border-primary/30 bg-primary/20 backdrop-blur-md px-1.5 py-0.5 font-mono text-[9px] sm:text-[10px] font-bold text-primary shadow-sm">
-            PDF
-          </span>
+          {/* Education Level Tag */}
+          {file.educationLevel !== "general" && (
+            <span
+              className={`rounded-full border backdrop-blur-md px-2 py-0.5 text-[9px] sm:text-[10px] font-bold shadow-sm ${levelMeta.badgeBg}`}
+            >
+              {levelMeta.shortLabel}
+            </span>
+          )}
         </div>
       </div>
 

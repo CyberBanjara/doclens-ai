@@ -10,7 +10,8 @@ import {
   Layers,
   FolderOpen,
   Upload,
-  ExternalLink,
+  GraduationCap,
+  ChevronDown,
 } from "lucide-react";
 import { SidebarLayout } from "@/components/SidebarLayout";
 import { deleteFromR2, downloadFromR2 } from "@/lib/r2";
@@ -19,38 +20,36 @@ import { createDoc, listDocs, type DocSummary } from "@/lib/storage";
 import { LoadingLogo } from "@/components/LoadingLogo";
 import { getSyncConfig } from "@/lib/sync";
 import { useIsMobile } from "@/hooks/use-mobile";
-import {
-  formatBytes,
-  base64ToBlob,
-  parseFileCategory,
-  type R2File,
-  type ParsedR2File,
-} from "@/lib/file-utils";
+import { formatBytes, base64ToBlob, type R2File } from "@/lib/file-utils";
 import { DeleteFileDialog } from "@/components/DeleteFileDialog";
 import { R2UploadDialog } from "@/components/R2UploadDialog";
 import { useAuth } from "@/context/AuthContext";
-import { CategoryVerticalHeap, getCategoryMeta } from "@/components/CategoryVerticalHeap";
+import { CategoryVerticalHeap } from "@/components/CategoryVerticalHeap";
 import { CategoryMarqueeRow } from "@/components/CategoryMarqueeRow";
 import { GlobalLibraryCard } from "@/components/GlobalLibraryCard";
+import { EducationLevelModal } from "@/components/EducationLevelModal";
+import {
+  classifyR2Book,
+  filterBooks,
+  getSavedEducationLevel,
+  saveEducationLevel,
+  getEducationLevelMeta,
+  getSubjectCategoryMeta,
+  SUBJECT_CATEGORIES,
+  type ClassifiedBook,
+  type EducationLevel,
+  type SubjectCategory,
+} from "@/lib/classification";
 
 export const Route = createFileRoute("/global-library")({
   component: GlobalLibraryPage,
   head: () => ({
     meta: [
-      { title: "Anuwad — Global Library (Cloudflare R2)" },
+      { title: "Global Library — NCERT Curriculum & Chapters" },
       { name: "robots", content: "noindex, nofollow" },
     ],
   }),
 });
-
-const STANDARD_CATEGORIES: Record<string, { label: string; icon: string; desc: string }> = {
-  history: { label: "History", icon: "📜", desc: "history/" },
-  economics: { label: "Economics", icon: "📈", desc: "economics/" },
-  geography: { label: "Geography", icon: "🌍", desc: "geography/" },
-  civics: { label: "Civics", icon: "🏛️", desc: "civics/" },
-  science: { label: "Science", icon: "🔬", desc: "science/" },
-  uncategorized: { label: "Uncategorized", icon: "📂", desc: "uncategorized/" },
-};
 
 function GlobalLibraryPage() {
   const isMobile = useIsMobile();
@@ -66,16 +65,43 @@ function GlobalLibraryPage() {
   const [deletingKey, setDeletingKey] = useState<string | null>(null);
   const [syncEnabled, setSyncEnabled] = useState(true);
 
-  // Category navigation & search
-  const [activeCategory, setActiveCategory] = useState<string>("all");
+  // Education Level state & First-time detection
+  const [educationLevel, setEducationLevel] = useState<EducationLevel>("class-10");
+  const [educationModalOpen, setEducationModalOpen] = useState(false);
+  const [isFirstTime, setIsFirstTime] = useState(false);
+
+  // Category navigation (Strictly one of the 4 subject categories)
+  const [activeCategory, setActiveCategory] = useState<SubjectCategory>("history");
   const [searchQuery, setSearchQuery] = useState("");
 
-  // R2 Direct Upload states
+  // R2 Direct Upload states (Admin)
   const [uploadDialogOpen, setUploadDialogOpen] = useState(false);
   const [uploadFile, setUploadFile] = useState<File | null>(null);
-  const [uploadCategory, setUploadCategory] = useState<string>("uncategorized");
-  const [customUploadCategory, setCustomUploadCategory] = useState<string>("");
+  const [uploadCategory, setUploadCategory] = useState<string>("history");
+  const [uploadEducationLevel, setUploadEducationLevel] = useState<string>("class-10");
   const [uploadingDirect, setUploadingDirect] = useState(false);
+
+  // Initialize Education Level from localStorage
+  useEffect(() => {
+    const savedLevel = getSavedEducationLevel();
+    if (savedLevel) {
+      setEducationLevel(savedLevel);
+    } else {
+      // First time user visiting Global Library
+      setIsFirstTime(true);
+      setEducationModalOpen(true);
+    }
+
+    const handleLevelChanged = (e: any) => {
+      if (e?.detail) {
+        setEducationLevel(e.detail);
+      }
+    };
+    window.addEventListener("doclens:education-level-changed" as any, handleLevelChanged);
+    return () => {
+      window.removeEventListener("doclens:education-level-changed" as any, handleLevelChanged);
+    };
+  }, []);
 
   const handleDirectUpload = async () => {
     if (!uploadFile || uploadingDirect) return;
@@ -87,15 +113,14 @@ function GlobalLibraryPage() {
       const { fileToBase64 } = await import("@/lib/file-utils");
 
       const base64Data = await fileToBase64(uploadFile);
-      const selectedCat =
-        uploadCategory === "custom" ? customUploadCategory.trim() : uploadCategory;
 
       const res = await uploadToR2({
         data: {
           fileName: uploadFile.name,
           contentType: uploadFile.type || "application/pdf",
           base64Data,
-          category: selectedCat,
+          subject: uploadCategory,
+          educationLevel: uploadEducationLevel,
         },
       });
 
@@ -164,31 +189,58 @@ function GlobalLibraryPage() {
     };
   }, []);
 
-  const parsedFiles: ParsedR2File[] = useMemo(() => {
-    return files.map(parseFileCategory);
+  // Classify all raw files into standardized 4 categories + education level
+  const classifiedFiles: ClassifiedBook[] = useMemo(() => {
+    return files.map(classifyR2Book);
   }, [files]);
 
-  // Aggregate Category counts & size
+  // Aggregate Subject Category stats specifically for the currently selected Education Level
   const categoryStats = useMemo(() => {
-    const map: Record<string, { count: number; totalSize: number }> = {};
-    for (const f of parsedFiles) {
-      if (!map[f.category]) {
-        map[f.category] = { count: 0, totalSize: 0 };
+    const map: Record<SubjectCategory, { count: number; totalSize: number }> = {
+      history: { count: 0, totalSize: 0 },
+      "political-science": { count: 0, totalSize: 0 },
+      economics: { count: 0, totalSize: 0 },
+      miscellaneous: { count: 0, totalSize: 0 },
+    };
+
+    for (const f of classifiedFiles) {
+      const matchesLevel =
+        educationLevel === "gov-exams"
+          ? f.educationLevel === "gov-exams" ||
+            f.educationLevel === "general" ||
+            f.educationLevel === "class-11" ||
+            f.educationLevel === "class-12"
+          : f.educationLevel === educationLevel || f.educationLevel === "general";
+
+      if (matchesLevel) {
+        if (map[f.category]) {
+          map[f.category].count += 1;
+          map[f.category].totalSize += f.size;
+        } else {
+          map.miscellaneous.count += 1;
+          map.miscellaneous.totalSize += f.size;
+        }
       }
-      map[f.category].count += 1;
-      map[f.category].totalSize += f.size;
     }
     return map;
-  }, [parsedFiles]);
+  }, [classifiedFiles, educationLevel]);
 
-  const categoriesList = useMemo(() => {
-    const keys = new Set([...Object.keys(STANDARD_CATEGORIES), ...Object.keys(categoryStats)]);
-    return Array.from(keys);
+  // Filter books matching current education level and active subject category
+  const filteredFiles = useMemo(() => {
+    return filterBooks(classifiedFiles, educationLevel, activeCategory, searchQuery);
+  }, [classifiedFiles, educationLevel, activeCategory, searchQuery]);
+
+  const levelTotalCount = useMemo(() => {
+    return Object.values(categoryStats).reduce((sum, s) => sum + s.count, 0);
   }, [categoryStats]);
 
-  const allCategories = useMemo(() => {
-    return ["all", ...categoriesList.filter((c) => c !== "all")];
-  }, [categoriesList]);
+  const currentLevelMeta = useMemo(() => {
+    return getEducationLevelMeta(educationLevel);
+  }, [educationLevel]);
+
+  const activeCategoryMeta = useMemo(() => {
+    return getSubjectCategoryMeta(activeCategory);
+  }, [activeCategory]);
 
   // Map of local doc filename -> doc id
   const localDocsMap = useMemo(() => {
@@ -200,25 +252,6 @@ function GlobalLibraryPage() {
     }
     return map;
   }, [localDocs]);
-
-  const filteredFiles = useMemo(() => {
-    return parsedFiles.filter((f) => {
-      const matchesCat = activeCategory === "all" || f.category === activeCategory;
-      const matchesSearch =
-        !searchQuery.trim() ||
-        f.displayName.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        f.key.toLowerCase().includes(searchQuery.toLowerCase());
-      return matchesCat && matchesSearch;
-    });
-  }, [parsedFiles, activeCategory, searchQuery]);
-
-  const activeCategoryMeta = useMemo(() => {
-    return getCategoryMeta(activeCategory);
-  }, [activeCategory]);
-
-  const totalLibrarySize = useMemo(() => {
-    return parsedFiles.reduce((sum, f) => sum + f.size, 0);
-  }, [parsedFiles]);
 
   const handleImport = async (file: R2File) => {
     if (importingKey) return;
@@ -300,10 +333,26 @@ function GlobalLibraryPage() {
 
   const [syncingThumbnails, setSyncingThumbnails] = useState(false);
 
-  const handleSyncAllThumbnails = async () => {
-    if (syncingThumbnails || files.length === 0) return;
+  // Scoped Thumbnail Sync: Only syncs thumbnails for the documents of the selected class
+  const handleSyncClassThumbnails = async () => {
+    // Collect all documents belonging to the currently selected class tier
+    const classDocuments = classifiedFiles.filter((f) => {
+      if (educationLevel === "gov-exams") {
+        return (
+          f.educationLevel === "gov-exams" ||
+          f.educationLevel === "general" ||
+          f.educationLevel === "class-11" ||
+          f.educationLevel === "class-12"
+        );
+      }
+      return f.educationLevel === educationLevel || f.educationLevel === "general";
+    });
+
+    if (syncingThumbnails || classDocuments.length === 0) return;
     setSyncingThumbnails(true);
-    const toastId = toast.loading("Checking & syncing missing PDF thumbnails in R2...");
+    const toastId = toast.loading(
+      `Checking & syncing thumbnails for ${currentLevelMeta.label} (${classDocuments.length} docs)...`,
+    );
     let syncedCount = 0;
     try {
       const { getThumbnailFromR2, downloadFromR2 } = await import("@/lib/r2");
@@ -311,24 +360,21 @@ function GlobalLibraryPage() {
       const { base64ToBlob } = await import("@/lib/file-utils");
       const { uploadBlobAsThumbnailToR2 } = await import("@/hooks/useR2Thumbnail");
 
-      for (let i = 0; i < files.length; i++) {
-        const file = files[i];
+      for (let i = 0; i < classDocuments.length; i++) {
+        const file = classDocuments[i];
         try {
           const check = await getThumbnailFromR2({ data: { fileKey: file.key } });
           if (!check.found) {
             toast.loading(
-              `Generating thumbnail (${i + 1}/${files.length}): "${file.key.split("/").pop() || file.key}"...`,
+              `Generating thumbnail (${i + 1}/${classDocuments.length}): "${file.displayName || file.key}"...`,
               { id: toastId },
             );
             const res = await downloadFromR2({ data: { key: file.key } });
             const pdfBlob = base64ToBlob(res.base64Data, res.contentType);
-            // Drop base64 string reference immediately to free heap
             res.base64Data = "";
             const thumbBlob = await renderPageToJpegBlob(pdfBlob);
             const ok = await uploadBlobAsThumbnailToR2(file.key, thumbBlob);
             if (ok) syncedCount++;
-
-            // Brief yield to allow browser garbage collection between large files
             await new Promise((resolve) => setTimeout(resolve, 50));
           }
         } catch (err) {
@@ -338,18 +384,18 @@ function GlobalLibraryPage() {
 
       if (syncedCount > 0) {
         toast.success(
-          `Successfully generated and saved ${syncedCount} missing thumbnails to Cloudflare R2!`,
+          `Successfully saved ${syncedCount} missing thumbnails for ${currentLevelMeta.label}!`,
           { id: toastId },
         );
         void fetchFiles(true, true);
       } else {
-        toast.success("All R2 PDF thumbnails are already generated and stored in Cloudflare R2!", {
+        toast.success(`All ${currentLevelMeta.label} thumbnails are up to date!`, {
           id: toastId,
         });
       }
     } catch (e: any) {
       console.error(e);
-      toast.error(e?.message || "Failed to sync R2 thumbnails.", { id: toastId });
+      toast.error(e?.message || "Failed to sync thumbnails.", { id: toastId });
     } finally {
       setSyncingThumbnails(false);
     }
@@ -360,38 +406,50 @@ function GlobalLibraryPage() {
       pageTitle="Global Library"
       topBarRight={
         <div className="flex items-center gap-2">
+          {/* Education Level Switcher Pill Button */}
+          <button
+            onClick={() => setEducationModalOpen(true)}
+            className="flex items-center gap-1.5 h-8 px-2.5 rounded-xl border border-primary/40 bg-primary/10 text-xs font-bold text-foreground transition-all hover:bg-primary/20 cursor-pointer shadow-sm"
+            aria-label="Switch Education Level"
+            title="Change Education Level"
+          >
+            <span>{currentLevelMeta.icon}</span>
+            <span className="hidden xs:inline">{currentLevelMeta.shortLabel}</span>
+            <ChevronDown className="h-3 w-3 text-muted-foreground" />
+          </button>
+
           {isAdmin && (
             <button
               onClick={() => setUploadDialogOpen(true)}
               disabled={!user || loading || syncingThumbnails || !!importingKey || !!deletingKey}
-              className="flex items-center gap-1.5 h-8 px-2.5 rounded-lg border border-primary/40 bg-primary/10 text-xs font-semibold text-primary transition-colors hover:bg-primary/20 disabled:opacity-50 cursor-pointer shadow-sm"
+              className="flex items-center gap-1.5 h-8 px-2.5 rounded-xl border border-border bg-surface text-xs font-semibold text-foreground transition-colors hover:bg-surface-2 disabled:opacity-50 cursor-pointer shadow-sm"
               aria-label="Upload PDF to R2"
-              title="Upload PDF document to Cloudflare R2"
+              title="Upload PDF chapter to Cloudflare R2"
             >
               <Upload className="h-3.5 w-3.5" />
-              <span className="hidden sm:inline">Upload PDF</span>
+              <span className="hidden sm:inline">Upload</span>
             </button>
           )}
 
           {isAdmin && (
             <button
-              onClick={() => void handleSyncAllThumbnails()}
+              onClick={() => void handleSyncClassThumbnails()}
               disabled={!user || loading || syncingThumbnails || !!importingKey || !!deletingKey}
-              className="flex items-center gap-1.5 h-8 px-2.5 rounded-lg border border-border bg-surface text-xs font-medium text-muted-foreground transition-colors hover:bg-surface-2 hover:text-foreground disabled:opacity-50 cursor-pointer"
-              aria-label="Sync R2 Thumbnails"
-              title="Generate & store missing PDF thumbnails in Cloudflare R2"
+              className="flex items-center gap-1.5 h-8 px-2.5 rounded-xl border border-border bg-surface text-xs font-medium text-muted-foreground transition-colors hover:bg-surface-2 hover:text-foreground disabled:opacity-50 cursor-pointer"
+              aria-label="Sync Thumbnails for active class"
+              title={`Generate & store missing PDF thumbnails for ${currentLevelMeta.label}`}
             >
               <Layers
                 className={`h-3.5 w-3.5 ${syncingThumbnails ? "animate-spin text-primary" : ""}`}
               />
-              <span className="hidden sm:inline">Sync Thumbnails</span>
+              <span className="hidden sm:inline">Thumbnails</span>
             </button>
           )}
 
           <button
             onClick={() => void fetchFiles(false, true)}
             disabled={!user || loading || syncingThumbnails || !!importingKey || !!deletingKey}
-            className="flex h-8 w-8 items-center justify-center rounded-lg border border-border bg-surface text-muted-foreground transition-colors hover:bg-surface-2 hover:text-foreground disabled:opacity-50 cursor-pointer"
+            className="flex h-8 w-8 items-center justify-center rounded-xl border border-border bg-surface text-muted-foreground transition-colors hover:bg-surface-2 hover:text-foreground disabled:opacity-50 cursor-pointer"
             aria-label="Refresh"
             title="Refresh library"
           >
@@ -404,7 +462,7 @@ function GlobalLibraryPage() {
         className={`transition-all duration-300 ${!user ? "filter blur-[5px] pointer-events-none select-none opacity-50" : ""}`}
       >
         <div className="mx-auto max-w-7xl p-3.5 sm:p-6 lg:p-8 space-y-4 sm:space-y-6">
-          <h1 className="sr-only">Cloudflare R2 Global Library</h1>
+          <h1 className="sr-only">Global Library — Curated Curriculum Chapters</h1>
 
           {errorMsg ? (
             <div className="rounded-3xl border border-destructive/40 bg-destructive/10 p-6 sm:p-8 text-center max-w-2xl mx-auto shadow-lg">
@@ -413,8 +471,7 @@ function GlobalLibraryPage() {
               </div>
               <p className="mt-2 text-sm text-foreground/95">{errorMsg}</p>
               <p className="mt-1 text-xs text-muted-foreground leading-relaxed">
-                Make sure you have populated the Cloudflare R2 credentials (`R2_ACCOUNT_ID`,
-                `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY`, `R2_BUCKET_NAME`) in your `.env` file.
+                Ensure Cloudflare R2 credentials are populated in your environment variables.
               </p>
               <button
                 onClick={() => void fetchFiles(false, true)}
@@ -432,27 +489,49 @@ function GlobalLibraryPage() {
             <div className="flex flex-col lg:flex-row items-start gap-6 lg:gap-8">
               {/* Left Column: Vertical Category Heap Sidebar (Desktop Only) */}
               <CategoryVerticalHeap
-                categories={categoriesList}
+                categories={SUBJECT_CATEGORIES.map((c) => c.id)}
                 activeCategory={activeCategory}
                 onSelectCategory={setActiveCategory}
                 categoryStats={categoryStats}
-                totalCount={files.length}
-                totalSize={totalLibrarySize}
+                totalCount={levelTotalCount}
                 searchQuery={searchQuery}
                 onSearchChange={setSearchQuery}
+                currentEducationLevel={educationLevel}
+                onOpenEducationModal={() => setEducationModalOpen(true)}
                 syncEnabled={syncEnabled}
               />
 
               {/* Right Column: Library Books Container */}
               <main className="flex-1 min-w-0 w-full space-y-4">
-                {/* ──── Dedicated Mobile E-Book App Header (Search + Category Pills + Community CTA) ──── */}
+                {/* ──── Mobile View Header (Education Switcher + Search + 4 Category Pills) ──── */}
                 <div className="lg:hidden space-y-3">
+                  {/* Mobile Education Level Card */}
+                  <div className="flex items-center justify-between rounded-2xl border border-primary/25 bg-gradient-to-r from-primary/15 via-surface/80 to-surface/60 p-3 shadow-sm">
+                    <div className="flex items-center gap-2.5 min-w-0">
+                      <span className="text-xl">{currentLevelMeta.icon}</span>
+                      <div className="min-w-0">
+                        <span className="block text-[9px] font-bold uppercase tracking-wider text-muted-foreground">
+                          Class / Tier
+                        </span>
+                        <h4 className="text-xs font-bold text-foreground truncate">
+                          {currentLevelMeta.label}
+                        </h4>
+                      </div>
+                    </div>
+                    <button
+                      onClick={() => setEducationModalOpen(true)}
+                      className="rounded-xl border border-border bg-surface-2 px-3 py-1.5 text-[11px] font-bold text-foreground hover:bg-surface transition-colors cursor-pointer"
+                    >
+                      Change
+                    </button>
+                  </div>
+
                   {/* Mobile Search Input */}
                   <div className="relative">
                     <Search className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
                     <input
                       type="text"
-                      placeholder="Search books & documents..."
+                      placeholder="Search chapters..."
                       value={searchQuery}
                       onChange={(e) => setSearchQuery(e.target.value)}
                       className="w-full rounded-2xl border border-border bg-surface/70 py-2.5 pl-10 pr-9 text-xs text-foreground placeholder:text-muted-foreground shadow-sm backdrop-blur-md focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary transition-all"
@@ -468,55 +547,17 @@ function GlobalLibraryPage() {
                     )}
                   </div>
 
-                  {/* Auto-drifting Smooth Category Pills Marquee (Leftward motion) */}
+                  {/* Category Pills Marquee (Strictly the 4 categories, No All Documents) */}
                   <CategoryMarqueeRow
-                    items={allCategories.map((catKey) => {
-                      const meta = getCategoryMeta(catKey);
-                      const count =
-                        catKey === "all" ? files.length : categoryStats[catKey]?.count || 0;
-                      return {
-                        key: catKey,
-                        label: meta.label,
-                        icon: meta.icon,
-                        count,
-                        active: activeCategory === catKey,
-                        onClick: () => setActiveCategory(catKey),
-                      };
-                    })}
+                    items={SUBJECT_CATEGORIES.map((cat) => ({
+                      key: cat.id,
+                      label: cat.label,
+                      icon: cat.icon,
+                      count: categoryStats[cat.id]?.count || 0,
+                      active: activeCategory === cat.id,
+                      onClick: () => setActiveCategory(cat.id),
+                    }))}
                   />
-
-                  {/* Modern Mobile "Request a Book" Telegram Banner */}
-                  <div className="relative overflow-hidden rounded-2xl border border-primary/25 bg-gradient-to-r from-primary/10 via-surface/80 to-surface/60 p-3 backdrop-blur-md shadow-sm flex items-center justify-between gap-3">
-                    <div className="flex items-center gap-2.5 min-w-0">
-                      <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl bg-primary/20 text-primary border border-primary/30 shadow-inner">
-                        <svg className="h-4 w-4 fill-current" viewBox="0 0 24 24">
-                          <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm4.64 6.8c-.15 1.58-.8 5.42-1.13 7.19-.14.75-.42 1-.68 1.03-.58.05-1.02-.38-1.58-.75-.88-.58-1.38-.94-2.23-1.5-.99-.65-.35-1.01.22-1.59.15-.15 2.71-2.48 2.76-2.69a.2.2 0 00-.05-.18c-.06-.05-.14-.03-.21-.02-.09.02-1.49.95-4.22 2.79-.4.27-.76.41-1.08.4-.36-.01-1.04-.2-1.55-.37-.63-.2-1.12-.31-1.08-.66.02-.18.27-.36.75-.55 2.92-1.27 4.86-2.11 5.83-2.51 2.78-1.16 3.35-1.36 3.73-1.36.08 0 .27.02.39.12.1.08.13.19.14.27-.01.06.01.24 0 .37z" />
-                        </svg>
-                      </div>
-                      <div className="min-w-0 flex-1">
-                        <div className="flex items-center gap-1.5">
-                          <h4 className="text-xs font-bold text-foreground truncate">
-                            Need a Book?
-                          </h4>
-                          <span className="rounded bg-primary/15 px-1.5 py-0.2 text-[9px] font-semibold text-primary">
-                            Community
-                          </span>
-                        </div>
-                        <p className="text-[10px] text-muted-foreground line-clamp-1">
-                          Request books from our Telegram
-                        </p>
-                      </div>
-                    </div>
-                    <a
-                      href="https://t.me/cyber_banjara"
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="shrink-0 flex items-center gap-1.5 rounded-xl bg-primary px-3 py-1.5 text-[11px] font-semibold text-primary-foreground shadow-sm hover:opacity-90 active:scale-95 transition-all cursor-pointer"
-                    >
-                      <span>Request</span>
-                      <ExternalLink className="h-3 w-3 opacity-80" />
-                    </a>
-                  </div>
 
                   {/* Section Title & Count Indicator */}
                   <div className="flex items-center justify-between px-0.5 pt-1">
@@ -527,7 +568,7 @@ function GlobalLibraryPage() {
                       </h3>
                     </div>
                     <span className="text-[10px] font-mono font-bold text-muted-foreground bg-surface-2/80 border border-border/50 rounded-full px-2 py-0.5">
-                      {filteredFiles.length} {filteredFiles.length === 1 ? "book" : "books"}
+                      {filteredFiles.length} {filteredFiles.length === 1 ? "chapter" : "chapters"}
                     </span>
                   </div>
                 </div>
@@ -540,12 +581,12 @@ function GlobalLibraryPage() {
                     </div>
                     <div className="space-y-1">
                       <p className="text-sm sm:text-base font-bold text-foreground">
-                        No documents found
+                        No chapters found
                       </p>
                       <p className="text-xs text-muted-foreground max-w-sm mx-auto leading-relaxed">
                         {searchQuery
-                          ? `No documents matching "${searchQuery}" in ${activeCategoryMeta.label}.`
-                          : `There are currently no document playcards in the "${activeCategoryMeta.label}" category.`}
+                          ? `No chapters matching "${searchQuery}" in ${activeCategoryMeta.label} for ${currentLevelMeta.label}.`
+                          : `There are currently no chapters in "${activeCategoryMeta.label}" for ${currentLevelMeta.label}.`}
                       </p>
                     </div>
                     <div className="flex flex-wrap items-center justify-center gap-3 pt-2">
@@ -558,15 +599,13 @@ function GlobalLibraryPage() {
                           Clear Search Filter
                         </button>
                       )}
-                      <a
-                        href="https://t.me/cyber_banjara"
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="inline-flex items-center gap-1.5 rounded-xl bg-primary px-4 py-2 text-xs font-semibold text-primary-foreground shadow-md shadow-primary/20 hover:opacity-95 active:scale-95 transition-all cursor-pointer"
+                      <button
+                        onClick={() => setEducationModalOpen(true)}
+                        className="inline-flex items-center gap-1.5 rounded-xl bg-primary px-4 py-2 text-xs font-bold text-primary-foreground shadow-md shadow-primary/20 hover:opacity-95 active:scale-95 transition-all cursor-pointer"
                       >
-                        <span>Request a Book on Telegram</span>
-                        <ExternalLink className="h-3.5 w-3.5 opacity-80" />
-                      </a>
+                        <GraduationCap className="h-3.5 w-3.5" />
+                        <span>Switch Class / Level</span>
+                      </button>
                     </div>
                   </div>
                 ) : (
@@ -602,6 +641,21 @@ function GlobalLibraryPage() {
         </div>
       </div>
 
+      {/* Education Level Selection / Switcher Modal */}
+      <EducationLevelModal
+        open={educationModalOpen}
+        onOpenChange={(open) => {
+          setEducationModalOpen(open);
+          if (!open) setIsFirstTime(false);
+        }}
+        currentLevel={educationLevel}
+        onSelectLevel={(level) => {
+          setEducationLevel(level);
+          setIsFirstTime(false);
+        }}
+        isFirstTime={isFirstTime}
+      />
+
       {/* Direct R2 Upload Dialog for Admin */}
       <R2UploadDialog
         isMobile={isMobile}
@@ -611,8 +665,8 @@ function GlobalLibraryPage() {
         onFileChange={setUploadFile}
         uploadCategory={uploadCategory}
         onCategoryChange={setUploadCategory}
-        customUploadCategory={customUploadCategory}
-        onCustomCategoryChange={setCustomUploadCategory}
+        uploadEducationLevel={uploadEducationLevel}
+        onEducationLevelChange={setUploadEducationLevel}
         uploadingDirect={uploadingDirect}
         onSubmit={() => void handleDirectUpload()}
       />
@@ -637,7 +691,7 @@ function GlobalLibraryPage() {
                 Access Global Library
               </h2>
               <p className="text-xs sm:text-sm text-muted-foreground leading-relaxed max-w-xs mx-auto">
-                Sign in with your Google account to access, sync, and download shared documents from
+                Sign in with your Google account to access, sync, and download shared curriculum chapters from
                 the Global Library.
               </p>
             </div>

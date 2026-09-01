@@ -154,36 +154,45 @@ export function sanitizeCategory(cat?: string): string {
   const clean = cat
     .trim()
     .toLowerCase()
-    .replace(/[^a-z0-9_-]/g, "-")
-    .replace(/-+/g, "-")
-    .replace(/^-|-$/g, "");
+    .split("/")
+    .map((seg) =>
+      seg
+        .trim()
+        .replace(/[^a-z0-9_-]/g, "-")
+        .replace(/-+/g, "-")
+        .replace(/^-|-$/g, ""),
+    )
+    .filter(Boolean)
+    .join("/");
   return clean || "uncategorized";
 }
 
 export function inferCategoryFromKey(key: string): string {
   const parts = key.split("/");
   if (parts.length > 1 && parts[0].trim().length > 0) {
-    return sanitizeCategory(parts[0]);
+    const rawCat = sanitizeCategory(parts[0]);
+    if (rawCat.includes("hist")) return "history";
+    if (rawCat.includes("pol") || rawCat.includes("civ") || rawCat.includes("gov")) return "political-science";
+    if (rawCat.includes("econ") || rawCat.includes("finan")) return "economics";
+    return "miscellaneous";
   }
   const lower = key.toLowerCase();
   if (lower.includes("hist")) return "history";
+  if (lower.includes("pol") || lower.includes("civ") || lower.includes("gov") || lower.includes("constitution")) return "political-science";
   if (lower.includes("econ") || lower.includes("finan")) return "economics";
-  if (lower.includes("geo")) return "geography";
-  if (lower.includes("civ") || lower.includes("pol") || lower.includes("gov")) return "civics";
-  if (
-    lower.includes("sci") ||
-    lower.includes("bio") ||
-    lower.includes("chem") ||
-    lower.includes("phys")
-  )
-    return "science";
-  return "uncategorized";
+  return "miscellaneous";
 }
 
 export const uploadToR2 = createServerFn({ method: "POST" })
   .validator(
-    (input: { fileName: string; contentType: string; base64Data: string; category?: string }) =>
-      input,
+    (input: {
+      fileName: string;
+      contentType: string;
+      base64Data: string;
+      subject?: string;
+      educationLevel?: string;
+      category?: string;
+    }) => input,
   )
   .handler(async ({ data }) => {
     "use server";
@@ -205,8 +214,22 @@ export const uploadToR2 = createServerFn({ method: "POST" })
         ? data.fileName.split("/").pop() || data.fileName
         : data.fileName;
 
-      const category = sanitizeCategory(data.category || inferCategoryFromKey(data.fileName));
-      const targetKey = `${category}/${cleanFileName}`;
+      // Construct explicit file hierarchy from selected subject and class (no auto-classification)
+      let targetPrefix: string;
+      if (data.subject) {
+        const cleanSubj = sanitizeCategory(data.subject);
+        const cleanLevel =
+          data.educationLevel && data.educationLevel !== "general"
+            ? sanitizeCategory(data.educationLevel)
+            : "";
+        targetPrefix = cleanLevel ? `${cleanSubj}/${cleanLevel}` : cleanSubj;
+      } else if (data.category) {
+        targetPrefix = sanitizeCategory(data.category);
+      } else {
+        targetPrefix = "miscellaneous";
+      }
+
+      const targetKey = `${targetPrefix}/${cleanFileName}`;
 
       const cmd = new sdk.PutObjectCommand({
         Bucket: bucketName,
@@ -233,7 +256,7 @@ export const uploadToR2 = createServerFn({ method: "POST" })
       return {
         success: true,
         key: targetKey,
-        category,
+        category: targetPrefix,
         url: publicBaseUrl ? `${publicBaseUrl}/${targetKey}` : undefined,
       };
     } catch (err: any) {
@@ -242,13 +265,25 @@ export const uploadToR2 = createServerFn({ method: "POST" })
         const cleanFileName = data.fileName.includes("/")
           ? data.fileName.split("/").pop() || data.fileName
           : data.fileName;
-        const category = sanitizeCategory(data.category || inferCategoryFromKey(data.fileName));
-        const targetKey = `${category}/${cleanFileName}`;
+        let targetPrefix: string;
+        if (data.subject) {
+          const cleanSubj = sanitizeCategory(data.subject);
+          const cleanLevel =
+            data.educationLevel && data.educationLevel !== "general"
+              ? sanitizeCategory(data.educationLevel)
+              : "";
+          targetPrefix = cleanLevel ? `${cleanSubj}/${cleanLevel}` : cleanSubj;
+        } else if (data.category) {
+          targetPrefix = sanitizeCategory(data.category);
+        } else {
+          targetPrefix = "miscellaneous";
+        }
+        const targetKey = `${targetPrefix}/${cleanFileName}`;
         return {
           success: true,
           alreadyExists: true,
           key: targetKey,
-          category,
+          category: targetPrefix,
           url: publicBaseUrl ? `${publicBaseUrl}/${targetKey}` : undefined,
         };
       }

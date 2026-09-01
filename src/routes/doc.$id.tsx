@@ -27,24 +27,8 @@ import {
 import { syncFromSupabase, syncToSupabase, getSyncConfig } from "@/lib/sync";
 import { useAuth } from "@/context/AuthContext";
 import { checkTextQuality } from "@/lib/textCleaning";
-import { UPLOAD_CATEGORIES } from "@/lib/uploadCategories";
+import { R2UploadDialog } from "@/components/R2UploadDialog";
 import { ChevronLeft, ChevronRight, Cloud, RefreshCw, Settings, Zap } from "lucide-react";
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
-import {
-  Drawer,
-  DrawerContent,
-  DrawerDescription,
-  DrawerFooter,
-  DrawerHeader,
-  DrawerTitle,
-} from "@/components/ui/drawer";
 
 const extractPdfPagesClient = createClientOnlyFn(
   async (
@@ -347,8 +331,8 @@ function DocPage() {
 
   const [uploading, setUploading] = useState(false);
   const [showUploadCategoryModal, setShowUploadCategoryModal] = useState(false);
-  const [categoryChoice, setCategoryChoice] = useState("history");
-  const [customCategoryInput, setCustomCategoryInput] = useState("");
+  const [uploadSubject, setUploadSubject] = useState("history");
+  const [uploadEducationLevel, setUploadEducationLevel] = useState("class-10");
 
   const handleUploadToR2 = () => {
     if (uploading || !doc) return;
@@ -357,7 +341,6 @@ function DocPage() {
 
   const confirmCategoryUpload = async () => {
     if (uploading || !doc) return;
-    const finalCategory = categoryChoice === "custom" ? customCategoryInput.trim() : categoryChoice;
     setShowUploadCategoryModal(false);
     setUploading(true);
     const toastId = toast.loading("Preparing document for R2 upload...");
@@ -369,7 +352,7 @@ function DocPage() {
         return;
       }
 
-      toast.loading(`Uploading to Cloudflare R2 (${finalCategory || "uncategorized"})...`, {
+      toast.loading(`Uploading to Cloudflare R2 (${uploadSubject}/${uploadEducationLevel})...`, {
         id: toastId,
       });
 
@@ -391,7 +374,8 @@ function DocPage() {
           fileName: doc.fileName,
           contentType: blob.type || "application/pdf",
           base64Data,
-          category: finalCategory,
+          subject: uploadSubject,
+          educationLevel: uploadEducationLevel,
         },
       });
 
@@ -737,126 +721,19 @@ function DocPage() {
         )}
       </ClientOnly>
 
-      {/* Category Selection Modal for R2 Upload */}
-      {isMobile ? (
-        <Drawer open={showUploadCategoryModal} onOpenChange={setShowUploadCategoryModal}>
-          <DrawerContent>
-            <DrawerHeader>
-              <DrawerTitle>Select R2 Category Folder</DrawerTitle>
-              <DrawerDescription>
-                Choose a category folder prefix to store this PDF in the shared Cloudflare R2
-                bucket.
-              </DrawerDescription>
-            </DrawerHeader>
-            <div className="space-y-4 overflow-y-auto px-6 pb-2">
-              <div className="grid grid-cols-2 gap-2">
-                {UPLOAD_CATEGORIES.map((cat) => (
-                  <button
-                    key={cat.id}
-                    type="button"
-                    onClick={() => setCategoryChoice(cat.id)}
-                    className={`flex flex-col items-start rounded-lg border p-3 text-left transition-all ${categoryChoice === cat.id
-                        ? "border-primary bg-primary/10 text-foreground ring-1 ring-primary"
-                        : "border-border bg-surface hover:bg-surface-2 text-muted-foreground"
-                      }`}
-                  >
-                    <span className="font-semibold text-sm">{cat.label}</span>
-                    <span className="text-[11px] font-mono text-muted-foreground">{cat.desc}</span>
-                  </button>
-                ))}
-              </div>
-              {categoryChoice === "custom" && (
-                <div className="space-y-1">
-                  <label className="text-xs font-medium text-foreground">
-                    Custom Category Name
-                  </label>
-                  <input
-                    type="text"
-                    placeholder="e.g. mathematics, philosophy"
-                    value={customCategoryInput}
-                    onChange={(e) => setCustomCategoryInput(e.target.value)}
-                    className="w-full rounded-md border border-border bg-surface px-3 py-2 text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-primary"
-                  />
-                </div>
-              )}
-            </div>
-            <DrawerFooter>
-              <button
-                onClick={() => setShowUploadCategoryModal(false)}
-                className="rounded-lg border border-border px-4 py-2 text-xs font-semibold text-muted-foreground hover:bg-surface-2 transition-colors"
-              >
-                Cancel
-              </button>
-              <button
-                onClick={confirmCategoryUpload}
-                disabled={categoryChoice === "custom" && !customCategoryInput.trim()}
-                className="rounded-lg bg-primary px-4 py-2 text-xs font-semibold text-primary-foreground hover:opacity-90 disabled:opacity-50 transition-opacity"
-              >
-                Upload to Category
-              </button>
-            </DrawerFooter>
-          </DrawerContent>
-        </Drawer>
-      ) : (
-        <Dialog open={showUploadCategoryModal} onOpenChange={setShowUploadCategoryModal}>
-          <DialogContent className="sm:max-w-md">
-            <DialogHeader>
-              <DialogTitle>Select R2 Category Folder</DialogTitle>
-              <DialogDescription>
-                Choose a category folder prefix to store this PDF in the shared Cloudflare R2
-                bucket.
-              </DialogDescription>
-            </DialogHeader>
-            <div className="space-y-4 py-3">
-              <div className="grid grid-cols-2 gap-2">
-                {UPLOAD_CATEGORIES.map((cat) => (
-                  <button
-                    key={cat.id}
-                    type="button"
-                    onClick={() => setCategoryChoice(cat.id)}
-                    className={`flex flex-col items-start rounded-lg border p-3 text-left transition-all ${categoryChoice === cat.id
-                        ? "border-primary bg-primary/10 text-foreground ring-1 ring-primary"
-                        : "border-border bg-surface hover:bg-surface-2 text-muted-foreground"
-                      }`}
-                  >
-                    <span className="font-semibold text-sm">{cat.label}</span>
-                    <span className="text-[11px] font-mono text-muted-foreground">{cat.desc}</span>
-                  </button>
-                ))}
-              </div>
-              {categoryChoice === "custom" && (
-                <div className="space-y-1">
-                  <label className="text-xs font-medium text-foreground">
-                    Custom Category Name
-                  </label>
-                  <input
-                    type="text"
-                    placeholder="e.g. mathematics, philosophy"
-                    value={customCategoryInput}
-                    onChange={(e) => setCustomCategoryInput(e.target.value)}
-                    className="w-full rounded-md border border-border bg-surface px-3 py-2 text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-primary"
-                  />
-                </div>
-              )}
-            </div>
-            <DialogFooter>
-              <button
-                onClick={() => setShowUploadCategoryModal(false)}
-                className="rounded-lg border border-border px-4 py-2 text-xs font-semibold text-muted-foreground hover:bg-surface-2 transition-colors"
-              >
-                Cancel
-              </button>
-              <button
-                onClick={confirmCategoryUpload}
-                disabled={categoryChoice === "custom" && !customCategoryInput.trim()}
-                className="rounded-lg bg-primary px-4 py-2 text-xs font-semibold text-primary-foreground hover:opacity-90 disabled:opacity-50 transition-opacity"
-              >
-                Upload to Category
-              </button>
-            </DialogFooter>
-          </DialogContent>
-        </Dialog>
-      )}
+      {/* 2-Step Subject & Class Selection Modal for R2 Upload */}
+      <R2UploadDialog
+        isMobile={isMobile}
+        open={showUploadCategoryModal}
+        onOpenChange={setShowUploadCategoryModal}
+        existingDocFileName={doc?.fileName}
+        uploadCategory={uploadSubject}
+        onCategoryChange={setUploadSubject}
+        uploadEducationLevel={uploadEducationLevel}
+        onEducationLevelChange={setUploadEducationLevel}
+        uploadingDirect={uploading}
+        onSubmit={() => void confirmCategoryUpload()}
+      />
     </div>
   );
 }
