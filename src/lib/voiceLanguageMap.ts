@@ -25,15 +25,26 @@ export interface LanguageInfo {
 
 export const LANGUAGES: LanguageInfo[] = [
   { id: "हिंदी", native: "हिंदी", english: "Hindi", script: "Devanagari" },
-  { id: "বাংলা", native: "বাংলা", english: "Bengali", script: "Bengali" },
-  { id: "తెలుగు", native: "తెలుగు", english: "Telugu", script: "Telugu" },
-  { id: "മലയാളം", native: "മലയാളം", english: "Malayalam", script: "Malayalam" },
-  { id: "தமிழ்", native: "தமிழ்", english: "Tamil", script: "Tamil" },
   { id: "English", native: "English", english: "English", script: "Latin" },
+  { id: "বাংলা", native: "বাংলা", english: "Bengali", script: "Bengali" },
+  { id: "मराठी", native: "मराठी", english: "Marathi", script: "Devanagari" },
+  { id: "తెలుగు", native: "తెలుగు", english: "Telugu", script: "Telugu" },
+  { id: "தமிழ்", native: "தமிழ்", english: "Tamil", script: "Tamil" },
+  { id: "ગુજરાતી", native: "ગુજરાતી", english: "Gujarati", script: "Gujarati" },
+  { id: "ಕನ್ನಡ", native: "ಕನ್ನಡ", english: "Kannada", script: "Kannada" },
+  { id: "മലയാളം", native: "മലയാളം", english: "Malayalam", script: "Malayalam" },
+  { id: "ਪੰਜਾਬੀ", native: "ਪੰਜਾਬੀ", english: "Punjabi", script: "Gurmukhi" },
+  { id: "ଓଡ଼ିଆ", native: "ଓଡ଼ିଆ", english: "Odia", script: "Odia" },
+  { id: "اردو", native: "اردو", english: "Urdu", script: "Arabic" },
+  { id: "অসমীয়া", native: "অসমীয়া", english: "Assamese", script: "Bengali" },
   { id: "Spanish", native: "Español", english: "Spanish", script: "Latin" },
-  { id: "Mandarin", native: "中文", english: "Mandarin", script: "Chinese" },
   { id: "French", native: "Français", english: "French", script: "Latin" },
   { id: "German", native: "Deutsch", english: "German", script: "Latin" },
+  { id: "Mandarin", native: "中文", english: "Mandarin", script: "Chinese" },
+  { id: "Japanese", native: "日本語", english: "Japanese", script: "Japanese" },
+  { id: "Arabic", native: "العربية", english: "Arabic", script: "Arabic" },
+  { id: "Russian", native: "Русский", english: "Russian", script: "Cyrillic" },
+  { id: "Portuguese", native: "Português", english: "Portuguese", script: "Latin" },
 ];
 
 /* ─── Alias Map: UI name → BCP-47 locale prefix(es) ─── */

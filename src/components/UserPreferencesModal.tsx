@@ -1,16 +1,16 @@
 import { useState, useEffect, useMemo } from "react";
 import {
   Check,
-  Sparkles,
   ChevronRight,
   Languages,
   GraduationCap,
   ArrowLeft,
   Loader2,
   Search,
+  X,
 } from "lucide-react";
 import { LANGUAGES, type LanguageInfo } from "@/lib/voiceLanguageMap";
-import { EDUCATION_LEVELS, type EducationLevel, getEducationLevelMeta } from "@/lib/classification";
+import { EDUCATION_LEVELS, type EducationLevel } from "@/lib/classification";
 
 interface UserPreferencesModalProps {
   open: boolean;
@@ -20,27 +20,10 @@ interface UserPreferencesModalProps {
   onSave: (language: string, educationLevel: EducationLevel) => Promise<void> | void;
 }
 
-// Top featured / most common regional languages for quick one-tap selection
-const POPULAR_LANGUAGES = [
-  "हिंदी",
-  "English",
-  "বাংলা",
-  "मराठी",
-  "తెలుగు",
-  "தமிழ்",
-  "ગુજરાતી",
-  "ಕನ್ನಡ",
-  "മലയാളം",
-  "ਪੰਜਾਬੀ",
-  "ଓଡ଼ିଆ",
-  "اردو",
-];
-
 export function UserPreferencesModal({
   open,
   initialLanguage,
   initialEducationLevel,
-  isInitialSetup = true,
   onSave,
 }: UserPreferencesModalProps) {
   const [step, setStep] = useState<1 | 2>(1);
@@ -86,155 +69,145 @@ export function UserPreferencesModal({
     }
   };
 
-  const currentLevelMeta = getEducationLevelMeta(selectedLevel);
-
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 backdrop-blur-md p-4 animate-in fade-in duration-200">
       <div
-        className="relative w-full max-w-lg rounded-3xl border border-border/80 bg-card/95 p-6 sm:p-7 shadow-2xl backdrop-blur-2xl text-left space-y-5 animate-in zoom-in-95 duration-200"
+        className="relative w-full max-w-xl rounded-3xl border border-border/80 bg-card/95 p-6 sm:p-7 shadow-2xl backdrop-blur-2xl text-left space-y-5 animate-in zoom-in-95 duration-200"
         role="dialog"
         aria-modal="true"
         aria-labelledby="preferences-setup-title"
       >
-        {/* Header & Step Indicator */}
-        <div className="flex items-start justify-between gap-3">
-          <div className="flex items-start gap-3.5 min-w-0">
-            <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-primary/10 text-primary border border-primary/20 shadow-inner">
-              {step === 1 ? (
-                <Languages className="h-6 w-6 text-primary" />
-              ) : (
-                <GraduationCap className="h-6 w-6 text-primary" />
-              )}
-            </div>
-            <div className="space-y-1 min-w-0">
-              <div className="flex items-center gap-2 flex-wrap">
-                <h2
-                  id="preferences-setup-title"
-                  className="text-lg sm:text-xl font-extrabold tracking-tight text-foreground"
-                >
-                  {step === 1 ? "Select Your Native Language" : "Select Your Class / Standard"}
-                </h2>
-                {isInitialSetup && (
-                  <span className="flex items-center gap-1 rounded-full bg-primary/15 px-2 py-0.5 text-[10px] font-bold text-primary">
-                    <Sparkles className="h-3 w-3" />
-                    One-Time Setup
-                  </span>
-                )}
-              </div>
-              <p className="text-xs text-muted-foreground leading-relaxed">
-                {step === 1
-                  ? "Choose the language for AI translations, audio narration, and explanations."
-                  : "Choose your study standard to automatically filter textbooks and curriculum."}
-              </p>
-            </div>
+        {/* Header */}
+        <div className="flex items-center gap-3.5 min-w-0">
+          <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-primary/10 text-primary border border-primary/20 shadow-inner">
+            {step === 1 ? (
+              <Languages className="h-6 w-6 text-primary" />
+            ) : (
+              <GraduationCap className="h-6 w-6 text-primary" />
+            )}
+          </div>
+          <div className="space-y-0.5 min-w-0 flex-1">
+            <h2
+              id="preferences-setup-title"
+              className="text-lg sm:text-xl font-extrabold tracking-tight text-foreground"
+            >
+              {step === 1 ? "Select the Language You Speak" : "Select Your Class or Goal"}
+            </h2>
+            <p className="text-xs text-muted-foreground leading-relaxed">
+              {step === 1
+                ? "Choose the language you know best for translations, audio narration, and explanations."
+                : "Choose your study standard or reading preference to personalize your books."}
+            </p>
           </div>
         </div>
 
         {/* Step Progress Bar */}
-        <div className="flex items-center gap-2 pt-1">
+        <div className="flex items-center gap-2 pt-0.5">
           <div
             className={`h-1.5 flex-1 rounded-full transition-all duration-300 ${
-              step >= 1 ? "bg-primary" : "bg-border"
+              step >= 1 ? "bg-primary shadow-xs shadow-primary/30" : "bg-border"
             }`}
           />
           <div
             className={`h-1.5 flex-1 rounded-full transition-all duration-300 ${
-              step >= 2 ? "bg-primary" : "bg-border/60"
+              step >= 2 ? "bg-primary shadow-xs shadow-primary/30" : "bg-border/60"
             }`}
           />
         </div>
 
-        {/* ─── STEP 1: LANGUAGE SELECTION ─── */}
+        {/* ─── STEP 1: MODERN UNIFIED LANGUAGE SELECTION ─── */}
         {step === 1 && (
-          <div className="space-y-3.5 animate-in fade-in duration-200">
-            {/* Quick Popular Chips */}
-            <div className="space-y-1.5">
-              <div className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
-                Popular Regional Languages
-              </div>
-              <div className="flex flex-wrap gap-1.5">
-                {POPULAR_LANGUAGES.map((nativeName) => {
-                  const isSelected = selectedLang === nativeName;
-                  return (
-                    <button
-                      key={nativeName}
-                      type="button"
-                      onClick={() => setSelectedLang(nativeName)}
-                      className={`rounded-xl px-3 py-1.5 text-xs font-semibold transition-all cursor-pointer border ${
-                        isSelected
-                          ? "border-primary bg-primary text-primary-foreground shadow-sm shadow-primary/20 scale-105"
-                          : "border-border/70 bg-surface/60 text-foreground hover:bg-surface-2 hover:border-primary/40"
-                      }`}
-                    >
-                      {nativeName}
-                    </button>
-                  );
-                })}
-              </div>
-            </div>
-
-            {/* Search Input */}
+          <div className="space-y-4 animate-in fade-in duration-200">
+            {/* Clean Search Input */}
             <div className="relative">
-              <Search className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" />
+              <Search className="pointer-events-none absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
               <input
                 type="text"
-                placeholder="Search languages (Hindi, Tamil, Bengali, English...)"
+                placeholder="Search languages (Hindi, Tamil, Telugu, English...)"
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                className="w-full rounded-xl border border-border/80 bg-surface/40 py-2 pl-9 pr-3 text-xs text-foreground placeholder:text-muted-foreground focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
+                className="w-full rounded-2xl border border-border/80 bg-surface/50 py-2.5 pl-10 pr-9 text-xs sm:text-sm text-foreground placeholder:text-muted-foreground focus:border-primary focus:bg-surface focus:outline-none focus:ring-2 focus:ring-primary/20 transition-all"
               />
+              {searchQuery && (
+                <button
+                  type="button"
+                  onClick={() => setSearchQuery("")}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground p-0.5 rounded-full transition-colors cursor-pointer"
+                  title="Clear search"
+                >
+                  <X className="h-4 w-4" />
+                </button>
+              )}
             </div>
 
-            {/* Languages Scrollable Grid */}
-            <div className="max-h-[36vh] space-y-1.5 overflow-y-auto pr-0.5">
-              {filteredLanguages.map((lang: LanguageInfo) => {
-                const isChosen =
-                  selectedLang.toLowerCase() === lang.native.toLowerCase() ||
-                  selectedLang.toLowerCase() === lang.english.toLowerCase() ||
-                  selectedLang.toLowerCase() === lang.id.toLowerCase();
-                return (
-                  <button
-                    key={lang.id}
-                    type="button"
-                    onClick={() => setSelectedLang(lang.native)}
-                    className={`group relative flex w-full items-center justify-between rounded-2xl p-2.5 sm:p-3 text-left transition-all duration-150 cursor-pointer border ${
-                      isChosen
-                        ? "border-primary bg-primary/10 ring-1 ring-primary text-foreground"
-                        : "border-border/60 bg-surface/40 text-muted-foreground hover:border-primary/40 hover:bg-surface-2/60 hover:text-foreground"
-                    }`}
-                  >
-                    <div className="flex items-center gap-3 min-w-0">
-                      <div
-                        className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-lg font-bold text-xs transition-colors ${
+            {/* Unified Languages Grid */}
+            <div className="max-h-[46vh] overflow-y-auto pr-1 py-0.5">
+              {filteredLanguages.length > 0 ? (
+                <div className="grid grid-cols-2 sm:grid-cols-3 gap-2.5">
+                  {filteredLanguages.map((lang: LanguageInfo) => {
+                    const isChosen =
+                      selectedLang.toLowerCase() === lang.native.toLowerCase() ||
+                      selectedLang.toLowerCase() === lang.english.toLowerCase() ||
+                      selectedLang.toLowerCase() === lang.id.toLowerCase();
+                    return (
+                      <button
+                        key={lang.id}
+                        type="button"
+                        onClick={() => setSelectedLang(lang.native)}
+                        className={`group relative flex flex-col justify-between items-start rounded-2xl p-3 sm:p-3.5 text-left transition-all duration-200 cursor-pointer border ${
                           isChosen
-                            ? "bg-primary text-primary-foreground"
-                            : "bg-surface-2 text-foreground group-hover:bg-primary/20 group-hover:text-primary"
+                            ? "border-primary bg-primary/10 ring-1 ring-primary/40 shadow-sm shadow-primary/15 text-foreground scale-[1.01]"
+                            : "border-border/60 bg-surface/40 text-muted-foreground hover:border-primary/40 hover:bg-surface-2/60 hover:text-foreground active:scale-[0.98]"
                         }`}
                       >
-                        {lang.native.slice(0, 2)}
-                      </div>
-                      <div className="min-w-0">
-                        <div className="flex items-center gap-1.5">
-                          <span className="text-sm font-bold text-foreground truncate">
+                        <div className="flex items-center justify-between w-full gap-2">
+                          <span className="text-base sm:text-lg font-bold text-foreground leading-tight tracking-tight">
                             {lang.native}
                           </span>
-                          <span className="text-xs text-muted-foreground">({lang.english})</span>
+                          <div
+                            className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-full border transition-all ${
+                              isChosen
+                                ? "border-primary bg-primary text-primary-foreground shadow-xs"
+                                : "border-border/60 bg-surface text-transparent group-hover:border-primary/40"
+                            }`}
+                          >
+                            <Check className="h-3 w-3 stroke-[3]" />
+                          </div>
                         </div>
-                      </div>
-                    </div>
 
-                    <div
-                      className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-full border transition-all ${
-                        isChosen
-                          ? "border-primary bg-primary text-primary-foreground"
-                          : "border-border/80 bg-background/50 text-transparent group-hover:border-primary/50"
-                      }`}
-                    >
-                      <Check className="h-3 w-3 stroke-[3]" />
-                    </div>
+                        <span
+                          className={`text-[11px] sm:text-xs font-medium mt-1.5 transition-colors ${
+                            isChosen
+                              ? "text-primary font-semibold"
+                              : "text-muted-foreground group-hover:text-foreground/80"
+                          }`}
+                        >
+                          {lang.english}
+                        </span>
+                      </button>
+                    );
+                  })}
+                </div>
+              ) : (
+                <div className="flex flex-col items-center justify-center py-10 text-center px-4 space-y-2.5">
+                  <div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-surface-2 text-muted-foreground border border-border">
+                    <Search className="h-5 w-5" />
+                  </div>
+                  <div>
+                    <p className="text-sm font-bold text-foreground">No languages found</p>
+                    <p className="text-xs text-muted-foreground mt-0.5">
+                      No matching result for &ldquo;{searchQuery}&rdquo;
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setSearchQuery("")}
+                    className="text-xs font-bold text-primary hover:underline pt-1 cursor-pointer"
+                  >
+                    Clear search
                   </button>
-                );
-              })}
+                </div>
+              )}
             </div>
 
             {/* Step 1 Action Button */}
@@ -243,7 +216,7 @@ export function UserPreferencesModal({
                 type="button"
                 onClick={() => handleNextToLevel(selectedLang)}
                 disabled={!selectedLang}
-                className="flex w-full items-center justify-center gap-2 rounded-2xl bg-primary py-3 px-4 font-bold text-sm text-primary-foreground shadow-lg shadow-primary/20 transition-all hover:opacity-95 active:scale-[0.99] disabled:opacity-40 cursor-pointer"
+                className="flex w-full items-center justify-center gap-2 rounded-2xl bg-primary py-3 px-4 font-bold text-sm text-primary-foreground shadow-lg shadow-primary/25 transition-all hover:opacity-95 active:scale-[0.99] disabled:opacity-40 cursor-pointer"
               >
                 <span>Continue with {selectedLang}</span>
                 <ChevronRight className="h-4 w-4" />
@@ -252,60 +225,65 @@ export function UserPreferencesModal({
           </div>
         )}
 
-        {/* ─── STEP 2: CLASS / STANDARD SELECTION ─── */}
+        {/* ─── STEP 2: MODERN CLASS / GOAL SELECTION ─── */}
         {step === 2 && (
-          <div className="space-y-3 animate-in fade-in duration-200">
-            {/* 5 Education Levels */}
-            <div className="space-y-2 max-h-[46vh] overflow-y-auto pr-0.5">
-              {EDUCATION_LEVELS.map((level) => {
-                const isChosen = selectedLevel === level.id;
-                return (
-                  <button
-                    key={level.id}
-                    type="button"
-                    onClick={() => setSelectedLevel(level.id)}
-                    className={`group relative flex w-full items-center justify-between rounded-2xl p-3 sm:p-3.5 text-left transition-all duration-200 cursor-pointer border ${
-                      isChosen
-                        ? "border-primary bg-primary/10 ring-1 ring-primary shadow-md shadow-primary/5 text-foreground"
-                        : "border-border/70 bg-surface/50 text-muted-foreground hover:border-primary/40 hover:bg-surface-2/60 hover:text-foreground"
-                    }`}
-                  >
-                    <div className="flex items-center gap-3.5 min-w-0">
-                      <div
-                        className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl text-xl shadow-inner border transition-transform duration-200 group-hover:scale-105 ${
-                          isChosen
-                            ? "border-primary/40 bg-primary/20"
-                            : "border-border/60 bg-surface-2"
-                        }`}
-                      >
-                        {level.icon}
-                      </div>
-                      <div className="min-w-0 flex-1">
-                        <div className="flex items-center gap-2">
-                          <span className="text-xs sm:text-sm font-bold text-foreground truncate">
+          <div className="space-y-4 animate-in fade-in duration-200">
+            {/* Unified Class Cards Grid */}
+            <div className="max-h-[48vh] overflow-y-auto pr-1 py-0.5">
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2.5">
+                {EDUCATION_LEVELS.map((level) => {
+                  const isChosen = selectedLevel === level.id;
+                  return (
+                    <button
+                      key={level.id}
+                      type="button"
+                      onClick={() => setSelectedLevel(level.id)}
+                      className={`group relative flex flex-col justify-between items-start rounded-2xl p-3 sm:p-3.5 text-left transition-all duration-200 cursor-pointer border ${
+                        isChosen
+                          ? "border-primary bg-primary/10 ring-1 ring-primary/40 shadow-sm shadow-primary/15 text-foreground scale-[1.01]"
+                          : "border-border/60 bg-surface/40 text-muted-foreground hover:border-primary/40 hover:bg-surface-2/60 hover:text-foreground active:scale-[0.98]"
+                      }`}
+                    >
+                      <div className="flex items-start justify-between w-full gap-2">
+                        <div className="flex items-center gap-2.5 min-w-0">
+                          <div
+                            className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-xl text-lg shadow-inner border transition-transform duration-200 group-hover:scale-105 ${
+                              isChosen
+                                ? "border-primary/40 bg-primary/20"
+                                : "border-border/60 bg-surface-2"
+                            }`}
+                          >
+                            {level.icon}
+                          </div>
+                          <span className="text-xs sm:text-sm font-bold text-foreground leading-tight truncate">
                             {level.label}
                           </span>
                         </div>
-                        <p className="text-[11px] text-muted-foreground line-clamp-1 mt-0.5">
-                          {level.description}
-                        </p>
-                      </div>
-                    </div>
 
-                    <div className="ml-2 shrink-0 flex items-center">
-                      <div
-                        className={`flex h-6 w-6 items-center justify-center rounded-full border transition-all ${
+                        <div
+                          className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-full border transition-all ${
+                            isChosen
+                              ? "border-primary bg-primary text-primary-foreground shadow-xs"
+                              : "border-border/60 bg-surface text-transparent group-hover:border-primary/40"
+                          }`}
+                        >
+                          <Check className="h-3 w-3 stroke-[3]" />
+                        </div>
+                      </div>
+
+                      <p
+                        className={`text-[10px] sm:text-[11px] line-clamp-2 mt-2 transition-colors ${
                           isChosen
-                            ? "border-primary bg-primary text-primary-foreground shadow-sm"
-                            : "border-border/80 bg-surface text-transparent group-hover:border-primary/40"
+                            ? "text-primary/90 font-medium"
+                            : "text-muted-foreground group-hover:text-foreground/80"
                         }`}
                       >
-                        <Check className="h-3.5 w-3.5 stroke-[3]" />
-                      </div>
-                    </div>
-                  </button>
-                );
-              })}
+                        {level.description}
+                      </p>
+                    </button>
+                  );
+                })}
+              </div>
             </div>
 
             {/* Bottom Actions: Back and Save Preferences */}
@@ -314,7 +292,7 @@ export function UserPreferencesModal({
                 type="button"
                 onClick={() => setStep(1)}
                 disabled={isSaving}
-                className="inline-flex items-center gap-1.5 rounded-xl border border-border/60 px-3.5 py-2 text-xs font-semibold text-muted-foreground transition-colors hover:bg-surface-2 hover:text-foreground disabled:opacity-40 cursor-pointer"
+                className="inline-flex items-center gap-1.5 rounded-xl border border-border/60 px-4 py-2.5 text-xs font-semibold text-muted-foreground transition-colors hover:bg-surface-2 hover:text-foreground disabled:opacity-40 cursor-pointer"
               >
                 <ArrowLeft className="h-3.5 w-3.5" />
                 <span>Back</span>
@@ -332,10 +310,7 @@ export function UserPreferencesModal({
                     <span>Saving to Profile...</span>
                   </>
                 ) : (
-                  <>
-                    <span>Save & Open in {selectedLang}</span>
-                    <Sparkles className="h-4 w-4" />
-                  </>
+                  <span>Save & Open in {selectedLang}</span>
                 )}
               </button>
             </div>

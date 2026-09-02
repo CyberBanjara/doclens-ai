@@ -1,6 +1,15 @@
 import type { R2File } from "./file-utils";
 
-export type EducationLevel = "class-9" | "class-10" | "class-11" | "class-12" | "gov-exams";
+export type EducationLevel =
+  | "class-6"
+  | "class-7"
+  | "class-8"
+  | "class-9"
+  | "class-10"
+  | "class-11"
+  | "class-12"
+  | "gov-exams"
+  | "hobby-reading";
 
 export type SubjectCategory = "history" | "political-science" | "economics" | "miscellaneous";
 
@@ -16,19 +25,46 @@ export interface EducationLevelConfig {
 
 export const EDUCATION_LEVELS: EducationLevelConfig[] = [
   {
+    id: "class-6",
+    label: "Class 6",
+    shortLabel: "Class 6",
+    icon: "🌱",
+    badge: "Class 6",
+    description: "NCERT Class 6 Middle School Curriculum",
+    badgeBg: "bg-sky-500/15 text-sky-400 border-sky-500/30",
+  },
+  {
+    id: "class-7",
+    label: "Class 7",
+    shortLabel: "Class 7",
+    icon: "📖",
+    badge: "Class 7",
+    description: "NCERT Class 7 Middle School Curriculum",
+    badgeBg: "bg-cyan-500/15 text-cyan-400 border-cyan-500/30",
+  },
+  {
+    id: "class-8",
+    label: "Class 8",
+    shortLabel: "Class 8",
+    icon: "📚",
+    badge: "Class 8",
+    description: "NCERT Class 8 Curriculum & Foundations",
+    badgeBg: "bg-indigo-500/15 text-indigo-400 border-indigo-500/30",
+  },
+  {
     id: "class-9",
     label: "Class 9",
     shortLabel: "Class 9",
     icon: "🎒",
     badge: "Class 9",
-    description: "NCERT Class 9 Curriculum & Social Science Chapters",
+    description: "NCERT Class 9 Curriculum & High School",
     badgeBg: "bg-blue-500/15 text-blue-400 border-blue-500/30",
   },
   {
     id: "class-10",
     label: "Class 10",
     shortLabel: "Class 10",
-    icon: "🎒",
+    icon: "🎯",
     badge: "Class 10",
     description: "NCERT Class 10 Board Curriculum & Core Concepts",
     badgeBg: "bg-emerald-500/15 text-emerald-400 border-emerald-500/30",
@@ -39,7 +75,7 @@ export const EDUCATION_LEVELS: EducationLevelConfig[] = [
     shortLabel: "Class 11",
     icon: "📚",
     badge: "Class 11",
-    description: "NCERT Class 11 Humanities, History & Social Sciences",
+    description: "NCERT Class 11 Humanities & Senior Secondary",
     badgeBg: "bg-purple-500/15 text-purple-400 border-purple-500/30",
   },
   {
@@ -48,7 +84,7 @@ export const EDUCATION_LEVELS: EducationLevelConfig[] = [
     shortLabel: "Class 12",
     icon: "🎓",
     badge: "Class 12",
-    description: "NCERT Class 12 Senior Secondary History & Syllabus",
+    description: "NCERT Class 12 Senior Secondary & Board Syllabus",
     badgeBg: "bg-amber-500/15 text-amber-400 border-amber-500/30",
   },
   {
@@ -57,8 +93,17 @@ export const EDUCATION_LEVELS: EducationLevelConfig[] = [
     shortLabel: "Govt Exams",
     icon: "🏛️",
     badge: "Govt Exams",
-    description: "UPSC, State PSC, SSC & Civil Services Foundation Material",
+    description: "UPSC, State PSC, SSC & Civil Services Material",
     badgeBg: "bg-rose-500/15 text-rose-400 border-rose-500/30",
+  },
+  {
+    id: "hobby-reading",
+    label: "Reading as a Hobby",
+    shortLabel: "Hobby Reading",
+    icon: "☕",
+    badge: "Hobby Reading",
+    description: "Literature, self-study, general knowledge & casual reading",
+    badgeBg: "bg-teal-500/15 text-teal-400 border-teal-500/30",
   },
 ];
 
@@ -136,8 +181,11 @@ export interface ClassifiedBook extends R2File {
   folderPath: string;
 }
 
-// Letter mapping to Class: a-1, b-2, ... i-9, j-10, k-11, l-12
+// Letter mapping to Class: a-1, b-2, ... f-6, g-7, h-8, i-9, j-10, k-11, l-12
 const LETTER_CLASS_MAP: Record<string, EducationLevel> = {
+  f: "class-6",
+  g: "class-7",
+  h: "class-8",
   i: "class-9",
   j: "class-10",
   k: "class-11",
@@ -169,11 +217,15 @@ export function classifyR2Book(file: R2File): ClassifiedBook {
     "miscellaneous",
   ];
   const validLevels: EducationLevel[] = [
+    "class-6",
+    "class-7",
+    "class-8",
     "class-9",
     "class-10",
     "class-11",
     "class-12",
     "gov-exams",
+    "hobby-reading",
   ];
 
   let pathCategoryFound = false;
@@ -207,7 +259,7 @@ export function classifyR2Book(file: R2File): ClassifiedBook {
     }
   }
 
-  // 2. Direct NCERT code decoder (e.g. jess101, jess201, jess401, iest101, kehs101, lehs101)
+  // 2. Direct NCERT code decoder (e.g. jess101, jess201, jess401, iest101, kehs101, lehs101, fees101)
   const isNcertCode = /^[a-z]{4}\d{3}$/i.test(baseCode);
 
   if (isNcertCode) {
@@ -264,23 +316,22 @@ export function classifyR2Book(file: R2File): ClassifiedBook {
       displayName = `Chapter ${chapterNumber}`;
     }
   } else {
-    // 3. Fallback: Decode from Path or Human-Readable Title if not determined
+    // 3. Fallback Semantic keywords detection
     if (!pathCategoryFound) {
       if (
-        lowerKey.includes("/political-science") ||
-        lowerKey.includes("political-science/") ||
-        lowerKey.includes("/political science") ||
-        lowerKey.includes("politics") ||
+        lowerKey.includes("/pol") ||
         lowerKey.includes("polity") ||
-        lowerKey.includes("civics") ||
         lowerKey.includes("constitution") ||
-        lowerKey.includes("democratic politics")
+        lowerKey.includes("political science") ||
+        lowerKey.includes("democratic politics") ||
+        lowerKey.includes("civics") ||
+        lowerKey.includes("indian constitution") ||
+        lowerKey.includes("political theory")
       ) {
         category = "political-science";
       } else if (
-        lowerKey.includes("/economics") ||
-        lowerKey.includes("economics/") ||
-        lowerKey.includes("economy") ||
+        lowerKey.includes("/econ") ||
+        lowerKey.includes("economics") ||
         lowerKey.includes("macroeconomics") ||
         lowerKey.includes("microeconomics") ||
         lowerKey.includes("economic development") ||
@@ -305,6 +356,36 @@ export function classifyR2Book(file: R2File): ClassifiedBook {
     // Detect Education Level if not already determined from path
     if (!pathLevelFound) {
       if (
+        lowerKey.includes("class 6") ||
+        lowerKey.includes("class-6") ||
+        lowerKey.includes("class_6") ||
+        lowerKey.includes("class6") ||
+        lowerKey.includes("grade 6") ||
+        lowerKey.includes("6th") ||
+        /\b(vi|class-vi|class vi)\b/.test(lowerKey)
+      ) {
+        educationLevel = "class-6";
+      } else if (
+        lowerKey.includes("class 7") ||
+        lowerKey.includes("class-7") ||
+        lowerKey.includes("class_7") ||
+        lowerKey.includes("class7") ||
+        lowerKey.includes("grade 7") ||
+        lowerKey.includes("7th") ||
+        /\b(vii|class-vii|class vii)\b/.test(lowerKey)
+      ) {
+        educationLevel = "class-7";
+      } else if (
+        lowerKey.includes("class 8") ||
+        lowerKey.includes("class-8") ||
+        lowerKey.includes("class_8") ||
+        lowerKey.includes("class8") ||
+        lowerKey.includes("grade 8") ||
+        lowerKey.includes("8th") ||
+        /\b(viii|class-viii|class viii)\b/.test(lowerKey)
+      ) {
+        educationLevel = "class-8";
+      } else if (
         lowerKey.includes("class 9") ||
         lowerKey.includes("class-9") ||
         lowerKey.includes("class_9") ||
@@ -356,6 +437,13 @@ export function classifyR2Book(file: R2File): ClassifiedBook {
         lowerKey.includes("civil services")
       ) {
         educationLevel = "gov-exams";
+      } else if (
+        lowerKey.includes("hobby") ||
+        lowerKey.includes("leisure") ||
+        lowerKey.includes("novel") ||
+        lowerKey.includes("story")
+      ) {
+        educationLevel = "hobby-reading";
       }
     }
 
@@ -397,6 +485,10 @@ export function filterBooks(
         book.educationLevel === "class-11" ||
         book.educationLevel === "class-12";
       if (!matchesGov) return false;
+    } else if (educationLevel === "hobby-reading") {
+      // Hobby Reading shows all books in the category for general browsing
+      const matchesHobby = true;
+      if (!matchesHobby) return false;
     } else {
       // Specific class filter: Show books specifically for this class, or general books
       const matchesLevel =
@@ -435,7 +527,7 @@ export function getSavedEducationLevel(): EducationLevel | null {
   if (typeof window === "undefined") return null;
   try {
     const saved = localStorage.getItem(STORAGE_KEY) as EducationLevel | null;
-    if (saved && ["class-9", "class-10", "class-11", "class-12", "gov-exams"].includes(saved)) {
+    if (saved && EDUCATION_LEVELS.some((l) => l.id === saved)) {
       return saved;
     }
   } catch (e) {

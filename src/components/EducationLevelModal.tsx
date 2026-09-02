@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { Check, Sparkles, BookOpen, GraduationCap, X } from "lucide-react";
+import { Check, BookOpen, GraduationCap, X } from "lucide-react";
 import { EDUCATION_LEVELS, type EducationLevel, saveEducationLevel } from "@/lib/classification";
 
 interface EducationLevelModalProps {
@@ -33,14 +33,14 @@ export function EducationLevelModal({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-md p-4 animate-in fade-in duration-200">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 backdrop-blur-md p-4 animate-in fade-in duration-200">
       <div
-        className="relative w-full max-w-lg rounded-3xl border border-border/80 bg-card/95 p-6 sm:p-7 shadow-2xl backdrop-blur-2xl text-left space-y-5 animate-in zoom-in-95 duration-200"
+        className="relative w-full max-w-xl rounded-3xl border border-border/80 bg-card/95 p-6 sm:p-7 shadow-2xl backdrop-blur-2xl text-left space-y-5 animate-in zoom-in-95 duration-200"
         role="dialog"
         aria-modal="true"
         aria-labelledby="education-level-title"
       >
-        {/* Close button (only when not strictly forcing first time, or allow close anytime) */}
+        {/* Close button */}
         {!isFirstTime && (
           <button
             onClick={() => onOpenChange(false)}
@@ -52,84 +52,80 @@ export function EducationLevelModal({
         )}
 
         {/* Modal Header */}
-        <div className="flex items-start gap-3.5 pr-8">
+        <div className="flex items-center gap-3.5 pr-8">
           <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-primary/10 text-primary border border-primary/20 shadow-inner">
             <GraduationCap className="h-6 w-6 text-primary" />
           </div>
-          <div className="space-y-1 min-w-0">
-            <div className="flex items-center gap-2">
-              <h2
-                id="education-level-title"
-                className="text-lg sm:text-xl font-extrabold tracking-tight text-foreground"
-              >
-                {isFirstTime ? "Select Your Education Level" : "Change Education Level"}
-              </h2>
-              {isFirstTime && (
-                <span className="flex items-center gap-1 rounded-full bg-primary/15 px-2 py-0.5 text-[10px] font-bold text-primary">
-                  <Sparkles className="h-3 w-3" />
-                  Quick Setup
-                </span>
-              )}
-            </div>
+          <div className="space-y-0.5 min-w-0 flex-1">
+            <h2
+              id="education-level-title"
+              className="text-lg sm:text-xl font-extrabold tracking-tight text-foreground"
+            >
+              {isFirstTime ? "Select Your Class or Goal" : "Change Class or Goal"}
+            </h2>
             <p className="text-xs text-muted-foreground leading-relaxed">
-              Tailor the Global Library to show relevant curriculum books, NCERTs, and exam
-              materials.
+              Personalize your library with relevant curriculum books, NCERTs, and reading materials.
             </p>
           </div>
         </div>
 
-        {/* 5 Education Tier Cards */}
-        <div className="space-y-2.5 max-h-[60vh] overflow-y-auto pr-0.5">
-          {EDUCATION_LEVELS.map((level) => {
-            const isChosen = selected === level.id;
-            return (
-              <button
-                key={level.id}
-                type="button"
-                onClick={() => {
-                  setSelected(level.id);
-                  handleConfirm(level.id);
-                }}
-                className={`group relative flex w-full items-center justify-between rounded-2xl p-3.5 sm:p-4 text-left transition-all duration-200 cursor-pointer border ${
-                  isChosen
-                    ? "border-primary bg-primary/10 ring-1 ring-primary shadow-md shadow-primary/5 text-foreground"
-                    : "border-border/70 bg-surface/50 text-muted-foreground hover:border-primary/40 hover:bg-surface-2/60 hover:text-foreground"
-                }`}
-              >
-                <div className="flex items-center gap-3.5 min-w-0">
-                  <div
-                    className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl text-xl shadow-inner border transition-transform duration-200 group-hover:scale-105 ${
-                      isChosen ? "border-primary/40 bg-primary/20" : "border-border/60 bg-surface-2"
-                    }`}
-                  >
-                    {level.icon}
-                  </div>
-                  <div className="min-w-0 flex-1">
-                    <div className="flex items-center gap-2">
-                      <span className="text-xs sm:text-sm font-bold text-foreground truncate">
+        {/* Education Tier Cards Grid */}
+        <div className="max-h-[50vh] overflow-y-auto pr-1 py-0.5">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2.5">
+            {EDUCATION_LEVELS.map((level) => {
+              const isChosen = selected === level.id;
+              return (
+                <button
+                  key={level.id}
+                  type="button"
+                  onClick={() => {
+                    setSelected(level.id);
+                    handleConfirm(level.id);
+                  }}
+                  className={`group relative flex flex-col justify-between items-start rounded-2xl p-3 sm:p-3.5 text-left transition-all duration-200 cursor-pointer border ${
+                    isChosen
+                      ? "border-primary bg-primary/10 ring-1 ring-primary/40 shadow-sm shadow-primary/15 text-foreground scale-[1.01]"
+                      : "border-border/60 bg-surface/40 text-muted-foreground hover:border-primary/40 hover:bg-surface-2/60 hover:text-foreground active:scale-[0.98]"
+                  }`}
+                >
+                  <div className="flex items-start justify-between w-full gap-2">
+                    <div className="flex items-center gap-2.5 min-w-0">
+                      <div
+                        className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-xl text-lg shadow-inner border transition-transform duration-200 group-hover:scale-105 ${
+                          isChosen ? "border-primary/40 bg-primary/20" : "border-border/60 bg-surface-2"
+                        }`}
+                      >
+                        {level.icon}
+                      </div>
+                      <span className="text-xs sm:text-sm font-bold text-foreground leading-tight truncate">
                         {level.label}
                       </span>
                     </div>
-                    <p className="text-[11px] text-muted-foreground line-clamp-1 mt-0.5">
-                      {level.description}
-                    </p>
-                  </div>
-                </div>
 
-                <div className="ml-2 shrink-0 flex items-center">
-                  <div
-                    className={`flex h-6 w-6 items-center justify-center rounded-full border transition-all ${
+                    <div
+                      className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-full border transition-all ${
+                        isChosen
+                          ? "border-primary bg-primary text-primary-foreground shadow-xs"
+                          : "border-border/60 bg-surface text-transparent group-hover:border-primary/40"
+                      }`}
+                    >
+                      <Check className="h-3 w-3 stroke-[3]" />
+                    </div>
+                  </div>
+
+                  <p
+                    className={`text-[10px] sm:text-[11px] line-clamp-2 mt-2 transition-colors ${
                       isChosen
-                        ? "border-primary bg-primary text-primary-foreground shadow-sm"
-                        : "border-border/80 bg-surface text-transparent group-hover:border-primary/40"
+                        ? "text-primary/90 font-medium"
+                        : "text-muted-foreground group-hover:text-foreground/80"
                     }`}
                   >
-                    <Check className="h-3.5 w-3.5 stroke-[3]" />
-                  </div>
-                </div>
-              </button>
-            );
-          })}
+                    {level.description}
+                  </p>
+                </button>
+              );
+            })}
+          </div>
         </div>
 
         {/* Action Button & Note */}
