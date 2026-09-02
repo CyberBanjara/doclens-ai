@@ -53,7 +53,9 @@ export function AiPipelineDefaultsSection({
       <div className="mb-6 flex items-center justify-between">
         <div className="flex items-center gap-3">
           <Zap className="h-5 w-5 text-accent" />
-          <h3 className="text-lg font-semibold text-foreground">Translation & Processing Defaults</h3>
+          <h3 className="text-lg font-semibold text-foreground">
+            Translation & Processing Defaults
+          </h3>
         </div>
       </div>
       <div

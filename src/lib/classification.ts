@@ -1,17 +1,8 @@
 import type { R2File } from "./file-utils";
 
-export type EducationLevel =
-  | "class-9"
-  | "class-10"
-  | "class-11"
-  | "class-12"
-  | "gov-exams";
+export type EducationLevel = "class-9" | "class-10" | "class-11" | "class-12" | "gov-exams";
 
-export type SubjectCategory =
-  | "history"
-  | "political-science"
-  | "economics"
-  | "miscellaneous";
+export type SubjectCategory = "history" | "political-science" | "economics" | "miscellaneous";
 
 export interface EducationLevelConfig {
   id: EducationLevel;
@@ -158,7 +149,10 @@ const LETTER_CLASS_MAP: Record<string, EducationLevel> = {
  */
 export function classifyR2Book(file: R2File): ClassifiedBook {
   const lowerKey = file.key.toLowerCase();
-  const parts = file.key.split("/").map((p) => p.trim()).filter(Boolean);
+  const parts = file.key
+    .split("/")
+    .map((p) => p.trim())
+    .filter(Boolean);
   const rawFileName = parts[parts.length - 1] || file.key;
   const baseCode = rawFileName.replace(/\.[^/.]+$/, "").toLowerCase();
 
@@ -188,7 +182,9 @@ export function classifyR2Book(file: R2File): ClassifiedBook {
   if (parts.length >= 2) {
     const firstSeg = parts[0].toLowerCase();
     const catMatch = validCategories.find(
-      (c) => firstSeg === c || (c === "political-science" && (firstSeg.includes("pol") || firstSeg.includes("civ"))),
+      (c) =>
+        firstSeg === c ||
+        (c === "political-science" && (firstSeg.includes("pol") || firstSeg.includes("civ"))),
     );
     if (catMatch) {
       category = catMatch;
@@ -222,9 +218,18 @@ export function classifyR2Book(file: R2File): ClassifiedBook {
 
     // Determine Subject from code if not already set from path
     if (!pathCategoryFound) {
-      if (baseCode.startsWith("jess4") || baseCode.startsWith("keps") || baseCode.startsWith("leps")) {
+      if (
+        baseCode.startsWith("jess4") ||
+        baseCode.startsWith("keps") ||
+        baseCode.startsWith("leps")
+      ) {
         category = "political-science";
-      } else if (baseCode.startsWith("jess2") || baseCode.startsWith("keec") || baseCode.startsWith("kest") || baseCode.startsWith("leec")) {
+      } else if (
+        baseCode.startsWith("jess2") ||
+        baseCode.startsWith("keec") ||
+        baseCode.startsWith("kest") ||
+        baseCode.startsWith("leec")
+      ) {
         category = "economics";
       } else if (
         baseCode.startsWith("jess1") ||
@@ -430,10 +435,7 @@ export function getSavedEducationLevel(): EducationLevel | null {
   if (typeof window === "undefined") return null;
   try {
     const saved = localStorage.getItem(STORAGE_KEY) as EducationLevel | null;
-    if (
-      saved &&
-      ["class-9", "class-10", "class-11", "class-12", "gov-exams"].includes(saved)
-    ) {
+    if (saved && ["class-9", "class-10", "class-11", "class-12", "gov-exams"].includes(saved)) {
       return saved;
     }
   } catch (e) {

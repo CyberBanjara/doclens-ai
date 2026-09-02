@@ -54,7 +54,7 @@ export const Route = createFileRoute("/global-library")({
 function GlobalLibraryPage() {
   const isMobile = useIsMobile();
   const navigate = useNavigate();
-  const { user, isAdmin, loading: authLoading, signInWithGoogle } = useAuth();
+  const { user, isAdmin, loading: authLoading, signInWithGoogle, updateProfile } = useAuth();
 
   const [files, setFiles] = useState<R2File[]>([]);
   const [localDocs, setLocalDocs] = useState<DocSummary[]>([]);
@@ -66,7 +66,9 @@ function GlobalLibraryPage() {
   const [syncEnabled, setSyncEnabled] = useState(true);
 
   // Education Level state & First-time detection
-  const [educationLevel, setEducationLevel] = useState<EducationLevel>("class-10");
+  const [educationLevel, setEducationLevel] = useState<EducationLevel>(
+    () => (user?.educationLevel as EducationLevel) || getSavedEducationLevel() || "class-10",
+  );
   const [educationModalOpen, setEducationModalOpen] = useState(false);
   const [isFirstTime, setIsFirstTime] = useState(false);
 
@@ -81,9 +83,9 @@ function GlobalLibraryPage() {
   const [uploadEducationLevel, setUploadEducationLevel] = useState<string>("class-10");
   const [uploadingDirect, setUploadingDirect] = useState(false);
 
-  // Initialize Education Level from localStorage
+  // Initialize Education Level from user session or localStorage
   useEffect(() => {
-    const savedLevel = getSavedEducationLevel();
+    const savedLevel = (user?.educationLevel as EducationLevel) || getSavedEducationLevel();
     if (savedLevel) {
       setEducationLevel(savedLevel);
     } else {
@@ -101,7 +103,7 @@ function GlobalLibraryPage() {
     return () => {
       window.removeEventListener("doclens:education-level-changed" as any, handleLevelChanged);
     };
-  }, []);
+  }, [user]);
 
   const handleDirectUpload = async (customFileName?: string) => {
     if (!uploadFile || uploadingDirect) return;
@@ -626,6 +628,11 @@ function GlobalLibraryPage() {
         onSelectLevel={(level) => {
           setEducationLevel(level);
           setIsFirstTime(false);
+          if (user) {
+            void updateProfile({ educationLevel: level }).catch((err) =>
+              console.warn("Failed to update education level in Firebase/JWT:", err),
+            );
+          }
         }}
         isFirstTime={isFirstTime}
       />
@@ -665,8 +672,8 @@ function GlobalLibraryPage() {
                 Access Global Library
               </h2>
               <p className="text-xs sm:text-sm text-muted-foreground leading-relaxed max-w-xs mx-auto">
-                Sign in with your Google account to access, sync, and download shared curriculum chapters from
-                the Global Library.
+                Sign in with your Google account to access, sync, and download shared curriculum
+                chapters from the Global Library.
               </p>
             </div>
 

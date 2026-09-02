@@ -27,10 +27,8 @@ import {
 import { syncFromSupabase, syncToSupabase, getSyncConfig } from "@/lib/sync";
 import { fetchAvailableLanguagesForBook } from "@/lib/supabase";
 import { getOutputLanguage, setOutputLanguage } from "@/lib/openrouter";
-import {
-  LanguageSelectionModal,
-  type AvailableLanguageOption,
-} from "@/components/LanguageSelectionModal";
+import { UserPreferencesModal } from "@/components/UserPreferencesModal";
+import { saveEducationLevel, type EducationLevel } from "@/lib/classification";
 import { useAuth } from "@/context/AuthContext";
 import { checkTextQuality } from "@/lib/textCleaning";
 import { R2UploadDialog } from "@/components/R2UploadDialog";
@@ -87,7 +85,7 @@ function DocPage() {
   const { page: urlPage } = Route.useSearch();
   const navigate = useNavigate();
   const isMobile = useIsMobile();
-  const { isAdmin } = useAuth();
+  const { user, loading: authLoading, updateProfile, isAdmin } = useAuth();
   const [readerOpen, setReaderOpen] = useState(false);
   const [pageJumpOpen, setPageJumpOpen] = useState(false);
   const [overflowOpen, setOverflowOpen] = useState(false);
@@ -101,10 +99,8 @@ function DocPage() {
   const [activePage, setActivePageRaw] = useState<number>(urlPage ?? 1);
   const [syncEnabled, setSyncEnabled] = useState(true);
 
-  // First-time Language Selection states
-  const [languageModalOpen, setLanguageModalOpen] = useState(false);
-  const [availableLanguages, setAvailableLanguages] = useState<AvailableLanguageOption[]>([]);
-  const [loadingAvailableLangs, setLoadingAvailableLangs] = useState(false);
+  // One-time Preferences Setup (Language & Class)
+  const [preferencesModalOpen, setPreferencesModalOpen] = useState(false);
 
   /** Sync page changes to the URL query param (?page=N) */
   const setActivePage = useCallback(
@@ -152,10 +148,24 @@ function DocPage() {
     }
   }, [aiSummary, setActivePage]);
 
-  // Handle language confirmation from the first-time modal
-  const handleSelectLanguage = async (chosenLang: string) => {
-    setLanguageModalOpen(false);
+  // Handle saving native language & class/standard preferences
+  const handleSavePreferences = async (chosenLang: string, chosenLevel: EducationLevel) => {
+    setPreferencesModalOpen(false);
     setOutputLanguage(chosenLang);
+    saveEducationLevel(chosenLevel);
+
+    if (user) {
+      try {
+        await updateProfile({
+          nativeLanguage: chosenLang,
+          educationLevel: chosenLevel,
+        });
+        toast.success(`Preferences saved (${chosenLang}, ${chosenLevel})`);
+      } catch (err) {
+        console.error("Failed to save user preferences in Firebase/JWT:", err);
+      }
+    }
+
     await updateDoc(id, {
       hasChosenLanguage: true,
       selectedLanguage: chosenLang,
@@ -202,32 +212,28 @@ function DocPage() {
       const currentRec = rec;
       const pc = currentRec.pageCount ?? 0;
 
-      // Check if this document needs first-time language selection popup
-      if (!currentRec.hasChosenLanguage && configEnabled) {
-        setLoadingAvailableLangs(true);
-        setLanguageModalOpen(true);
-        try {
-          const availRes = await fetchAvailableLanguagesForBook({
-            data: {
-              bookId: currentRec.bookId || currentRec.fileName,
-              docId: id,
-            },
-          });
-          if (!cancelled && availRes && availRes.languageDetails) {
-            setAvailableLanguages(availRes.languageDetails);
-          }
-        } catch (langErr) {
-          console.warn("Could not query available book languages from Supabase:", langErr);
-        } finally {
-          if (!cancelled) {
-            setLoadingAvailableLangs(false);
-          }
+      // Before Step 3 (Supabase fetch) and Step 4 (AI translation), validate JWT token.
+      // If JWT is present but does not contain user's native language and class/standard,
+      // show the one-time popup asking for both.
+      if (!authLoading) {
+        if (user && (!user.nativeLanguage || !user.educationLevel)) {
+          setPreferencesModalOpen(true);
+        } else if (!user && !currentRec.hasChosenLanguage && !getOutputLanguage()) {
+          setPreferencesModalOpen(true);
         }
-      } else if (configEnabled && pc > 0) {
-        // Only run background sync check if document was already extracted previously (pc > 0).
-        // For newly opened documents (pc === 0), handleAnalyze sequentially executes
-        // Stage 1 (PDF.js) -> Stage 2 (OCR) -> Stage 3 (Supabase Check/Fetch) -> Stage 4 (AI Translation).
-        const activeLang = currentRec.selectedLanguage || getOutputLanguage() || "हिंदी";
+      }
+
+      // Automatically resolve active language (JWT stored native language takes top priority)
+      const activeLang =
+        user?.nativeLanguage || currentRec.selectedLanguage || getOutputLanguage() || "हिंदी";
+
+      if (currentRec.selectedLanguage !== activeLang) {
+        void updateDoc(id, { selectedLanguage: activeLang });
+        currentRec.selectedLanguage = activeLang;
+      }
+
+      if (configEnabled && pc > 0 && (!user || (user.nativeLanguage && user.educationLevel))) {
+        // Step 3: Run background sync from Supabase for the active native language
         void (async () => {
           try {
             const updated = await syncFromSupabase(id, currentRec.fileName, activeLang, false);
@@ -247,11 +253,10 @@ function DocPage() {
         })();
       }
 
-      // Sync translations when user changes language in the workspace
+      // Sync translations when user changes language in the workspace or settings
       const handleLangChange = (e: any) => {
-        if (!configEnabled) return;
         const newLang = e?.detail;
-        if (!newLang) return;
+        if (!newLang || !configEnabled) return;
         void (async () => {
           try {
             await updateDoc(id, { selectedLanguage: newLang });
@@ -399,7 +404,8 @@ function DocPage() {
       } catch (ocrErr) {
         console.warn("OCR fallback note:", ocrErr);
         toast.error(
-          "OCR check completed with note: " + (ocrErr instanceof Error ? ocrErr.message : "unknown"),
+          "OCR check completed with note: " +
+            (ocrErr instanceof Error ? ocrErr.message : "unknown"),
         );
       }
 
@@ -410,7 +416,8 @@ function DocPage() {
       if (syncEnabled) {
         try {
           const freshDoc = (await getDoc(id)) || currentDoc;
-          const activeLang = freshDoc.selectedLanguage || getOutputLanguage() || "हिंदी";
+          const activeLang =
+            user?.nativeLanguage || freshDoc.selectedLanguage || getOutputLanguage() || "हिंदी";
           await syncFromSupabase(id, freshDoc.fileName, activeLang, false);
           const updatedRec = await getDoc(id);
           if (updatedRec) {
@@ -503,7 +510,7 @@ function DocPage() {
               const thumbBase64 = result.split(",")[1];
               if (thumbBase64) {
                 uploadThumbnailToR2({ data: { fileKey: res.key, base64Data: thumbBase64 } }).catch(
-                  () => { },
+                  () => {},
                 );
               }
             }
@@ -848,14 +855,15 @@ function DocPage() {
         onSubmit={(customFileName) => void confirmCategoryUpload(customFileName)}
       />
 
-      {/* First-time Translation Language Selection Popup */}
-      <LanguageSelectionModal
-        open={languageModalOpen}
-        bookTitle={doc?.fileName?.replace(/\.pdf$/i, "")}
-        availableLanguages={availableLanguages}
-        loadingAvailable={loadingAvailableLangs}
-        currentLanguage={doc?.selectedLanguage || getOutputLanguage() || "हिंदी"}
-        onSelectLanguage={handleSelectLanguage}
+      {/* One-Time Native Language & Class/Standard Setup Modal */}
+      <UserPreferencesModal
+        open={preferencesModalOpen}
+        initialLanguage={
+          user?.nativeLanguage || doc?.selectedLanguage || getOutputLanguage() || "हिंदी"
+        }
+        initialEducationLevel={user?.educationLevel || "class-10"}
+        isInitialSetup={true}
+        onSave={handleSavePreferences}
       />
     </div>
   );

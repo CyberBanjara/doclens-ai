@@ -15,6 +15,8 @@ export interface ClientUser {
   name: string;
   photoURL: string;
   role: UserRole;
+  nativeLanguage?: string;
+  educationLevel?: string;
 }
 
 export interface AdminUserProfile {
@@ -23,6 +25,8 @@ export interface AdminUserProfile {
   name: string;
   photoURL?: string;
   role: UserRole;
+  nativeLanguage?: string;
+  educationLevel?: string;
   createdAt?: string;
   updatedAt?: string;
   lastLoginAt?: string;
@@ -35,7 +39,7 @@ export function getStoredAuthToken(): string | null {
   if (inMemoryToken) return inMemoryToken;
   if (typeof window !== "undefined") {
     try {
-      return sessionStorage.getItem(AUTH_TOKEN_KEY);
+      return localStorage.getItem(AUTH_TOKEN_KEY) || sessionStorage.getItem(AUTH_TOKEN_KEY);
     } catch {
       return null;
     }
@@ -48,14 +52,61 @@ export function setStoredAuthToken(token: string | null): void {
   if (typeof window !== "undefined") {
     try {
       if (token) {
+        localStorage.setItem(AUTH_TOKEN_KEY, token);
         sessionStorage.setItem(AUTH_TOKEN_KEY, token);
       } else {
+        localStorage.removeItem(AUTH_TOKEN_KEY);
         sessionStorage.removeItem(AUTH_TOKEN_KEY);
       }
     } catch {
       // Ignore storage error
     }
   }
+}
+
+/**
+ * Get the current fresh ID token from Firebase auth or storage.
+ */
+export async function getFreshAuthToken(): Promise<string | null> {
+  if (typeof window !== "undefined") {
+    try {
+      const app = getFirebaseApp();
+      const auth = getAuth(app);
+      if (auth.currentUser) {
+        const token = await auth.currentUser.getIdToken(false);
+        setStoredAuthToken(token);
+        return token;
+      }
+
+      // If Firebase Auth is still initializing on page reload, wait briefly
+      const token = await new Promise<string | null>((resolve) => {
+        const unsubscribe = auth.onAuthStateChanged(async (fbUser) => {
+          unsubscribe();
+          if (fbUser) {
+            try {
+              const tok = await fbUser.getIdToken();
+              setStoredAuthToken(tok);
+              resolve(tok);
+            } catch {
+              resolve(getStoredAuthToken());
+            }
+          } else {
+            resolve(getStoredAuthToken());
+          }
+        });
+
+        setTimeout(() => {
+          unsubscribe();
+          resolve(getStoredAuthToken());
+        }, 1200);
+      });
+
+      if (token) return token;
+    } catch {
+      // Fall through to stored token
+    }
+  }
+  return getStoredAuthToken();
 }
 
 /**
@@ -235,4 +286,36 @@ export async function apiAdminUpdateUserRole(
   }
 
   return await res.json();
+}
+
+/**
+ * Update user preferences (nativeLanguage, educationLevel, etc.) in Firebase Firestore and refresh JWT session cookie.
+ */
+export async function apiUpdateUserProfile(updates: {
+  nativeLanguage?: string;
+  educationLevel?: string;
+  name?: string;
+  photoURL?: string;
+}): Promise<ClientUser> {
+  const token = await getFreshAuthToken();
+  const headers: Record<string, string> = { "Content-Type": "application/json" };
+  if (token) {
+    headers["Authorization"] = `Bearer ${token}`;
+    headers["x-firebase-token"] = token;
+  }
+
+  const res = await fetch("/api/auth/update-profile", {
+    method: "POST",
+    headers,
+    credentials: "include",
+    body: JSON.stringify({ ...updates, idToken: token }),
+  });
+
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ error: "Failed to update profile preferences" }));
+    throw new Error(err.error || `Update failed with status ${res.status}`);
+  }
+
+  const data = await res.json();
+  return data.user as ClientUser;
 }

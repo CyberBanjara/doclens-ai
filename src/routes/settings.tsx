@@ -39,11 +39,18 @@ import { markTtsVoiceSetupComplete, useTts } from "@/context/TtsContext";
 import { getFriendlyErrorMessage } from "@/lib/network";
 import { AiPipelineDefaultsSection } from "@/components/settings/AiPipelineDefaultsSection";
 import { OutputLanguageSection } from "@/components/settings/OutputLanguageSection";
+import { EducationLevelSection } from "@/components/settings/EducationLevelSection";
 import { VoiceCacheManagerSection } from "@/components/settings/VoiceCacheManagerSection";
 import { ApiKeySection } from "@/components/settings/ApiKeySection";
 import { OmniRouterStatusSection } from "@/components/settings/OmniRouterStatusSection";
 import { ModelSelectionSection } from "@/components/settings/ModelSelectionSection";
 import { StorageManagerSection } from "@/components/settings/StorageManagerSection";
+import {
+  getSavedEducationLevel,
+  saveEducationLevel,
+  type EducationLevel,
+} from "@/lib/classification";
+import { useAuth } from "@/context/AuthContext";
 
 export const Route = createFileRoute("/settings")({
   component: SettingsPage,
@@ -106,7 +113,9 @@ function SettingsPage() {
   // OmniRouter state
   const [omniModels, setOmniModels] = useState<ORModel[]>([]);
   const [loadingOmni, setLoadingOmni] = useState(false);
-  const [omniStatus, setOmniStatus] = useState<"connected" | "disconnected" | "checking">("checking");
+  const [omniStatus, setOmniStatus] = useState<"connected" | "disconnected" | "checking">(
+    "checking",
+  );
   const [omniError, setOmniError] = useState("");
   const [omniSelected, setOmniSelected] = useState("");
 
@@ -268,11 +277,30 @@ function SettingsPage() {
     }
   };
 
+  const { user, updateProfile } = useAuth();
+  const [educationLevel, setEducationLevel] = useState<EducationLevel>(
+    () => (user?.educationLevel as EducationLevel) || getSavedEducationLevel() || "class-10",
+  );
+
+  useEffect(() => {
+    if (user?.educationLevel) {
+      setEducationLevel(user.educationLevel as EducationLevel);
+    }
+    if (user?.nativeLanguage) {
+      setLanguage(user.nativeLanguage);
+    }
+  }, [user]);
+
   const handleLangSelect = (l: string) => {
     setLanguage(l);
     setOutputLanguage(l);
     setTtsLanguage(l);
     markTtsVoiceSetupComplete();
+    if (user) {
+      void updateProfile({ nativeLanguage: l }).catch((err) =>
+        console.warn("Failed to update profile language in Firebase/JWT:", err),
+      );
+    }
   };
 
   const handleCustomLang = () => {
@@ -281,6 +309,22 @@ function SettingsPage() {
     setLanguage(v);
     setOutputLanguage(v);
     setCustomLang("");
+    if (user) {
+      void updateProfile({ nativeLanguage: v }).catch((err) =>
+        console.warn("Failed to update profile language in Firebase/JWT:", err),
+      );
+    }
+  };
+
+  const handleEducationLevelChange = (level: EducationLevel) => {
+    setEducationLevel(level);
+    saveEducationLevel(level);
+    if (user) {
+      void updateProfile({ educationLevel: level }).catch((err) =>
+        console.warn("Failed to update profile class in Firebase/JWT:", err),
+      );
+    }
+    toast.success(`Class / standard updated to ${level}`);
   };
 
   const activeModelList = provider === "omnirouter" ? omniModels : models;
@@ -378,7 +422,13 @@ function SettingsPage() {
           />
         </div>
 
-        {/* Row 3: Provider Gateway/API Key Management + Model Selection */}
+        {/* Row 3: Education Level & Class Selection */}
+        <EducationLevelSection
+          educationLevel={educationLevel}
+          onEducationLevelChange={handleEducationLevelChange}
+        />
+
+        {/* Row 4: Provider Gateway/API Key Management + Model Selection */}
         <div className="grid grid-cols-1 gap-6 md:grid-cols-12">
           {provider === "omnirouter" ? (
             <OmniRouterStatusSection

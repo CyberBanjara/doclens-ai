@@ -1,8 +1,5 @@
 import { createServerFn } from "@tanstack/react-start";
-import {
-  fetchSupabaseLanguageBook,
-  batchSaveSupabaseLanguagePages,
-} from "./supabase";
+import { fetchSupabaseLanguageBook, batchSaveSupabaseLanguagePages } from "./supabase";
 import { getDoc, updateDoc, db, pageKey, getAllPages, withDocLock } from "./storage";
 import { isGlobalSyncEnabled } from "./env";
 import { getOutputLanguage } from "./openrouter";
@@ -173,7 +170,8 @@ export async function syncToSupabase(
     }
 
     // Explicit priority: targetLanguage -> docRec.selectedLanguage -> openrouter outputLanguage -> "हिंदी"
-    const defaultLanguage = targetLanguage || docRec.selectedLanguage || getOutputLanguage() || "हिंदी";
+    const defaultLanguage =
+      targetLanguage || docRec.selectedLanguage || getOutputLanguage() || "हिंदी";
     const targetKey = customKey || docRec.bookId || docRec.fileName;
 
     // Group completed standard translation pages by their effective language (respecting per-page language overrides)
@@ -217,4 +215,3 @@ export async function syncToSupabase(
     throw e;
   }
 }
-

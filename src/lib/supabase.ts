@@ -195,12 +195,7 @@ export const fetchAvailableLanguagesForBook = createServerFn({ method: "POST" })
  */
 export const fetchSupabaseLanguagePage = createServerFn({ method: "POST" })
   .validator(
-    (input: {
-      language: string;
-      bookId: string;
-      pageNumber: number;
-      docId?: string;
-    }) => input,
+    (input: { language: string; bookId: string; pageNumber: number; docId?: string }) => input,
   )
   .handler(async ({ data }) => {
     "use server";
@@ -248,13 +243,7 @@ export const fetchSupabaseLanguagePage = createServerFn({ method: "POST" })
  * Fetches all available pre-translated pages for an entire book from the dedicated language table.
  */
 export const fetchSupabaseLanguageBook = createServerFn({ method: "POST" })
-  .validator(
-    (input: {
-      language: string;
-      bookId: string;
-      docId?: string;
-    }) => input,
-  )
+  .validator((input: { language: string; bookId: string; docId?: string }) => input)
   .handler(async ({ data }) => {
     "use server";
     if (!isGlobalSyncEnabled()) {
@@ -478,4 +467,3 @@ export const batchSaveSupabaseLanguagePages = createServerFn({ method: "POST" })
       return { success: false, error: e?.message || String(e) };
     }
   });
-

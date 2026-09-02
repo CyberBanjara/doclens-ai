@@ -40,7 +40,10 @@ test("Language Table Mapping & Slugs", async (t) => {
   });
 
   await t.test("should normalize book candidates consistently", () => {
-    const { primaryId, candidateIds } = normalizeBookCandidates("history/class-10/jess101.pdf", "doc-123");
+    const { primaryId, candidateIds } = normalizeBookCandidates(
+      "history/class-10/jess101.pdf",
+      "doc-123",
+    );
     assert.equal(primaryId, "jess101.pdf");
     assert.ok(candidateIds.includes("history/class-10/jess101.pdf"));
     assert.ok(candidateIds.includes("jess101.pdf"));
@@ -50,7 +53,9 @@ test("Language Table Mapping & Slugs", async (t) => {
 
   await t.test("should properly compute sorted deduplicated pages array for book_languages", () => {
     const pageNumbers = [3, 1, 4, 1, 5, 9, 2, 6, 5, 3];
-    const uniqueSortedPages = Array.from(new Set(pageNumbers.filter((p) => p > 0))).sort((a, b) => a - b);
+    const uniqueSortedPages = Array.from(new Set(pageNumbers.filter((p) => p > 0))).sort(
+      (a, b) => a - b,
+    );
     assert.deepEqual(uniqueSortedPages, [1, 2, 3, 4, 5, 6, 9]);
     assert.equal(uniqueSortedPages.length, 7);
   });

@@ -201,6 +201,24 @@ describe("📋 3. Token Claims & Role Validation", () => {
       assert.equal(user.role, validRole);
     }
   });
+
+  it("should correctly encode and verify nativeLanguage and educationLevel profile claims in JWT", async () => {
+    const token = await createSessionJwt({
+      uid: "student-123",
+      email: "student@anuwad.com",
+      name: "Rohan Sharma",
+      photoURL: "https://example.com/rohan.jpg",
+      role: "user",
+      nativeLanguage: "हिंदी",
+      educationLevel: "class-10",
+    });
+
+    const user = await verifySessionJwt(token);
+    assert.ok(user, "Token with profile preferences should verify");
+    assert.equal(user.uid, "student-123");
+    assert.equal(user.nativeLanguage, "हिंदी");
+    assert.equal(user.educationLevel, "class-10");
+  });
 });
 
 describe("🛡️ 4. Privilege Escalation Across Authorization Matrix", () => {

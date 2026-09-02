@@ -47,7 +47,7 @@ export default defineConfig({
       __OMNIROUTER_CONFIGURED__: JSON.stringify(
         Boolean(
           (process.env.OMNIROUTER_BASE_URL || env.OMNIROUTER_BASE_URL) &&
-            (process.env.OMNIROUTER_API_KEY || env.OMNIROUTER_API_KEY),
+          (process.env.OMNIROUTER_API_KEY || env.OMNIROUTER_API_KEY),
         ),
       ),
       __OMNIROUTER_DEFAULT_MODEL__: JSON.stringify(

@@ -17,19 +17,17 @@ export function sanitizeBaseUrl(url: string): string {
 
 export function getOmniServerConfig(): OmniServerConfig {
   const baseUrl = sanitizeBaseUrl(
-    process.env.OMNIROUTER_BASE_URL ||
-      process.env.VITE_OMNIROUTER_BASE_URL ||
-      ""
+    process.env.OMNIROUTER_BASE_URL || process.env.VITE_OMNIROUTER_BASE_URL || "",
   );
   const apiKey = (
     process.env.OMNIROUTER_API_KEY ||
-      process.env.VITE_OMNIROUTER_API_KEY ||
-      ""
+    process.env.VITE_OMNIROUTER_API_KEY ||
+    ""
   ).trim();
   const defaultModel = (
     process.env.OMNIROUTER_DEFAULT_MODEL ||
-      process.env.VITE_OMNIROUTER_DEFAULT_MODEL ||
-      ""
+    process.env.VITE_OMNIROUTER_DEFAULT_MODEL ||
+    ""
   ).trim();
 
   return {

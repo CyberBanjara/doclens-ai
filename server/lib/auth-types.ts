@@ -6,6 +6,8 @@ export interface SessionUser {
   name: string;
   photoURL: string;
   role: UserRole;
+  nativeLanguage?: string;
+  educationLevel?: string;
 }
 
 export interface ClientUser {
@@ -14,6 +16,8 @@ export interface ClientUser {
   name: string;
   photoURL: string;
   role: UserRole;
+  nativeLanguage?: string;
+  educationLevel?: string;
 }
 
 export interface UserProfileRecord {
@@ -22,6 +26,8 @@ export interface UserProfileRecord {
   name: string;
   photoURL: string;
   role: UserRole;
+  nativeLanguage?: string;
+  educationLevel?: string;
   createdAt?: string;
   updatedAt?: string;
   lastLoginAt?: string;

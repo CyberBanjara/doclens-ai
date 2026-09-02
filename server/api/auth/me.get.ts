@@ -15,6 +15,8 @@ export default defineEventHandler(async (event) => {
       email: session.email,
       photoURL: session.photoURL,
       role: session.role,
+      nativeLanguage: session.nativeLanguage,
+      educationLevel: session.educationLevel,
     };
 
     return { user: clientUser };

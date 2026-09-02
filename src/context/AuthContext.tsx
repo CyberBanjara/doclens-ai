@@ -6,7 +6,10 @@ import {
   apiFetchCurrentUser,
   apiLoginWithGoogle,
   apiLogout,
+  apiUpdateUserProfile,
 } from "@/lib/auth-client";
+import { setOutputLanguage } from "@/lib/openrouter";
+import { saveEducationLevel, type EducationLevel } from "@/lib/classification";
 
 interface AuthContextType {
   user: ClientUser | null;
@@ -17,6 +20,12 @@ interface AuthContextType {
   signInWithGoogle: () => Promise<void>;
   signOut: () => Promise<void>;
   refreshUser: () => Promise<void>;
+  updateProfile: (updates: {
+    nativeLanguage?: string;
+    educationLevel?: string;
+    name?: string;
+    photoURL?: string;
+  }) => Promise<ClientUser>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -30,6 +39,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     try {
       const currentUser = await apiFetchCurrentUser();
       setUser(currentUser);
+      if (currentUser?.nativeLanguage) {
+        setOutputLanguage(currentUser.nativeLanguage);
+      }
+      if (currentUser?.educationLevel) {
+        saveEducationLevel(currentUser.educationLevel as EducationLevel);
+      }
     } catch {
       setUser(null);
     } finally {
@@ -41,11 +56,34 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     refreshUser();
   }, [refreshUser]);
 
+  const updateProfile = async (updates: {
+    nativeLanguage?: string;
+    educationLevel?: string;
+    name?: string;
+    photoURL?: string;
+  }): Promise<ClientUser> => {
+    const updated = await apiUpdateUserProfile(updates);
+    setUser(updated);
+    if (updated.nativeLanguage) {
+      setOutputLanguage(updated.nativeLanguage);
+    }
+    if (updated.educationLevel) {
+      saveEducationLevel(updated.educationLevel as EducationLevel);
+    }
+    return updated;
+  };
+
   const signInWithGoogle = async () => {
     try {
       setLoading(true);
       const authenticatedUser = await apiLoginWithGoogle();
       setUser(authenticatedUser);
+      if (authenticatedUser?.nativeLanguage) {
+        setOutputLanguage(authenticatedUser.nativeLanguage);
+      }
+      if (authenticatedUser?.educationLevel) {
+        saveEducationLevel(authenticatedUser.educationLevel as EducationLevel);
+      }
       toast.success(`Welcome, ${authenticatedUser.name || "User"}!`, {
         description: `Signed in as ${authenticatedUser.email} (${authenticatedUser.role})`,
       });
@@ -91,6 +129,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         signInWithGoogle,
         signOut,
         refreshUser,
+        updateProfile,
       }}
     >
       {children}

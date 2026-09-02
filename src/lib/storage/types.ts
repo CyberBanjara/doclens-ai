@@ -72,12 +72,7 @@ export function computeSettingsHash(input: {
 }): string {
   // Model selection and AI provider are intentionally excluded from the hash
   // so that switching models or providers never invalidates or deletes existing translations.
-  return [
-    input.mode,
-    input.language,
-    input.style,
-    input.temperature.toFixed(3),
-  ].join("|");
+  return [input.mode, input.language, input.style, input.temperature.toFixed(3)].join("|");
 }
 
 /**

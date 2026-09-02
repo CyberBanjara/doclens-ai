@@ -127,7 +127,8 @@ export function LanguageSelectionModal({
                   Available Translations for this book
                 </span>
                 <span className="text-[10px] text-muted-foreground font-normal lowercase">
-                  ({availableLanguages.length} {availableLanguages.length === 1 ? "language" : "languages"})
+                  ({availableLanguages.length}{" "}
+                  {availableLanguages.length === 1 ? "language" : "languages"})
                 </span>
               </div>
 
@@ -227,7 +228,8 @@ export function LanguageSelectionModal({
                       a.english.toLowerCase() === lang.english.toLowerCase(),
                   );
                   const isPreTranslated = !!matchedAvailable;
-                  const count = matchedAvailable?.translatedCount || matchedAvailable?.pages?.length || 0;
+                  const count =
+                    matchedAvailable?.translatedCount || matchedAvailable?.pages?.length || 0;
 
                   return (
                     <button

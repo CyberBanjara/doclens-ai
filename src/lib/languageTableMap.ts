@@ -247,7 +247,10 @@ export function getLanguageTableName(language: string): string {
  * - Code without extension (e.g. "jess101")
  * - Document UUID (e.g. "9a1b2c3d-...")
  */
-export function normalizeBookCandidates(keyOrFileName: string, docId?: string): {
+export function normalizeBookCandidates(
+  keyOrFileName: string,
+  docId?: string,
+): {
   primaryId: string;
   candidateIds: string[];
 } {
@@ -263,7 +266,10 @@ export function normalizeBookCandidates(keyOrFileName: string, docId?: string): 
   candidatesSet.add(raw);
 
   // Filename without folder path
-  const parts = raw.split("/").map((p) => p.trim()).filter(Boolean);
+  const parts = raw
+    .split("/")
+    .map((p) => p.trim())
+    .filter(Boolean);
   const baseName = parts[parts.length - 1] || raw;
   candidatesSet.add(baseName);
 

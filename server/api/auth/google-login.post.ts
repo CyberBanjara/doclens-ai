@@ -37,6 +37,8 @@ export default defineEventHandler(async (event) => {
       name: userProfile.name,
       photoURL: userProfile.photoURL || "",
       role: userProfile.role,
+      nativeLanguage: userProfile.nativeLanguage,
+      educationLevel: userProfile.educationLevel,
     };
 
     const sessionJwt = await createSessionJwt(sessionUser);
@@ -51,6 +53,8 @@ export default defineEventHandler(async (event) => {
       email: sessionUser.email,
       photoURL: sessionUser.photoURL,
       role: sessionUser.role,
+      nativeLanguage: sessionUser.nativeLanguage,
+      educationLevel: sessionUser.educationLevel,
     };
 
     return { user: clientUser };

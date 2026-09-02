@@ -78,11 +78,7 @@ export class OmniRouterError extends Error {
 
 export function friendlyOmniRouterError(status: number, body: string): OmniRouterError {
   if (status === 401 || status === 403) {
-    return new OmniRouterError(
-      "OmniRouter authentication failed on server.",
-      status,
-      "auth",
-    );
+    return new OmniRouterError("OmniRouter authentication failed on server.", status, "auth");
   }
   if (status === 429) {
     return new OmniRouterError(
@@ -277,11 +273,7 @@ async function readOmniSseStream(
 /** Streaming completion through secure server backend proxy. */
 export async function streamOmniRouterCompletion(opts: OmniStreamOpts): Promise<void> {
   if (!isOmniRouterConfigured()) {
-    throw new OmniRouterError(
-      "OmniRouter gateway is not configured on the server.",
-      401,
-      "auth",
-    );
+    throw new OmniRouterError("OmniRouter gateway is not configured on the server.", 401, "auth");
   }
 
   const { signal, cleanup } = combinedSignal(opts.signal, opts.timeoutMs ?? STREAM_TIMEOUT_MS);

@@ -1,10 +1,6 @@
 import { useState, useEffect } from "react";
 import { Check, Sparkles, BookOpen, GraduationCap, X } from "lucide-react";
-import {
-  EDUCATION_LEVELS,
-  type EducationLevel,
-  saveEducationLevel,
-} from "@/lib/classification";
+import { EDUCATION_LEVELS, type EducationLevel, saveEducationLevel } from "@/lib/classification";
 
 interface EducationLevelModalProps {
   open: boolean;
@@ -76,7 +72,8 @@ export function EducationLevelModal({
               )}
             </div>
             <p className="text-xs text-muted-foreground leading-relaxed">
-              Tailor the Global Library to show relevant curriculum books, NCERTs, and exam materials.
+              Tailor the Global Library to show relevant curriculum books, NCERTs, and exam
+              materials.
             </p>
           </div>
         </div>
@@ -102,9 +99,7 @@ export function EducationLevelModal({
                 <div className="flex items-center gap-3.5 min-w-0">
                   <div
                     className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl text-xl shadow-inner border transition-transform duration-200 group-hover:scale-105 ${
-                      isChosen
-                        ? "border-primary/40 bg-primary/20"
-                        : "border-border/60 bg-surface-2"
+                      isChosen ? "border-primary/40 bg-primary/20" : "border-border/60 bg-surface-2"
                     }`}
                   >
                     {level.icon}

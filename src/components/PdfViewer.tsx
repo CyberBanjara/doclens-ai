@@ -138,7 +138,8 @@ export function PdfViewer({ docId, activePage, setActivePage }: Props) {
           textLayer.style.setProperty("--scale-factor", String(meta.scale));
           try {
             const pdfjs = await import("pdfjs-dist");
-            const { convertLegacyHindiIfNeeded, isLegacyHindiText } = await import("@/lib/devanagari");
+            const { convertLegacyHindiIfNeeded, isLegacyHindiText } =
+              await import("@/lib/devanagari");
             const textContent = await page.getTextContent();
 
             if (!cancelled) {

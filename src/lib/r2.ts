@@ -172,13 +172,20 @@ export function inferCategoryFromKey(key: string): string {
   if (parts.length > 1 && parts[0].trim().length > 0) {
     const rawCat = sanitizeCategory(parts[0]);
     if (rawCat.includes("hist")) return "history";
-    if (rawCat.includes("pol") || rawCat.includes("civ") || rawCat.includes("gov")) return "political-science";
+    if (rawCat.includes("pol") || rawCat.includes("civ") || rawCat.includes("gov"))
+      return "political-science";
     if (rawCat.includes("econ") || rawCat.includes("finan")) return "economics";
     return "miscellaneous";
   }
   const lower = key.toLowerCase();
   if (lower.includes("hist")) return "history";
-  if (lower.includes("pol") || lower.includes("civ") || lower.includes("gov") || lower.includes("constitution")) return "political-science";
+  if (
+    lower.includes("pol") ||
+    lower.includes("civ") ||
+    lower.includes("gov") ||
+    lower.includes("constitution")
+  )
+    return "political-science";
   if (lower.includes("econ") || lower.includes("finan")) return "economics";
   return "miscellaneous";
 }

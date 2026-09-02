@@ -14,7 +14,15 @@ import {
   DrawerTitle,
 } from "@/components/ui/drawer";
 import { UPLOAD_CATEGORIES, UPLOAD_EDUCATION_LEVELS } from "@/lib/uploadCategories";
-import { ArrowLeft, ArrowRight, Check, CloudUpload, FileText, FolderTree, RotateCcw } from "lucide-react";
+import {
+  ArrowLeft,
+  ArrowRight,
+  Check,
+  CloudUpload,
+  FileText,
+  FolderTree,
+  RotateCcw,
+} from "lucide-react";
 
 export interface R2UploadDialogProps {
   isMobile: boolean;
@@ -63,7 +71,8 @@ export function R2UploadDialog({
   const selectedSubjectMeta =
     UPLOAD_CATEGORIES.find((c) => c.id === uploadCategory) || UPLOAD_CATEGORIES[0];
   const selectedClassMeta =
-    UPLOAD_EDUCATION_LEVELS.find((l) => l.id === uploadEducationLevel) || UPLOAD_EDUCATION_LEVELS[1];
+    UPLOAD_EDUCATION_LEVELS.find((l) => l.id === uploadEducationLevel) ||
+    UPLOAD_EDUCATION_LEVELS[1];
 
   // Clean filename and ensure .pdf extension
   const trimmedName = customFileName.trim().replace(/[\/\\]/g, "_") || initialFileName;
@@ -182,7 +191,9 @@ export function R2UploadDialog({
                 >
                   <div className="flex items-center gap-2.5 min-w-0">
                     <span className="text-xl shrink-0">{cat.icon}</span>
-                    <span className="font-semibold text-xs text-foreground truncate">{cat.label}</span>
+                    <span className="font-semibold text-xs text-foreground truncate">
+                      {cat.label}
+                    </span>
                   </div>
                   {isSelected && (
                     <div className="flex h-4 w-4 shrink-0 items-center justify-center rounded-full bg-primary text-primary-foreground">
@@ -216,7 +227,9 @@ export function R2UploadDialog({
                 >
                   <div className="flex items-center gap-2 min-w-0">
                     <span className="text-base shrink-0">{lvl.icon}</span>
-                    <span className="font-semibold text-xs text-foreground truncate">{lvl.label}</span>
+                    <span className="font-semibold text-xs text-foreground truncate">
+                      {lvl.label}
+                    </span>
                   </div>
                   {isSelected && (
                     <div className="flex h-4 w-4 shrink-0 items-center justify-center rounded-full bg-primary text-primary-foreground">
@@ -350,4 +363,3 @@ export function R2UploadDialog({
     </Dialog>
   );
 }
-

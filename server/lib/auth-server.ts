@@ -49,6 +49,8 @@ export async function createSessionJwt(user: SessionUser): Promise<string> {
     name: user.name || "",
     photoURL: user.photoURL || "",
     role: user.role,
+    nativeLanguage: user.nativeLanguage || "",
+    educationLevel: user.educationLevel || "",
   })
     .setProtectedHeader({ alg: "HS256", typ: "JWT" })
     .setSubject(user.uid)
@@ -89,6 +91,14 @@ export async function verifySessionJwt(token: string): Promise<SessionUser | nul
       name: typeof payload.name === "string" ? payload.name : "",
       photoURL: typeof payload.photoURL === "string" ? payload.photoURL : "",
       role: role as UserRole,
+      nativeLanguage:
+        typeof payload.nativeLanguage === "string" && payload.nativeLanguage.trim()
+          ? payload.nativeLanguage.trim()
+          : undefined,
+      educationLevel:
+        typeof payload.educationLevel === "string" && payload.educationLevel.trim()
+          ? payload.educationLevel.trim()
+          : undefined,
     };
   } catch {
     // Signature verification failure, expired token, or malformed structure

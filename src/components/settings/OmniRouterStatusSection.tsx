@@ -74,7 +74,9 @@ export function OmniRouterStatusSection({
           </div>
           <div>
             <h3 className="text-lg font-semibold text-foreground">OmniRouter Gateway</h3>
-            <p className="text-xs text-muted-foreground">Local AI provider &amp; model configuration</p>
+            <p className="text-xs text-muted-foreground">
+              Local AI provider &amp; model configuration
+            </p>
           </div>
         </div>
       </div>
@@ -215,14 +217,19 @@ export function OmniRouterStatusSection({
         </div>
         <ul className="space-y-1 pl-0.5 leading-relaxed list-disc list-inside">
           <li>
-            100% Secret Backend Proxy: upstream ngrok URL and API keys are stored only in server environment variables (<code className="font-mono text-foreground">OMNIROUTER_BASE_URL</code> &amp; <code className="font-mono text-foreground">OMNIROUTER_API_KEY</code>).
+            100% Secret Backend Proxy: upstream ngrok URL and API keys are stored only in server
+            environment variables (
+            <code className="font-mono text-foreground">OMNIROUTER_BASE_URL</code> &amp;{" "}
+            <code className="font-mono text-foreground">OMNIROUTER_API_KEY</code>).
           </li>
           <li>
-            Default model fallback: <code className="font-mono text-foreground">OMNIROUTER_DEFAULT_MODEL</code> (
+            Default model fallback:{" "}
+            <code className="font-mono text-foreground">OMNIROUTER_DEFAULT_MODEL</code> (
             <span className="font-mono text-primary">{envDefaultModel}</span>).
           </li>
           <li>
-            Choosing a model here or in the catalog updates your active default model for all OmniRouter requests.
+            Choosing a model here or in the catalog updates your active default model for all
+            OmniRouter requests.
           </li>
         </ul>
       </div>

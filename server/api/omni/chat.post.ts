@@ -1,4 +1,11 @@
-import { defineEventHandler, readBody, createError, sendStream, setHeader, setResponseStatus } from "h3";
+import {
+  defineEventHandler,
+  readBody,
+  createError,
+  sendStream,
+  setHeader,
+  setResponseStatus,
+} from "h3";
 import { getOmniServerConfig, getOmniUpstreamHeaders } from "../../lib/omnirouter-server";
 
 export default defineEventHandler(async (event) => {

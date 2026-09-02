@@ -135,6 +135,28 @@ export function ProfileDropdown() {
                 {user.role}
               </span>
             </div>
+
+            {user.nativeLanguage && (
+              <div className="mt-1.5 flex items-center justify-between">
+                <span className="text-[10px] uppercase tracking-wider text-muted-foreground">
+                  Language
+                </span>
+                <span className="inline-flex items-center rounded-md border border-primary/30 bg-primary/10 px-2 py-0.5 text-[10px] font-bold text-primary">
+                  {user.nativeLanguage}
+                </span>
+              </div>
+            )}
+
+            {user.educationLevel && (
+              <div className="mt-1.5 flex items-center justify-between">
+                <span className="text-[10px] uppercase tracking-wider text-muted-foreground">
+                  Standard
+                </span>
+                <span className="inline-flex items-center rounded-md border border-border bg-surface-2 px-2 py-0.5 text-[10px] font-semibold text-foreground">
+                  {user.educationLevel.replace("-", " ").toUpperCase()}
+                </span>
+              </div>
+            )}
           </div>
 
           {/* Links / Actions */}

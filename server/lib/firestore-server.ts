@@ -103,6 +103,8 @@ export async function getUserFromFirestore(
       name: decoded.name || "",
       photoURL: decoded.photoURL || "",
       role: (decoded.role as UserRole) || "user",
+      nativeLanguage: decoded.nativeLanguage || undefined,
+      educationLevel: decoded.educationLevel || undefined,
       createdAt: decoded.createdAt,
       updatedAt: decoded.updatedAt,
       lastLoginAt: decoded.lastLoginAt,
@@ -131,6 +133,8 @@ export async function syncUserInFirestore(
       name: googleUser.name,
       photoURL: googleUser.photoURL,
       role: existing?.role || "user",
+      nativeLanguage: existing?.nativeLanguage,
+      educationLevel: existing?.educationLevel,
       lastLoginAt: nowIso,
     };
   }
@@ -174,6 +178,8 @@ export async function syncUserInFirestore(
       name: googleUser.name,
       photoURL: googleUser.photoURL,
       role,
+      nativeLanguage: existing.nativeLanguage,
+      educationLevel: existing.educationLevel,
       createdAt: existing.createdAt,
       updatedAt: nowIso,
       lastLoginAt: nowIso,
@@ -210,6 +216,78 @@ export async function syncUserInFirestore(
 }
 
 /**
+ * Update user preferences (nativeLanguage, educationLevel) in Firestore.
+ */
+export async function updateUserProfileInFirestore(
+  uid: string,
+  updates: {
+    nativeLanguage?: string;
+    educationLevel?: string;
+    name?: string;
+    photoURL?: string;
+  },
+  idToken?: string,
+): Promise<UserProfileRecord | null> {
+  const config = getFirestoreBaseUrl();
+  if (!config) return null;
+
+  try {
+    const nowIso = new Date().toISOString();
+    const updateData: Record<string, any> = {
+      updatedAt: nowIso,
+    };
+    const fieldMasks = ["updateMask.fieldPaths=updatedAt"];
+
+    if (updates.nativeLanguage !== undefined) {
+      updateData.nativeLanguage = updates.nativeLanguage;
+      fieldMasks.push("updateMask.fieldPaths=nativeLanguage");
+    }
+
+    if (updates.educationLevel !== undefined) {
+      updateData.educationLevel = updates.educationLevel;
+      fieldMasks.push("updateMask.fieldPaths=educationLevel");
+    }
+
+    if (updates.name !== undefined) {
+      updateData.name = updates.name;
+      fieldMasks.push("updateMask.fieldPaths=name");
+    }
+
+    if (updates.photoURL !== undefined) {
+      updateData.photoURL = updates.photoURL;
+      fieldMasks.push("updateMask.fieldPaths=photoURL");
+    }
+
+    const mask = fieldMasks.join("&");
+    const url = `${config.baseUrl}/users/${encodeURIComponent(uid)}?${mask}&key=${config.apiKey}`;
+
+    const headers: Record<string, string> = {
+      "Content-Type": "application/json",
+    };
+    if (idToken) {
+      headers["Authorization"] = `Bearer ${idToken}`;
+    }
+
+    const res = await fetch(url, {
+      method: "PATCH",
+      headers,
+      body: JSON.stringify({ fields: encodeFirestoreFields(updateData) }),
+    });
+
+    if (!res.ok) {
+      console.warn(`Firestore REST update profile notice for ${uid} (${res.status}):`, await res.text());
+      return null;
+    }
+
+    // Return the updated full profile
+    return await getUserFromFirestore(uid, idToken);
+  } catch (err) {
+    console.warn(`Firestore REST update profile notice for ${uid}:`, err);
+    return null;
+  }
+}
+
+/**
  * List all users from Firestore (Admin only).
  */
 export async function listUsersFromFirestore(idToken?: string): Promise<UserProfileRecord[]> {
@@ -242,6 +320,8 @@ export async function listUsersFromFirestore(idToken?: string): Promise<UserProf
           name: decoded.name || "",
           photoURL: decoded.photoURL || "",
           role: (decoded.role as UserRole) || "user",
+          nativeLanguage: decoded.nativeLanguage || undefined,
+          educationLevel: decoded.educationLevel || undefined,
           createdAt: decoded.createdAt,
           updatedAt: decoded.updatedAt,
           lastLoginAt: decoded.lastLoginAt,
