@@ -1,75 +1,30 @@
 import { isNetworkError } from "./network";
 import type { ORModel } from "./openrouter";
 
-declare const __OMNIROUTER_BASE_URL__: string | undefined;
-declare const __OMNIROUTER_API_KEY__: string | undefined;
+declare const __OMNIROUTER_CONFIGURED__: boolean | undefined;
 declare const __OMNIROUTER_DEFAULT_MODEL__: string | undefined;
 
 const OMNI_MODEL_LS = "doclens.omnirouter.model";
 const OMNI_STATUS_EVT = "doclens:omnirouter-status-change";
 
-/** Normalize base URL by removing any trailing slashes. */
-export function sanitizeBaseUrl(url: string): string {
-  if (!url) return "";
-  return url.trim().replace(/\/+$/, "");
-}
-
-/** Synchronously resolves OmniRouter Base URL from build-time defines or runtime env. */
+/** Base endpoint for backend-proxied OmniRouter API. */
 export function getOmniRouterBaseUrl(): string {
-  try {
-    if (typeof __OMNIROUTER_BASE_URL__ !== "undefined" && __OMNIROUTER_BASE_URL__) {
-      return sanitizeBaseUrl(__OMNIROUTER_BASE_URL__);
-    }
-  } catch {
-    // Ignore ReferenceError
-  }
-  if (typeof import.meta !== "undefined" && (import.meta as any).env?.VITE_OMNIROUTER_BASE_URL) {
-    return sanitizeBaseUrl((import.meta as any).env.VITE_OMNIROUTER_BASE_URL);
-  }
-  if (typeof import.meta !== "undefined" && (import.meta as any).env?.OMNIROUTER_BASE_URL) {
-    return sanitizeBaseUrl((import.meta as any).env.OMNIROUTER_BASE_URL);
-  }
-  if (typeof process !== "undefined" && process.env?.OMNIROUTER_BASE_URL) {
-    return sanitizeBaseUrl(process.env.OMNIROUTER_BASE_URL);
-  }
-  if (typeof process !== "undefined" && process.env?.VITE_OMNIROUTER_BASE_URL) {
-    return sanitizeBaseUrl(process.env.VITE_OMNIROUTER_BASE_URL);
-  }
-  return "";
-}
-
-/** Synchronously resolves OmniRouter API Key from build-time defines or runtime env. */
-export function getOmniRouterApiKey(): string {
-  try {
-    if (typeof __OMNIROUTER_API_KEY__ !== "undefined" && __OMNIROUTER_API_KEY__) {
-      return __OMNIROUTER_API_KEY__.trim();
-    }
-  } catch {
-    // Ignore ReferenceError
-  }
-  if (typeof import.meta !== "undefined" && (import.meta as any).env?.VITE_OMNIROUTER_API_KEY) {
-    return (import.meta as any).env.VITE_OMNIROUTER_API_KEY.trim();
-  }
-  if (typeof import.meta !== "undefined" && (import.meta as any).env?.OMNIROUTER_API_KEY) {
-    return (import.meta as any).env.OMNIROUTER_API_KEY.trim();
-  }
-  if (typeof process !== "undefined" && process.env?.OMNIROUTER_API_KEY) {
-    return process.env.OMNIROUTER_API_KEY.trim();
-  }
-  if (typeof process !== "undefined" && process.env?.VITE_OMNIROUTER_API_KEY) {
-    return process.env.VITE_OMNIROUTER_API_KEY.trim();
-  }
-  return "";
+  return "/api/omni";
 }
 
 /**
- * Returns true only when both OmniRouter Base URL and API Key are configured.
+ * Returns true only when OmniRouter is configured on the backend.
  * When false, all OmniRouter options are completely hidden from UI.
  */
 export function isOmniRouterConfigured(): boolean {
-  const baseUrl = getOmniRouterBaseUrl();
-  const apiKey = getOmniRouterApiKey();
-  return Boolean(baseUrl && apiKey);
+  try {
+    if (typeof __OMNIROUTER_CONFIGURED__ !== "undefined") {
+      return Boolean(__OMNIROUTER_CONFIGURED__);
+    }
+  } catch {
+    // Ignore ReferenceError in non-Vite environments
+  }
+  return false;
 }
 
 export function getOmniSelectedModel(): string {
@@ -93,21 +48,6 @@ export function getOmniDefaultModelSync(): string {
     }
   } catch {
     // Ignore ReferenceError
-  }
-  if (
-    typeof import.meta !== "undefined" &&
-    (import.meta as any).env?.VITE_OMNIROUTER_DEFAULT_MODEL
-  ) {
-    return (import.meta as any).env.VITE_OMNIROUTER_DEFAULT_MODEL.trim();
-  }
-  if (typeof import.meta !== "undefined" && (import.meta as any).env?.OMNIROUTER_DEFAULT_MODEL) {
-    return (import.meta as any).env.OMNIROUTER_DEFAULT_MODEL.trim();
-  }
-  if (typeof process !== "undefined" && process.env?.OMNIROUTER_DEFAULT_MODEL) {
-    return process.env.OMNIROUTER_DEFAULT_MODEL.trim();
-  }
-  if (typeof process !== "undefined" && process.env?.VITE_OMNIROUTER_DEFAULT_MODEL) {
-    return process.env.VITE_OMNIROUTER_DEFAULT_MODEL.trim();
   }
   return "";
 }
@@ -139,7 +79,7 @@ export class OmniRouterError extends Error {
 export function friendlyOmniRouterError(status: number, body: string): OmniRouterError {
   if (status === 401 || status === 403) {
     return new OmniRouterError(
-      "OmniRouter authentication failed. Please verify your OMNIROUTER_API_KEY.",
+      "OmniRouter authentication failed on server.",
       status,
       "auth",
     );
@@ -154,7 +94,7 @@ export function friendlyOmniRouterError(status: number, body: string): OmniRoute
   if (status >= 500) {
     const snippet = body.replace(/\s+/g, " ").trim().slice(0, 160);
     return new OmniRouterError(
-      `OmniRouter server error (${status})${snippet ? `: ${snippet}` : ". Please check your local router."}`,
+      `OmniRouter server error (${status})${snippet ? `: ${snippet}` : ". Please check your gateway."}`,
       status,
       "server",
     );
@@ -167,17 +107,12 @@ export function friendlyOmniRouterError(status: number, body: string): OmniRoute
   );
 }
 
-/** Fetches available models from OmniRouter API. */
+/** Fetches available models from backend OmniRouter proxy API. */
 export async function fetchOmniRouterModels(): Promise<ORModel[]> {
-  const baseUrl = getOmniRouterBaseUrl();
-  const apiKey = getOmniRouterApiKey();
-  if (!baseUrl || !apiKey) return [];
+  if (!isOmniRouterConfigured()) return [];
 
   try {
-    const res = await fetch(`${baseUrl}/models`, {
-      headers: {
-        Authorization: `Bearer ${apiKey}`,
-      },
+    const res = await fetch("/api/omni/models", {
       signal: AbortSignal.timeout(10_000),
     });
     if (!res.ok) return [];
@@ -197,37 +132,30 @@ export async function fetchOmniRouterModels(): Promise<ORModel[]> {
   }
 }
 
-/** Validates connectivity to the configured OmniRouter endpoint. */
+/** Validates connectivity to the configured OmniRouter backend proxy. */
 export async function validateOmniRouterConnection(): Promise<{
   ok: boolean;
   error?: string;
   modelCount?: number;
 }> {
-  const baseUrl = getOmniRouterBaseUrl();
-  const apiKey = getOmniRouterApiKey();
-  if (!baseUrl || !apiKey) {
-    return { ok: false, error: "OmniRouter base URL or API key is missing." };
+  if (!isOmniRouterConfigured()) {
+    return { ok: false, error: "OmniRouter Gateway is not configured." };
   }
 
   try {
-    const res = await fetch(`${baseUrl}/models`, {
-      headers: {
-        Authorization: `Bearer ${apiKey}`,
-      },
+    const res = await fetch("/api/omni/validate", {
       signal: AbortSignal.timeout(8_000),
     });
-    if (!res.ok) {
-      const txt = await res.text();
-      return { ok: false, error: `HTTP ${res.status}: ${txt.slice(0, 120)}` };
-    }
     const json = await res.json();
-    const count = Array.isArray(json?.data) ? json.data.length : 0;
-    return { ok: true, modelCount: count };
+    if (!res.ok || !json?.ok) {
+      return { ok: false, error: json?.error || `HTTP ${res.status}` };
+    }
+    return { ok: true, modelCount: json.modelCount ?? 0 };
   } catch (err: any) {
     if (isNetworkError(err)) {
       return {
         ok: false,
-        error: `Could not connect to ${baseUrl}. Make sure your local OmniRouter server is running.`,
+        error: "Could not connect to backend OmniRouter proxy.",
       };
     }
     return { ok: false, error: err?.message || "Connection failed." };
@@ -346,14 +274,11 @@ async function readOmniSseStream(
   }
 }
 
-/** Direct streaming completion to OmniRouter OpenAI-compatible API. */
+/** Streaming completion through secure server backend proxy. */
 export async function streamOmniRouterCompletion(opts: OmniStreamOpts): Promise<void> {
-  const baseUrl = sanitizeBaseUrl(opts.baseUrl || getOmniRouterBaseUrl());
-  const apiKey = (opts.apiKey || getOmniRouterApiKey()).trim();
-
-  if (!baseUrl || !apiKey) {
+  if (!isOmniRouterConfigured()) {
     throw new OmniRouterError(
-      "OmniRouter base URL or API key is not configured in local environment.",
+      "OmniRouter gateway is not configured on the server.",
       401,
       "auth",
     );
@@ -367,19 +292,18 @@ export async function streamOmniRouterCompletion(opts: OmniStreamOpts): Promise<
 
       let response: Response;
       try {
-        response = await fetch(`${baseUrl}/chat/completions`, {
+        response = await fetch("/api/omni/chat", {
           method: "POST",
           headers: {
-            Authorization: `Bearer ${apiKey}`,
             "Content-Type": "application/json",
           },
-          body: JSON.stringify({ ...opts.payload, stream: true }),
+          body: JSON.stringify(opts.payload),
           signal,
         });
       } catch (fetchErr: any) {
         if (signal.aborted) throw fetchErr;
         throw new OmniRouterError(
-          fetchErr?.message || "Failed to connect to OmniRouter endpoint",
+          fetchErr?.message || "Failed to connect to OmniRouter proxy endpoint",
           0,
           "network",
         );

@@ -103,14 +103,16 @@ export function OmniRouterStatusSection({
             </div>
             <p className="text-xs leading-relaxed text-muted-foreground">
               {status === "connected"
-                ? `Loaded ${modelCount} models from your local OmniRouter endpoint. AI requests are streamed directly to this gateway.`
-                : error || "Make sure your local OmniRouter server is running at " + baseUrl}
+                ? `Loaded ${modelCount} models from your OmniRouter gateway. AI requests and streams are securely proxied through the backend.`
+                : error || "Make sure your OmniRouter gateway is running and reachable."}
             </p>
           </div>
         </div>
 
         <div className="mt-3 flex items-center justify-between border-t border-border/40 pt-3 text-[11px]">
-          <span className="font-mono text-muted-foreground truncate max-w-[240px]">{baseUrl}</span>
+          <span className="font-mono text-muted-foreground truncate max-w-[240px]">
+            Backend Proxy (/api/omni)
+          </span>
           <button
             onClick={onRefresh}
             disabled={status === "checking"}
@@ -209,12 +211,11 @@ export function OmniRouterStatusSection({
       <div className="rounded-xl border border-border/60 bg-background/50 p-3 space-y-2 text-[11px] text-muted-foreground">
         <div className="font-semibold text-foreground text-xs flex items-center gap-1.5">
           <ShieldCheck className="h-3.5 w-3.5 text-primary" />
-          <span>Local Environment Info</span>
+          <span>Security & Gateway Info</span>
         </div>
         <ul className="space-y-1 pl-0.5 leading-relaxed list-disc list-inside">
           <li>
-            Configured via <code className="font-mono text-foreground">OMNIROUTER_BASE_URL</code> &amp;{" "}
-            <code className="font-mono text-foreground">OMNIROUTER_API_KEY</code>.
+            100% Secret Backend Proxy: upstream ngrok URL and API keys are stored only in server environment variables (<code className="font-mono text-foreground">OMNIROUTER_BASE_URL</code> &amp; <code className="font-mono text-foreground">OMNIROUTER_API_KEY</code>).
           </li>
           <li>
             Default model fallback: <code className="font-mono text-foreground">OMNIROUTER_DEFAULT_MODEL</code> (
