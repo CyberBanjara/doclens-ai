@@ -50,24 +50,24 @@ export function getOmniServerConfig(): OmniServerConfig {
   const fileEnv = readEnvFallback();
 
   const baseUrl = sanitizeBaseUrl(
-    fileEnv.OMNIROUTER_BASE_URL ||
-      process.env.OMNIROUTER_BASE_URL ||
-      fileEnv.VITE_OMNIROUTER_BASE_URL ||
+    process.env.OMNIROUTER_BASE_URL ||
+      fileEnv.OMNIROUTER_BASE_URL ||
       process.env.VITE_OMNIROUTER_BASE_URL ||
+      fileEnv.VITE_OMNIROUTER_BASE_URL ||
       "",
   );
   const apiKey = (
-    fileEnv.OMNIROUTER_API_KEY ||
     process.env.OMNIROUTER_API_KEY ||
-    fileEnv.VITE_OMNIROUTER_API_KEY ||
+    fileEnv.OMNIROUTER_API_KEY ||
     process.env.VITE_OMNIROUTER_API_KEY ||
+    fileEnv.VITE_OMNIROUTER_API_KEY ||
     ""
   ).trim();
   const defaultModel = (
-    fileEnv.OMNIROUTER_DEFAULT_MODEL ||
     process.env.OMNIROUTER_DEFAULT_MODEL ||
-    fileEnv.VITE_OMNIROUTER_DEFAULT_MODEL ||
+    fileEnv.OMNIROUTER_DEFAULT_MODEL ||
     process.env.VITE_OMNIROUTER_DEFAULT_MODEL ||
+    fileEnv.VITE_OMNIROUTER_DEFAULT_MODEL ||
     ""
   ).trim();
 

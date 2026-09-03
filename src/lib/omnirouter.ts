@@ -197,6 +197,7 @@ export async function fetchOmniRouterModels(): Promise<ORModel[]> {
       const res = await fetch(`${directBaseUrl}/models`, {
         headers: {
           Authorization: `Bearer ${directApiKey}`,
+          "ngrok-skip-browser-warning": "true",
         },
         signal: AbortSignal.timeout(10_000),
       });
@@ -223,7 +224,10 @@ export async function fetchOmniRouterModels(): Promise<ORModel[]> {
                 : { prompt: "0", completion: "0" }
             ) as ORModel["pricing"];
             const description = typeof m.description === "string" ? m.description : undefined;
-            const top_provider = typeof m.top_provider === "string" ? m.top_provider : undefined;
+            const top_provider =
+              typeof m.top_provider === "object" && m.top_provider !== null
+                ? (m.top_provider as ORModel["top_provider"])
+                : undefined;
             return { id, name, context_length, pricing, description, top_provider };
           });
         }
@@ -257,7 +261,10 @@ export async function fetchOmniRouterModels(): Promise<ORModel[]> {
           : { prompt: "0", completion: "0" }
       ) as ORModel["pricing"];
       const description = typeof m.description === "string" ? m.description : undefined;
-      const top_provider = typeof m.top_provider === "string" ? m.top_provider : undefined;
+      const top_provider =
+        typeof m.top_provider === "object" && m.top_provider !== null
+          ? (m.top_provider as ORModel["top_provider"])
+          : undefined;
       return { id, name, context_length, pricing, description, top_provider };
     });
   } catch {
@@ -284,6 +291,7 @@ export async function validateOmniRouterConnection(): Promise<{
       const res = await fetch(`${directBaseUrl}/models`, {
         headers: {
           Authorization: `Bearer ${directApiKey}`,
+          "ngrok-skip-browser-warning": "true",
         },
         signal: AbortSignal.timeout(8_000),
       });
@@ -462,6 +470,7 @@ export async function streamOmniRouterCompletion(opts: OmniStreamOpts): Promise<
             headers: {
               Authorization: `Bearer ${directApiKey}`,
               "Content-Type": "application/json",
+              "ngrok-skip-browser-warning": "true",
             },
             body: JSON.stringify({ ...opts.payload, stream: true }),
             signal,
