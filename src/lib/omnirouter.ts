@@ -197,6 +197,7 @@ export async function fetchOmniRouterModels(): Promise<ORModel[]> {
       const res = await fetch(`${directBaseUrl}/models`, {
         headers: {
           Authorization: `Bearer ${directApiKey}`,
+          "ngrok-skip-browser-warning": "true",
         },
         signal: AbortSignal.timeout(10_000),
       });
@@ -290,6 +291,7 @@ export async function validateOmniRouterConnection(): Promise<{
       const res = await fetch(`${directBaseUrl}/models`, {
         headers: {
           Authorization: `Bearer ${directApiKey}`,
+          "ngrok-skip-browser-warning": "true",
         },
         signal: AbortSignal.timeout(8_000),
       });
@@ -468,6 +470,7 @@ export async function streamOmniRouterCompletion(opts: OmniStreamOpts): Promise<
             headers: {
               Authorization: `Bearer ${directApiKey}`,
               "Content-Type": "application/json",
+              "ngrok-skip-browser-warning": "true",
             },
             body: JSON.stringify({ ...opts.payload, stream: true }),
             signal,
