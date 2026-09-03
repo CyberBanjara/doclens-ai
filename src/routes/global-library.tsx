@@ -248,6 +248,17 @@ function GlobalLibraryPage() {
     return getSubjectCategoryMeta(activeCategory);
   }, [activeCategory]);
 
+  // Track education tiers that contain chapters in R2
+  const availableLevelsWithChapters = useMemo(() => {
+    const map: Record<string, number> = {};
+    for (const f of classifiedFiles) {
+      if (f.educationLevel && f.educationLevel !== "general") {
+        map[f.educationLevel] = (map[f.educationLevel] || 0) + 1;
+      }
+    }
+    return map;
+  }, [classifiedFiles]);
+
   // Map of local doc filename -> doc id
   const localDocsMap = useMemo(() => {
     const map: Record<string, string> = {};
@@ -583,6 +594,35 @@ function GlobalLibraryPage() {
                         <span>Switch Class / Level</span>
                       </button>
                     </div>
+
+                    {Object.keys(availableLevelsWithChapters).length > 0 && (
+                      <div className="pt-4 border-t border-border/40 max-w-md mx-auto space-y-2">
+                        <span className="text-[11px] font-bold text-muted-foreground uppercase tracking-wider block">
+                          Chapters Available In Other Classes:
+                        </span>
+                        <div className="flex flex-wrap items-center justify-center gap-2">
+                          {Object.entries(availableLevelsWithChapters).map(([lvlId, count]) => {
+                            const meta = getEducationLevelMeta(lvlId);
+                            return (
+                              <button
+                                key={lvlId}
+                                onClick={() => {
+                                  setEducationLevel(lvlId as EducationLevel);
+                                  saveEducationLevel(lvlId as EducationLevel);
+                                }}
+                                className="inline-flex items-center gap-1.5 rounded-xl border border-primary/40 bg-primary/10 px-3 py-1.5 text-xs font-bold text-foreground hover:bg-primary/20 hover:scale-[1.02] active:scale-95 transition-all cursor-pointer shadow-sm"
+                              >
+                                <span>{meta.icon}</span>
+                                <span>{meta.label}</span>
+                                <span className="rounded-full bg-primary/20 px-1.5 py-0.5 text-[10px] font-mono font-bold text-primary">
+                                  {count} {count === 1 ? "doc" : "docs"}
+                                </span>
+                              </button>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    )}
                   </div>
                 ) : (
                   <div className="grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-2 xl:grid-cols-3">

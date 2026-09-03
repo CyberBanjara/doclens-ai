@@ -502,7 +502,7 @@ export function filterBooks(
     }
 
     // 3. Search Query Filter
-    if (searchQuery.trim()) {
+    if (searchQuery && typeof searchQuery === "string" && searchQuery.trim()) {
       const q = searchQuery.toLowerCase().trim();
       const matchesTitle = book.displayName.toLowerCase().includes(q);
       const matchesKey = book.key.toLowerCase().includes(q);
