@@ -7,6 +7,7 @@ interface UseAiTabAutoPlayArgs {
   activePage: number;
   tab: "ai" | "text";
   pageCount: number;
+  analyzing?: boolean;
   isPlaying: boolean;
   continuousPlay: boolean;
   activePageNumber: number | null;
@@ -26,6 +27,7 @@ export function useAiTabAutoPlay({
   activePage,
   tab,
   pageCount,
+  analyzing = false,
   isPlaying,
   continuousPlay,
   activePageNumber,
@@ -43,9 +45,9 @@ export function useAiTabAutoPlay({
   //    after a background translation may have finished while they were on
   //    "Original Text" — ask PageWorkstation to ensure it's generated.
   useEffect(() => {
-    if (tab !== "ai") return;
+    if (tab !== "ai" || analyzing || pageCount <= 0) return;
     dispatchDocEvent("doclens:ensure-page-ready", { docId, pageNumber: activePage });
-  }, [docId, activePage, tab]);
+  }, [docId, activePage, tab, analyzing, pageCount]);
 
   // 2. Continuous-play look-ahead: while the current page is playing, start
   //    translating the next page in the background so it's ready by the time

@@ -61,8 +61,15 @@ export function usePageTranslation(
   const runPage = useCallback(
     async (pageNumber: number): Promise<string | undefined> => {
       // Read fresh page text + state from IDB
+      const docRec = await getDoc(docId);
       const pageRec = await getPageData(docId, pageNumber);
+
       if (!pageRec || !pageRec.text?.trim()) {
+        // If document pages are still being extracted / document is not ready yet, bail out quietly
+        if (!docRec || (docRec.pageCount ?? 0) === 0) {
+          return undefined;
+        }
+
         const msg = "No text content found on this page to process.";
         toast.error(msg);
         await upsertPageAi(docId, pageNumber, { status: "error", error: msg });
@@ -81,7 +88,6 @@ export function usePageTranslation(
       const hash = hashFor(eff);
 
       // Get doc record for book_id identification
-      const docRec = await getDoc(docId);
       const bookId = docRec?.bookId || docRec?.fileName || docId;
 
       // ─────────────────────────────────────────────────────────────────

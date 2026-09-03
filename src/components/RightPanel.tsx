@@ -122,6 +122,7 @@ export function RightPanel({
     activePage,
     tab,
     pageCount,
+    analyzing,
     isPlaying,
     continuousPlay,
     activePageNumber,

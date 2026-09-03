@@ -222,12 +222,15 @@ export function PageWorkstation({
   useEffect(() => {
     return listenDocEvent("doclens:ensure-page-ready", (d) => {
       if (d.docId !== docId) return;
-      // Do not auto-generate while document is still extracting/running OCR/syncing
-      if (analyzing) return;
+      // Do not auto-generate while document is still extracting/running OCR/syncing or has no pages
+      if (analyzing || pageCount <= 0) return;
       const { pageNumber } = d;
 
       void (async () => {
         const pageRec = await getPageData(docId, pageNumber);
+        // Do not attempt to generate if page data is not yet saved to storage
+        if (!pageRec || !pageRec.text?.trim()) return;
+
         const state: PageAi = pageRec?.pageAi ?? { pageNumber, status: "idle" };
 
         if (state.status === "done" && !!state.result) {
@@ -242,7 +245,7 @@ export function PageWorkstation({
         }
       })();
     });
-  }, [docId, runPageOnce, analyzing]);
+  }, [docId, runPageOnce, analyzing, pageCount]);
 
   // ─── Auto-translate currently visible active page when doc is loaded and analyzed ───
   const autoTranslatedInitialPageRef = useRef<Record<string, number>>({});
