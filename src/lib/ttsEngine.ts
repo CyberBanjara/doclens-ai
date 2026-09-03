@@ -40,26 +40,34 @@ let inferenceChain: Promise<any> = Promise.resolve();
  *
  * Runs all inferences through a serialized mutex chain to prevent concurrent WASM clashes.
  */
+export function cleanVoiceId(voiceId: string | null | undefined): string | null {
+  if (!voiceId) return null;
+  return voiceId.replace(/^✨\s*Neural\s*/i, "").replace(/\s*\(.*?\)$/, "").trim();
+}
+
 export function predictWithRecovery(
   tts: any,
   params: { text: string; voiceId: string | null },
   onProgress?: (progress: any) => void,
 ): Promise<Blob> {
+  const normalizedVoiceId = cleanVoiceId(params.voiceId);
+  const normalizedParams = { ...params, voiceId: normalizedVoiceId };
+
   const task = async (): Promise<Blob> => {
     try {
-      return await tts.predict(params, onProgress);
+      return await tts.predict(normalizedParams, onProgress);
     } catch (err: any) {
       const message = String(err?.message || err || "");
       const looksLikeCorruptedModel = /Gather|out of data bounds/i.test(message);
       if (!looksLikeCorruptedModel) throw err;
 
       console.warn(
-        `[TTS] Voice model "${params.voiceId}" failed inference (likely a corrupted/stale cached copy) — clearing cache and retrying:`,
+        `[TTS] Voice model "${normalizedVoiceId}" failed inference (likely a corrupted/stale cached copy) — clearing cache and retrying:`,
         message,
       );
       await clearTtsSessionCache();
-      if (params.voiceId) await deleteCachedVoice(params.voiceId);
-      return await tts.predict(params, onProgress);
+      if (normalizedVoiceId) await deleteCachedVoice(normalizedVoiceId);
+      return await tts.predict(normalizedParams, onProgress);
     }
   };
 

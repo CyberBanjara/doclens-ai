@@ -14,6 +14,7 @@ import {
   Settings,
   Volume2,
   Loader2,
+  Sparkles,
 } from "lucide-react";
 import { useMemo } from "react";
 import { getLanguageEnglishName } from "@/lib/voiceLanguageMap";
@@ -186,8 +187,30 @@ export function TtsPlayer({ text, source, pageNumber, onNeedsVoiceOnboarding }: 
             </button>
           </div>
 
-          {/* Settings Popover */}
+          {/* Settings & Voice Controls */}
           <div className="flex items-center gap-2">
+            {/* Quick voice selection directly on Workspace player */}
+            {sortedVoices.length > 0 && (
+              <div className="flex items-center gap-1.5 rounded-lg border border-border bg-surface/60 px-2 py-1">
+                <Sparkles className="h-3 w-3 text-primary shrink-0" />
+                <select
+                  value={selectedVoiceUri || sortedVoices[0]?.voiceURI || ""}
+                  onChange={(e) => {
+                    setSelectedVoiceUri(e.target.value || null);
+                    markTtsVoiceSetupComplete();
+                  }}
+                  title="Select Voice"
+                  className="max-w-[120px] sm:max-w-[160px] truncate bg-transparent text-xs text-foreground outline-none cursor-pointer"
+                >
+                  {sortedVoices.map((v) => (
+                    <option key={v.voiceURI} value={v.voiceURI} className="bg-popover text-popover-foreground">
+                      {v.name.replace(/^✨\s*Neural\s*/i, "✨ ")}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            )}
+
             <label className="flex items-center gap-1.5 text-xs text-muted-foreground cursor-pointer">
               <input
                 type="checkbox"
@@ -232,7 +255,7 @@ export function TtsPlayer({ text, source, pageNumber, onNeedsVoiceOnboarding }: 
                     </div>
                   ) : (
                     <select
-                      value={selectedVoiceUri || ""}
+                      value={selectedVoiceUri || sortedVoices[0]?.voiceURI || ""}
                       onChange={(e) => {
                         setSelectedVoiceUri(e.target.value || null);
                         markTtsVoiceSetupComplete();

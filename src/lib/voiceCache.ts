@@ -267,8 +267,8 @@ export function initVoiceCache() {
       }
     }
 
-    // Fall back to original fetch
-    return originalFetch!(input, init);
+    // Fall back to original fetch with redirected URL if modified
+    return originalFetch!(targetUrl || input, init);
   };
 }
 

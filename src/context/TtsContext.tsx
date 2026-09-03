@@ -162,7 +162,7 @@ async function getNeuralTtsEngine(): Promise<{ mod: any; catalog: any[] }> {
     try {
       const ort: any = await import("onnxruntime-web");
       if (ort.env && ort.env.wasm) {
-        ort.env.wasm.proxy = true;
+        ort.env.wasm.proxy = false;
         ort.env.wasm.numThreads = 1;
       }
 
@@ -179,7 +179,7 @@ async function getNeuralTtsEngine(): Promise<{ mod: any; catalog: any[] }> {
             return ONNX_SESSION_CACHE.get(cacheKey);
           }
 
-          ort.env.wasm.proxy = true;
+          ort.env.wasm.proxy = false;
           ort.env.wasm.numThreads = 1;
 
           const session = await ort.InferenceSession.originalCreate(model, options);
@@ -375,10 +375,10 @@ export function TtsProvider({ children }: { children: React.ReactNode }) {
     }
   }, [refreshVoicesInternal]);
 
-  // Initial load: ONLY fetch native browser voices on startup (minimal memory footprint!)
+  // Initial load: fetch native browser voices and load the Piper neural catalog
   useEffect(() => {
     if (typeof window === "undefined") return;
-    void refreshVoices(false);
+    void refreshVoices(true);
   }, [refreshVoices]);
 
   // Sync outputLanguage when window regains focus or storage changes
@@ -428,9 +428,17 @@ export function TtsProvider({ children }: { children: React.ReactNode }) {
     localStorage.setItem("doclens:tts-continuous", val.toString());
   };
 
-  // Auto-switch voice when language filter excludes current selection
+  // Auto-select initial voice or switch when language filter excludes current selection
   useEffect(() => {
-    if (!selectedVoiceUri || filteredVoices.length === 0) return;
+    if (filteredVoices.length === 0) return;
+    if (!selectedVoiceUri) {
+      const firstNeural = filteredVoices.find((v) => v.isNeural && v.isDownloaded);
+      const fallback = firstNeural || filteredVoices.find((v) => v.isNeural) || filteredVoices[0];
+      if (fallback) {
+        setSelectedVoiceUri(fallback.voiceURI);
+      }
+      return;
+    }
     const currentVoiceInFiltered = filteredVoices.some((v) => v.voiceURI === selectedVoiceUri);
     if (!currentVoiceInFiltered) {
       const firstNeural = filteredVoices.find((v) => v.isNeural && v.isDownloaded);
@@ -559,7 +567,7 @@ export function TtsProvider({ children }: { children: React.ReactNode }) {
 
   // Speaks the sentence at the specified index
   const speakSentence = useCallback(
-    (index: number, sentenceList: string[]) => {
+    async (index: number, sentenceList: string[]) => {
       isTransitioningRef.current = false;
       const currentSessionId = synthesisSessionIdRef.current;
 
@@ -695,9 +703,17 @@ export function TtsProvider({ children }: { children: React.ReactNode }) {
 
       if (isNeural) {
         if (!ttsRef.current) {
-          console.error("VITS TTS Engine not loaded yet.");
-          setIsPlaying(false);
-          return;
+          setIsNeuralLoading(true);
+          try {
+            await ensureNeuralEngine();
+          } catch (e) {
+            console.error("Failed to load VITS TTS Engine:", e);
+            setIsNeuralLoading(false);
+            setIsPlaying(false);
+            toast.error("Could not initialize voice engine. Please try again.");
+            return;
+          }
+          setIsNeuralLoading(false);
         }
 
         const activeVoiceId = voice?.voiceURI || targetVoiceUri;
@@ -864,6 +880,7 @@ export function TtsProvider({ children }: { children: React.ReactNode }) {
       continuousPlay,
       processPreSynthesizeQueue,
       refreshVoices,
+      ensureNeuralEngine,
       setSelectedVoiceUri,
       setIsPlaying,
       setIsPaused,
@@ -890,16 +907,39 @@ export function TtsProvider({ children }: { children: React.ReactNode }) {
       setIsPlaying(true);
       setIsPaused(false);
 
-      const targetVoiceUri = selectedVoiceUriRef.current || localStorage.getItem(TTS_VOICE_URI_LS);
+      let targetVoiceUri = selectedVoiceUriRef.current || localStorage.getItem(TTS_VOICE_URI_LS);
+      if (!targetVoiceUri) {
+        const langVoices = filterVoicesByLanguage(
+          availableVoicesRef.current,
+          outputLanguageRef.current,
+        );
+        const bestVoice =
+          langVoices.find((v) => v.isNeural && v.isDownloaded) ||
+          langVoices.find((v) => v.isNeural) ||
+          langVoices[0] ||
+          availableVoicesRef.current[0];
+        if (bestVoice) {
+          targetVoiceUri = bestVoice.voiceURI;
+          setSelectedVoiceUri(bestVoice.voiceURI);
+        }
+      }
+
       const isTargetNeural = isNeuralVoiceUri(targetVoiceUri);
 
       // If neural engine is needed or not loaded yet, ensure it is initialized then play
       if (isTargetNeural && !ttsRef.current) {
         setIsNeuralLoading(true);
-        void ensureNeuralEngine().then(() => {
-          setIsNeuralLoading(false);
-          speakSentence(startIndex, list);
-        });
+        void ensureNeuralEngine()
+          .then(() => {
+            setIsNeuralLoading(false);
+            speakSentence(startIndex, list);
+          })
+          .catch((err) => {
+            setIsNeuralLoading(false);
+            setIsPlaying(false);
+            console.error("Failed to ensure neural engine:", err);
+            toast.error("Could not load speech engine. Please try again.");
+          });
       } else {
         speakSentence(startIndex, list);
       }

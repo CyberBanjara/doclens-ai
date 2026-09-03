@@ -314,6 +314,8 @@ function DocPage() {
       const activeLang =
         currentUser?.nativeLanguage || freshDoc.selectedLanguage || getOutputLanguage() || "हिंदी";
 
+      setOutputLanguage(activeLang);
+
       if (freshDoc.selectedLanguage !== activeLang) {
         await updateDoc(id, { selectedLanguage: activeLang });
         freshDoc.selectedLanguage = activeLang;
