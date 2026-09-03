@@ -223,7 +223,10 @@ export async function fetchOmniRouterModels(): Promise<ORModel[]> {
                 : { prompt: "0", completion: "0" }
             ) as ORModel["pricing"];
             const description = typeof m.description === "string" ? m.description : undefined;
-            const top_provider = typeof m.top_provider === "string" ? m.top_provider : undefined;
+            const top_provider =
+              typeof m.top_provider === "object" && m.top_provider !== null
+                ? (m.top_provider as ORModel["top_provider"])
+                : undefined;
             return { id, name, context_length, pricing, description, top_provider };
           });
         }
@@ -257,7 +260,10 @@ export async function fetchOmniRouterModels(): Promise<ORModel[]> {
           : { prompt: "0", completion: "0" }
       ) as ORModel["pricing"];
       const description = typeof m.description === "string" ? m.description : undefined;
-      const top_provider = typeof m.top_provider === "string" ? m.top_provider : undefined;
+      const top_provider =
+        typeof m.top_provider === "object" && m.top_provider !== null
+          ? (m.top_provider as ORModel["top_provider"])
+          : undefined;
       return { id, name, context_length, pricing, description, top_provider };
     });
   } catch {
