@@ -63,11 +63,12 @@ export function usePageTranslation(
       // Read fresh page text + state from IDB
       const pageRec = await getPageData(docId, pageNumber);
       if (!pageRec || !pageRec.text?.trim()) {
-        const msg = "No text content found on this page to process.";
-        toast.error(msg);
-        await upsertPageAi(docId, pageNumber, { status: "error", error: msg });
+        console.warn(
+          `[usePageTranslation] No text content found on page ${pageNumber} of doc ${docId}.`,
+        );
+        await upsertPageAi(docId, pageNumber, { status: "idle" });
         onPageAiChangeRef.current(pageNumber, {
-          status: "error",
+          status: "idle",
           hasResult: false,
           isCustom: false,
         });
@@ -158,18 +159,6 @@ export function usePageTranslation(
         return undefined;
       }
 
-      if (isOmni && !isOmniRouterConfigured()) {
-        const msg = "OmniRouter base URL or API key is not configured in environment.";
-        toast.error(msg);
-        await upsertPageAi(docId, pageNumber, { status: "error", error: msg });
-        onPageAiChangeRef.current(pageNumber, {
-          status: "error",
-          hasResult: false,
-          isCustom: false,
-        });
-        return undefined;
-      }
-
       const modelId = eff.modelId || (isOmni ? "" : getDefaultModelSync());
 
       // One-shot selection override (from PDF text selection → "Translate")
@@ -241,11 +230,65 @@ export function usePageTranslation(
         };
 
         if (isOmni) {
-          await streamOmniRouterCompletion({
-            payload,
-            signal: ctrl.signal,
-            onDelta: onDeltaHandler,
-          });
+          let omniFailed = false;
+          try {
+            if (!isOmniRouterConfigured()) {
+              throw new OmniRouterError("OmniRouter is not configured.", 500, "server");
+            }
+            await streamOmniRouterCompletion({
+              payload,
+              signal: ctrl.signal,
+              onDelta: onDeltaHandler,
+            });
+          } catch (omniErr: any) {
+            if ((omniErr as Error).name === "AbortError" || ctrl.signal.aborted) {
+              throw omniErr;
+            }
+            console.warn(
+              "[OmniRouter] Failed during translation, falling back to OpenRouter:",
+              omniErr,
+            );
+            omniFailed = true;
+          }
+
+          if (omniFailed) {
+            // Show single clear popup: "Omni Router failed, going for Open Router."
+            toast.info("Omni Router failed, going for Open Router.");
+
+            // Clear buffers from any partial stream
+            bufferRef.current = "";
+            lastUiRef.current = "";
+            if (mountedRef.current) {
+              setStreamBufs((b) => ({ ...b, [pageNumber]: "" }));
+            }
+
+            const openRouterKey = getKey();
+            if (!openRouterKey) {
+              ensureKeyReady();
+              throw new OpenRouterError("No OpenRouter API key configured.", 401, "auth");
+            }
+
+            const openRouterModel = currentGlobals.modelId || getDefaultModelSync();
+            const openRouterPayload =
+              state.isCustom && state.customRequest
+                ? { ...state.customRequest, stream: true }
+                : buildPagePayload({
+                    modelId: openRouterModel,
+                    mode: eff.mode,
+                    language: eff.language,
+                    style: eff.style,
+                    temperature: eff.temperature,
+                    pageNumber,
+                    pageText: effectiveText,
+                  });
+
+            await streamCompletion({
+              key: openRouterKey,
+              payload: openRouterPayload,
+              signal: ctrl.signal,
+              onDelta: onDeltaHandler,
+            });
+          }
         } else {
           await streamCompletion({
             key,
@@ -313,32 +356,28 @@ export function usePageTranslation(
           await upsertPageAi(docId, pageNumber, { status: "error", error: err });
           onPageAiChangeRef.current(pageNumber, { ...summarize(state), status: "error" });
 
-          if (isOmni || e instanceof OmniRouterError) {
-            toast.error(err);
-          } else {
-            const isDailyOrQuota =
-              (e instanceof OpenRouterError &&
-                (e.kind === "daily_limit" ||
-                  e.kind === "rate_limit" ||
-                  e.kind === "quota" ||
-                  e.kind === "credits")) ||
-              /50 free pages|daily limit|rate limit|quota/i.test(err);
+          const isDailyOrQuota =
+            (e instanceof OpenRouterError &&
+              (e.kind === "daily_limit" ||
+                e.kind === "rate_limit" ||
+                e.kind === "quota" ||
+                e.kind === "credits")) ||
+            /50 free pages|daily limit|rate limit|quota/i.test(err);
 
-            if (isDailyOrQuota) {
-              toast.error(err, {
-                duration: 8000,
-                action: {
-                  label: "Get Free Key",
-                  onClick: () => openApiKeyModal(err, true),
-                },
-              });
-              openApiKeyModal(err, true);
-            } else if (e instanceof OpenRouterError && e.kind === "auth") {
-              toast.error(err);
-              openApiKeyModal(err, false);
-            } else {
-              toast.error(err);
-            }
+          if (isDailyOrQuota) {
+            toast.error(err, {
+              duration: 8000,
+              action: {
+                label: "Get Free Key",
+                onClick: () => openApiKeyModal(err, true),
+              },
+            });
+            openApiKeyModal(err, true);
+          } else if (e instanceof OpenRouterError && e.kind === "auth") {
+            toast.error(err);
+            openApiKeyModal(err, false);
+          } else {
+            toast.error(err);
           }
         }
         return undefined;

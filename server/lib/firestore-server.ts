@@ -275,7 +275,10 @@ export async function updateUserProfileInFirestore(
     });
 
     if (!res.ok) {
-      console.warn(`Firestore REST update profile notice for ${uid} (${res.status}):`, await res.text());
+      console.warn(
+        `Firestore REST update profile notice for ${uid} (${res.status}):`,
+        await res.text(),
+      );
       return null;
     }
 

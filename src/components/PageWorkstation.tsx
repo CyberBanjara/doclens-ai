@@ -163,6 +163,8 @@ export function PageWorkstation({
 
   const hasKey = !!getKey();
   const keyReady = keyStatus !== "invalid" && keyStatus !== "missing" && hasKey;
+  const isOmniConfigured = isOmniRouterConfigured();
+  const aiReady = keyReady || isOmniConfigured;
 
   /** Returns true if the key is usable; otherwise opens modal + shows toast and returns false. */
   const ensureKeyReady = useCallback((): boolean => {
@@ -244,13 +246,28 @@ export function PageWorkstation({
     });
   }, [docId, runPageOnce, analyzing]);
 
+  // When pipeline finishes and the active page is already done (e.g. synced from Supabase),
+  // immediately dispatch page-ready for TTS audio and UI readers
+  useEffect(() => {
+    if (!mountedRef.current || analyzing || pageCount <= 0) return;
+    const targetPage = activePage > 0 ? activePage : 1;
+    const pageState = aiSummary[targetPage];
+    if (pageState?.status === "done" && pageState.hasResult) {
+      void getPageData(docId, targetPage).then((rec) => {
+        if (rec?.pageAi?.result) {
+          dispatchPageReady(docId, targetPage, rec.pageAi.result);
+        }
+      });
+    }
+  }, [analyzing, pageCount, activePage, aiSummary, docId]);
+
   // ─── Auto-translate currently visible active page when doc is loaded and analyzed ───
   const autoTranslatedInitialPageRef = useRef<Record<string, number>>({});
   useEffect(() => {
     if (!mountedRef.current) return;
     // Strictly do not run AI translation while document is still extracting or has 0 pages
     if (analyzing || pageCount <= 0) return;
-    if (!keyReady || !globals.modelId) return;
+    if (!aiReady || (!globals.modelId && !isOmniConfigured)) return;
     if (shouldShowExplainSetup()) return;
 
     const targetPage = activePage > 0 ? activePage : 1;
@@ -270,7 +287,8 @@ export function PageWorkstation({
     docId,
     pageCount,
     analyzing,
-    keyReady,
+    aiReady,
+    isOmniConfigured,
     globals.modelId,
     aiSummary,
     shouldShowExplainSetup,
@@ -308,7 +326,7 @@ export function PageWorkstation({
 
   /* ---------- Empty / setup states ---------- */
 
-  if (keyReady && !modelResolved && !globals.modelId) {
+  if (aiReady && !modelResolved && !globals.modelId && !isOmniConfigured) {
     return (
       <div className="flex h-full items-center justify-center px-6 text-center">
         <div className="flex items-center gap-3 text-sm text-muted-foreground">
@@ -319,7 +337,7 @@ export function PageWorkstation({
     );
   }
 
-  if (!keyReady || !globals.modelId) {
+  if (!aiReady || (!globals.modelId && !isOmniConfigured)) {
     const noKey = !hasKey;
     const invalid = keyStatus === "invalid";
     const missing = keyStatus === "missing";

@@ -30,6 +30,7 @@ import { getOutputLanguage, setOutputLanguage } from "@/lib/openrouter";
 import { UserPreferencesModal } from "@/components/UserPreferencesModal";
 import { saveEducationLevel, type EducationLevel } from "@/lib/classification";
 import { useAuth } from "@/context/AuthContext";
+import { apiFetchCurrentUser } from "@/lib/auth-client";
 import { checkTextQuality } from "@/lib/textCleaning";
 import { R2UploadDialog } from "@/components/R2UploadDialog";
 import { ChevronLeft, ChevronRight, Cloud, RefreshCw, Settings, Zap } from "lucide-react";
@@ -174,18 +175,183 @@ function DocPage() {
       prev ? { ...prev, hasChosenLanguage: true, selectedLanguage: chosenLang } : null,
     );
 
-    if (syncEnabled && doc) {
-      const toastId = toast.loading(`Loading ${chosenLang} translations...`);
+    // Continue to Stage 4 (Supabase check & fetch) and Stage 5 (AI translation ready)
+    const freshDoc = (await getDoc(id)) || doc;
+    if (freshDoc) {
+      setAnalyzing(true);
+      setStatus("Stage 4/5: Checking translations in Supabase…");
       try {
-        await syncFromSupabase(id, doc.fileName, chosenLang, true);
-        const sum = await getPageAiSummary(id);
-        setAiSummary(sum);
-        toast.success(`Active translation language: ${chosenLang}`, { id: toastId });
+        if (syncEnabled) {
+          await syncFromSupabase(id, freshDoc.fileName, chosenLang, true);
+          const updatedRec = await getDoc(id);
+          if (updatedRec) setDoc(updatedRec);
+          await refreshSummary();
+        }
       } catch (e) {
         console.warn("Language sync note:", e);
-        toast.dismiss(toastId);
+      } finally {
+        setStatus(`ready · ${freshDoc.pageCount ?? pageCount} pages`);
+        setAnalyzing(false);
       }
     }
+  };
+
+  const initialPipelineRanRef = useRef<Record<string, boolean>>({});
+  const pipelineInProgressRef = useRef(false);
+
+  const refreshSummary = async () => {
+    const sum = await getPageAiSummary(id);
+    setAiSummary(sum);
+  };
+
+  /**
+   * Strict 5-Stage Document Processing Pipeline:
+   * 1. PDF.js Text Extraction (extract layout & text if not yet in IDB)
+   * 2. OCR Processing (identify garbled/scanned pages and run OCR silently in background)
+   * 3. Authentication & JWT Validation (verifies user session, native language & education level)
+   * 4. Supabase Check & Fetch (syncs existing translation data for book + language)
+   * 5. AI Translation Ready (unblocks PageWorkstation to translate pages without existing translations)
+   */
+  const runPipeline = async (targetDoc: DocRecord, forceReExtract = false) => {
+    if (pipelineInProgressRef.current) return;
+    pipelineInProgressRef.current = true;
+    setAnalyzing(true);
+
+    try {
+      let currentDoc = targetDoc;
+      let finalCount = currentDoc.pageCount ?? 0;
+      const needsExtraction = forceReExtract || finalCount === 0;
+
+      // ─────────────────────────────────────────────────────────────────
+      // STAGE 1: PDF.js Text Extraction
+      // ─────────────────────────────────────────────────────────────────
+      if (needsExtraction) {
+        setStatus("Stage 1/5: Extracting PDF text…");
+        const blob = await getDocBlob(id);
+        if (!blob) {
+          console.warn("[DocPipeline] PDF binary not found in storage.");
+          setAnalyzing(false);
+          pipelineInProgressRef.current = false;
+          return;
+        }
+
+        let lastTotal = 0;
+        const collected: {
+          pageNumber: number;
+          text: string;
+          columns: number;
+          garbageRatio: number;
+        }[] = [];
+
+        await extractPdfPagesClient(blob, (page, total) => {
+          lastTotal = total;
+          collected.push({
+            pageNumber: page.pageNumber,
+            text: page.text,
+            columns: page.columns,
+            garbageRatio: page.garbageRatio,
+          });
+          setPageCount(total);
+          setStatus(`Stage 1/5: PDF extraction (page ${page.pageNumber}/${total})`);
+        });
+
+        const scannedCount = collected.filter((p) => checkTextQuality(p.text).isScanned).length;
+        const isScannedPdf = collected.length > 0 && scannedCount / collected.length >= 0.5;
+
+        await writePages(id, collected);
+        await updateDoc(id, { pageCount: collected.length, isScannedPdf });
+        finalCount = collected.length || lastTotal;
+        setDoc((prev) => (prev ? { ...prev, pageCount: finalCount, isScannedPdf } : null));
+        setPageCount(finalCount);
+        await refreshSummary();
+
+        // ─────────────────────────────────────────────────────────────────
+        // STAGE 2: OCR Processing
+        // ─────────────────────────────────────────────────────────────────
+        setStatus("Stage 2/5: Checking text quality & running OCR…");
+        try {
+          await runOcrOnGarbledPagesClient(
+            blob,
+            collected,
+            (pageNumber, total) => {
+              setStatus(`Stage 2/5: OCR Processing (page ${pageNumber}/${total})`);
+            },
+            async (pageNumber, ocrText, garbageRatio) => {
+              await updatePageData(id, pageNumber, {
+                text: ocrText,
+                garbageRatio,
+                ocrRun: true,
+              });
+              await refreshSummary();
+            },
+          );
+        } catch (ocrErr) {
+          // Silently log non-fatal OCR worker notes without disrupting user flow
+          console.warn("[OCR note]:", ocrErr);
+        }
+        await refreshSummary();
+      }
+
+      // ─────────────────────────────────────────────────────────────────
+      // STAGE 3: Authentication / JWT Validation
+      // ─────────────────────────────────────────────────────────────────
+      setStatus("Stage 3/5: Validating authentication…");
+      const currentUser = user ?? (await apiFetchCurrentUser().catch(() => null));
+      const freshDoc = (await getDoc(id)) || currentDoc;
+
+      const needsPreferencesModal =
+        (currentUser && (!currentUser.nativeLanguage || !currentUser.educationLevel)) ||
+        (!currentUser && !freshDoc.hasChosenLanguage && !getOutputLanguage());
+
+      if (needsPreferencesModal) {
+        setPreferencesModalOpen(true);
+        setStatus("Waiting for preferences…");
+        setAnalyzing(false);
+        pipelineInProgressRef.current = false;
+        return;
+      }
+
+      const activeLang =
+        currentUser?.nativeLanguage || freshDoc.selectedLanguage || getOutputLanguage() || "हिंदी";
+
+      if (freshDoc.selectedLanguage !== activeLang) {
+        await updateDoc(id, { selectedLanguage: activeLang });
+        freshDoc.selectedLanguage = activeLang;
+      }
+
+      // ─────────────────────────────────────────────────────────────────
+      // STAGE 4: Supabase Check & Fetch
+      // ─────────────────────────────────────────────────────────────────
+      setStatus("Stage 4/5: Checking translations in Supabase…");
+      if (syncEnabled) {
+        try {
+          await syncFromSupabase(id, freshDoc.fileName, activeLang, false);
+          const updatedRec = await getDoc(id);
+          if (updatedRec) setDoc(updatedRec);
+          await refreshSummary();
+        } catch (syncErr) {
+          console.warn("Supabase initial translation check note:", syncErr);
+        }
+      }
+
+      // ─────────────────────────────────────────────────────────────────
+      // STAGE 5: AI Translation Ready
+      // ─────────────────────────────────────────────────────────────────
+      setStatus(`ready · ${finalCount} pages`);
+    } catch (err) {
+      console.error("Document processing error:", err);
+      const msg = err instanceof Error ? err.message : "unknown";
+      setStatus("error: " + msg);
+    } finally {
+      setAnalyzing(false);
+      pipelineInProgressRef.current = false;
+    }
+  };
+
+  const handleAnalyze = async (forcedDoc?: DocRecord) => {
+    const currentDoc = forcedDoc || doc;
+    if (!currentDoc || analyzing) return;
+    await runPipeline(currentDoc, true);
   };
 
   useEffect(() => {
@@ -212,72 +378,26 @@ function DocPage() {
       const currentRec = rec;
       const pc = currentRec.pageCount ?? 0;
 
-      // Before Step 3 (Supabase fetch) and Step 4 (AI translation), validate JWT token.
-      // If JWT is present but does not contain user's native language and class/standard,
-      // show the one-time popup asking for both.
-      if (!authLoading) {
-        if (user && (!user.nativeLanguage || !user.educationLevel)) {
-          setPreferencesModalOpen(true);
-        } else if (!user && !currentRec.hasChosenLanguage && !getOutputLanguage()) {
-          setPreferencesModalOpen(true);
-        }
+      setDoc(currentRec);
+      setPageCount(pc);
+      if (pc > 0 && activePage > pc) setActivePageRaw(pc);
+
+      try {
+        await touchDoc(id);
+        await setLastOpened(id);
+      } catch (e) {
+        console.error("Failed to update last-opened bookkeeping:", e);
       }
 
-      // Automatically resolve active language (JWT stored native language takes top priority)
-      const activeLang =
-        user?.nativeLanguage || currentRec.selectedLanguage || getOutputLanguage() || "हिंदी";
-
-      if (currentRec.selectedLanguage !== activeLang) {
-        void updateDoc(id, { selectedLanguage: activeLang });
-        currentRec.selectedLanguage = activeLang;
+      if (!urlPage && currentRec.lastReadPage) {
+        const targetPage = Math.min(pc > 0 ? pc : Infinity, currentRec.lastReadPage);
+        setActivePage(targetPage);
       }
 
-      if (configEnabled && pc > 0 && (!user || (user.nativeLanguage && user.educationLevel))) {
-        // Step 3: Run background sync from Supabase for the active native language
-        void (async () => {
-          try {
-            const updated = await syncFromSupabase(id, currentRec.fileName, activeLang, false);
-            if (updated && !cancelled) {
-              const updatedRec = await getDoc(id);
-              if (updatedRec) {
-                setDoc(updatedRec);
-                const sum = await getPageAiSummary(id);
-                if (!cancelled) {
-                  setAiSummary(sum);
-                }
-              }
-            }
-          } catch (e) {
-            console.error("Background sync check failed:", e);
-          }
-        })();
+      const sum = await getPageAiSummary(id);
+      if (!cancelled) {
+        setAiSummary(sum);
       }
-
-      // Sync translations when user changes language in the workspace or settings
-      const handleLangChange = (e: any) => {
-        const newLang = e?.detail;
-        if (!newLang || !configEnabled) return;
-        void (async () => {
-          try {
-            await updateDoc(id, { selectedLanguage: newLang });
-            await syncFromSupabase(id, currentRec.fileName, newLang, true);
-            if (!cancelled) {
-              const updatedRec = await getDoc(id);
-              if (updatedRec) {
-                setDoc(updatedRec);
-                const sum = await getPageAiSummary(id);
-                if (!cancelled) {
-                  setAiSummary(sum);
-                }
-              }
-            }
-          } catch (err) {
-            console.warn("Language sync check note:", err);
-          }
-        })();
-      };
-
-      window.addEventListener("doclens:output-language-changed" as any, handleLangChange);
 
       // Compute isScannedPdf if not set on existing document (sample first 5 pages)
       if (currentRec.isScannedPdf === undefined && pc > 0) {
@@ -294,155 +414,46 @@ function DocPage() {
         currentRec.isScannedPdf = isScannedPdf;
       }
 
-      const sum = await getPageAiSummary(id);
-      if (cancelled) return;
-      setAiSummary(sum);
-      setDoc(currentRec);
-      setPageCount(pc);
-      // Clamp activePage if the URL had a page beyond the document's range
-      if (pc > 0 && activePage > pc) setActivePageRaw(pc);
-      try {
-        await touchDoc(id);
-        await setLastOpened(id);
-      } catch (e) {
-        // Non-fatal — don't let a "last opened" bookkeeping failure block
-        // restoring the reader below.
-        console.error("Failed to update last-opened bookkeeping:", e);
-      }
-
-      // If no page was passed in the URL search params, and there's a saved last read page:
-      if (!urlPage && currentRec.lastReadPage) {
-        const targetPage = Math.min(pc > 0 ? pc : Infinity, currentRec.lastReadPage);
-        setActivePage(targetPage);
+      // Trigger 5-stage pipeline sequentially in background
+      if (!cancelled && !initialPipelineRanRef.current[id]) {
+        initialPipelineRanRef.current[id] = true;
+        void runPipeline(currentRec, false);
       }
     })();
+
     return () => {
       cancelled = true;
-      window.removeEventListener("doclens:output-language-changed" as any, () => {});
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [id]);
+  }, [id, authLoading]);
 
-  const refreshSummary = async () => {
-    const sum = await getPageAiSummary(id);
-    setAiSummary(sum);
-  };
-
-  /**
-   * 4-Stage Document Processing Pipeline:
-   * 1. PDF.js Text Extraction (extract layout & text)
-   * 2. OCR Processing (identify missing/unusable/garbled pages and run OCR to completion)
-   * 3. Supabase Check / Fetch (sync existing translation data for book + language)
-   * 4. AI Translation Ready (unblocks AI translation to run on final extracted text)
-   */
-  const handleAnalyze = async (forcedDoc?: DocRecord) => {
-    const currentDoc = forcedDoc || doc;
-    if (!currentDoc || analyzing) return;
-    setAnalyzing(true);
-    setStatus("Stage 1/4: PDF text extraction…");
-
-    try {
-      const blob = await getDocBlob(id);
-      if (!blob) {
-        toast.error("PDF binary not found in storage.");
-        setAnalyzing(false);
-        return;
-      }
-
-      // ─────────────────────────────────────────────────────────────────
-      // STAGE 1: PDF.js Text Extraction
-      // ─────────────────────────────────────────────────────────────────
-      let lastTotal = 0;
-      const collected: {
-        pageNumber: number;
-        text: string;
-        columns: number;
-        garbageRatio: number;
-      }[] = [];
-
-      await extractPdfPagesClient(blob, (page, total) => {
-        lastTotal = total;
-        collected.push({
-          pageNumber: page.pageNumber,
-          text: page.text,
-          columns: page.columns,
-          garbageRatio: page.garbageRatio,
-        });
-        setPageCount(total);
-        setStatus(`Stage 1/4: PDF extraction (page ${page.pageNumber}/${total})`);
-      });
-
-      const scannedCount = collected.filter((p) => checkTextQuality(p.text).isScanned).length;
-      const isScannedPdf = collected.length > 0 && scannedCount / collected.length >= 0.5;
-
-      await writePages(id, collected);
-      await updateDoc(id, { pageCount: collected.length, isScannedPdf });
-      setDoc((prev) => (prev ? { ...prev, pageCount: collected.length, isScannedPdf } : null));
-      setPageCount(collected.length || lastTotal);
-      await refreshSummary();
-
-      // ─────────────────────────────────────────────────────────────────
-      // STAGE 2: OCR Processing
-      // ─────────────────────────────────────────────────────────────────
-      setStatus("Stage 2/4: Checking text quality & running OCR…");
-      try {
-        await runOcrOnGarbledPagesClient(
-          blob,
-          collected,
-          (pageNumber, total) => {
-            setStatus(`Stage 2/4: OCR Processing (page ${pageNumber}/${total})`);
-          },
-          async (pageNumber, ocrText, garbageRatio) => {
-            await updatePageData(id, pageNumber, {
-              text: ocrText,
-              garbageRatio,
-              ocrRun: true,
-            });
-            await refreshSummary();
-          },
-        );
-      } catch (ocrErr) {
-        console.warn("OCR fallback note:", ocrErr);
-        toast.error(
-          "OCR check completed with note: " +
-            (ocrErr instanceof Error ? ocrErr.message : "unknown"),
-        );
-      }
-
-      // ─────────────────────────────────────────────────────────────────
-      // STAGE 3: Supabase Check / Fetch
-      // ─────────────────────────────────────────────────────────────────
-      setStatus("Stage 3/4: Checking translations in Supabase…");
-      if (syncEnabled) {
+  // Sync translations when user explicitly changes language in the workspace or settings
+  useEffect(() => {
+    const handleLangChange = (e: any) => {
+      const newLang = e?.detail;
+      if (!newLang || !syncEnabled || !doc) return;
+      void (async () => {
         try {
-          const freshDoc = (await getDoc(id)) || currentDoc;
-          const activeLang =
-            user?.nativeLanguage || freshDoc.selectedLanguage || getOutputLanguage() || "हिंदी";
-          await syncFromSupabase(id, freshDoc.fileName, activeLang, false);
+          setAnalyzing(true);
+          setStatus("Checking translations…");
+          await updateDoc(id, { selectedLanguage: newLang });
+          await syncFromSupabase(id, doc.fileName, newLang, true);
           const updatedRec = await getDoc(id);
-          if (updatedRec) {
-            setDoc(updatedRec);
-          }
+          if (updatedRec) setDoc(updatedRec);
           await refreshSummary();
-        } catch (syncErr) {
-          console.warn("Supabase initial translation check note:", syncErr);
+        } catch (err) {
+          console.warn("Language sync check note:", err);
+        } finally {
+          setAnalyzing(false);
         }
-      }
+      })();
+    };
 
-      // ─────────────────────────────────────────────────────────────────
-      // STAGE 4: AI Translation Ready
-      // ─────────────────────────────────────────────────────────────────
-      setStatus(`done · ${collected.length} pages`);
-      toast.success(`Document processed (${collected.length} pages ready).`);
-    } catch (err) {
-      console.error("Document processing error:", err);
-      const msg = err instanceof Error ? err.message : "unknown";
-      setStatus("error: " + msg);
-      toast.error(`Extraction failed: ${msg}`);
-    } finally {
-      setAnalyzing(false);
-    }
-  };
+    window.addEventListener("doclens:output-language-changed" as any, handleLangChange);
+    return () => {
+      window.removeEventListener("doclens:output-language-changed" as any, handleLangChange);
+    };
+  }, [id, syncEnabled, doc]);
 
   const [uploading, setUploading] = useState(false);
   const [showUploadCategoryModal, setShowUploadCategoryModal] = useState(false);
@@ -567,17 +578,6 @@ function DocPage() {
       setSyncingSupabase(false);
     }
   };
-
-  const autoAnalyzedRef = useRef<Record<string, boolean>>({});
-
-  // Auto-trigger text analysis on document load if not yet extracted
-  useEffect(() => {
-    if (doc && pageCount === 0 && !analyzing && !autoAnalyzedRef.current[id]) {
-      autoAnalyzedRef.current[id] = true;
-      void handleAnalyze();
-    }
-  }, [doc, pageCount, analyzing, id]);
-
   /** Called by per-row workstation cards to keep the doc-level summary in sync. */
   const handlePageAiChange = (pageNumber: number, entry: PageAiSummaryEntry | null) => {
     setAiSummary((prev) => {
