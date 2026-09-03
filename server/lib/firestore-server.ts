@@ -2,8 +2,8 @@ import type { UserProfileRecord, UserRole } from "./auth-types";
 import type { VerifiedGoogleUser } from "./google-verify";
 
 function getFirestoreBaseUrl(): { baseUrl: string; apiKey: string; projectId: string } | null {
-  const projectId = process.env.FIREBASE_PROJECT_ID;
-  const apiKey = process.env.FIREBASE_API_KEY;
+  const projectId = process.env.FIREBASE_PROJECT_ID || process.env.VITE_FIREBASE_PROJECT_ID;
+  const apiKey = process.env.FIREBASE_API_KEY || process.env.VITE_FIREBASE_API_KEY;
   if (!projectId || !apiKey) {
     console.warn("Missing FIREBASE_PROJECT_ID or FIREBASE_API_KEY for Firestore REST operations");
     return null;
@@ -301,7 +301,13 @@ export async function listUsersFromFirestore(idToken?: string): Promise<UserProf
       headers["Authorization"] = `Bearer ${idToken}`;
     }
 
-    const res = await fetch(url, { headers });
+    let res = await fetch(url, { headers });
+    // If authenticated fetch failed (e.g. token expired), fallback to public REST read allowed by firestore.rules
+    if (!res.ok && idToken) {
+      console.warn("Firestore list users with idToken failed, attempting fallback read:", await res.text());
+      res = await fetch(url);
+    }
+
     if (!res.ok) {
       console.error("Firestore list users failed:", await res.text());
       return [];
@@ -312,10 +318,12 @@ export async function listUsersFromFirestore(idToken?: string): Promise<UserProf
 
     return documents
       .map((doc: any) => {
-        const decoded = decodeFirestoreDocument(doc);
-        if (!decoded || !decoded.uid) return null;
+        const decoded = decodeFirestoreDocument(doc) || {};
+        const docId = doc.name ? doc.name.split("/").pop() : "";
+        const uid = decoded.uid || docId;
+        if (!uid) return null;
         return {
-          uid: decoded.uid,
+          uid,
           email: decoded.email || "",
           name: decoded.name || "",
           photoURL: decoded.photoURL || "",

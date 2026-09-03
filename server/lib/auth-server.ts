@@ -126,15 +126,40 @@ export async function getSessionUserFromEvent(event: H3Event): Promise<SessionUs
     if (user) return user;
   }
 
-  // 2. Try Authorization: Bearer <token>
-  const authHeader = getHeader(event, "authorization") || getHeader(event, "x-session-token");
+  // 2. Try Authorization: Bearer <token> or x-firebase-token
+  const authHeader =
+    getHeader(event, "authorization") ||
+    getHeader(event, "x-session-token") ||
+    getHeader(event, "x-firebase-token");
   if (authHeader) {
     const bearerToken = authHeader.startsWith("Bearer ")
       ? authHeader.substring(7).trim()
       : authHeader.trim();
     if (bearerToken) {
+      // 2a. Try custom HMAC session JWT
       const user = await verifySessionJwt(bearerToken);
       if (user) return user;
+
+      // 2b. Try Google Firebase ID token verification
+      try {
+        const { verifyGoogleIdentity } = await import("./google-verify");
+        const { getUserFromFirestore } = await import("./firestore-server");
+        const googleUser = await verifyGoogleIdentity(bearerToken);
+        if (googleUser) {
+          const profile = await getUserFromFirestore(googleUser.uid, bearerToken);
+          return {
+            uid: googleUser.uid,
+            email: googleUser.email,
+            name: googleUser.name,
+            photoURL: googleUser.photoURL,
+            role: profile?.role || "user",
+            nativeLanguage: profile?.nativeLanguage,
+            educationLevel: profile?.educationLevel,
+          };
+        }
+      } catch (err) {
+        console.warn("Google identity fallback check notice:", err);
+      }
     }
   }
 

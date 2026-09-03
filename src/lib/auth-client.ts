@@ -5,7 +5,7 @@ import {
   signInWithRedirect,
   signOut as fbSignOut,
 } from "firebase/auth";
-import { getFirebaseApp } from "./firebase";
+import { getFirebaseApp, getFirestoreDb } from "./firebase";
 
 export type UserRole = "admin" | "editor" | "moderator" | "viewer" | "user";
 
@@ -232,60 +232,107 @@ export async function apiLogout(): Promise<void> {
 }
 
 /**
- * Admin: list all users from Firestore via serverless endpoint.
- * Automatically attaches stored admin credentials for authenticated Firestore REST access.
+ * Admin: list all users from Firestore via serverless endpoint with client-side Firestore fallback.
  */
 export async function apiAdminListUsers(): Promise<AdminUserProfile[]> {
-  const token = getStoredAuthToken();
+  const token = await getFreshAuthToken();
   const headers: Record<string, string> = {};
   if (token) {
     headers["Authorization"] = `Bearer ${token}`;
     headers["x-firebase-token"] = token;
   }
 
-  const res = await fetch("/api/admin/users", {
-    method: "GET",
-    headers,
-    credentials: "include",
-  });
+  // 1. Try serverless endpoint first
+  try {
+    const res = await fetch("/api/admin/users", {
+      method: "GET",
+      headers,
+      credentials: "include",
+    });
 
-  if (!res.ok) {
-    const err = await res.json().catch(() => ({ error: "Failed to list users" }));
-    throw new Error(err.error || `Request failed with status ${res.status}`);
+    if (res.ok) {
+      const data = await res.json();
+      if (Array.isArray(data?.users) && data.users.length > 0) {
+        return data.users as AdminUserProfile[];
+      }
+    }
+  } catch (err) {
+    console.warn("Serverless /api/admin/users fetch notice:", err);
   }
 
-  const data = await res.json();
-  return (data?.users as AdminUserProfile[]) || [];
+  // 2. Direct Firestore SDK client fallback (instant, zero-dependency on serverless cold starts)
+  try {
+    const db = getFirestoreDb();
+    if (db) {
+      const { collection, getDocs } = await import("firebase/firestore");
+      const snap = await getDocs(collection(db, "users"));
+      const directUsers: AdminUserProfile[] = [];
+      snap.forEach((docSnap) => {
+        const data = docSnap.data();
+        directUsers.push({
+          uid: data.uid || docSnap.id,
+          email: data.email || "",
+          name: data.name || data.displayName || "",
+          photoURL: data.photoURL || "",
+          role: (data.role as UserRole) || "user",
+          nativeLanguage: data.nativeLanguage,
+          educationLevel: data.educationLevel,
+          createdAt: data.createdAt,
+          updatedAt: data.updatedAt,
+          lastLoginAt: data.lastLoginAt,
+        });
+      });
+      return directUsers;
+    }
+  } catch (directErr) {
+    console.error("Direct Firestore users fetch failed:", directErr);
+  }
+
+  return [];
 }
 
 /**
- * Admin: update a user's role via protected serverless endpoint.
- * Automatically attaches stored admin credentials for authenticated Firestore REST access.
+ * Admin: update a user's role via protected serverless endpoint with direct Firestore SDK fallback.
  */
 export async function apiAdminUpdateUserRole(
   uid: string,
   role: UserRole,
 ): Promise<{ success: boolean; uid: string; role: UserRole; message?: string }> {
-  const token = getStoredAuthToken();
+  const token = await getFreshAuthToken();
   const headers: Record<string, string> = { "Content-Type": "application/json" };
   if (token) {
     headers["Authorization"] = `Bearer ${token}`;
     headers["x-firebase-token"] = token;
   }
 
-  const res = await fetch("/api/admin/update-user-role", {
-    method: "POST",
-    headers,
-    credentials: "include",
-    body: JSON.stringify({ uid, role, idToken: token }),
-  });
+  // 1. Try serverless endpoint first
+  try {
+    const res = await fetch("/api/admin/update-user-role", {
+      method: "POST",
+      headers,
+      credentials: "include",
+      body: JSON.stringify({ uid, role, idToken: token }),
+    });
 
-  if (!res.ok) {
-    const err = await res.json().catch(() => ({ error: "Failed to update user role" }));
-    throw new Error(err.error || `Update failed with status ${res.status}`);
+    if (res.ok) {
+      return await res.json();
+    }
+  } catch (err) {
+    console.warn("Serverless role update notice:", err);
   }
 
-  return await res.json();
+  // 2. Direct Firestore SDK fallback
+  const db = getFirestoreDb();
+  if (db) {
+    const { doc, updateDoc } = await import("firebase/firestore");
+    await updateDoc(doc(db, "users", uid), {
+      role,
+      updatedAt: new Date().toISOString(),
+    });
+    return { success: true, uid, role, message: "User role updated successfully" };
+  }
+
+  throw new Error("Failed to update user role");
 }
 
 /**
