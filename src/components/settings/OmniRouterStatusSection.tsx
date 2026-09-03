@@ -105,15 +105,16 @@ export function OmniRouterStatusSection({
             </div>
             <p className="text-xs leading-relaxed text-muted-foreground">
               {status === "connected"
-                ? `Loaded ${modelCount} models from your OmniRouter gateway. AI requests and streams are securely proxied through the backend.`
-                : error || "Make sure your OmniRouter gateway is running and reachable."}
+                ? `Loaded ${modelCount} models from your OmniRouter gateway (${baseUrl || "http://localhost:20128/v1"}). AI requests and streams connect directly to this gateway.`
+                : error ||
+                  `Make sure your local OmniRouter server is running at ${baseUrl || "http://localhost:20128/v1"}.`}
             </p>
           </div>
         </div>
 
         <div className="mt-3 flex items-center justify-between border-t border-border/40 pt-3 text-[11px]">
           <span className="font-mono text-muted-foreground truncate max-w-[240px]">
-            Backend Proxy (/api/omni)
+            {baseUrl || "http://localhost:20128/v1"}
           </span>
           <button
             onClick={onRefresh}

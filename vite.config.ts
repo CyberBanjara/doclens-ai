@@ -11,6 +11,7 @@ import { loadEnv } from "vite";
 // Load ALL env vars (including non-VITE_ prefixed) from .env files
 // The empty string prefix '' means "load all", not just VITE_-prefixed
 const env = loadEnv(process.env.NODE_ENV || "development", process.cwd(), "");
+Object.assign(process.env, env);
 
 const isVercel = process.env.VERCEL === "1" || env.VERCEL === "1";
 
@@ -43,6 +44,12 @@ export default defineConfig({
       ),
       __OPENROUTER_DEFAULT_MODEL__: JSON.stringify(
         process.env.OPENROUTER_DEFAULT_MODEL || env.OPENROUTER_DEFAULT_MODEL || "",
+      ),
+      __OMNIROUTER_BASE_URL__: JSON.stringify(
+        process.env.OMNIROUTER_BASE_URL || env.OMNIROUTER_BASE_URL || "",
+      ),
+      __OMNIROUTER_API_KEY__: JSON.stringify(
+        process.env.OMNIROUTER_API_KEY || env.OMNIROUTER_API_KEY || "",
       ),
       __OMNIROUTER_CONFIGURED__: JSON.stringify(
         Boolean(
