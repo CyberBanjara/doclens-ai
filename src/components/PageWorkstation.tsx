@@ -254,6 +254,7 @@ export function PageWorkstation({
     // Strictly do not run AI translation while document is still extracting or has 0 pages
     if (analyzing || pageCount <= 0) return;
     if (!keyReady || !globals.modelId) return;
+    if (!globals.language || !globals.style || !hasCompletedAiPreferenceSetup()) return;
     if (shouldShowExplainSetup()) return;
 
     const targetPage = activePage > 0 ? activePage : 1;
@@ -275,6 +276,8 @@ export function PageWorkstation({
     analyzing,
     keyReady,
     globals.modelId,
+    globals.language,
+    globals.style,
     aiSummary,
     shouldShowExplainSetup,
     runPageOnce,

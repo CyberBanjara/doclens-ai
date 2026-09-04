@@ -17,7 +17,10 @@ import {
 import { Loader2, Volume2 } from "lucide-react";
 import { markTtsVoiceSetupComplete, useTts } from "@/context/TtsContext";
 import { LANGUAGES, filterVoicesByLanguage } from "@/lib/voiceLanguageMap";
-import { setOutputLanguage as persistOutputLanguage } from "@/lib/openrouter";
+import {
+  getOutputLanguage,
+  setOutputLanguage as persistOutputLanguage,
+} from "@/lib/openrouter";
 import { getFriendlyErrorMessage, isOnline, OFFLINE_MESSAGE } from "@/lib/network";
 import { useIsMobile } from "@/hooks/use-mobile";
 
@@ -39,7 +42,7 @@ export function VoiceOnboardingDialog({ open, onOpenChange, onReady }: VoiceOnbo
     refreshVoices,
   } = useTts();
 
-  const [pickedLanguage, setPickedLanguage] = useState(outputLanguage);
+  const [pickedLanguage, setPickedLanguage] = useState(() => getOutputLanguage() || outputLanguage || "");
   const [pickedVoiceUri, setPickedVoiceUri] = useState<string | null>(null);
   const [downloading, setDownloading] = useState(false);
   const [progress, setProgress] = useState(0);
@@ -49,7 +52,8 @@ export function VoiceOnboardingDialog({ open, onOpenChange, onReady }: VoiceOnbo
   useEffect(() => {
     if (open) {
       void refreshVoices(true);
-      setPickedLanguage(outputLanguage);
+      const activeLang = getOutputLanguage() || outputLanguage || "";
+      setPickedLanguage(activeLang);
       setPickedVoiceUri(null);
       setDownloading(false);
       setProgress(0);
@@ -58,6 +62,7 @@ export function VoiceOnboardingDialog({ open, onOpenChange, onReady }: VoiceOnbo
   }, [open, outputLanguage, refreshVoices]);
 
   const voicesForLanguage = useMemo(() => {
+    if (!pickedLanguage) return [];
     return filterVoicesByLanguage(availableVoices, pickedLanguage).sort((a, b) => {
       if (a.isNeural && !b.isNeural) return -1;
       if (!a.isNeural && b.isNeural) return 1;
@@ -81,7 +86,7 @@ export function VoiceOnboardingDialog({ open, onOpenChange, onReady }: VoiceOnbo
   };
 
   const handleStart = async () => {
-    if (!effectiveVoiceUri || downloading) return;
+    if (!pickedLanguage || !effectiveVoiceUri || downloading) return;
     setError(null);
 
     const voice = voicesForLanguage.find((v) => v.voiceURI === effectiveVoiceUri);
@@ -141,7 +146,11 @@ export function VoiceOnboardingDialog({ open, onOpenChange, onReady }: VoiceOnbo
         <div className="font-mono text-[10px] uppercase tracking-widest text-muted-foreground">
           voice
         </div>
-        {voicesForLanguage.length === 0 ? (
+        {!pickedLanguage ? (
+          <div className="rounded-lg bg-surface-2/40 px-3 py-2 text-xs italic text-muted-foreground">
+            Please select a language above to view available voices.
+          </div>
+        ) : voicesForLanguage.length === 0 ? (
           <div className="rounded-lg bg-surface-2/40 px-3 py-2 text-xs italic text-muted-foreground">
             No voices available for this language yet.
           </div>
@@ -198,7 +207,7 @@ export function VoiceOnboardingDialog({ open, onOpenChange, onReady }: VoiceOnbo
       </button>
       <button
         onClick={handleStart}
-        disabled={!effectiveVoiceUri || downloading}
+        disabled={!pickedLanguage || !effectiveVoiceUri || downloading}
         className="flex items-center gap-1.5 rounded-md bg-primary px-3 py-1.5 text-sm font-semibold text-primary-foreground disabled:opacity-40"
       >
         {downloading ? (

@@ -21,6 +21,7 @@ export default defineEventHandler(async (event) => {
 
     const body = await readBody<{
       nativeLanguage?: string;
+      style?: string;
       educationLevel?: string;
       name?: string;
       photoURL?: string;
@@ -29,6 +30,7 @@ export default defineEventHandler(async (event) => {
 
     const updates: {
       nativeLanguage?: string;
+      style?: string;
       educationLevel?: string;
       name?: string;
       photoURL?: string;
@@ -36,6 +38,10 @@ export default defineEventHandler(async (event) => {
 
     if (typeof body?.nativeLanguage === "string") {
       updates.nativeLanguage = body.nativeLanguage.trim();
+    }
+
+    if (typeof body?.style === "string") {
+      updates.style = body.style.trim();
     }
 
     if (typeof body?.educationLevel === "string") {
@@ -71,6 +77,7 @@ export default defineEventHandler(async (event) => {
       role: session.role,
       nativeLanguage:
         updates.nativeLanguage !== undefined ? updates.nativeLanguage : session.nativeLanguage,
+      style: updates.style !== undefined ? updates.style : session.style,
       educationLevel:
         updates.educationLevel !== undefined ? updates.educationLevel : session.educationLevel,
     };
@@ -88,6 +95,7 @@ export default defineEventHandler(async (event) => {
       photoURL: updatedSessionUser.photoURL,
       role: updatedSessionUser.role,
       nativeLanguage: updatedSessionUser.nativeLanguage,
+      style: updatedSessionUser.style,
       educationLevel: updatedSessionUser.educationLevel,
     };
 

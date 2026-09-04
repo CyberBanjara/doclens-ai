@@ -16,6 +16,7 @@ export interface ClientUser {
   photoURL: string;
   role: UserRole;
   nativeLanguage?: string;
+  style?: string;
   educationLevel?: string;
 }
 
@@ -26,6 +27,7 @@ export interface AdminUserProfile {
   photoURL?: string;
   role: UserRole;
   nativeLanguage?: string;
+  style?: string;
   educationLevel?: string;
   createdAt?: string;
   updatedAt?: string;
@@ -340,6 +342,7 @@ export async function apiAdminUpdateUserRole(
  */
 export async function apiUpdateUserProfile(updates: {
   nativeLanguage?: string;
+  style?: string;
   educationLevel?: string;
   name?: string;
   photoURL?: string;

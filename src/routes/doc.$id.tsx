@@ -26,12 +26,29 @@ import {
 } from "@/lib/storage";
 import { syncFromSupabase, syncToSupabase, getSyncConfig } from "@/lib/sync";
 import { fetchAvailableLanguagesForBook } from "@/lib/supabase";
-import { getOutputLanguage, setOutputLanguage } from "@/lib/openrouter";
+import {
+  getOutputLanguage,
+  setOutputLanguage,
+  getStyle,
+  setStyle,
+  getMode,
+  setMode,
+  hasStoredLanguage,
+  hasStoredStyle,
+  hasCompletedAiPreferenceSetup,
+  type ProcessingStyle,
+  type GlobalMode,
+} from "@/lib/openrouter";
 import { UserPreferencesModal } from "@/components/UserPreferencesModal";
-import { saveEducationLevel, type EducationLevel } from "@/lib/classification";
+import {
+  getSavedEducationLevel,
+  saveEducationLevel,
+  type EducationLevel,
+} from "@/lib/classification";
 import { useAuth } from "@/context/AuthContext";
 import { checkTextQuality } from "@/lib/textCleaning";
 import { R2UploadDialog } from "@/components/R2UploadDialog";
+import { dispatchDocEvent } from "@/lib/docEvents";
 import { ChevronLeft, ChevronRight, Cloud, RefreshCw, Settings, Zap } from "lucide-react";
 
 const extractPdfPagesClient = createClientOnlyFn(
@@ -148,34 +165,52 @@ function DocPage() {
     }
   }, [aiSummary, setActivePage]);
 
-  // Handle saving native language & class/standard preferences
-  const handleSavePreferences = async (chosenLang: string, chosenLevel: EducationLevel) => {
+  // Handle saving native language, style, and education level preferences
+  const handleSavePreferences = async (
+    chosenLang: string,
+    chosenStyle: ProcessingStyle,
+    chosenMode: GlobalMode,
+    chosenLevel?: EducationLevel,
+  ) => {
     setPreferencesModalOpen(false);
     setOutputLanguage(chosenLang);
-    saveEducationLevel(chosenLevel);
+    setStyle(chosenStyle);
+    setMode(chosenMode);
+    if (chosenLevel) {
+      saveEducationLevel(chosenLevel);
+    }
 
     if (user) {
       try {
         await updateProfile({
           nativeLanguage: chosenLang,
-          educationLevel: chosenLevel,
+          style: chosenStyle,
+          educationLevel: chosenLevel || user.educationLevel || undefined,
         });
-        toast.success(`Preferences saved (${chosenLang}, ${chosenLevel})`);
+        toast.success(`Preferences saved (${chosenLang}, ${chosenStyle})`);
       } catch (err) {
-        console.error("Failed to save user preferences in Firebase/JWT:", err);
+        console.error("Failed to save user preferences in profile:", err);
       }
     }
 
     await updateDoc(id, {
       hasChosenLanguage: true,
       selectedLanguage: chosenLang,
+      selectedStyle: chosenStyle,
     });
     setDoc((prev) =>
-      prev ? { ...prev, hasChosenLanguage: true, selectedLanguage: chosenLang } : null,
+      prev
+        ? {
+            ...prev,
+            hasChosenLanguage: true,
+            selectedLanguage: chosenLang,
+            selectedStyle: chosenStyle,
+          }
+        : null,
     );
 
-    if (syncEnabled && doc) {
-      const toastId = toast.loading(`Loading ${chosenLang} translations...`);
+    if (syncEnabled && doc && chosenLang) {
+      const toastId = toast.loading(`Checking ${chosenLang} translations...`);
       try {
         await syncFromSupabase(id, doc.fileName, chosenLang, true);
         const sum = await getPageAiSummary(id);
@@ -186,6 +221,12 @@ function DocPage() {
         toast.dismiss(toastId);
       }
     }
+
+    // Immediately trigger AI translation for active page
+    dispatchDocEvent("doclens:ensure-page-ready", {
+      docId: id,
+      pageNumber: activePage || 1,
+    });
   };
 
   useEffect(() => {
@@ -212,27 +253,28 @@ function DocPage() {
       const currentRec = rec;
       const pc = currentRec.pageCount ?? 0;
 
-      // Before Step 3 (Supabase fetch) and Step 4 (AI translation), validate JWT token.
-      // If JWT is present but does not contain user's native language and class/standard,
-      // show the one-time popup asking for both.
+      // Before Step 3 (Supabase fetch) and Step 4 (AI translation):
+      // For anonymous users or 1st-time users, check if language and style are configured
+      const hasLang = !!(user?.nativeLanguage || currentRec.selectedLanguage || hasStoredLanguage());
+      const hasSty = !!(currentRec.selectedStyle || hasStoredStyle());
+      const isConfigured = hasLang && hasSty && (currentRec.hasChosenLanguage || hasCompletedAiPreferenceSetup());
+
       if (!authLoading) {
-        if (user && (!user.nativeLanguage || !user.educationLevel)) {
-          setPreferencesModalOpen(true);
-        } else if (!user && !currentRec.hasChosenLanguage && !getOutputLanguage()) {
+        if (!isConfigured) {
           setPreferencesModalOpen(true);
         }
       }
 
-      // Automatically resolve active language (JWT stored native language takes top priority)
+      // Automatically resolve active language
       const activeLang =
-        user?.nativeLanguage || currentRec.selectedLanguage || getOutputLanguage() || "हिंदी";
+        user?.nativeLanguage || currentRec.selectedLanguage || getOutputLanguage();
 
-      if (currentRec.selectedLanguage !== activeLang) {
+      if (activeLang && currentRec.selectedLanguage !== activeLang) {
         void updateDoc(id, { selectedLanguage: activeLang });
         currentRec.selectedLanguage = activeLang;
       }
 
-      if (configEnabled && pc > 0 && (!user || (user.nativeLanguage && user.educationLevel))) {
+      if (configEnabled && pc > 0 && isConfigured && activeLang) {
         // Step 3: Run background sync from Supabase for the active native language
         void (async () => {
           try {
@@ -417,13 +459,15 @@ function DocPage() {
         try {
           const freshDoc = (await getDoc(id)) || currentDoc;
           const activeLang =
-            user?.nativeLanguage || freshDoc.selectedLanguage || getOutputLanguage() || "हिंदी";
-          await syncFromSupabase(id, freshDoc.fileName, activeLang, false);
-          const updatedRec = await getDoc(id);
-          if (updatedRec) {
-            setDoc(updatedRec);
+            user?.nativeLanguage || freshDoc.selectedLanguage || getOutputLanguage();
+          if (activeLang) {
+            await syncFromSupabase(id, freshDoc.fileName, activeLang, false);
+            const updatedRec = await getDoc(id);
+            if (updatedRec) {
+              setDoc(updatedRec);
+            }
+            await refreshSummary();
           }
-          await refreshSummary();
         } catch (syncErr) {
           console.warn("Supabase initial translation check note:", syncErr);
         }
@@ -855,14 +899,15 @@ function DocPage() {
         onSubmit={(customFileName) => void confirmCategoryUpload(customFileName)}
       />
 
-      {/* One-Time Native Language & Class/Standard Setup Modal */}
+      {/* One-Time Native Language, Style & Education Level Setup Modal */}
       <UserPreferencesModal
         open={preferencesModalOpen}
         initialLanguage={
-          user?.nativeLanguage || doc?.selectedLanguage || getOutputLanguage() || "हिंदी"
+          user?.nativeLanguage || doc?.selectedLanguage || getOutputLanguage()
         }
-        initialEducationLevel={user?.educationLevel || "class-10"}
-        isInitialSetup={true}
+        initialStyle={user?.style || doc?.selectedStyle || getStyle()}
+        initialMode={getMode()}
+        initialEducationLevel={user?.educationLevel || getSavedEducationLevel() || ""}
         onSave={handleSavePreferences}
       />
     </div>

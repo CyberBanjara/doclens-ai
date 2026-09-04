@@ -8,7 +8,13 @@ import {
   apiLogout,
   apiUpdateUserProfile,
 } from "@/lib/auth-client";
-import { setOutputLanguage } from "@/lib/openrouter";
+import {
+  setOutputLanguage,
+  setStyle,
+  setMode,
+  TRANSLATION_STYLES,
+  type ProcessingStyle,
+} from "@/lib/openrouter";
 import { saveEducationLevel, type EducationLevel } from "@/lib/classification";
 
 interface AuthContextType {
@@ -17,11 +23,13 @@ interface AuthContextType {
   isAdmin: boolean;
   isPrivileged: boolean;
   role: UserRole | null;
+  needsPreferencesSetup: boolean;
   signInWithGoogle: () => Promise<void>;
   signOut: () => Promise<void>;
   refreshUser: () => Promise<void>;
   updateProfile: (updates: {
     nativeLanguage?: string;
+    style?: string;
     educationLevel?: string;
     name?: string;
     photoURL?: string;
@@ -34,17 +42,27 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<ClientUser | null>(null);
   const [loading, setLoading] = useState(true);
 
+  const syncUserToLocalStorage = (u: ClientUser | null) => {
+    if (!u) return;
+    if (u.nativeLanguage) {
+      setOutputLanguage(u.nativeLanguage);
+    }
+    if (u.style) {
+      setStyle(u.style as ProcessingStyle);
+      const mode = TRANSLATION_STYLES.some((s) => s.id === u.style) ? "translate" : "explain";
+      setMode(mode);
+    }
+    if (u.educationLevel) {
+      saveEducationLevel(u.educationLevel as EducationLevel);
+    }
+  };
+
   // Initialize session on mount by checking HttpOnly cookie via /api/auth/me
   const refreshUser = useCallback(async () => {
     try {
       const currentUser = await apiFetchCurrentUser();
       setUser(currentUser);
-      if (currentUser?.nativeLanguage) {
-        setOutputLanguage(currentUser.nativeLanguage);
-      }
-      if (currentUser?.educationLevel) {
-        saveEducationLevel(currentUser.educationLevel as EducationLevel);
-      }
+      syncUserToLocalStorage(currentUser);
     } catch {
       setUser(null);
     } finally {
@@ -58,18 +76,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const updateProfile = async (updates: {
     nativeLanguage?: string;
+    style?: string;
     educationLevel?: string;
     name?: string;
     photoURL?: string;
   }): Promise<ClientUser> => {
     const updated = await apiUpdateUserProfile(updates);
     setUser(updated);
-    if (updated.nativeLanguage) {
-      setOutputLanguage(updated.nativeLanguage);
-    }
-    if (updated.educationLevel) {
-      saveEducationLevel(updated.educationLevel as EducationLevel);
-    }
+    syncUserToLocalStorage(updated);
     return updated;
   };
 
@@ -78,12 +92,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       setLoading(true);
       const authenticatedUser = await apiLoginWithGoogle();
       setUser(authenticatedUser);
-      if (authenticatedUser?.nativeLanguage) {
-        setOutputLanguage(authenticatedUser.nativeLanguage);
-      }
-      if (authenticatedUser?.educationLevel) {
-        saveEducationLevel(authenticatedUser.educationLevel as EducationLevel);
-      }
+      syncUserToLocalStorage(authenticatedUser);
       toast.success(`Welcome, ${authenticatedUser.name || "User"}!`, {
         description: `Signed in as ${authenticatedUser.email} (${authenticatedUser.role})`,
       });
@@ -117,6 +126,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const isAdmin = user?.role === "admin";
   const isPrivileged = user ? ["admin", "editor", "moderator"].includes(user.role) : false;
+  const needsPreferencesSetup = Boolean(
+    user && (!user.nativeLanguage || !user.style || !user.educationLevel),
+  );
 
   return (
     <AuthContext.Provider
@@ -126,6 +138,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         isAdmin,
         isPrivileged,
         role: user?.role || null,
+        needsPreferencesSetup,
         signInWithGoogle,
         signOut,
         refreshUser,

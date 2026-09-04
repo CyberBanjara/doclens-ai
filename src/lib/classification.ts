@@ -536,11 +536,19 @@ export function getSavedEducationLevel(): EducationLevel | null {
   return null;
 }
 
-export function saveEducationLevel(level: EducationLevel): void {
+export function hasSavedEducationLevel(): boolean {
+  return getSavedEducationLevel() !== null;
+}
+
+export function saveEducationLevel(level: EducationLevel | string): void {
   if (typeof window === "undefined") return;
   try {
-    localStorage.setItem(STORAGE_KEY, level);
-    window.dispatchEvent(new CustomEvent("doclens:education-level-changed", { detail: level }));
+    if (level) {
+      localStorage.setItem(STORAGE_KEY, level);
+      window.dispatchEvent(new CustomEvent("doclens:education-level-changed", { detail: level }));
+    } else {
+      localStorage.removeItem(STORAGE_KEY);
+    }
   } catch (e) {
     console.warn("Could not save education level to localStorage:", e);
   }

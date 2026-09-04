@@ -38,6 +38,7 @@ export default defineEventHandler(async (event) => {
       photoURL: userProfile.photoURL || "",
       role: userProfile.role,
       nativeLanguage: userProfile.nativeLanguage,
+      style: userProfile.style,
       educationLevel: userProfile.educationLevel,
     };
 
@@ -54,6 +55,7 @@ export default defineEventHandler(async (event) => {
       photoURL: sessionUser.photoURL,
       role: sessionUser.role,
       nativeLanguage: sessionUser.nativeLanguage,
+      style: sessionUser.style,
       educationLevel: sessionUser.educationLevel,
     };
 

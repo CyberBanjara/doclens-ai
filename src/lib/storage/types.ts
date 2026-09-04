@@ -98,7 +98,9 @@ export interface DocRecord {
   bookId?: string;
   /** Language chosen by the user for translation */
   selectedLanguage?: string;
-  /** Tracks whether the user has been prompted to choose a translation language */
+  /** Style chosen by the user for translation/explanation */
+  selectedStyle?: string;
+  /** Tracks whether the user has been prompted to choose language and style */
   hasChosenLanguage?: boolean;
 }
 
@@ -115,6 +117,7 @@ export interface DocSummary {
   isScannedPdf?: boolean;
   bookId?: string;
   selectedLanguage?: string;
+  selectedStyle?: string;
   hasChosenLanguage?: boolean;
 }
 

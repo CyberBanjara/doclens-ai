@@ -7,6 +7,7 @@ export interface SessionUser {
   photoURL: string;
   role: UserRole;
   nativeLanguage?: string;
+  style?: string;
   educationLevel?: string;
 }
 
@@ -17,6 +18,7 @@ export interface ClientUser {
   photoURL: string;
   role: UserRole;
   nativeLanguage?: string;
+  style?: string;
   educationLevel?: string;
 }
 
@@ -27,6 +29,7 @@ export interface UserProfileRecord {
   photoURL: string;
   role: UserRole;
   nativeLanguage?: string;
+  style?: string;
   educationLevel?: string;
   createdAt?: string;
   updatedAt?: string;

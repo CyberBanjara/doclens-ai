@@ -10,12 +10,28 @@ import { Analytics } from "@vercel/analytics/react";
 import { SpeedInsights } from "@vercel/speed-insights/react";
 import { ApiKeyModal } from "@/components/ApiKeyModal";
 import { Toaster } from "@/components/ui/sonner";
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { initTheme } from "@/lib/theme";
 
 import appCss from "../styles.css?url";
 import { TtsProvider } from "@/context/TtsContext";
-import { AuthProvider } from "@/context/AuthContext";
+import { AuthProvider, useAuth } from "@/context/AuthContext";
+import { UserPreferencesModal } from "@/components/UserPreferencesModal";
+import {
+  setOutputLanguage,
+  setStyle,
+  setMode,
+  getStoredLanguage,
+  getStoredStyle,
+  type ProcessingStyle,
+  type GlobalMode,
+} from "@/lib/openrouter";
+import {
+  saveEducationLevel,
+  getSavedEducationLevel,
+  type EducationLevel,
+} from "@/lib/classification";
+import { toast } from "sonner";
 
 import { NotFoundComponent } from "@/components/NotFound";
 import { AdBannerWidget } from "@/components/AdBannerWidget";
@@ -269,6 +285,56 @@ function RootShell({ children }: { children: React.ReactNode }) {
   );
 }
 
+function GlobalAuthPreferencesWatcher() {
+  const location = useLocation();
+  const { user, needsPreferencesSetup, updateProfile } = useAuth();
+  const [modalOpen, setModalOpen] = useState(false);
+
+  // On /doc/:id, the document workstation handles preference setup and starts translation for that doc.
+  const isDocPage = location.pathname.startsWith("/doc/");
+
+  useEffect(() => {
+    if (user && needsPreferencesSetup && !isDocPage) {
+      setModalOpen(true);
+    } else {
+      setModalOpen(false);
+    }
+  }, [user, needsPreferencesSetup, isDocPage]);
+
+  const handleSave = async (
+    language: string,
+    style: ProcessingStyle,
+    mode: GlobalMode,
+    educationLevel?: EducationLevel,
+  ) => {
+    setOutputLanguage(language);
+    setStyle(style);
+    setMode(mode);
+    if (educationLevel) {
+      saveEducationLevel(educationLevel);
+    }
+    await updateProfile({
+      nativeLanguage: language,
+      style,
+      educationLevel: educationLevel || "",
+    });
+    setModalOpen(false);
+    toast.success("Preferences saved and synchronized to your account!");
+  };
+
+  if (!user || !needsPreferencesSetup || isDocPage) return null;
+
+  return (
+    <UserPreferencesModal
+      open={modalOpen}
+      initialLanguage={user.nativeLanguage || getStoredLanguage() || ""}
+      initialStyle={(user.style as ProcessingStyle) || getStoredStyle() || ""}
+      initialEducationLevel={user.educationLevel || getSavedEducationLevel() || undefined}
+      onSave={handleSave}
+    />
+  );
+}
+
 function RootComponent() {
   const location = useLocation();
 
@@ -302,6 +368,7 @@ function RootComponent() {
     <AuthProvider>
       <TtsProvider>
         <Outlet />
+        <GlobalAuthPreferencesWatcher />
         <AdBannerWidget />
         <ApiKeyModal />
         <Analytics />

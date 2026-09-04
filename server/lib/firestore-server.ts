@@ -104,6 +104,7 @@ export async function getUserFromFirestore(
       photoURL: decoded.photoURL || "",
       role: (decoded.role as UserRole) || "user",
       nativeLanguage: decoded.nativeLanguage || undefined,
+      style: decoded.style || undefined,
       educationLevel: decoded.educationLevel || undefined,
       createdAt: decoded.createdAt,
       updatedAt: decoded.updatedAt,
@@ -134,6 +135,7 @@ export async function syncUserInFirestore(
       photoURL: googleUser.photoURL,
       role: existing?.role || "user",
       nativeLanguage: existing?.nativeLanguage,
+      style: existing?.style,
       educationLevel: existing?.educationLevel,
       lastLoginAt: nowIso,
     };
@@ -179,6 +181,7 @@ export async function syncUserInFirestore(
       photoURL: googleUser.photoURL,
       role,
       nativeLanguage: existing.nativeLanguage,
+      style: existing.style,
       educationLevel: existing.educationLevel,
       createdAt: existing.createdAt,
       updatedAt: nowIso,
@@ -222,6 +225,7 @@ export async function updateUserProfileInFirestore(
   uid: string,
   updates: {
     nativeLanguage?: string;
+    style?: string;
     educationLevel?: string;
     name?: string;
     photoURL?: string;
@@ -241,6 +245,11 @@ export async function updateUserProfileInFirestore(
     if (updates.nativeLanguage !== undefined) {
       updateData.nativeLanguage = updates.nativeLanguage;
       fieldMasks.push("updateMask.fieldPaths=nativeLanguage");
+    }
+
+    if (updates.style !== undefined) {
+      updateData.style = updates.style;
+      fieldMasks.push("updateMask.fieldPaths=style");
     }
 
     if (updates.educationLevel !== undefined) {

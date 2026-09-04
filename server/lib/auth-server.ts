@@ -50,6 +50,7 @@ export async function createSessionJwt(user: SessionUser): Promise<string> {
     photoURL: user.photoURL || "",
     role: user.role,
     nativeLanguage: user.nativeLanguage || "",
+    style: user.style || "",
     educationLevel: user.educationLevel || "",
   })
     .setProtectedHeader({ alg: "HS256", typ: "JWT" })
@@ -94,6 +95,10 @@ export async function verifySessionJwt(token: string): Promise<SessionUser | nul
       nativeLanguage:
         typeof payload.nativeLanguage === "string" && payload.nativeLanguage.trim()
           ? payload.nativeLanguage.trim()
+          : undefined,
+      style:
+        typeof payload.style === "string" && payload.style.trim()
+          ? payload.style.trim()
           : undefined,
       educationLevel:
         typeof payload.educationLevel === "string" && payload.educationLevel.trim()

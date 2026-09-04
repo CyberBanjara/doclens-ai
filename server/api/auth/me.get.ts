@@ -16,6 +16,7 @@ export default defineEventHandler(async (event) => {
       photoURL: session.photoURL,
       role: session.role,
       nativeLanguage: session.nativeLanguage,
+      style: session.style,
       educationLevel: session.educationLevel,
     };
 

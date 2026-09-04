@@ -235,14 +235,27 @@ export async function getEffectiveSelectedModel(): Promise<string> {
 export const OUTPUT_LANGUAGE_CHANGE_EVT = "doclens:output-language-changed";
 export const GLOBALS_CHANGE_EVT = "doclens:globals-changed";
 
+export function hasStoredLanguage(): boolean {
+  return hasStoredValue(LANG_LS);
+}
+
+export function getStoredLanguage(): string {
+  if (typeof window === "undefined") return "";
+  return localStorage.getItem(LANG_LS)?.trim() ?? "";
+}
+
 export function getOutputLanguage(): string {
-  if (typeof window === "undefined") return "हिंदी";
-  return localStorage.getItem(LANG_LS) ?? "हिंदी";
+  if (typeof window === "undefined") return "";
+  return localStorage.getItem(LANG_LS)?.trim() ?? "";
 }
 
 export function setOutputLanguage(lang: string) {
   if (typeof window === "undefined") return;
-  localStorage.setItem(LANG_LS, lang);
+  if (lang) {
+    localStorage.setItem(LANG_LS, lang.trim());
+  } else {
+    localStorage.removeItem(LANG_LS);
+  }
   window.dispatchEvent(new CustomEvent(OUTPUT_LANGUAGE_CHANGE_EVT, { detail: lang }));
   window.dispatchEvent(new CustomEvent(GLOBALS_CHANGE_EVT, { detail: { language: lang } }));
 }
@@ -250,6 +263,15 @@ export function setOutputLanguage(lang: string) {
 function hasStoredValue(key: string): boolean {
   if (typeof window === "undefined") return false;
   return (localStorage.getItem(key)?.trim() ?? "") !== "";
+}
+
+export function hasStoredStyle(): boolean {
+  return hasStoredValue(STYLE_LS);
+}
+
+export function getStoredStyle(): string {
+  if (typeof window === "undefined") return "";
+  return localStorage.getItem(STYLE_LS)?.trim() ?? "";
 }
 
 export type GlobalMode = "translate" | "explain";
@@ -260,8 +282,10 @@ function normalizeMode(v: string | null): GlobalMode {
 }
 
 export function getMode(): GlobalMode {
-  if (typeof window === "undefined") return "explain";
-  return normalizeMode(localStorage.getItem(MODE_LS));
+  if (typeof window === "undefined") return "translate";
+  const raw = localStorage.getItem(MODE_LS);
+  if (!raw) return "translate";
+  return normalizeMode(raw);
 }
 
 export function setMode(m: GlobalMode) {
@@ -270,11 +294,11 @@ export function setMode(m: GlobalMode) {
   window.dispatchEvent(new CustomEvent(GLOBALS_CHANGE_EVT, { detail: { mode: m } }));
 }
 
-export function getStyle(mode?: GlobalMode): ProcessingStyle {
-  if (typeof window === "undefined") return "Standard";
+export function getStyle(mode?: GlobalMode): ProcessingStyle | "" {
+  if (typeof window === "undefined") return "";
+  const v = localStorage.getItem(STYLE_LS)?.trim();
+  if (!v) return "";
   const activeMode = mode ?? getMode();
-  const v = localStorage.getItem(STYLE_LS);
-  if (!v) return activeMode === "translate" ? "Native" : "Standard";
   if (activeMode === "translate") {
     if (TRANSLATION_STYLES.some((s) => s.id === v)) return v as TranslationStyle;
     return "Native";
@@ -290,23 +314,19 @@ export function getStyle(mode?: GlobalMode): ProcessingStyle {
 
 export function setStyle(s: ProcessingStyle | string) {
   if (typeof window === "undefined") return;
-  localStorage.setItem(STYLE_LS, s);
+  if (s) {
+    localStorage.setItem(STYLE_LS, s);
+  } else {
+    localStorage.removeItem(STYLE_LS);
+  }
   window.dispatchEvent(new CustomEvent(GLOBALS_CHANGE_EVT, { detail: { style: s } }));
 }
 
 export function hasCompletedAiPreferenceSetup(): boolean {
   if (typeof window === "undefined") return false;
-  const rawMode = localStorage.getItem(MODE_LS);
-  const mode = normalizeMode(rawMode);
-  const hasMode = rawMode === "translate" || rawMode === "explain";
-  const hasLanguage = hasStoredValue(LANG_LS);
-  const currentStyle = getStyle(mode);
-  const hasValidStyle =
-    mode === "translate"
-      ? TRANSLATION_STYLES.some((s) => s.id === currentStyle)
-      : EXPLANATION_STYLES.some((s) => s.id === currentStyle);
-
-  return hasMode && hasLanguage && hasValidStyle;
+  const hasLang = hasStoredValue(LANG_LS);
+  const hasSty = hasStoredValue(STYLE_LS);
+  return hasLang && hasSty;
 }
 
 export function getTemperature(): number {
