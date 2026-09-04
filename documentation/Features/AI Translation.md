@@ -8,7 +8,7 @@
 
 - **Translation Mode (`translate`):** Direct language-to-language translation preserving original text structure and formatting into 90+ languages. Supports **2 Translation Styles:**
   - **Native** — Fluent, natural translation preserving meaning and tone.
-  - **Mixed** — Bilingual blend (e.g., Hinglish) keeping technical terms and proper nouns in English.
+  - **Mixed** — Native script translation retaining English abbreviations and obvious keywords when required (not Hinglish/Romanized text).
 
 - **Explanation Mode (`explain`):** Deep conceptual explanations powered by **5 Explanation Styles:**
   - **Standard**, **Simple**, **Story**, **Deep**, and **AI Mode**.

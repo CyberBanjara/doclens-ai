@@ -22,7 +22,7 @@ All outputs are additionally sanitized by a post-processing pipeline (`cleanAiTe
 | Style ID | Label      | Directive Summary                                                                                                                                    |
 | :------- | :--------- | :--------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `Native` | **Native** | Translate naturally and fluently. Preserve meaning, tone, and nuance. No added explanations.                                                         |
-| `Mixed`  | **Mixed**  | Blend the target language with English as bilingual speakers naturally do (e.g., Hinglish). Keep technical terms, acronyms, proper nouns in English. |
+| `Mixed`  | **Mixed**  | Translate primarily into the target language's native script (not Hinglish/Romanized text). Retain English abbreviations when required, along with technical terms, acronyms, and obvious keywords in English. |
 
 ---
 

@@ -835,7 +835,7 @@ export const TRANSLATION_STYLES: TranslationStyleSpec[] = [
     id: "Mixed",
     label: "Mixed",
     instruction:
-      "Translate by blending the target language with English as bilingual speakers naturally do (e.g., Hinglish for Hindi). Keep technical terms, acronyms, brand names, proper nouns, and commonly understood English words in English. The result should feel conversational and fluid, not like machine translation. Preserve original meaning and tone.",
+      "Translate primarily into the target language written in its native script (do NOT write in Hinglish or Latin/Romanized transliteration). Retain English abbreviations when required, along with technical terms, acronyms, brand names, proper nouns, and obvious keywords in English. Preserve original meaning, tone, and structure without adding explanations.",
   },
 ];
 

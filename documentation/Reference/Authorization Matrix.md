@@ -40,33 +40,35 @@
 
 ### Server-Side API Endpoints
 
-| Endpoint                      | Method | Anonymous | `user` | `viewer` | `moderator` | `editor` | `admin` | Enforcement                                 |
-| :---------------------------- | :----: | :-------: | :----: | :------: | :---------: | :------: | :-----: | :------------------------------------------ |
-| `/api/auth/google-login`      |  POST  |    ✅     |   ✅   |    ✅    |     ✅      |    ✅    |   ✅    | Public                                      |
-| `/api/auth/me`                |  GET   |    ❌     |   ✅   |    ✅    |     ✅      |    ✅    |   ✅    | HttpOnly cookie session                     |
-| `/api/auth/logout`            |  POST  |    ✅     |   ✅   |    ✅    |     ✅      |    ✅    |   ✅    | Public (clears cookie)                      |
-| `/api/admin/users`            |  GET   |    ❌     |   ❌   |    ❌    |     ❌      |    ❌    |   ✅    | `requireSessionFromEvent(event, ["admin"])` |
-| `/api/admin/update-user-role` |  POST  |    ❌     |   ❌   |    ❌    |     ❌      |    ❌    |   ✅    | `requireSessionFromEvent(event, ["admin"])` |
+| Endpoint                      | Method | Anonymous | `user` | `viewer` | `moderator` | `editor` | `admin` | Enforcement                                                                                              |
+| :---------------------------- | :----: | :-------: | :----: | :------: | :---------: | :------: | :-----: | :------------------------------------------------------------------------------------------------------- |
+| `/api/auth/google-login`      |  POST  |    ✅     |   ✅   |    ✅    |     ✅      |    ✅    |   ✅    | Public (verifies Google token, creates session JWT & HttpOnly cookie)                                     |
+| `/api/auth/me`                |  GET   |    ❌     |   ✅   |    ✅    |     ✅      |    ✅    |   ✅    | HttpOnly cookie session (`verifySessionJwt`)                                                             |
+| `/api/auth/update-profile`    |  POST  |    ❌     |   ✅   |    ✅    |     ✅      |    ✅    |   ✅    | Valid session (`getSessionUserFromEvent`); syncs Firestore & issues updated JWT in HttpOnly cookie       |
+| `/api/auth/logout`            |  POST  |    ✅     |   ✅   |    ✅    |     ✅      |    ✅    |   ✅    | Public (clears cookie)                                                                                   |
+| `/api/admin/users`            |  GET   |    ❌     |   ❌   |    ❌    |     ❌      |    ❌    |   ✅    | `requireSessionFromEvent(event, ["admin"])`                                                              |
+| `/api/admin/update-user-role` |  POST  |    ❌     |   ❌   |    ❌    |     ❌      |    ❌    |   ✅    | `requireSessionFromEvent(event, ["admin"])`                                                              |
 
 ### Client-Side Feature Actions
 
-| Action                                   | Anonymous | `user` | `viewer` | `moderator` | `editor` | `admin` | Enforcement                                                   |
-| :--------------------------------------- | :-------: | :----: | :------: | :---------: | :------: | :-----: | :------------------------------------------------------------ |
-| Upload PDF to local library              |    ✅     |   ✅   |    ✅    |     ✅      |    ✅    |   ✅    | Local IndexedDB — no auth needed                              |
-| Read/open local documents                |    ✅     |   ✅   |    ✅    |     ✅      |    ✅    |   ✅    | Local IndexedDB                                               |
-| AI translate/explain pages               |    ✅     |   ✅   |    ✅    |     ✅      |    ✅    |   ✅    | Requires valid API key (server env or user-provided)          |
-| TTS playback (native + neural)           |    ✅     |   ✅   |    ✅    |     ✅      |    ✅    |   ✅    | Client-side, no auth                                          |
-| Export (Markdown/JSON)                   |    ✅     |   ✅   |    ✅    |     ✅      |    ✅    |   ✅    | Local IndexedDB data                                          |
-| Browse Global Library                    |    ❌     |   ✅   |    ✅    |     ✅      |    ✅    |   ✅    | Requires authenticated session                                |
-| Import from Global Library               |    ❌     |   ✅   |    ✅    |     ✅      |    ✅    |   ✅    | Requires authenticated session                                |
-| Upload PDF to Cloudflare R2 (Global Lib) |    ❌     |   ❌   |    ❌    |     ✅      |    ✅    |   ✅    | Client: `isAdmin \|\| moderator \|\| editor`                  |
-| Sync R2 thumbnails                       |    ❌     |   ❌   |    ❌    |     ✅      |    ✅    |   ✅    | Client: `isAdmin \|\| moderator \|\| editor`                  |
-| Delete from Global Library               |    ❌     |   ❌   |    ❌    |     ✅      |    ❌    |   ✅    | Client: `isAdmin \|\| moderator`                              |
-| Upload to R2 from workspace              |    ❌     |   ❌   |    ❌    |     ✅      |    ✅    |   ✅    | Client: `isAdmin \|\| moderator \|\| editor \|\| syncEnabled` |
-| Sync to Supabase from workspace          |    ❌     |   ❌   |    ❌    |     ✅      |    ✅    |   ✅    | Client: `isAdmin \|\| moderator \|\| editor \|\| syncEnabled` |
-| View admin dashboard                     |    ❌     |   ❌   |    ❌    |     ❌      |    ❌    |   ✅    | Client + server `isAdmin`                                     |
-| List all users                           |    ❌     |   ❌   |    ❌    |     ❌      |    ❌    |   ✅    | Server: `requireSessionFromEvent(["admin"])`                  |
-| Change user roles                        |    ❌     |   ❌   |    ❌    |     ❌      |    ❌    |   ✅    | Server: `requireSessionFromEvent(["admin"])`                  |
+| Action                                      | Anonymous | `user` | `viewer` | `moderator` | `editor` | `admin` | Enforcement                                                   |
+| :------------------------------------------ | :-------: | :----: | :------: | :---------: | :------: | :-----: | :------------------------------------------------------------ |
+| Upload PDF to local library                 |    ✅     |   ✅   |    ✅    |     ✅      |    ✅    |   ✅    | Local IndexedDB — no auth needed                              |
+| Read/open local documents                   |    ✅     |   ✅   |    ✅    |     ✅      |    ✅    |   ✅    | Local IndexedDB                                               |
+| AI translate/explain pages                  |    ✅     |   ✅   |    ✅    |     ✅      |    ✅    |   ✅    | Requires valid API key (server env or user-provided)          |
+| TTS playback (native + neural)              |    ✅     |   ✅   |    ✅    |     ✅      |    ✅    |   ✅    | Client-side, no auth                                          |
+| Export (Markdown/JSON)                      |    ✅     |   ✅   |    ✅    |     ✅      |    ✅    |   ✅    | Local IndexedDB data                                          |
+| Browse Global Library                       |    ❌     |   ✅   |    ✅    |     ✅      |    ✅    |   ✅    | Requires authenticated session                                |
+| Import from Global Library                  |    ❌     |   ✅   |    ✅    |     ✅      |    ✅    |   ✅    | Requires authenticated session                                |
+| Update profile & translation preferences    |    ❌     |   ✅   |    ✅    |     ✅      |    ✅    |   ✅    | `apiUpdateUserProfile` (`POST /api/auth/update-profile`)       |
+| Upload PDF to Cloudflare R2 (Global Lib)    |    ❌     |   ❌   |    ❌    |     ✅      |    ✅    |   ✅    | Client: `isAdmin \|\| moderator \|\| editor`                  |
+| Sync R2 thumbnails                          |    ❌     |   ❌   |    ❌    |     ✅      |    ✅    |   ✅    | Client: `isAdmin \|\| moderator \|\| editor`                  |
+| Delete from Global Library                  |    ❌     |   ❌   |    ❌    |     ✅      |    ❌    |   ✅    | Client: `isAdmin \|\| moderator`                              |
+| Upload to R2 from workspace                 |    ❌     |   ❌   |    ❌    |     ✅      |    ✅    |   ✅    | Client: `isAdmin \|\| moderator \|\| editor \|\| syncEnabled` |
+| Sync to Supabase from workspace             |    ❌     |   ❌   |    ❌    |     ✅      |    ✅    |   ✅    | Client: `isAdmin \|\| moderator \|\| editor \|\| syncEnabled` |
+| View admin dashboard                        |    ❌     |   ❌   |    ❌    |     ❌      |    ❌    |   ✅    | Client + server `isAdmin`                                     |
+| List all users                              |    ❌     |   ❌   |    ❌    |     ❌      |    ❌    |   ✅    | Server: `requireSessionFromEvent(["admin"])`                  |
+| Change user roles                           |    ❌     |   ❌   |    ❌    |     ❌      |    ❌    |   ✅    | Server: `requireSessionFromEvent(["admin"])`                  |
 
 ---
 
@@ -86,13 +88,16 @@
 
 ## Implementation References
 
-- **Client auth context:** [AuthContext.tsx](file:///home/sanskar/Desktop/doclens-ai/src/context/AuthContext.tsx) — `isAdmin`, `isPrivileged`, `role`
-- **Server session guard:** [auth-server.ts](file:///home/sanskar/Desktop/doclens-ai/server/lib/auth-server.ts) — `requireSessionFromEvent(event, allowedRoles)`
+- **Client auth context:** [AuthContext.tsx](file:///home/sanskar/Desktop/doclens-ai/src/context/AuthContext.tsx) — `isAdmin`, `isPrivileged`, `role`, `userPreferences`
+- **Client auth helpers:** [auth-client.ts](file:///home/sanskar/Desktop/doclens-ai/src/lib/auth-client.ts) — `apiLoginWithGoogle`, `apiFetchCurrentUser`, `apiUpdateUserProfile`, `apiLogout`
+- **Server session guard:** [auth-server.ts](file:///home/sanskar/Desktop/doclens-ai/server/lib/auth-server.ts) — `requireSessionFromEvent(event, allowedRoles)`, `getSessionUserFromEvent`, `createSessionJwt`, `setSessionCookieOnEvent`
+- **Profile update & JWT refresh endpoint:** [update-profile.post.ts](file:///home/sanskar/Desktop/doclens-ai/server/api/auth/update-profile.post.ts) — Updates user profile claims (`nativeLanguage`, `style`, `educationLevel`, `name`, `photoURL`), syncs Firestore, and issues updated JWT session cookie
 - **Admin route guard:** [admin.tsx](file:///home/sanskar/Desktop/doclens-ai/src/routes/admin.tsx) — Client-side `isAdmin` check
 - **Global Library auth wall:** [global-library.tsx](file:///home/sanskar/Desktop/doclens-ai/src/routes/global-library.tsx) — Sign-in popup for unauthenticated users
 - **Role definitions:** [admin.tsx](file:///home/sanskar/Desktop/doclens-ai/src/routes/admin.tsx#L38-L79) — `ALL_ROLES` and `ROLE_CONFIG`
-- **Firestore user schema:** `users/{uid}` — `{ name, email, photoURL, role, lastLoginAt, createdAt }`
+- **Firestore user schema:** `users/{uid}` — `{ name, email, photoURL, role, nativeLanguage, style, educationLevel, lastLoginAt, createdAt, updatedAt }`
 
 ---
 
 _Part of [[MOC — Features]]_
+
