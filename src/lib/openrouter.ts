@@ -43,23 +43,23 @@ const GLOBAL_KEY_LS = "doclens.openrouter.globalKey";
 export type KeyStatus = "missing" | "valid" | "invalid" | "unknown";
 
 export function getAiProvider(): AiProvider {
-  if (typeof window === "undefined") return "openrouter";
+  if (typeof window === "undefined") return "omnirouter";
   const saved = localStorage.getItem(PROVIDER_LS);
-  if (saved === "omnirouter" && isOmniRouterConfigured()) {
+  if (saved === "openrouter") {
+    return "openrouter";
+  }
+  if (saved === "omnirouter") {
     return "omnirouter";
   }
-  return "openrouter";
+  return "omnirouter";
 }
 
 export function setAiProvider(p: AiProvider) {
   if (typeof window === "undefined") return;
-  if (p === "omnirouter" && isOmniRouterConfigured()) {
-    localStorage.setItem(PROVIDER_LS, "omnirouter");
-  } else {
-    localStorage.removeItem(PROVIDER_LS);
-  }
+  localStorage.setItem(PROVIDER_LS, p);
   emitKeyChange();
 }
+
 
 function emitKeyChange() {
   if (typeof window !== "undefined") {

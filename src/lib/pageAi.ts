@@ -19,10 +19,9 @@ import { cleanAiText } from "./cleanAiText";
 export { cleanAiText };
 
 export function effective(globals: Globals, ov?: PageOverrides) {
-  const omniAvailable = isOmniRouterConfigured();
-  const rawProvider = ov?.provider ?? globals.provider ?? "openrouter";
-  const provider: AiProvider =
-    rawProvider === "omnirouter" && omniAvailable ? "omnirouter" : "openrouter";
+  const rawProvider = ov?.provider ?? globals.provider ?? "omnirouter";
+  const provider: AiProvider = rawProvider === "omnirouter" ? "omnirouter" : "openrouter";
+
 
   const mode = ov?.mode ?? globals.mode;
   let rawStyle = ov?.style ?? globals.style;

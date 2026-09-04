@@ -3,7 +3,10 @@ import { toast } from "sonner";
 import {
   buildPagePayload,
   getDefaultModelSync,
+  getSelectedModel,
+  setSelectedModel,
   getKey,
+  setAiProvider,
   OpenRouterError,
   openApiKeyModal,
   readGlobals,
@@ -73,7 +76,7 @@ export function usePageTranslation(
         const msg = "No text content found on this page to process.";
         toast.error(msg);
         await upsertPageAi(docId, pageNumber, { status: "error", error: msg });
-        onPageAiChangeRef.current(pageNumber, {
+        onPageAiChangeRef.current?.(pageNumber, {
           status: "error",
           hasResult: false,
           isCustom: false,
@@ -81,22 +84,16 @@ export function usePageTranslation(
         return undefined;
       }
 
+      const bookId = docRec?.bookId || docRec?.fileName || docId;
       const currentGlobals = globalsRef.current || readGlobals();
       const state: PageAi = pageRec.pageAi ?? { pageNumber, status: "idle" };
-      const eff = effective(currentGlobals, state.overrides);
-      const isOmni = eff.provider === "omnirouter";
+      let eff = effective(currentGlobals, state.overrides);
+      let isOmni = eff.provider === "omnirouter";
       const hash = hashFor(eff);
 
-      // Get doc record for book_id identification
-      const bookId = docRec?.bookId || docRec?.fileName || docId;
-
       // ─────────────────────────────────────────────────────────────────
-      // 1. SUPABASE MULTI-TABLE REUSE CHECK: Same book + Same language = Instant Reuse
+      // 1. SUPABASE MULTI-TABLE REUSE CHECK
       // ─────────────────────────────────────────────────────────────────
-      // Supabase translation tables store canonical standard translations (mode: translate, style: Native).
-      // If the user changed mode (e.g. explain), changed style (e.g. Detailed, Simplified, ELI5),
-      // set custom overrides, or has a text selection override, skip Supabase reuse so that a fresh
-      // AI response is generated using the newly selected settings.
       const selOverride = selectionOverridesRef.current.get(pageNumber);
       const isDefaultTranslation =
         eff.mode === "translate" &&
@@ -105,7 +102,7 @@ export function usePageTranslation(
         !state.overrides?.style &&
         !state.overrides?.mode;
 
-      if (!selOverride && isDefaultTranslation) {
+      if (!selOverride && isDefaultTranslation && bookId) {
         try {
           const supabaseLookup = await fetchSupabaseLanguagePage({
             data: {
@@ -119,7 +116,6 @@ export function usePageTranslation(
           if (supabaseLookup && supabaseLookup.found && supabaseLookup.content) {
             const result = cleanAiText(supabaseLookup.content);
 
-            // Persist to local IndexedDB and update UI
             await upsertPageAi(docId, pageNumber, {
               status: "done",
               result,
@@ -127,7 +123,7 @@ export function usePageTranslation(
               settingsHash: hash,
             });
 
-            onPageAiChangeRef.current(
+            onPageAiChangeRef.current?.(
               pageNumber,
               summarize({
                 ...state,
@@ -137,7 +133,6 @@ export function usePageTranslation(
               }),
             );
 
-            // Notify UI & TTS workstation
             dispatchPageReady(docId, pageNumber, result);
             return result;
           }
@@ -147,8 +142,16 @@ export function usePageTranslation(
       }
 
       // ─────────────────────────────────────────────────────────────────
-      // 2. PAGE GENERATION (Only runs if page is missing from Supabase)
+      // 2. PAGE GENERATION (With OmniRouter -> OpenRouter Fallback)
       // ─────────────────────────────────────────────────────────────────
+      if (isOmni && !isOmniRouterConfigured()) {
+        console.warn("OmniRouter not configured. Auto-switching to OpenRouter fallback.");
+        setAiProvider("openrouter");
+        isOmni = false;
+        eff = { ...eff, provider: "openrouter" };
+        toast.info("OmniRouter is offline/unconfigured. Automatically switched to OpenRouter.");
+      }
+
       const key = getKey();
       if (!isOmni && !key) {
         ensureKeyReady();
@@ -156,7 +159,7 @@ export function usePageTranslation(
           status: "error",
           error: "No OpenRouter API key configured.",
         });
-        onPageAiChangeRef.current(pageNumber, {
+        onPageAiChangeRef.current?.(pageNumber, {
           status: "error",
           hasResult: false,
           isCustom: false,
@@ -164,21 +167,12 @@ export function usePageTranslation(
         return undefined;
       }
 
-      if (isOmni && !isOmniRouterConfigured()) {
-        const msg = "OmniRouter base URL or API key is not configured in environment.";
-        toast.error(msg);
-        await upsertPageAi(docId, pageNumber, { status: "error", error: msg });
-        onPageAiChangeRef.current(pageNumber, {
-          status: "error",
-          hasResult: false,
-          isCustom: false,
-        });
-        return undefined;
-      }
+      const modelId =
+        eff.modelId ||
+        (isOmni
+          ? currentGlobals.omniModelId || ""
+          : getSelectedModel() || getDefaultModelSync());
 
-      const modelId = eff.modelId || (isOmni ? "" : getDefaultModelSync());
-
-      // One-shot selection override (from PDF text selection → "Translate")
       if (selOverride) selectionOverridesRef.current.delete(pageNumber);
       const effectiveText = selOverride ?? pageRec.text;
 
@@ -204,16 +198,14 @@ export function usePageTranslation(
         setStreamBufs((b) => ({ ...b, [pageNumber]: "" }));
       }
 
-      // Persist running status
       await upsertPageAi(docId, pageNumber, { status: "running", error: undefined });
-      onPageAiChangeRef.current(pageNumber, {
+      onPageAiChangeRef.current?.(pageNumber, {
         status: "running",
         hasResult: !!state.result,
         isCustom: state.isCustom,
         settingsHash: state.settingsHash,
       });
 
-      // ---- High-throughput live UI flusher ----
       const bufferRef = { current: "" };
       const lastUiRef = { current: "" };
       let flushScheduled = false;
@@ -238,7 +230,6 @@ export function usePageTranslation(
       try {
         const onDeltaHandler = (d: string) => {
           bufferRef.current += d;
-          // Immediate update on first chunk for zero perceived latency
           if (!lastUiRef.current) {
             flushUi();
           } else {
@@ -247,97 +238,67 @@ export function usePageTranslation(
         };
 
         if (isOmni) {
-          await streamOmniRouterCompletion({
-            payload,
-            signal: ctrl.signal,
-            onDelta: onDeltaHandler,
-          });
+          try {
+            await streamOmniRouterCompletion({
+              payload,
+              signal: ctrl.signal,
+              onDelta: onDeltaHandler,
+            });
+          } catch (omniErr) {
+            if ((omniErr as Error).name === "AbortError" || ctrl.signal.aborted) throw omniErr;
+            console.warn("OmniRouter failed, switching to OpenRouter:", omniErr);
+            setAiProvider("openrouter");
+            const openRouterModel = getSelectedModel() || getDefaultModelSync();
+            setSelectedModel(openRouterModel);
+            bufferRef.current = "";
+            lastUiRef.current = "";
+            toast.info("OmniRouter failed. Automatically switched to OpenRouter fallback.");
+
+            const fallbackPayload = state.isCustom && state.customRequest
+                ? { ...state.customRequest, model: openRouterModel, stream: true }
+                : buildPagePayload({
+                    modelId: openRouterModel,
+                    mode: eff.mode,
+                    language: eff.language,
+                    style: eff.style,
+                    temperature: eff.temperature,
+                    pageNumber,
+                    pageText: effectiveText,
+                  });
+
+            const openRouterKey = getKey();
+            if (!openRouterKey) {
+              ensureKeyReady();
+              throw new OpenRouterError("No OpenRouter API key configured.", 401, "auth");
+            }
+            await streamCompletion({ key: openRouterKey, payload: fallbackPayload, signal: ctrl.signal, onDelta: onDeltaHandler });
+          }
         } else {
-          await streamCompletion({
-            key,
-            payload,
-            signal: ctrl.signal,
-            onDelta: onDeltaHandler,
-          });
+          await streamCompletion({ key, payload, signal: ctrl.signal, onDelta: onDeltaHandler });
         }
 
-        // Final synchronous flush before writing to IDB
         flushUi();
-        const rawResult = bufferRef.current;
-        const result = cleanAiText(rawResult);
+        const result = cleanAiText(bufferRef.current);
+        await upsertPageAi(docId, pageNumber, { status: "done", result, error: undefined, settingsHash: hash });
+        onPageAiChangeRef.current?.(pageNumber, summarize({ ...state, status: "done", result, settingsHash: hash }));
 
-        // 1. Save to local IndexedDB
-        await upsertPageAi(docId, pageNumber, {
-          status: "done",
-          result,
-          error: undefined,
-          settingsHash: hash,
-        });
-        onPageAiChangeRef.current(
-          pageNumber,
-          summarize({
-            ...state,
-            status: "done",
-            result,
-            settingsHash: hash,
-          }),
-        );
-
-        // 2. Save newly generated page exclusively to dedicated Supabase language table & book_languages
-        // (Only canonical default translations are saved to the shared Supabase table)
-        if (
-          eff.mode === "translate" &&
-          eff.style === "Native" &&
-          !state.isCustom &&
-          !state.overrides?.style &&
-          !state.overrides?.mode
-        ) {
-          void saveSupabaseLanguagePage({
-            data: {
-              language: eff.language,
-              bookId,
-              pageNumber,
-              content: result,
-              docId,
-            },
-          }).catch((err) =>
-            console.warn(
-              `Auto-saving page to Supabase table translations_${eff.language} note:`,
-              err?.message || err,
-            ),
-          );
+        if (isDefaultTranslation && bookId) {
+          void saveSupabaseLanguagePage({ data: { language: eff.language, bookId, pageNumber, content: result, docId } });
         }
-
         return result;
       } catch (e) {
         if ((e as Error).name === "AbortError" || ctrl.signal.aborted) {
           const status = state.result ? "done" : "idle";
           await upsertPageAi(docId, pageNumber, { status });
-          onPageAiChangeRef.current(pageNumber, { ...summarize(state), status });
+          onPageAiChangeRef.current?.(pageNumber, { ...summarize(state), status });
         } else {
           const err = e instanceof Error ? e.message : "Unknown error";
           await upsertPageAi(docId, pageNumber, { status: "error", error: err });
-          onPageAiChangeRef.current(pageNumber, { ...summarize(state), status: "error" });
-
-          if (isOmni || e instanceof OmniRouterError) {
-            toast.error(err);
-          } else {
-            const isDailyOrQuota =
-              (e instanceof OpenRouterError &&
-                (e.kind === "daily_limit" ||
-                  e.kind === "rate_limit" ||
-                  e.kind === "quota" ||
-                  e.kind === "credits")) ||
-              /50 free pages|daily limit|rate limit|quota/i.test(err);
-
+          onPageAiChangeRef.current?.(pageNumber, { ...summarize(state), status: "error" });
+          if (!(e instanceof OmniRouterError)) {
+            const isDailyOrQuota = (e instanceof OpenRouterError && /daily_limit|rate_limit|quota|credits/i.test(e.kind)) || /50 free pages|daily limit|rate limit|quota/i.test(err);
             if (isDailyOrQuota) {
-              toast.error(err, {
-                duration: 8000,
-                action: {
-                  label: "Get Free Key",
-                  onClick: () => openApiKeyModal(err, true),
-                },
-              });
+              toast.error(err, { duration: 8000, action: { label: "Get Free Key", onClick: () => openApiKeyModal(err, true) } });
               openApiKeyModal(err, true);
             } else if (e instanceof OpenRouterError && e.kind === "auth") {
               toast.error(err);
@@ -364,13 +325,10 @@ export function usePageTranslation(
         }
       }
     },
-    [docId, ensureKeyReady, globalsRef, mountedRef, onPageAiChangeRef],
+    [docId, ensureKeyReady, globalsRef, onPageAiChangeRef, mountedRef],
   );
 
-  // Dedupes concurrent generation requests for the same page — the manual
-  // Run button and the ensure-ready / continuous-play-prefetch triggers can
-  // both target the same page number; this makes them share one in-flight
-  // run instead of racing.
+  // Dedupes concurrent generation requests for the same page
   const inFlightRuns = useRef<Map<number, Promise<string | undefined>>>(new Map());
   const runPageOnce = useCallback(
     (pageNumber: number): Promise<string | undefined> => {
@@ -391,3 +349,4 @@ export function usePageTranslation(
 
   return { runningPages, streamBufs, runPageOnce, cancelPage, selectionOverridesRef };
 }
+
