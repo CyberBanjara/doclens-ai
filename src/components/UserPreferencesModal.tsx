@@ -138,6 +138,8 @@ export function UserPreferencesModal({
   const needStyle = !initialStyle;
   const needLevel = !initialEducationLevel;
 
+  const allThreeInitialPresent = Boolean(initialLanguage && initialStyle && initialEducationLevel);
+
   const neededSteps = useMemo<ModalStep[]>(() => {
     const steps: ModalStep[] = [];
     if (needLang) steps.push(1);
@@ -146,6 +148,9 @@ export function UserPreferencesModal({
     return steps.length > 0 ? steps : [1, 2, 3];
   }, [needLang, needStyle, needLevel]);
 
+  const [viewMode, setViewMode] = useState<"confirm" | "wizard">(() =>
+    allThreeInitialPresent ? "confirm" : "wizard",
+  );
   const [step, setStep] = useState<ModalStep>(() => neededSteps[0] ?? 1);
   const [selectedLang, setSelectedLang] = useState<string>(initialLanguage || "");
   const [selectedStyle, setSelectedStyle] = useState<ProcessingStyle | "">(
@@ -161,9 +166,16 @@ export function UserPreferencesModal({
   useEffect(() => {
     if (open) {
       if (initialLanguage) setSelectedLang(initialLanguage);
-      if (initialStyle) setSelectedStyle(initialStyle as ProcessingStyle);
+      if (initialStyle) {
+        setSelectedStyle(initialStyle as ProcessingStyle);
+        const found = ALL_STYLE_OPTIONS.find((s) => s.id === initialStyle);
+        if (found) setSelectedMode(found.mode);
+      }
       if (initialMode) setSelectedMode(initialMode);
       if (initialEducationLevel) setSelectedLevel(initialEducationLevel as EducationLevel);
+
+      const allPresent = Boolean(initialLanguage && initialStyle && initialEducationLevel);
+      setViewMode(allPresent ? "confirm" : "wizard");
       setStep(neededSteps[0] ?? 1);
     }
   }, [initialLanguage, initialStyle, initialMode, initialEducationLevel, open, neededSteps]);
@@ -238,56 +250,190 @@ export function UserPreferencesModal({
         aria-modal="true"
         aria-labelledby="preferences-setup-title"
       >
-        {/* Header */}
-        <div className="flex items-center gap-3.5 min-w-0">
-          <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-primary/10 text-primary border border-primary/20 shadow-inner">
-            {step === 1 ? (
-              <Languages className="h-6 w-6 text-primary" />
-            ) : step === 2 ? (
-              <Sparkles className="h-6 w-6 text-primary" />
-            ) : (
-              <GraduationCap className="h-6 w-6 text-primary" />
-            )}
-          </div>
-          <div className="space-y-0.5 min-w-0 flex-1">
-            <h2
-              id="preferences-setup-title"
-              className="text-lg sm:text-xl font-extrabold tracking-tight text-foreground"
-            >
-              {step === 1
-                ? "Choose Your Translation Language"
-                : step === 2
-                  ? "Choose Your Reading & AI Style"
-                  : "Choose Your Class or Study Goal"}
-            </h2>
-            <p className="text-xs text-muted-foreground leading-relaxed">
-              {step === 1
-                ? "Select the language you want documents, translations, and audio narration in."
-                : step === 2
-                  ? "Select how AI should translate and explain pages for your reading style."
-                  : "Select your standard or goal to personalize books, study materials, and library."}
-            </p>
-          </div>
-        </div>
+        {/* ─── SINGLE CONFIRMATION VIEW (When all 3 parameters exist locally) ─── */}
+        {viewMode === "confirm" ? (
+          <div className="space-y-5 animate-in fade-in duration-200">
+            {/* Header */}
+            <div className="flex items-center gap-3.5 min-w-0">
+              <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-primary/10 text-primary border border-primary/20 shadow-inner">
+                <Sparkles className="h-6 w-6 text-primary" />
+              </div>
+              <div className="space-y-0.5 min-w-0 flex-1">
+                <h2
+                  id="preferences-setup-title"
+                  className="text-lg sm:text-xl font-extrabold tracking-tight text-foreground"
+                >
+                  Confirm Your Preferences
+                </h2>
+                <p className="text-xs text-muted-foreground leading-relaxed">
+                  We found your saved settings on this device. Confirm or adjust them to sync with your account.
+                </p>
+              </div>
+            </div>
 
-        {/* Step Progress Bar */}
-        {neededSteps.length > 1 && (
-          <div className="flex items-center gap-2 pt-0.5">
-            {neededSteps.map((s, idx) => (
-              <div
-                key={s}
-                className={`h-1.5 flex-1 rounded-full transition-all duration-300 ${
-                  currentStepIndex >= idx
-                    ? "bg-primary shadow-xs shadow-primary/30"
-                    : "bg-border/60"
-                }`}
-              />
-            ))}
+            {/* Dropdowns Container */}
+            <div className="space-y-3.5 max-h-[50vh] overflow-y-auto pr-1 py-0.5">
+              {/* Dropdown 1: Language */}
+              <div className="space-y-1.5">
+                <label className="flex items-center gap-1.5 text-xs font-bold text-foreground">
+                  <Languages className="h-3.5 w-3.5 text-primary" />
+                  <span>Translation & Audio Language</span>
+                </label>
+                <div className="relative">
+                  <select
+                    value={selectedLang}
+                    onChange={(e) => setSelectedLang(e.target.value)}
+                    disabled={isSaving}
+                    className="w-full appearance-none rounded-2xl border border-border/80 bg-surface/80 py-3 pl-4 pr-10 text-xs sm:text-sm font-semibold text-foreground focus:border-primary focus:bg-surface focus:outline-none focus:ring-2 focus:ring-primary/20 transition-all cursor-pointer"
+                  >
+                    {LANGUAGES.map((l) => (
+                      <option key={l.id} value={l.native} className="bg-card text-foreground py-1">
+                        {l.native} ({l.english})
+                      </option>
+                    ))}
+                  </select>
+                  <ChevronRight className="pointer-events-none absolute right-3.5 top-1/2 -translate-y-1/2 h-4 w-4 rotate-90 text-muted-foreground" />
+                </div>
+              </div>
+
+              {/* Dropdown 2: AI Style */}
+              <div className="space-y-1.5">
+                <label className="flex items-center gap-1.5 text-xs font-bold text-foreground">
+                  <Sparkles className="h-3.5 w-3.5 text-primary" />
+                  <span>Reading & AI Processing Style</span>
+                </label>
+                <div className="relative">
+                  <select
+                    value={selectedStyle}
+                    onChange={(e) => {
+                      const s = e.target.value as ProcessingStyle;
+                      setSelectedStyle(s);
+                      const found = ALL_STYLE_OPTIONS.find((opt) => opt.id === s);
+                      if (found) setSelectedMode(found.mode);
+                    }}
+                    disabled={isSaving}
+                    className="w-full appearance-none rounded-2xl border border-border/80 bg-surface/80 py-3 pl-4 pr-10 text-xs sm:text-sm font-semibold text-foreground focus:border-primary focus:bg-surface focus:outline-none focus:ring-2 focus:ring-primary/20 transition-all cursor-pointer"
+                  >
+                    <optgroup label="Translation Styles" className="font-bold text-muted-foreground bg-card">
+                      {ALL_STYLE_OPTIONS.filter((o) => o.mode === "translate").map((opt) => (
+                        <option key={opt.id} value={opt.id} className="bg-card text-foreground font-medium py-1">
+                          {opt.title} ({opt.subtitle})
+                        </option>
+                      ))}
+                    </optgroup>
+                    <optgroup label="Explanation Styles" className="font-bold text-muted-foreground bg-card">
+                      {ALL_STYLE_OPTIONS.filter((o) => o.mode === "explain").map((opt) => (
+                        <option key={opt.id} value={opt.id} className="bg-card text-foreground font-medium py-1">
+                          {opt.title} ({opt.subtitle})
+                        </option>
+                      ))}
+                    </optgroup>
+                  </select>
+                  <ChevronRight className="pointer-events-none absolute right-3.5 top-1/2 -translate-y-1/2 h-4 w-4 rotate-90 text-muted-foreground" />
+                </div>
+              </div>
+
+              {/* Dropdown 3: Class / Study Goal */}
+              <div className="space-y-1.5">
+                <label className="flex items-center gap-1.5 text-xs font-bold text-foreground">
+                  <GraduationCap className="h-3.5 w-3.5 text-primary" />
+                  <span>Class / Study Goal</span>
+                </label>
+                <div className="relative">
+                  <select
+                    value={selectedLevel}
+                    onChange={(e) => setSelectedLevel(e.target.value as EducationLevel)}
+                    disabled={isSaving}
+                    className="w-full appearance-none rounded-2xl border border-border/80 bg-surface/80 py-3 pl-4 pr-10 text-xs sm:text-sm font-semibold text-foreground focus:border-primary focus:bg-surface focus:outline-none focus:ring-2 focus:ring-primary/20 transition-all cursor-pointer"
+                  >
+                    {EDUCATION_LEVELS.map((lvl) => (
+                      <option key={lvl.id} value={lvl.id} className="bg-card text-foreground py-1">
+                        {lvl.icon} {lvl.label} — {lvl.description}
+                      </option>
+                    ))}
+                  </select>
+                  <ChevronRight className="pointer-events-none absolute right-3.5 top-1/2 -translate-y-1/2 h-4 w-4 rotate-90 text-muted-foreground" />
+                </div>
+              </div>
+            </div>
+
+            {/* Confirm Actions */}
+            <div className="pt-2 border-t border-border/40 flex flex-col gap-2">
+              <button
+                type="button"
+                onClick={() => void handleFinalSubmit()}
+                disabled={isSaving || !selectedLang || !selectedStyle || !selectedLevel}
+                className="flex w-full items-center justify-center gap-2 rounded-2xl bg-primary py-3 px-4 font-bold text-sm text-primary-foreground shadow-lg shadow-primary/25 transition-all hover:opacity-95 active:scale-[0.99] disabled:opacity-40 cursor-pointer"
+              >
+                {isSaving ? (
+                  <>
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                    <span>Saving to Profile & Syncing JWT...</span>
+                  </>
+                ) : (
+                  <>
+                    <Check className="h-4 w-4 stroke-[3]" />
+                    <span>Save & Sync to Account</span>
+                  </>
+                )}
+              </button>
+            </div>
           </div>
+        ) : (
+          /* ─── MULTI-STEP WIZARD VIEW (When some or all parameters are missing) ─── */
+          <>
+            {/* Header */}
+            <div className="flex items-center gap-3.5 min-w-0">
+              <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-primary/10 text-primary border border-primary/20 shadow-inner">
+                {step === 1 ? (
+                  <Languages className="h-6 w-6 text-primary" />
+                ) : step === 2 ? (
+                  <Sparkles className="h-6 w-6 text-primary" />
+                ) : (
+                  <GraduationCap className="h-6 w-6 text-primary" />
+                )}
+              </div>
+              <div className="space-y-0.5 min-w-0 flex-1">
+                <h2
+                  id="preferences-setup-title"
+                  className="text-lg sm:text-xl font-extrabold tracking-tight text-foreground"
+                >
+                  {step === 1
+                    ? "Choose Your Translation Language"
+                    : step === 2
+                      ? "Choose Your Reading & AI Style"
+                      : "Choose Your Class or Study Goal"}
+                </h2>
+                <p className="text-xs text-muted-foreground leading-relaxed">
+                  {step === 1
+                    ? "Select the language you want documents, translations, and audio narration in."
+                    : step === 2
+                      ? "Select how AI should translate and explain pages for your reading style."
+                      : "Select your standard or goal to personalize books, study materials, and library."}
+                </p>
+              </div>
+            </div>
+
+            {/* Step Progress Bar */}
+            {neededSteps.length > 1 && (
+              <div className="flex items-center gap-2 pt-0.5">
+                {neededSteps.map((s, idx) => (
+                  <div
+                    key={s}
+                    className={`h-1.5 flex-1 rounded-full transition-all duration-300 ${
+                      currentStepIndex >= idx
+                        ? "bg-primary shadow-xs shadow-primary/30"
+                        : "bg-border/60"
+                    }`}
+                  />
+                ))}
+              </div>
+            )}
+          </>
         )}
 
         {/* ─── STEP 1: LANGUAGE SELECTION ─── */}
-        {step === 1 && (
+        {viewMode === "wizard" && step === 1 && (
           <div className="space-y-4 animate-in fade-in duration-200">
             {/* Search Input */}
             <div className="relative">
@@ -411,7 +557,7 @@ export function UserPreferencesModal({
         )}
 
         {/* ─── STEP 2: STYLE SELECTION ─── */}
-        {step === 2 && (
+        {viewMode === "wizard" && step === 2 && (
           <div className="space-y-4 animate-in fade-in duration-200">
             {/* Style Cards Grid */}
             <div className="max-h-[48vh] overflow-y-auto pr-1 py-0.5 space-y-2.5">
@@ -523,7 +669,7 @@ export function UserPreferencesModal({
         )}
 
         {/* ─── STEP 3: CLASS / STANDARD / GOAL SELECTION ─── */}
-        {step === 3 && (
+        {viewMode === "wizard" && step === 3 && (
           <div className="space-y-4 animate-in fade-in duration-200">
             {/* Unified Class Cards Grid */}
             <div className="max-h-[48vh] overflow-y-auto pr-1 py-0.5">
