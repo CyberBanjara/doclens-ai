@@ -23,6 +23,7 @@ import {
 } from "@/lib/openrouter";
 import { getFriendlyErrorMessage, isOnline, OFFLINE_MESSAGE } from "@/lib/network";
 import { useIsMobile } from "@/hooks/use-mobile";
+import { useAuth } from "@/context/AuthContext";
 
 interface VoiceOnboardingDialogProps {
   open: boolean;
@@ -33,6 +34,7 @@ interface VoiceOnboardingDialogProps {
 
 export function VoiceOnboardingDialog({ open, onOpenChange, onReady }: VoiceOnboardingDialogProps) {
   const isMobile = useIsMobile();
+  const { user, updateProfile } = useAuth();
   const {
     outputLanguage,
     availableVoices,
@@ -99,6 +101,12 @@ export function VoiceOnboardingDialog({ open, onOpenChange, onReady }: VoiceOnbo
     setOutputLanguage(pickedLanguage);
     persistOutputLanguage(pickedLanguage);
     setSelectedVoiceUri(effectiveVoiceUri);
+
+    if (user) {
+      void updateProfile({ nativeLanguage: pickedLanguage }).catch((err) =>
+        console.warn("Failed to sync voice onboarding language to Firebase/JWT:", err),
+      );
+    }
 
     if (voice?.isNeural && !voice.isDownloaded) {
       setDownloading(true);

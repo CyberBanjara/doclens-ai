@@ -31,6 +31,7 @@ import { effective, hashFor, dispatchPageReady } from "@/lib/pageAi";
 import { usePageTranslation } from "@/hooks/usePageTranslation";
 import { PageCardLoader } from "@/components/PageCard";
 import { dispatchDocEvent, listenDocEvent } from "@/lib/docEvents";
+import { useAuth } from "@/context/AuthContext";
 
 interface Props {
   docId: string;
@@ -55,6 +56,7 @@ export function PageWorkstation({
   activePage,
   setActivePage,
 }: Props) {
+  const { user, updateProfile } = useAuth();
   const [globals, setGlobals] = useState<Globals>(readGlobals);
   const [models, setModels] = useState<ORModel[]>([]);
   const [omniModels, setOmniModels] = useState<ORModel[]>([]);
@@ -292,6 +294,15 @@ export function PageWorkstation({
     setOutputLanguage(settings.language);
     saveStyle(settings.style);
     localStorage.setItem(explainSetupKey, "1");
+
+    if (user) {
+      void updateProfile({
+        nativeLanguage: settings.language,
+        style: settings.style,
+      }).catch((err) =>
+        console.warn("Failed to sync explain preferences to Firebase/JWT:", err),
+      );
+    }
 
     const nextGlobals = {
       ...(await readEffectiveGlobals()),

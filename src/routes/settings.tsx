@@ -395,6 +395,11 @@ function SettingsPage() {
           onStyleChange={(v) => {
             setStyleState(v);
             saveStyle(v);
+            if (user) {
+              void updateProfile({ style: v }).catch((err) =>
+                console.warn("Failed to update profile style in Firebase/JWT:", err),
+              );
+            }
           }}
           temperature={temperature}
           onTemperatureChange={(v) => {
