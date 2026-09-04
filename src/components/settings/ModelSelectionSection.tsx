@@ -30,7 +30,7 @@ export function ModelSelectionSection({
   onSelectModel,
 }: ModelSelectionSectionProps) {
   return (
-    <section className="glass-panel flex flex-col gap-4 rounded-[18px] p-4 md:col-span-7 md:p-6">
+    <section className="glass-panel flex flex-col gap-4 rounded-[18px] p-4 md:p-6">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div className="flex items-center gap-3">
           <Brain className="h-5 w-5 text-yellow-500" />

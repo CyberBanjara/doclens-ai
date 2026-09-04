@@ -126,9 +126,9 @@ export async function clearAllCaches(): Promise<void> {
 }
 
 /**
- * Clear localStorage and sessionStorage.
+ * Clear localStorage only.
  */
-export function clearAllWebStorage(): void {
+export function clearLocalStorage(): void {
   try {
     if (typeof window !== "undefined" && window.localStorage) {
       window.localStorage.clear();
@@ -136,7 +136,12 @@ export function clearAllWebStorage(): void {
   } catch (e) {
     console.warn("[Storage] Failed to clear localStorage:", e);
   }
+}
 
+/**
+ * Clear sessionStorage only.
+ */
+export function clearSessionStorage(): void {
   try {
     if (typeof window !== "undefined" && window.sessionStorage) {
       window.sessionStorage.clear();
@@ -144,6 +149,14 @@ export function clearAllWebStorage(): void {
   } catch (e) {
     console.warn("[Storage] Failed to clear sessionStorage:", e);
   }
+}
+
+/**
+ * Clear localStorage and sessionStorage.
+ */
+export function clearAllWebStorage(): void {
+  clearLocalStorage();
+  clearSessionStorage();
 }
 
 /**
@@ -180,6 +193,40 @@ export async function unregisterAllServiceWorkers(): Promise<void> {
       console.warn("[Storage] Failed to unregister service workers:", e);
     }
   }
+}
+
+export interface StorageClearOptions {
+  documents?: boolean;
+  voices?: boolean;
+  cache?: boolean;
+  settings?: boolean;
+  session?: boolean;
+}
+
+/**
+ * Granularly clear only the selected categories of data.
+ */
+export async function clearSelectedStorage(options: StorageClearOptions): Promise<void> {
+  const tasks: Promise<any>[] = [];
+
+  if (options.documents) {
+    tasks.push(clearAllIndexedDB());
+  }
+  if (options.voices) {
+    tasks.push(clearAllOpfs());
+  }
+  if (options.cache) {
+    tasks.push(clearAllCaches(), unregisterAllServiceWorkers());
+  }
+  if (options.settings) {
+    clearLocalStorage();
+  }
+  if (options.session) {
+    clearSessionStorage();
+    clearAllCookies();
+  }
+
+  await Promise.allSettled(tasks);
 }
 
 /**

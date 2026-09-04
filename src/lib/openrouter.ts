@@ -152,7 +152,7 @@ export interface OpenApiKeyModalDetail {
 
 /** Subscribe to any key/status change (cross-tab + in-tab). */
 export function onKeyChange(cb: () => void): () => void {
-  if (typeof window === "undefined") return () => {};
+  if (typeof window === "undefined") return () => { };
   const h = () => cb();
   window.addEventListener(KEY_CHANGE_EVT, h);
   window.addEventListener("storage", h);
@@ -176,8 +176,8 @@ export function openApiKeyModal(
       isDailyLimit ||
       (reasonOrDetail
         ? /50 free pages|daily limit|daily free limit|rate limit|too many requests|free tier/i.test(
-            reasonOrDetail,
-          )
+          reasonOrDetail,
+        )
         : false);
     detail = {
       reason: reasonOrDetail,
@@ -640,9 +640,9 @@ function combinedSignal(
   timeoutMs: number,
 ): { signal: AbortSignal; cleanup: () => void } {
   const timeout = AbortSignal.timeout(timeoutMs);
-  if (!userSignal) return { signal: timeout, cleanup: () => {} };
+  if (!userSignal) return { signal: timeout, cleanup: () => { } };
   if (typeof AbortSignal.any === "function") {
-    return { signal: AbortSignal.any([userSignal, timeout]), cleanup: () => {} };
+    return { signal: AbortSignal.any([userSignal, timeout]), cleanup: () => { } };
   }
   const ctrl = new AbortController();
   const onAbort = () => ctrl.abort();
@@ -673,7 +673,7 @@ async function readSseStream(
   let emittedTokens = 0;
 
   const onAbort = () => {
-    reader.cancel().catch(() => {});
+    reader.cancel().catch(() => { });
   };
   signal.addEventListener("abort", onAbort, { once: true });
 

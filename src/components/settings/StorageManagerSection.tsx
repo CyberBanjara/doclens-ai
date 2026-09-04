@@ -1,282 +1,221 @@
 import { useEffect, useState } from "react";
+import { Loader2, Check } from "lucide-react";
 import {
-  HardDrive,
-  Trash2,
-  AlertTriangle,
-  FileText,
-  Mic,
-  KeyRound,
-  Layers,
-  Loader2,
-  RefreshCw,
-  CheckCircle2,
-} from "lucide-react";
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-} from "@/components/ui/alert-dialog";
-import { clearAllStorage, getStorageOverview, type StorageOverview } from "@/lib/storage";
+  clearSelectedStorage,
+  getStorageOverview,
+  type StorageOverview,
+} from "@/lib/storage";
 import { toast } from "sonner";
 
-function formatBytes(bytes: number): string {
-  if (bytes <= 0) return "0 B";
-  const k = 1024;
-  const sizes = ["B", "KB", "MB", "GB", "TB"];
-  const i = Math.min(Math.floor(Math.log(bytes) / Math.log(k)), sizes.length - 1);
-  return `${parseFloat((bytes / Math.pow(k, i)).toFixed(1))} ${sizes[i]}`;
+interface StorageItemOption {
+  id: "documents" | "voices";
+  title: string;
+  description: string;
+  badge?: string;
 }
 
 export function StorageManagerSection() {
   const [stats, setStats] = useState<StorageOverview | null>(null);
-  const [loadingStats, setLoadingStats] = useState(true);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [isClearing, setIsClearing] = useState(false);
 
+  // Selection states for documents and voices (default all selected)
+  const [selected, setSelected] = useState<Record<"documents" | "voices", boolean>>({
+    documents: true,
+    voices: true,
+  });
+
   const loadStats = async () => {
-    setLoadingStats(true);
     try {
       const overview = await getStorageOverview();
       setStats(overview);
     } catch (err) {
       console.warn("Failed to load storage overview:", err);
-    } finally {
-      setLoadingStats(false);
     }
   };
 
   useEffect(() => {
-    void loadStats();
-  }, []);
+    if (dialogOpen) {
+      void loadStats();
+    }
+  }, [dialogOpen]);
 
-  const handleConfirmClear = async () => {
+  const items: StorageItemOption[] = [
+    {
+      id: "documents",
+      title: "Documents & Translations",
+      description: "Uploaded PDF documents, reading notes, and AI translations.",
+      badge: stats ? `${stats.docCount} ${stats.docCount === 1 ? "doc" : "docs"}` : undefined,
+    },
+    {
+      id: "voices",
+      title: "Offline Neural Voices",
+      description: "Downloaded neural voice models for offline text-to-speech.",
+      badge: stats ? `${stats.voiceCount} ${stats.voiceCount === 1 ? "voice" : "voices"}` : undefined,
+    },
+  ];
+
+  const selectedCount = Object.values(selected).filter(Boolean).length;
+  const isAllSelected = selectedCount === items.length;
+
+  const toggleSelectAll = () => {
+    const nextState = !isAllSelected;
+    setSelected({
+      documents: nextState,
+      voices: nextState,
+    });
+  };
+
+  const toggleItem = (id: "documents" | "voices") => {
+    setSelected((prev) => ({
+      ...prev,
+      [id]: !prev[id],
+    }));
+  };
+
+  const handleConfirmDelete = async () => {
+    if (selectedCount === 0) return;
+
     setIsClearing(true);
     try {
-      await clearAllStorage();
-      toast.success("All local application data has been wiped.", {
-        description: "Reloading application...",
+      await clearSelectedStorage(selected);
+      toast.success("Selected data deleted successfully.", {
+        description: "Refreshing application...",
       });
+
       setTimeout(() => {
-        // Full hard navigation to ensure clean state and in-memory singletons reset
         window.location.href = "/settings";
-      }, 750);
+      }, 600);
     } catch (err) {
-      console.error("Storage clear failed:", err);
-      toast.error("Failed to clear some storage items. Please try again.");
+      console.error("Storage delete failed:", err);
+      toast.error("Failed to delete selected storage. Please try again.");
       setIsClearing(false);
-      setDialogOpen(false);
     }
   };
 
-  const usagePercent =
-    stats && stats.quotaBytes > 0
-      ? Math.min(Math.max((stats.usageBytes / stats.quotaBytes) * 100, 0.5), 100)
-      : 0;
-
   return (
-    <section className="glass-panel flex flex-col rounded-[18px] p-4 md:p-6">
-      {/* Header */}
-      <div className="mb-6 flex flex-wrap items-center justify-between gap-4">
-        <div className="flex items-center gap-3">
-          <div className="flex h-10 w-10 items-center justify-center rounded-[10px] bg-primary/10 text-primary border border-primary/20">
-            <HardDrive className="h-5 w-5" />
-          </div>
-          <div>
-            <h3 className="text-lg font-semibold text-foreground">Local Storage & Privacy</h3>
-            <p className="text-xs text-muted-foreground">
-              All documents, OCR caches, neural voices, and API keys are stored entirely inside your
-              browser.
-            </p>
-          </div>
-        </div>
-
-        <div className="flex items-center gap-3">
-          <button
-            type="button"
-            onClick={loadStats}
-            disabled={loadingStats}
-            title="Refresh storage statistics"
-            className="flex items-center gap-1.5 rounded-full border border-border bg-surface-2/60 px-3 py-1.5 text-xs font-semibold text-muted-foreground hover:text-foreground transition-all hover:bg-surface-2 active:scale-95 disabled:opacity-50"
-          >
-            <RefreshCw className={`h-3.5 w-3.5 ${loadingStats ? "animate-spin" : ""}`} />
-            <span className="hidden sm:inline">Refresh</span>
-          </button>
-
-          <button
-            type="button"
-            onClick={() => setDialogOpen(true)}
-            className="flex items-center gap-2 rounded-full bg-destructive/10 px-4 py-2 text-xs font-bold text-destructive transition-all hover:bg-destructive hover:text-destructive-foreground active:scale-95 shadow-sm"
-          >
-            <Trash2 className="h-4 w-4" />
-            <span>Clear All Storage</span>
-          </button>
-        </div>
+    <>
+      {/* ─── Classic, Clean, Centered "Delete Data" Button ─── */}
+      <div className="w-full flex flex-col items-center justify-center pt-8 pb-10 border-t border-border/30 mt-4">
+        <button
+          type="button"
+          onClick={() => setDialogOpen(true)}
+          className="rounded-xl border border-border bg-surface-2/70 px-9 py-3 text-sm font-semibold text-foreground transition-all duration-200 hover:bg-surface-2 hover:border-border-strong hover:shadow-md active:scale-95 shadow-xs cursor-pointer min-w-[160px] text-center"
+        >
+          Delete Data
+        </button>
       </div>
 
-      {/* Storage Meter */}
-      <div className="mb-6 rounded-2xl border border-border bg-card/60 p-4 sm:p-5">
-        <div className="flex flex-wrap items-center justify-between gap-2 mb-2.5">
-          <div className="flex items-center gap-2">
-            <span className="text-xs font-bold uppercase tracking-wider text-muted-foreground">
-              Estimated Browser Quota Usage
-            </span>
-            <span className="inline-flex items-center gap-1 rounded-full bg-primary/10 px-2 py-0.5 text-[10px] font-semibold text-primary">
-              <CheckCircle2 className="h-3 w-3" /> 100% On-Device
-            </span>
-          </div>
-          <span className="font-mono text-xs font-bold text-foreground">
-            {stats ? (
-              <>
-                <span className="text-primary">{formatBytes(stats.usageBytes)}</span>
-                <span className="text-muted-foreground font-normal">
-                  {" "}
-                  of ~{formatBytes(stats.quotaBytes)}
-                </span>
-              </>
-            ) : (
-              "Calculating..."
-            )}
-          </span>
-        </div>
+      {/* ─── Classic Data Selection & Deletion Dialog ─── */}
+      <Dialog open={dialogOpen} onOpenChange={(open) => !isClearing && setDialogOpen(open)}>
+        <DialogContent className="max-w-md border-border bg-background shadow-2xl p-6 sm:rounded-2xl">
+          <DialogHeader className="space-y-1 text-left">
+            <DialogTitle className="text-base font-bold text-foreground">
+              Delete Application Data
+            </DialogTitle>
+            <DialogDescription className="text-xs text-muted-foreground">
+              Select the data you want to delete from your browser.
+            </DialogDescription>
+          </DialogHeader>
 
-        {/* Progress Bar */}
-        <div className="h-2 w-full overflow-hidden rounded-full bg-surface-2 border border-border/40">
-          <div
-            className="h-full rounded-full bg-gradient-to-r from-primary to-accent transition-all duration-500"
-            style={{ width: `${usagePercent}%` }}
-          />
-        </div>
-      </div>
-
-      {/* Breakdown Grid */}
-      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4 mb-6">
-        {/* IndexedDB */}
-        <div className="rounded-xl border border-border bg-surface/40 p-4 transition-all hover:border-border-strong">
-          <div className="flex items-center gap-2 mb-1.5 text-primary">
-            <FileText className="h-4 w-4" />
-            <span className="text-xs font-bold uppercase tracking-wide">IndexedDB</span>
-          </div>
-          <div className="text-lg font-bold text-foreground">
-            {stats ? `${stats.docCount} ${stats.docCount === 1 ? "Doc" : "Docs"}` : "—"}
-          </div>
-          <p className="text-[11px] text-muted-foreground mt-0.5">
-            Documents, PDF blobs, OCR extractions, and translations.
-          </p>
-        </div>
-
-        {/* OPFS / Voice Cache */}
-        <div className="rounded-xl border border-border bg-surface/40 p-4 transition-all hover:border-border-strong">
-          <div className="flex items-center gap-2 mb-1.5 text-primary">
-            <Mic className="h-4 w-4" />
-            <span className="text-xs font-bold uppercase tracking-wide">
-              {stats?.isOpfs ? "OPFS Storage" : "Voice Cache"}
-            </span>
-          </div>
-          <div className="text-lg font-bold text-foreground">
-            {stats ? `${stats.voiceCount} ${stats.voiceCount === 1 ? "Voice" : "Voices"}` : "—"}
-          </div>
-          <p className="text-[11px] text-muted-foreground mt-0.5">
-            Piper ONNX speech models for instant offline playback.
-          </p>
-        </div>
-
-        {/* Cache Storage */}
-        <div className="rounded-xl border border-border bg-surface/40 p-4 transition-all hover:border-border-strong">
-          <div className="flex items-center gap-2 mb-1.5 text-primary">
-            <Layers className="h-4 w-4" />
-            <span className="text-xs font-bold uppercase tracking-wide">Cache & Workers</span>
-          </div>
-          <div className="text-lg font-bold text-foreground">Cache API</div>
-          <p className="text-[11px] text-muted-foreground mt-0.5">
-            Service worker registrations and cached web assets.
-          </p>
-        </div>
-
-        {/* Local & Session Storage */}
-        <div className="rounded-xl border border-border bg-surface/40 p-4 transition-all hover:border-border-strong">
-          <div className="flex items-center gap-2 mb-1.5 text-primary">
-            <KeyRound className="h-4 w-4" />
-            <span className="text-xs font-bold uppercase tracking-wide">Web Storage</span>
-          </div>
-          <div className="text-lg font-bold text-foreground">Preferences</div>
-          <p className="text-[11px] text-muted-foreground mt-0.5">
-            API keys, selected models, languages, themes, and session tokens.
-          </p>
-        </div>
-      </div>
-
-      {/* Privacy Notice Banner */}
-      <div className="flex items-start gap-3 rounded-xl border border-primary/20 bg-primary/5 p-4 text-xs text-foreground/80">
-        <AlertTriangle className="h-4 w-4 text-primary shrink-0 mt-0.5" />
-        <p className="leading-relaxed">
-          <strong className="text-foreground">Universal In-App Data Control:</strong> Clicking{" "}
-          <span className="font-semibold text-destructive">Clear All Storage</span> purges all
-          application storage across IndexedDB, OPFS, Cache Storage, localStorage, sessionStorage,
-          and service workers using standard browser APIs (Chrome, Brave, Firefox, Edge). No browser
-          DevTools or settings inspection required.
-        </p>
-      </div>
-
-      {/* Confirmation Dialog */}
-      <AlertDialog open={dialogOpen} onOpenChange={(open) => !isClearing && setDialogOpen(open)}>
-        <AlertDialogContent className="max-w-lg border-border bg-background shadow-2xl">
-          <AlertDialogHeader>
-            <div className="mx-auto mb-2 flex h-12 w-12 items-center justify-center rounded-full bg-destructive/10 text-destructive sm:mx-0">
-              <AlertTriangle className="h-6 w-6" />
-            </div>
-            <AlertDialogTitle className="text-xl font-bold text-foreground">
-              Permanently clear all application storage?
-            </AlertDialogTitle>
-            <AlertDialogDescription className="text-sm text-muted-foreground space-y-3 pt-2 text-left">
-              <span>
-                This will permanently delete all data stored by Anuwad in your browser. This action
-                is irreversible and includes:
-              </span>
-              <ul className="list-disc pl-5 space-y-1 text-foreground/90 font-medium">
-                <li>All uploaded PDF documents, OCR texts, and AI translations (IndexedDB)</li>
-                <li>All downloaded Piper neural voice models (OPFS & Voice Cache)</li>
-                <li>All offline cached assets and Service Worker registrations (Cache API)</li>
-                <li>
-                  Your custom OpenRouter API keys, model selections, and pipeline defaults
-                  (localStorage)
-                </li>
-                <li>All UI theme and font preferences (localStorage)</li>
-                <li>Active session states and cookies (sessionStorage & Cookies)</li>
-              </ul>
-              <span className="block pt-1 text-destructive font-semibold">
-                Once confirmed, all local data will be purged and the application will reload with
-                default settings.
-              </span>
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-
-          <AlertDialogFooter className="mt-4 gap-2 sm:gap-0">
-            <AlertDialogCancel disabled={isClearing}>Cancel</AlertDialogCancel>
-            <AlertDialogAction
-              onClick={(e) => {
-                e.preventDefault();
-                void handleConfirmClear();
-              }}
+          {/* ─── Selection Quick Toolbar ─── */}
+          <div className="flex items-center justify-between border-y border-border/60 py-2 px-0.5 mt-2">
+            <button
+              type="button"
+              onClick={toggleSelectAll}
               disabled={isClearing}
-              className="bg-destructive text-destructive-foreground hover:bg-destructive/90 transition-all font-semibold"
+              className="text-xs font-medium text-primary hover:underline transition-all cursor-pointer disabled:opacity-50"
+            >
+              {isAllSelected ? "Deselect All" : "Select All"}
+            </button>
+            <span className="text-xs font-medium text-muted-foreground">
+              {selectedCount} of {items.length} selected
+            </span>
+          </div>
+
+          {/* ─── Items List with Classic Checkbox & Card Styling ─── */}
+          <div className="space-y-2 mt-1">
+            {items.map((item) => {
+              const isChecked = selected[item.id];
+
+              return (
+                <div
+                  key={item.id}
+                  onClick={() => !isClearing && toggleItem(item.id)}
+                  className={`group flex items-start gap-3 rounded-xl border p-3.5 transition-all cursor-pointer select-none ${
+                    isChecked
+                      ? "border-primary/50 bg-primary/5"
+                      : "border-border/60 bg-surface/40 hover:border-border"
+                  }`}
+                >
+                  {/* Classic Checkbox */}
+                  <div
+                    className={`mt-0.5 flex h-4 w-4 shrink-0 items-center justify-center rounded-md border transition-all ${
+                      isChecked
+                        ? "border-primary bg-primary text-primary-foreground shadow-xs"
+                        : "border-muted-foreground/40 bg-background group-hover:border-foreground/60"
+                    }`}
+                  >
+                    {isChecked && <Check className="h-3 w-3 stroke-[3]" />}
+                  </div>
+
+                  {/* Text Details */}
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="text-xs font-semibold text-foreground">{item.title}</span>
+                      {item.badge && (
+                        <span className="shrink-0 rounded-md bg-surface-2 px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground">
+                          {item.badge}
+                        </span>
+                      )}
+                    </div>
+                    <p className="text-[11px] text-muted-foreground mt-0.5 leading-relaxed">
+                      {item.description}
+                    </p>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+
+          {/* ─── Modal Footer ─── */}
+          <DialogFooter className="mt-4 flex flex-row items-center justify-end gap-2">
+            <button
+              type="button"
+              onClick={() => setDialogOpen(false)}
+              disabled={isClearing}
+              className="rounded-xl border border-border bg-surface px-4 py-2 text-xs font-medium text-muted-foreground hover:text-foreground hover:bg-surface-2 transition-all active:scale-95 disabled:opacity-50 cursor-pointer"
+            >
+              Cancel
+            </button>
+            <button
+              type="button"
+              onClick={() => void handleConfirmDelete()}
+              disabled={isClearing || selectedCount === 0}
+              className="inline-flex items-center justify-center gap-2 rounded-xl bg-primary px-4 py-2 text-xs font-semibold text-primary-foreground hover:bg-primary/90 transition-all shadow-xs active:scale-95 disabled:opacity-50 cursor-pointer"
             >
               {isClearing ? (
                 <>
-                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                  Purging Storage...
+                  <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                  <span>Deleting...</span>
                 </>
               ) : (
-                "Yes, Clear All Storage"
+                <span>
+                  Delete Selected {selectedCount > 0 ? `(${selectedCount})` : ""}
+                </span>
               )}
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
-    </section>
+            </button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </>
   );
 }
