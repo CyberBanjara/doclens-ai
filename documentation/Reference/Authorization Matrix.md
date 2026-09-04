@@ -51,24 +51,60 @@
 
 ### Client-Side Feature Actions
 
-| Action                                      | Anonymous | `user` | `viewer` | `moderator` | `editor` | `admin` | Enforcement                                                   |
-| :------------------------------------------ | :-------: | :----: | :------: | :---------: | :------: | :-----: | :------------------------------------------------------------ |
-| Upload PDF to local library                 |    ✅     |   ✅   |    ✅    |     ✅      |    ✅    |   ✅    | Local IndexedDB — no auth needed                              |
-| Read/open local documents                   |    ✅     |   ✅   |    ✅    |     ✅      |    ✅    |   ✅    | Local IndexedDB                                               |
-| AI translate/explain pages                  |    ✅     |   ✅   |    ✅    |     ✅      |    ✅    |   ✅    | Requires valid API key (server env or user-provided)          |
-| TTS playback (native + neural)              |    ✅     |   ✅   |    ✅    |     ✅      |    ✅    |   ✅    | Client-side, no auth                                          |
-| Export (Markdown/JSON)                      |    ✅     |   ✅   |    ✅    |     ✅      |    ✅    |   ✅    | Local IndexedDB data                                          |
-| Browse Global Library                       |    ❌     |   ✅   |    ✅    |     ✅      |    ✅    |   ✅    | Requires authenticated session                                |
-| Import from Global Library                  |    ❌     |   ✅   |    ✅    |     ✅      |    ✅    |   ✅    | Requires authenticated session                                |
-| Update profile & translation preferences    |    ❌     |   ✅   |    ✅    |     ✅      |    ✅    |   ✅    | `apiUpdateUserProfile` (`POST /api/auth/update-profile`)       |
-| Upload PDF to Cloudflare R2 (Global Lib)    |    ❌     |   ❌   |    ❌    |     ✅      |    ✅    |   ✅    | Client: `isAdmin \|\| moderator \|\| editor`                  |
-| Sync R2 thumbnails                          |    ❌     |   ❌   |    ❌    |     ✅      |    ✅    |   ✅    | Client: `isAdmin \|\| moderator \|\| editor`                  |
-| Delete from Global Library                  |    ❌     |   ❌   |    ❌    |     ✅      |    ❌    |   ✅    | Client: `isAdmin \|\| moderator`                              |
-| Upload to R2 from workspace                 |    ❌     |   ❌   |    ❌    |     ✅      |    ✅    |   ✅    | Client: `isAdmin \|\| moderator \|\| editor \|\| syncEnabled` |
-| Sync to Supabase from workspace             |    ❌     |   ❌   |    ❌    |     ✅      |    ✅    |   ✅    | Client: `isAdmin \|\| moderator \|\| editor \|\| syncEnabled` |
-| View admin dashboard                        |    ❌     |   ❌   |    ❌    |     ❌      |    ❌    |   ✅    | Client + server `isAdmin`                                     |
-| List all users                              |    ❌     |   ❌   |    ❌    |     ❌      |    ❌    |   ✅    | Server: `requireSessionFromEvent(["admin"])`                  |
-| Change user roles                           |    ❌     |   ❌   |    ❌    |     ❌      |    ❌    |   ✅    | Server: `requireSessionFromEvent(["admin"])`                  |
+| Action                                            | Anonymous | `user` | `viewer` | `moderator` | `editor` | `admin` | Enforcement & Credential Layer                                                                                   |
+| :------------------------------------------------ | :-------: | :----: | :------: | :---------: | :------: | :-----: | :--------------------------------------------------------------------------------------------------------------- |
+| Upload PDF to local library                       |    ✅     |   ✅   |    ✅    |     ✅      |    ✅    |   ✅    | Local IndexedDB (`docStore`, `docBlobs`) — zero auth needed                                                     |
+| Read/open local documents                         |    ✅     |   ✅   |    ✅    |     ✅      |    ✅    |   ✅    | Local IndexedDB                                                                                                  |
+| AI translate/explain pages                        |    ✅     |   ✅   |    ✅    |     ✅      |    ✅    |   ✅    | Requires valid API key (server env or user-provided in settings)                                                 |
+| TTS playback (native + neural)                    |    ✅     |   ✅   |    ✅    |     ✅      |    ✅    |   ✅    | Client-side Web Speech / Kokoro — no auth needed                                                                 |
+| Export (Markdown/JSON)                            |    ✅     |   ✅   |    ✅    |     ✅      |    ✅    |   ✅    | Local IndexedDB data export                                                                                      |
+| Browse Global Library                             |    ❌     |   ✅   |    ✅    |     ✅      |    ✅    |   ✅    | Client sign-in wall (`!user` blurred overlay) + Server `listR2Files` (read-only R2 keys)                         |
+| Import from Global Library (PDF + translations)   |    ❌     |   ✅   |    ✅    |     ✅      |    ✅    |   ✅    | Requires sign-in; downloads R2 PDF + pulls Supabase translations via `VITE_SUPABASE_PUBLISHABLE_KEY`             |
+| **Sync to workspace from Supabase** (Read cache)  |    ✅     |   ✅   |    ✅    |     ✅      |    ✅    |   ✅    | **Universal read:** `syncFromSupabase` uses `VITE_SUPABASE_PUBLISHABLE_KEY` (public read-only key)              |
+| **Sync to Supabase from workspace** (Write cache) |    ❌     |   ❌   |    ❌    |     ✅      |    ✅    |   ✅    | **Restricted write:** `syncToSupabase` requires write secret (`PIPELINE_CATALOG_SYNC_TOKEN` / `SUPABASE_SECRET`) |
+| Update profile & translation preferences          |    ❌     |   ✅   |    ✅    |     ✅      |    ✅    |   ✅    | `apiUpdateUserProfile` (`POST /api/auth/update-profile`) -> updates Firestore + refreshed session JWT           |
+| Upload PDF to Cloudflare R2 (Global Lib)          |    ❌     |   ❌   |    ❌    |     ✅      |    ✅    |   ✅    | Layer 1: `assertRoleSession(["admin", "moderator", "editor"])` + Layer 2: `STORAGE_DISPATCH_TOKEN_*`            |
+| Sync R2 thumbnails                                |    ❌     |   ❌   |    ❌    |     ✅      |    ✅    |   ✅    | Layer 1: `assertRoleSession(["admin", "moderator", "editor"])` + Layer 2: `STORAGE_DISPATCH_TOKEN_*`            |
+| Delete from Global Library                        |    ❌     |   ❌   |    ❌    |     ✅      |    ❌    |   ✅    | Layer 1: `assertRoleSession(["admin", "moderator"])` + Layer 2: `STORAGE_DISPATCH_TOKEN_*`                      |
+| Upload to R2 from workspace                       |    ❌     |   ❌   |    ❌    |     ✅      |    ✅    |   ✅    | Client: `isAdmin \|\| moderator \|\| editor \|\| syncEnabled` + Server Layer 1 role check                        |
+| View admin dashboard                              |    ❌     |   ❌   |    ❌    |     ❌      |    ❌    |   ✅    | Client `isAdmin` check + Server session verification                                                             |
+| List all users                                    |    ❌     |   ❌   |    ❌    |     ❌      |    ❌    |   ✅    | Server: `requireSessionFromEvent(["admin"])`                                                                     |
+| Change user roles                                 |    ❌     |   ❌   |    ❌    |     ❌      |    ❌    |   ✅    | Server: `requireSessionFromEvent(["admin"])`                                                                     |
+
+---
+
+## Credential Separation & Two-Layer Security Model
+
+The system enforces strict directional credential isolation:
+
+### Supabase Synchronizations (Read vs Write Separation)
+
+1. **Sync to Workspace from Supabase (`syncFromSupabase` / Read):**
+   - **Direction:** Supabase Cloud -> Local Workspace / IndexedDB
+   - **Scope:** **Universal.** Any user reading a document or selecting a language can fetch public pre-translated pages.
+   - **Environment Variables Used:**
+     - `VITE_SUPABASE_PUBLISHABLE_KEY` or `SUPABASE_PUBLISHABLE_KEY` (Public Read-Only Anonymous Key)
+     - `SUPABASE_URL` / `VITE_SUPABASE_URL`
+   - **Enforcement:** No server-side session or write key required. Fails gracefully if disabled via `ENABLE_GLOBAL_SYNC=false`.
+
+2. **Sync to Supabase from Workspace (`syncToSupabase` / Write):**
+   - **Direction:** Local Workspace / IndexedDB -> Supabase Cloud
+   - **Scope:** **Restricted.** Only permitted environments/roles with server-side write authorization can persist translations.
+   - **Environment Variables Used:**
+     - `PIPELINE_CATALOG_SYNC_TOKEN` (Primary Write Key)
+     - Fallback Write Keys: `SUPABASE_WRITE_KEY`, `SUPABASE_SECRET_KEY`, `SUPABASE_SERVICE_ROLE_KEY`
+     - *Note: `VITE_SUPABASE_PUBLISHABLE_KEY` will strictly fail with `Unauthorized [Layer 2 Failed]` if write key is missing.*
+   - **Enforcement:** Validated in `saveSupabaseLanguagePage` and `batchSaveSupabaseLanguagePages`. Data is strictly isolated to the specific language table (`translations_<slug>`) and `book_languages`.
+
+### Cloudflare R2 Vault (Read vs Write Separation)
+
+1. **Read Operations (Browse, Download, Read Thumbnails):**
+   - **Environment Variables:** `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY`, `R2_ACCOUNT_ID`, `R2_BUCKET_NAME`, `R2_PUBLIC_BASE_URL`
+   - **Enforcement:** Validated read client; Global Library route is protected by client-side auth wall (`!user` blur).
+
+2. **Write Operations (Upload PDF, Upload Thumbnail, Delete, Reorganize):**
+   - **Layer 1 (Identity & Role):** Validates HttpOnly cookie JWT session via `assertRoleSession(["admin", "moderator", "editor"])` (or `["admin", "moderator"]` for destructive actions like delete/reorganize).
+   - **Layer 2 (API Credentials):** Requires dedicated write credentials `STORAGE_DISPATCH_TOKEN_ID` and `STORAGE_DISPATCH_TOKEN_SECRET` (or `R2_WRITE_ACCESS_KEY_ID`).
 
 ---
 
@@ -92,9 +128,11 @@
 - **Client auth helpers:** [auth-client.ts](file:///home/sanskar/Desktop/doclens-ai/src/lib/auth-client.ts) — `apiLoginWithGoogle`, `apiFetchCurrentUser`, `apiUpdateUserProfile`, `apiLogout`
 - **Server session guard:** [auth-server.ts](file:///home/sanskar/Desktop/doclens-ai/server/lib/auth-server.ts) — `requireSessionFromEvent(event, allowedRoles)`, `getSessionUserFromEvent`, `createSessionJwt`, `setSessionCookieOnEvent`
 - **Profile update & JWT refresh endpoint:** [update-profile.post.ts](file:///home/sanskar/Desktop/doclens-ai/server/api/auth/update-profile.post.ts) — Updates user profile claims (`nativeLanguage`, `style`, `educationLevel`, `name`, `photoURL`), syncs Firestore, and issues updated JWT session cookie
+- **Supabase Server Functions & Credential Isolation:** [supabase.ts](file:///home/sanskar/Desktop/doclens-ai/src/lib/supabase.ts) — `getSupabaseClient({ writeAccess })`, `fetchAvailableLanguagesForBook`, `fetchSupabaseLanguagePage`, `fetchSupabaseLanguageBook`, `saveSupabaseLanguagePage`, `batchSaveSupabaseLanguagePages`
+- **Sync Orchestration:** [sync.ts](file:///home/sanskar/Desktop/doclens-ai/src/lib/sync.ts) — `syncFromSupabase` (Read), `syncToSupabase` (Write)
+- **R2 Two-Layer Protected Operations:** [r2.ts](file:///home/sanskar/Desktop/doclens-ai/src/lib/r2.ts) — `assertRoleSession`, `getS3Client({ writeAccess })`, `uploadToR2`, `deleteFromR2`, `uploadThumbnailToR2`, `downloadFromR2`
 - **Admin route guard:** [admin.tsx](file:///home/sanskar/Desktop/doclens-ai/src/routes/admin.tsx) — Client-side `isAdmin` check
 - **Global Library auth wall:** [global-library.tsx](file:///home/sanskar/Desktop/doclens-ai/src/routes/global-library.tsx) — Sign-in popup for unauthenticated users
-- **Role definitions:** [admin.tsx](file:///home/sanskar/Desktop/doclens-ai/src/routes/admin.tsx#L38-L79) — `ALL_ROLES` and `ROLE_CONFIG`
 - **Firestore user schema:** `users/{uid}` — `{ name, email, photoURL, role, nativeLanguage, style, educationLevel, lastLoginAt, createdAt, updatedAt }`
 
 ---
