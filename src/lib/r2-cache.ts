@@ -1,47 +1,65 @@
 import { listR2Files } from "@/lib/r2";
+import { db, safePut, META } from "@/lib/storage/idbUtils";
+import type { R2File } from "@/lib/file-utils";
+
+export type { R2File };
 
 /**
- * In-memory (module-scoped) cache for the R2 `listObjects` metadata response.
+ * Persistent IndexedDB + in-memory cache for Cloudflare R2 files listing.
  *
- * Only reachable from client-side code paths (event handlers / effects), so this
- * state never gets populated during SSR and never leaks across users/requests.
- * A plain module-level variable naturally survives SPA (client-side router)
- * navigations but is wiped on a full browser refresh, since the JS module is
- * re-evaluated from scratch — which is exactly the invalidation behavior wanted.
+ * Like the Local Library, the Global Library caches the list of available
+ * documents in IndexedDB so subsequent page loads and navigations never make
+ * unnecessary network calls to R2.
+ * Fresh data is only fetched when forceRefresh is requested (e.g. user clicks Refresh).
  */
 
-interface R2File {
-  key: string;
-  size: number;
-  lastModified?: string;
-  url?: string;
-}
+const META_KEY_R2_FILES = "cached_r2_files";
+const META_KEY_R2_AT = "cached_r2_files_at";
 
-const CACHE_TTL_MS = 10 * 60 * 1000;
-
-let cachedFiles: R2File[] | null = null;
-let cachedAt = 0;
+let inMemoryFiles: R2File[] | null = null;
 let inFlightRequest: Promise<{ files: R2File[] }> | null = null;
 
 export async function getCachedR2Files(options?: {
   forceRefresh?: boolean;
 }): Promise<{ files: R2File[] }> {
   const forceRefresh = options?.forceRefresh ?? false;
-  const isFresh = cachedFiles !== null && Date.now() - cachedAt < CACHE_TTL_MS;
 
-  if (!forceRefresh && isFresh) {
-    return { files: cachedFiles! };
+  // 1. If in-memory is already populated and not force-refreshing, return immediately
+  if (!forceRefresh && inMemoryFiles !== null) {
+    return { files: inMemoryFiles };
   }
 
+  // 2. If not forceRefresh, check persistent IndexedDB META store before making any network call
+  if (!forceRefresh) {
+    try {
+      const d = await db();
+      const stored = (await d.get(META, META_KEY_R2_FILES)) as R2File[] | undefined;
+      if (Array.isArray(stored) && stored.length > 0) {
+        inMemoryFiles = stored;
+        return { files: stored };
+      }
+    } catch (e) {
+      console.warn("Failed reading R2 files cache from IndexedDB:", e);
+    }
+  }
+
+  // 3. Deduplicate simultaneous in-flight network requests
   if (!forceRefresh && inFlightRequest) {
     return inFlightRequest;
   }
 
   const request = listR2Files()
-    .then((res) => {
-      cachedFiles = res.files || [];
-      cachedAt = Date.now();
-      return { files: cachedFiles };
+    .then(async (res) => {
+      const files = res.files || [];
+      inMemoryFiles = files;
+      try {
+        const d = await db();
+        await safePut(d, META, files, META_KEY_R2_FILES);
+        await safePut(d, META, Date.now(), META_KEY_R2_AT);
+      } catch (e) {
+        console.warn("Failed persisting R2 files cache to IndexedDB:", e);
+      }
+      return { files };
     })
     .finally(() => {
       inFlightRequest = null;
@@ -51,8 +69,22 @@ export async function getCachedR2Files(options?: {
   return request;
 }
 
-/** Keep the cache in sync after a local mutation (e.g. delete) without a network round-trip. */
+/** Keep the cache in sync after a local mutation (e.g. upload or delete) without a network round-trip. */
 export function setCachedR2Files(files: R2File[]) {
-  cachedFiles = files;
-  cachedAt = Date.now();
+  inMemoryFiles = files;
+  db()
+    .then((d) => safePut(d, META, files, META_KEY_R2_FILES))
+    .catch((e) => console.warn("Failed updating R2 files in IndexedDB:", e));
+}
+
+/** Clear R2 files from local cache */
+export async function clearCachedR2Files() {
+  inMemoryFiles = null;
+  try {
+    const d = await db();
+    await d.delete(META, META_KEY_R2_FILES);
+    await d.delete(META, META_KEY_R2_AT);
+  } catch (e) {
+    console.warn("Failed clearing R2 files from IndexedDB:", e);
+  }
 }

@@ -31,7 +31,12 @@ export function GlobalLibraryCard({
 }: GlobalLibraryCardProps) {
   const catMeta = getSubjectCategoryMeta(file.category);
   const levelMeta = getEducationLevelMeta(file.educationLevel);
-  const { thumbnailUrl, loading: thumbLoading } = useR2Thumbnail(file.key, localDocId);
+  const { thumbnailUrl, loading: thumbLoading } = useR2Thumbnail(
+    file.key,
+    localDocId,
+    file.thumbnailUrl,
+    file.hasThumbnail,
+  );
 
   const [imgError, setImgError] = useState(false);
 

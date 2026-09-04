@@ -3,6 +3,8 @@ export interface R2File {
   size: number;
   lastModified?: string;
   url?: string;
+  thumbnailUrl?: string;
+  hasThumbnail?: boolean;
 }
 
 export interface ParsedR2File extends R2File {

@@ -1,6 +1,6 @@
-import { useState, useEffect, useMemo, useCallback } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { X, Megaphone } from "lucide-react";
-import { type AdRecord, fetchActiveAds, AD_PACKAGES } from "@/lib/ads";
+import { type AdRecord, getCachedActiveAds, AD_PACKAGES } from "@/lib/ads";
 import { AdSubmissionModal } from "@/components/AdSubmissionModal";
 import { useLocation } from "@tanstack/react-router";
 
@@ -29,6 +29,72 @@ const AD_SLOTS = [
   },
 ];
 
+/**
+ * Component to display ad banner image with persistent local IndexedDB Blob caching.
+ * Fetches the image once from R2/remote URL and stores it locally for future views.
+ */
+function AdBannerImage({ src, alt }: { src: string; alt: string }) {
+  const [imgSrc, setImgSrc] = useState<string>(src);
+
+  useEffect(() => {
+    let cancelled = false;
+    let createdUrl: string | null = null;
+    const cacheKey = `ad_img_${src}`;
+
+    (async () => {
+      try {
+        const { getThumbnail, saveThumbnailBlob } = await import("@/lib/storage");
+        const cached = await getThumbnail(cacheKey);
+        if (cached && cached !== "NO_THUMBNAIL") {
+          if (!cancelled) {
+            if (cached.startsWith("blob:")) {
+              createdUrl = cached;
+            }
+            setImgSrc(cached);
+          }
+          return;
+        }
+
+        // Fetch once and cache Blob locally in IndexedDB
+        const res = await fetch(src);
+        if (res.ok) {
+          const blob = await res.blob();
+          if (!cancelled) {
+            const url = URL.createObjectURL(blob);
+            createdUrl = url;
+            setImgSrc(url);
+          }
+          await saveThumbnailBlob(cacheKey, blob);
+        }
+      } catch {
+        // Fallback to direct URL
+        if (!cancelled) {
+          setImgSrc(src);
+        }
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+      if (createdUrl) {
+        URL.revokeObjectURL(createdUrl);
+      }
+    };
+  }, [src]);
+
+  return (
+    <img
+      src={imgSrc}
+      alt={alt}
+      className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-105"
+      loading="lazy"
+      onError={(e) => {
+        (e.target as HTMLElement).style.display = "none";
+      }}
+    />
+  );
+}
+
 export function AdBannerWidget() {
   const [liveAds, setLiveAds] = useState<AdRecord[]>([]);
   const [loading, setLoading] = useState(true);
@@ -39,10 +105,10 @@ export function AdBannerWidget() {
 
   const location = useLocation();
 
-  // Load active ads directly from Supabase (approval_status = 'approved' AND expires_at > now())
-  const loadAds = useCallback(async () => {
+  // Load active ads from local cache / server
+  const loadAds = useCallback(async (forceRefresh = false) => {
     try {
-      const res = await fetchActiveAds({ data: { t: Date.now() } });
+      const res = await getCachedActiveAds({ forceRefresh });
       if (res?.success && Array.isArray(res.ads)) {
         const now = Date.now();
         // Strictly filter only approved ads whose expiration is in the future
@@ -67,20 +133,12 @@ export function AdBannerWidget() {
   useEffect(() => {
     loadAds();
 
-    // Poll every 15 seconds for real-time freshness and automatic expiration
-    const interval = setInterval(loadAds, 15 * 1000);
-
-    // Refresh when tab gains focus or visibility returns
-    const handleFocus = () => void loadAds();
-    window.addEventListener("focus", handleFocus);
-    window.addEventListener("anuwad:ads-changed" as any, handleFocus);
-    document.addEventListener("visibilitychange", handleFocus);
+    // Re-fetch only on explicit ads modification events
+    const handleAdsChanged = () => void loadAds(true);
+    window.addEventListener("anuwad:ads-changed" as any, handleAdsChanged);
 
     return () => {
-      clearInterval(interval);
-      window.removeEventListener("focus", handleFocus);
-      window.removeEventListener("anuwad:ads-changed" as any, handleFocus);
-      document.removeEventListener("visibilitychange", handleFocus);
+      window.removeEventListener("anuwad:ads-changed" as any, handleAdsChanged);
     };
   }, [loadAds]);
 
@@ -151,16 +209,8 @@ export function AdBannerWidget() {
                           AD
                         </span>
 
-                        {/* Banner Image */}
-                        <img
-                          src={activeAd.image_url}
-                          alt={activeAd.title}
-                          className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-105"
-                          loading="lazy"
-                          onError={(e) => {
-                            (e.target as HTMLElement).style.display = "none";
-                          }}
-                        />
+                        {/* Banner Image with Local Blob Caching */}
+                        <AdBannerImage src={activeAd.image_url} alt={activeAd.title} />
 
                         {/* Fallback in case of image load error */}
                         <div className="absolute inset-0 bg-gradient-to-br from-zinc-800 to-zinc-900 flex items-center justify-center p-1 text-center -z-10">
@@ -225,7 +275,7 @@ export function AdBannerWidget() {
         initialMode={submissionMode}
         initialPackageId={selectedPackageId}
         activeAds={liveAds}
-        onSuccess={loadAds}
+        onSuccess={() => void loadAds(true)}
       />
     </>
   );

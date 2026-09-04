@@ -310,6 +310,93 @@ export const fetchActiveAds = createServerFn({ method: "POST" })
     }
   });
 
+const ADS_CACHE_TTL_MS = 10 * 60 * 1000; // 10 minutes client cache
+const META_KEY_ACTIVE_ADS = "cached_active_ads";
+const META_KEY_ACTIVE_ADS_AT = "cached_active_ads_at";
+
+let inMemoryActiveAds: AdRecord[] | null = null;
+let inMemoryAdsCachedAt = 0;
+let inFlightAdsRequest: Promise<{ success: boolean; ads: AdRecord[] }> | null = null;
+
+/**
+ * Client-side cached active ads: reads from memory/IndexedDB before requesting serverFn.
+ */
+export async function getCachedActiveAds(options?: {
+  forceRefresh?: boolean;
+}): Promise<{ success: boolean; ads: AdRecord[] }> {
+  const forceRefresh = options?.forceRefresh ?? false;
+  const now = Date.now();
+
+  // 1. In-memory fresh cache check
+  if (!forceRefresh && inMemoryActiveAds !== null && now - inMemoryAdsCachedAt < ADS_CACHE_TTL_MS) {
+    return { success: true, ads: inMemoryActiveAds };
+  }
+
+  // 2. Persistent IndexedDB cache check (client-side only)
+  if (!forceRefresh && typeof window !== "undefined") {
+    try {
+      const { db, META } = await import("@/lib/storage/idbUtils");
+      const d = await db();
+      const cachedAt = (await d.get(META, META_KEY_ACTIVE_ADS_AT)) as number | undefined;
+      if (cachedAt && now - cachedAt < ADS_CACHE_TTL_MS) {
+        const stored = (await d.get(META, META_KEY_ACTIVE_ADS)) as AdRecord[] | undefined;
+        if (Array.isArray(stored)) {
+          inMemoryActiveAds = stored;
+          inMemoryAdsCachedAt = cachedAt;
+          return { success: true, ads: stored };
+        }
+      }
+    } catch (e) {
+      console.warn("Failed reading cached ads from IndexedDB:", e);
+    }
+  }
+
+  // 3. Deduplicate simultaneous network requests
+  if (!forceRefresh && inFlightAdsRequest) {
+    return inFlightAdsRequest;
+  }
+
+  const request = fetchActiveAds({ data: { t: now } })
+    .then(async (res) => {
+      if (res?.success && Array.isArray(res.ads)) {
+        inMemoryActiveAds = res.ads;
+        inMemoryAdsCachedAt = now;
+        if (typeof window !== "undefined") {
+          try {
+            const { db, safePut, META } = await import("@/lib/storage/idbUtils");
+            const d = await db();
+            await safePut(d, META, res.ads, META_KEY_ACTIVE_ADS);
+            await safePut(d, META, now, META_KEY_ACTIVE_ADS_AT);
+          } catch (e) {
+            console.warn("Failed saving cached ads to IndexedDB:", e);
+          }
+        }
+        return { success: true, ads: res.ads };
+      }
+      return { success: false, ads: inMemoryActiveAds || [] };
+    })
+    .finally(() => {
+      inFlightAdsRequest = null;
+    });
+
+  inFlightAdsRequest = request;
+  return request;
+}
+
+export function invalidateAdsCache() {
+  inMemoryActiveAds = null;
+  inMemoryAdsCachedAt = 0;
+  if (typeof window !== "undefined") {
+    import("@/lib/storage/idbUtils")
+      .then(async ({ db, META }) => {
+        const d = await db();
+        await d.delete(META, META_KEY_ACTIVE_ADS);
+        await d.delete(META, META_KEY_ACTIVE_ADS_AT);
+      })
+      .catch(() => {});
+  }
+}
+
 /**
  * Public: Upload ad creative image/icon to Cloudflare R2 in `ads/` folder
  */

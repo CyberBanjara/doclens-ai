@@ -303,7 +303,8 @@ export const listR2Files = createServerFn({ method: "GET" }).handler(async () =>
   "use server";
   try {
     const { s3, bucketName, publicBaseUrl, sdk } = await getS3Client({ writeAccess: false });
-    const files: { key: string; size: number; lastModified?: string; url?: string }[] = [];
+    const rawFiles: { key: string; size: number; lastModified?: string; url?: string }[] = [];
+    const thumbnailKeys = new Set<string>();
     let continuationToken: string | undefined;
 
     do {
@@ -316,9 +317,13 @@ export const listR2Files = createServerFn({ method: "GET" }).handler(async () =>
 
       for (const obj of data.Contents || []) {
         if (!obj.Key) continue;
-        // Exclude stored thumbnails from the main PDF file listing
-        if (obj.Key.startsWith("thumbnails/") || obj.Key.startsWith(".thumbnails/")) continue;
-        files.push({
+        if (obj.Key.startsWith("thumbnails/")) {
+          const rawKey = obj.Key.substring("thumbnails/".length).replace(/\.jpg$/i, "");
+          thumbnailKeys.add(rawKey);
+          continue;
+        }
+        if (obj.Key.startsWith(".thumbnails/")) continue;
+        rawFiles.push({
           key: obj.Key,
           size: obj.Size || 0,
           lastModified: obj.LastModified ? obj.LastModified.toISOString() : undefined,
@@ -328,6 +333,17 @@ export const listR2Files = createServerFn({ method: "GET" }).handler(async () =>
 
       continuationToken = data.IsTruncated ? data.NextContinuationToken : undefined;
     } while (continuationToken);
+
+    const cleanBaseUrl = publicBaseUrl ? publicBaseUrl.replace(/\/+$/, "") : "";
+    const files = rawFiles.map((file) => {
+      const hasThumb = thumbnailKeys.has(file.key);
+      return {
+        ...file,
+        hasThumbnail: hasThumb,
+        thumbnailUrl:
+          hasThumb && cleanBaseUrl ? `${cleanBaseUrl}/thumbnails/${file.key}.jpg` : undefined,
+      };
+    });
 
     return { files };
   } catch (err: any) {

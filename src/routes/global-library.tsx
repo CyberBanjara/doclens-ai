@@ -167,6 +167,9 @@ function GlobalLibraryPage() {
       ]);
       setFiles(res.files || []);
       setLocalDocs(docs || []);
+      if (forceRefresh && !silent) {
+        toast.success("Global Library refreshed from cloud!");
+      }
     } catch (e: any) {
       console.error(e);
       setErrorMsg(e?.message || "Failed to list files from Cloudflare R2.");
@@ -285,6 +288,16 @@ function GlobalLibraryPage() {
 
       const docRec = await createDoc(docFile, arrayBuffer, file.key);
 
+      // Copy cached thumbnail to local doc if already available
+      try {
+        const { getThumbnail, saveThumbnailBlob } = await import("@/lib/storage");
+        const r2Thumb = await getThumbnail(`r2_thumb_${file.key}`);
+        if (r2Thumb && r2Thumb.startsWith("blob:")) {
+          const thumbBlob = await fetch(r2Thumb).then((r) => r.blob());
+          await saveThumbnailBlob(docRec.id, thumbBlob);
+        }
+      } catch {}
+
       toast.success(`Successfully imported "${cleanName}" to your local library!`, { id: toastId });
 
       navigate({ to: "/doc/$id", params: { id: docRec.id } });
@@ -346,10 +359,17 @@ function GlobalLibraryPage() {
       const { renderPageToJpegBlob } = await import("@/hooks/useThumbnail");
       const { base64ToBlob } = await import("@/lib/file-utils");
       const { uploadBlobAsThumbnailToR2 } = await import("@/hooks/useR2Thumbnail");
+      const { getThumbnail, saveThumbnailBlob } = await import("@/lib/storage");
 
       for (let i = 0; i < classDocuments.length; i++) {
         const file = classDocuments[i];
+        const r2CacheKey = `r2_thumb_${file.key}`;
         try {
+          const localThumb = await getThumbnail(r2CacheKey);
+          if (localThumb && localThumb !== "NO_THUMBNAIL") {
+            continue; // Already cached locally in IndexedDB!
+          }
+
           const check = await getThumbnailFromR2({ data: { fileKey: file.key } });
           if (!check.found) {
             toast.loading(
@@ -360,9 +380,19 @@ function GlobalLibraryPage() {
             const pdfBlob = base64ToBlob(res.base64Data, res.contentType);
             res.base64Data = "";
             const thumbBlob = await renderPageToJpegBlob(pdfBlob);
+            await saveThumbnailBlob(r2CacheKey, thumbBlob);
             const ok = await uploadBlobAsThumbnailToR2(file.key, thumbBlob);
             if (ok) syncedCount++;
             await new Promise((resolve) => setTimeout(resolve, 50));
+          } else {
+            // Found on R2, save to IndexedDB locally
+            if ("url" in check && check.url) {
+              const blob = await fetch(check.url).then((r) => r.blob());
+              await saveThumbnailBlob(r2CacheKey, blob);
+            } else if ("base64Data" in check && check.base64Data) {
+              const blob = base64ToBlob(check.base64Data, check.contentType || "image/jpeg");
+              await saveThumbnailBlob(r2CacheKey, blob);
+            }
           }
         } catch (err) {
           console.warn(`Failed syncing thumbnail for ${file.key}:`, err);
