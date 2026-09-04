@@ -351,6 +351,17 @@ function SettingsPage() {
     return list.slice(0, 200);
   }, [activeModelList, search, tab]);
 
+  const openRouterStatus: "connected" | "disconnected" | "checking" =
+    keyStatus === "valid" || (keyStatus !== "invalid" && models.length > 0)
+      ? "connected"
+      : keyStatus === "checking" || loadingModels
+        ? "checking"
+        : keyStatus === "invalid"
+          ? "disconnected"
+          : models.length > 0
+            ? "connected"
+            : "disconnected";
+
   return (
     <SidebarLayout
       pageTitle="General Settings"
@@ -386,6 +397,8 @@ function SettingsPage() {
             setProvider(p);
             setAiProvider(p);
           }}
+          openRouterStatus={openRouterStatus}
+          omniStatus={omniStatus}
           mode={mode}
           onModeChange={(v) => {
             setModeState(v);
