@@ -15,7 +15,7 @@ interface GlobalLibraryCardProps {
   deleting: boolean;
   syncEnabled: boolean;
   onImport: (file: R2File) => void;
-  onDelete: (file: R2File) => void;
+  onDelete?: (file: R2File) => void;
   onOpenLocalDoc: (docId: string) => void;
 }
 
@@ -157,8 +157,8 @@ export function GlobalLibraryCard({
             </button>
           )}
 
-          {/* Delete Action (If Sync Enabled) */}
-          {syncEnabled && (
+          {/* Delete Action (If Sync Enabled & Authorized) */}
+          {syncEnabled && onDelete && (
             <button
               onClick={() => onDelete(file)}
               disabled={importing || deleting}

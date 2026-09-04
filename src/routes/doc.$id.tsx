@@ -102,7 +102,8 @@ function DocPage() {
   const { page: urlPage } = Route.useSearch();
   const navigate = useNavigate();
   const isMobile = useIsMobile();
-  const { user, loading: authLoading, updateProfile, isAdmin } = useAuth();
+  const { user, loading: authLoading, updateProfile, isAdmin, isPrivileged } = useAuth();
+  const canManageCloud = isAdmin || isPrivileged;
   const [readerOpen, setReaderOpen] = useState(false);
   const [pageJumpOpen, setPageJumpOpen] = useState(false);
   const [overflowOpen, setOverflowOpen] = useState(false);
@@ -574,7 +575,7 @@ function DocPage() {
       }
 
       // Automatically sync pages and translations to Supabase under the category key
-      if ((isAdmin || syncEnabled) && pageCount > 0) {
+      if (canManageCloud && pageCount > 0) {
         void syncToSupabase(id, res.key, doc.selectedLanguage).catch((err) =>
           console.warn("Auto-sync to Supabase after R2 upload failed:", err),
         );
@@ -765,7 +766,7 @@ function DocPage() {
                 )}
               </button>
             )}
-            {pageCount > 0 && (isAdmin || syncEnabled) && (
+            {pageCount > 0 && canManageCloud && (
               <button
                 onClick={handleUploadToR2}
                 disabled={uploading}
@@ -779,7 +780,7 @@ function DocPage() {
                 )}
               </button>
             )}
-            {pageCount > 0 && (isAdmin || syncEnabled) && (
+            {pageCount > 0 && canManageCloud && (
               <button
                 onClick={handleSyncToSupabase}
                 disabled={syncingSupabase}
@@ -858,7 +859,7 @@ function DocPage() {
               status={status}
               uploading={uploading}
               syncingSupabase={syncingSupabase}
-              syncEnabled={isAdmin || syncEnabled}
+              syncEnabled={canManageCloud}
               onAnalyze={handleAnalyze}
               onUploadToR2={handleUploadToR2}
               onSyncToSupabase={handleSyncToSupabase}

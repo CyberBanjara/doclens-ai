@@ -54,7 +54,9 @@ export const Route = createFileRoute("/global-library")({
 function GlobalLibraryPage() {
   const isMobile = useIsMobile();
   const navigate = useNavigate();
-  const { user, isAdmin, loading: authLoading, signInWithGoogle, updateProfile } = useAuth();
+  const { user, isAdmin, isPrivileged, loading: authLoading, signInWithGoogle, updateProfile } = useAuth();
+  const canManageCloud = isAdmin || isPrivileged;
+  const canDeleteCloud = isAdmin || user?.role === "moderator";
 
   const [files, setFiles] = useState<R2File[]>([]);
   const [localDocs, setLocalDocs] = useState<DocSummary[]>([]);
@@ -435,7 +437,7 @@ function GlobalLibraryPage() {
             <ChevronDown className="h-3 w-3 text-muted-foreground" />
           </button>
 
-          {isAdmin && (
+          {canManageCloud && (
             <button
               onClick={() => setUploadDialogOpen(true)}
               disabled={!user || loading || syncingThumbnails || !!importingKey || !!deletingKey}
@@ -448,7 +450,7 @@ function GlobalLibraryPage() {
             </button>
           )}
 
-          {isAdmin && (
+          {canManageCloud && (
             <button
               onClick={() => void handleSyncClassThumbnails()}
               disabled={!user || loading || syncingThumbnails || !!importingKey || !!deletingKey}
@@ -672,7 +674,7 @@ function GlobalLibraryPage() {
                           deleting={deletingKey === file.key}
                           syncEnabled={syncEnabled}
                           onImport={handleImport}
-                          onDelete={(f) => setDeleteTarget(f)}
+                          onDelete={canDeleteCloud ? (f) => setDeleteTarget(f) : undefined}
                           onOpenLocalDoc={(docId) =>
                             navigate({ to: "/doc/$id", params: { id: docId } })
                           }

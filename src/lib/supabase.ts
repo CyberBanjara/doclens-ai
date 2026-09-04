@@ -1,31 +1,35 @@
 import { createClient } from "@supabase/supabase-js";
 import { createServerFn } from "@tanstack/react-start";
 import { isGlobalSyncEnabled } from "./env";
+import { assertRoleSession } from "./auth-session";
 
 /**
  * ============================================================================
- * SUPABASE CLIENT FACTORY & CREDENTIAL SEPARATION
+ * TWO-LAYER AUTHENTICATION & AUTHORIZATION ENGINE: SUPABASE
  * ----------------------------------------------------------------------------
- * Read operations: strictly use read-only Supabase publishable key (VITE_SUPABASE_PUBLISHABLE_KEY).
- * Write operations: strictly require and use write-capable secret key (PIPELINE_CATALOG_SYNC_TOKEN).
+ * Layer 1: JWT Session Verification (assertRoleSession validates admin/moderator/editor)
+ * Layer 2: Write-Capable API Key Authorization (PIPELINE_CATALOG_SYNC_TOKEN / SUPABASE_SECRET_KEY)
+ * ----------------------------------------------------------------------------
+ * Read operations (Universal): strictly use read-only Supabase publishable key (VITE_SUPABASE_PUBLISHABLE_KEY).
+ * Write operations (Restricted): strictly require Layer 1 role + write-capable secret key (PIPELINE_CATALOG_SYNC_TOKEN / SUPABASE_SECRET_KEY).
  * ============================================================================
  */
 
 /**
  * Layer 2 Verification & Credential Separation:
  * - Read operations: strictly use read-only Supabase publishable key (VITE_SUPABASE_PUBLISHABLE_KEY).
- * - Write operations: strictly require and use write-capable secret key (PIPELINE_CATALOG_SYNC_TOKEN).
+ * - Write operations: strictly require and use write-capable secret key (PIPELINE_CATALOG_SYNC_TOKEN / SUPABASE_SECRET_KEY).
  */
 async function getSupabaseClient({ writeAccess = false }: { writeAccess?: boolean } = {}) {
-  const url = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL;
+  const url = process.env.VITE_SUPABASE_URL || process.env.SUPABASE_URL;
   let key = "";
 
   if (writeAccess) {
     // Layer 2: Verify and load dedicated server-side write credential
     key =
       process.env.PIPELINE_CATALOG_SYNC_TOKEN ||
-      process.env.SUPABASE_WRITE_KEY ||
       process.env.SUPABASE_SECRET_KEY ||
+      process.env.SUPABASE_WRITE_KEY ||
       process.env.SUPABASE_SERVICE_ROLE_KEY ||
       "";
 
@@ -316,7 +320,12 @@ export const saveSupabaseLanguagePage = createServerFn({ method: "POST" })
     if (!data.language || !data.bookId || !data.pageNumber || !data.content?.trim()) {
       return { success: false, error: "Missing required parameters to save translated page." };
     }
+
+    // 1. Layer 1: Verify user identity & role privilege (admin, moderator, editor) before mutating Supabase
+    await assertRoleSession(["admin", "moderator", "editor"]);
+
     try {
+      // 2. Layer 2: Verify and acquire write-capable credentials
       const supabase = await getSupabaseClient({ writeAccess: true });
       if (!supabase) {
         return { success: false, error: "Supabase write credentials not configured." };
@@ -327,7 +336,7 @@ export const saveSupabaseLanguagePage = createServerFn({ method: "POST" })
       const { primaryId } = normalizeBookCandidates(data.bookId, data.docId);
       const nowIso = new Date().toISOString();
 
-      // 1. Strictly write only to this language's dedicated table
+      // Write strictly to this language's dedicated table
       const { error } = await supabase.from(tableName).upsert(
         {
           book_id: primaryId,
@@ -343,7 +352,7 @@ export const saveSupabaseLanguagePage = createServerFn({ method: "POST" })
         return { success: false, error: error.message };
       }
 
-      // 2. Fetch all translated page numbers for (primaryId, langSlug) to maintain complete page list
+      // Fetch all translated page numbers for (primaryId, langSlug) to maintain complete page list
       const { data: pageRows } = await supabase
         .from(tableName)
         .select("page_number")
@@ -356,7 +365,7 @@ export const saveSupabaseLanguagePage = createServerFn({ method: "POST" })
             )
           : [data.pageNumber];
 
-      // 3. Register / update language availability in book_languages with full page list
+      // Register / update language availability in book_languages with full page list
       void Promise.resolve(
         supabase.from("book_languages").upsert(
           {
@@ -401,7 +410,11 @@ export const batchSaveSupabaseLanguagePages = createServerFn({ method: "POST" })
       return { success: true, count: 0, pages: [] };
     }
 
+    // 1. Layer 1: Verify user identity & role privilege (admin, moderator, editor) before mutating Supabase
+    await assertRoleSession(["admin", "moderator", "editor"]);
+
     try {
+      // 2. Layer 2: Verify and acquire write-capable credentials
       const supabase = await getSupabaseClient({ writeAccess: true });
       if (!supabase) {
         return { success: false, error: "Supabase write credentials not configured." };
@@ -424,7 +437,7 @@ export const batchSaveSupabaseLanguagePages = createServerFn({ method: "POST" })
         updated_at: nowIso,
       }));
 
-      // 1. Strictly write only to this language's dedicated table
+      // Write strictly to this language's dedicated table
       const { error } = await supabase
         .from(tableName)
         .upsert(rows, { onConflict: "book_id,page_number" });
