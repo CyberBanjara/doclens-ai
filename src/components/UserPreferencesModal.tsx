@@ -242,123 +242,279 @@ export function UserPreferencesModal({
     }
   };
 
+  const [activeDropdown, setActiveDropdown] = useState<"lang" | "style" | "class" | null>(null);
+  const [dropdownSearch, setDropdownSearch] = useState("");
+
+  const selectedLangObj = useMemo(() => {
+    return LANGUAGES.find(
+      (l) =>
+        l.native.toLowerCase() === selectedLang.toLowerCase() ||
+        l.english.toLowerCase() === selectedLang.toLowerCase() ||
+        l.id.toLowerCase() === selectedLang.toLowerCase(),
+    );
+  }, [selectedLang]);
+
+  const selectedStyleObj = useMemo(() => {
+    return ALL_STYLE_OPTIONS.find((s) => s.id === selectedStyle);
+  }, [selectedStyle]);
+
+  const selectedLevelObj = useMemo(() => {
+    return EDUCATION_LEVELS.find((lvl) => lvl.id === selectedLevel);
+  }, [selectedLevel]);
+
+  const filteredDropdownLangs = useMemo(() => {
+    const q = dropdownSearch.trim().toLowerCase();
+    if (!q) return LANGUAGES;
+    return LANGUAGES.filter(
+      (l) =>
+        l.native.toLowerCase().includes(q) ||
+        l.english.toLowerCase().includes(q) ||
+        l.id.toLowerCase().includes(q),
+    );
+  }, [dropdownSearch]);
+
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-md p-4 animate-in fade-in duration-200">
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 backdrop-blur-md p-4 animate-in fade-in duration-200"
+      onClick={() => setActiveDropdown(null)}
+    >
       <div
-        className="relative w-full max-w-2xl rounded-3xl border border-border/80 bg-card/95 p-6 sm:p-7 shadow-2xl backdrop-blur-2xl text-left space-y-5 animate-in zoom-in-95 duration-200 overflow-hidden"
+        className={`relative w-full ${viewMode === "confirm" ? "max-w-md" : "max-w-2xl"} rounded-3xl border border-border/80 bg-card/95 p-6 shadow-2xl backdrop-blur-2xl text-left space-y-4.5 animate-in zoom-in-95 duration-200`}
         role="dialog"
         aria-modal="true"
         aria-labelledby="preferences-setup-title"
+        onClick={(e) => e.stopPropagation()}
       >
         {/* ─── SINGLE CONFIRMATION VIEW (When all 3 parameters exist locally) ─── */}
         {viewMode === "confirm" ? (
-          <div className="space-y-5 animate-in fade-in duration-200">
-            {/* Header */}
-            <div className="flex items-center gap-3.5 min-w-0">
-              <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-primary/10 text-primary border border-primary/20 shadow-inner">
-                <Sparkles className="h-6 w-6 text-primary" />
+          <div className="space-y-4 animate-in fade-in duration-200">
+            {/* Minimal Clean Header */}
+            <div className="flex items-center gap-3">
+              <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-primary/10 text-primary border border-primary/20">
+                <Sparkles className="h-5 w-5" />
               </div>
-              <div className="space-y-0.5 min-w-0 flex-1">
+              <div className="min-w-0 flex-1">
                 <h2
                   id="preferences-setup-title"
-                  className="text-lg sm:text-xl font-extrabold tracking-tight text-foreground"
+                  className="text-base sm:text-lg font-extrabold tracking-tight text-foreground"
                 >
-                  Confirm Your Preferences
+                  Preferences
                 </h2>
-                <p className="text-xs text-muted-foreground leading-relaxed">
-                  We found your saved settings on this device. Confirm or adjust them to sync with your account.
+                <p className="text-xs text-muted-foreground">
+                  Confirm your settings to sync across devices.
                 </p>
               </div>
             </div>
 
-            {/* Dropdowns Container */}
-            <div className="space-y-3.5 max-h-[50vh] overflow-y-auto pr-1 py-0.5">
-              {/* Dropdown 1: Language */}
-              <div className="space-y-1.5">
-                <label className="flex items-center gap-1.5 text-xs font-bold text-foreground">
-                  <Languages className="h-3.5 w-3.5 text-primary" />
-                  <span>Translation & Audio Language</span>
-                </label>
-                <div className="relative">
-                  <select
-                    value={selectedLang}
-                    onChange={(e) => setSelectedLang(e.target.value)}
-                    disabled={isSaving}
-                    className="w-full appearance-none rounded-2xl border border-border/80 bg-surface/80 py-3 pl-4 pr-10 text-xs sm:text-sm font-semibold text-foreground focus:border-primary focus:bg-surface focus:outline-none focus:ring-2 focus:ring-primary/20 transition-all cursor-pointer"
-                  >
-                    {LANGUAGES.map((l) => (
-                      <option key={l.id} value={l.native} className="bg-card text-foreground py-1">
-                        {l.native} ({l.english})
-                      </option>
-                    ))}
-                  </select>
-                  <ChevronRight className="pointer-events-none absolute right-3.5 top-1/2 -translate-y-1/2 h-4 w-4 rotate-90 text-muted-foreground" />
-                </div>
+            {/* 3 Modern Interactive Boxes */}
+            <div className="space-y-2.5 pt-1">
+              {/* Box 1: Language */}
+              <div className="relative">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setActiveDropdown(activeDropdown === "lang" ? null : "lang");
+                    setDropdownSearch("");
+                  }}
+                  className={`flex w-full items-center justify-between rounded-2xl border px-3.5 py-3 text-left transition-all cursor-pointer ${
+                    activeDropdown === "lang"
+                      ? "border-primary bg-primary/5 ring-2 ring-primary/20"
+                      : "border-border/70 bg-surface/40 hover:bg-surface-2/60 hover:border-primary/40"
+                  }`}
+                >
+                  <div className="flex items-center gap-3 min-w-0">
+                    <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl bg-primary/10 text-primary border border-primary/20">
+                      <Languages className="h-4 w-4" />
+                    </div>
+                    <div className="min-w-0">
+                      <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">
+                        Language
+                      </p>
+                      <p className="text-xs sm:text-sm font-bold text-foreground truncate">
+                        {selectedLangObj
+                          ? `${selectedLangObj.native} (${selectedLangObj.english})`
+                          : selectedLang || "Select Language"}
+                      </p>
+                    </div>
+                  </div>
+                  <ChevronRight
+                    className={`h-4 w-4 text-muted-foreground transition-transform duration-200 ${
+                      activeDropdown === "lang" ? "rotate-90 text-primary" : ""
+                    }`}
+                  />
+                </button>
+
+                {activeDropdown === "lang" && (
+                  <div className="absolute left-0 right-0 top-full mt-1.5 z-50 rounded-2xl border border-border bg-popover p-2 shadow-2xl backdrop-blur-xl animate-in fade-in slide-in-from-top-2 duration-150">
+                    <div className="relative mb-2">
+                      <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
+                      <input
+                        type="text"
+                        placeholder="Search language..."
+                        value={dropdownSearch}
+                        onChange={(e) => setDropdownSearch(e.target.value)}
+                        className="w-full rounded-xl border border-border/80 bg-surface/60 py-1.5 pl-8 pr-3 text-xs text-foreground placeholder:text-muted-foreground focus:border-primary focus:outline-none"
+                        autoFocus
+                      />
+                    </div>
+                    <div className="max-h-44 overflow-y-auto space-y-0.5 pr-1">
+                      {filteredDropdownLangs.map((l) => (
+                        <button
+                          key={l.id}
+                          type="button"
+                          onClick={() => {
+                            setSelectedLang(l.native);
+                            setActiveDropdown(null);
+                          }}
+                          className={`flex w-full items-center justify-between rounded-xl px-3 py-2 text-xs font-semibold transition-colors cursor-pointer ${
+                            selectedLang === l.native || selectedLang === l.id
+                              ? "bg-primary/15 text-primary"
+                              : "text-foreground hover:bg-surface-2"
+                          }`}
+                        >
+                          <span>
+                            {l.native} ({l.english})
+                          </span>
+                          {(selectedLang === l.native || selectedLang === l.id) && (
+                            <Check className="h-3.5 w-3.5 stroke-[3]" />
+                          )}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                )}
               </div>
 
-              {/* Dropdown 2: AI Style */}
-              <div className="space-y-1.5">
-                <label className="flex items-center gap-1.5 text-xs font-bold text-foreground">
-                  <Sparkles className="h-3.5 w-3.5 text-primary" />
-                  <span>Reading & AI Processing Style</span>
-                </label>
-                <div className="relative">
-                  <select
-                    value={selectedStyle}
-                    onChange={(e) => {
-                      const s = e.target.value as ProcessingStyle;
-                      setSelectedStyle(s);
-                      const found = ALL_STYLE_OPTIONS.find((opt) => opt.id === s);
-                      if (found) setSelectedMode(found.mode);
-                    }}
-                    disabled={isSaving}
-                    className="w-full appearance-none rounded-2xl border border-border/80 bg-surface/80 py-3 pl-4 pr-10 text-xs sm:text-sm font-semibold text-foreground focus:border-primary focus:bg-surface focus:outline-none focus:ring-2 focus:ring-primary/20 transition-all cursor-pointer"
-                  >
-                    <optgroup label="Translation Styles" className="font-bold text-muted-foreground bg-card">
-                      {ALL_STYLE_OPTIONS.filter((o) => o.mode === "translate").map((opt) => (
-                        <option key={opt.id} value={opt.id} className="bg-card text-foreground font-medium py-1">
-                          {opt.title} ({opt.subtitle})
-                        </option>
+              {/* Box 2: Style */}
+              <div className="relative">
+                <button
+                  type="button"
+                  onClick={() => setActiveDropdown(activeDropdown === "style" ? null : "style")}
+                  className={`flex w-full items-center justify-between rounded-2xl border px-3.5 py-3 text-left transition-all cursor-pointer ${
+                    activeDropdown === "style"
+                      ? "border-primary bg-primary/5 ring-2 ring-primary/20"
+                      : "border-border/70 bg-surface/40 hover:bg-surface-2/60 hover:border-primary/40"
+                  }`}
+                >
+                  <div className="flex items-center gap-3 min-w-0">
+                    <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl bg-primary/10 text-primary border border-primary/20">
+                      <Sparkles className="h-4 w-4" />
+                    </div>
+                    <div className="min-w-0">
+                      <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">
+                        Style
+                      </p>
+                      <p className="text-xs sm:text-sm font-bold text-foreground truncate">
+                        {selectedStyleObj ? selectedStyleObj.title : selectedStyle || "Select Style"}
+                      </p>
+                    </div>
+                  </div>
+                  <ChevronRight
+                    className={`h-4 w-4 text-muted-foreground transition-transform duration-200 ${
+                      activeDropdown === "style" ? "rotate-90 text-primary" : ""
+                    }`}
+                  />
+                </button>
+
+                {activeDropdown === "style" && (
+                  <div className="absolute left-0 right-0 top-full mt-1.5 z-50 rounded-2xl border border-border bg-popover p-2 shadow-2xl backdrop-blur-xl animate-in fade-in slide-in-from-top-2 duration-150">
+                    <div className="max-h-48 overflow-y-auto space-y-0.5 pr-1">
+                      {ALL_STYLE_OPTIONS.map((opt) => (
+                        <button
+                          key={opt.id}
+                          type="button"
+                          onClick={() => {
+                            setSelectedStyle(opt.id);
+                            setSelectedMode(opt.mode);
+                            setActiveDropdown(null);
+                          }}
+                          className={`flex w-full items-center justify-between rounded-xl px-3 py-2 text-xs font-semibold transition-colors cursor-pointer ${
+                            selectedStyle === opt.id
+                              ? "bg-primary/15 text-primary"
+                              : "text-foreground hover:bg-surface-2"
+                          }`}
+                        >
+                          <div className="flex items-center gap-2">
+                            <span>{opt.title}</span>
+                            <span className="text-[10px] text-muted-foreground font-normal">
+                              ({opt.subtitle})
+                            </span>
+                          </div>
+                          {selectedStyle === opt.id && (
+                            <Check className="h-3.5 w-3.5 stroke-[3]" />
+                          )}
+                        </button>
                       ))}
-                    </optgroup>
-                    <optgroup label="Explanation Styles" className="font-bold text-muted-foreground bg-card">
-                      {ALL_STYLE_OPTIONS.filter((o) => o.mode === "explain").map((opt) => (
-                        <option key={opt.id} value={opt.id} className="bg-card text-foreground font-medium py-1">
-                          {opt.title} ({opt.subtitle})
-                        </option>
-                      ))}
-                    </optgroup>
-                  </select>
-                  <ChevronRight className="pointer-events-none absolute right-3.5 top-1/2 -translate-y-1/2 h-4 w-4 rotate-90 text-muted-foreground" />
-                </div>
+                    </div>
+                  </div>
+                )}
               </div>
 
-              {/* Dropdown 3: Class / Study Goal */}
-              <div className="space-y-1.5">
-                <label className="flex items-center gap-1.5 text-xs font-bold text-foreground">
-                  <GraduationCap className="h-3.5 w-3.5 text-primary" />
-                  <span>Class / Study Goal</span>
-                </label>
-                <div className="relative">
-                  <select
-                    value={selectedLevel}
-                    onChange={(e) => setSelectedLevel(e.target.value as EducationLevel)}
-                    disabled={isSaving}
-                    className="w-full appearance-none rounded-2xl border border-border/80 bg-surface/80 py-3 pl-4 pr-10 text-xs sm:text-sm font-semibold text-foreground focus:border-primary focus:bg-surface focus:outline-none focus:ring-2 focus:ring-primary/20 transition-all cursor-pointer"
-                  >
-                    {EDUCATION_LEVELS.map((lvl) => (
-                      <option key={lvl.id} value={lvl.id} className="bg-card text-foreground py-1">
-                        {lvl.icon} {lvl.label} — {lvl.description}
-                      </option>
-                    ))}
-                  </select>
-                  <ChevronRight className="pointer-events-none absolute right-3.5 top-1/2 -translate-y-1/2 h-4 w-4 rotate-90 text-muted-foreground" />
-                </div>
+              {/* Box 3: Class / Goal */}
+              <div className="relative">
+                <button
+                  type="button"
+                  onClick={() => setActiveDropdown(activeDropdown === "class" ? null : "class")}
+                  className={`flex w-full items-center justify-between rounded-2xl border px-3.5 py-3 text-left transition-all cursor-pointer ${
+                    activeDropdown === "class"
+                      ? "border-primary bg-primary/5 ring-2 ring-primary/20"
+                      : "border-border/70 bg-surface/40 hover:bg-surface-2/60 hover:border-primary/40"
+                  }`}
+                >
+                  <div className="flex items-center gap-3 min-w-0">
+                    <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl bg-primary/10 text-primary border border-primary/20">
+                      <GraduationCap className="h-4 w-4" />
+                    </div>
+                    <div className="min-w-0">
+                      <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">
+                        Class / Goal
+                      </p>
+                      <p className="text-xs sm:text-sm font-bold text-foreground truncate">
+                        {selectedLevelObj ? selectedLevelObj.label : selectedLevel || "Select Goal"}
+                      </p>
+                    </div>
+                  </div>
+                  <ChevronRight
+                    className={`h-4 w-4 text-muted-foreground transition-transform duration-200 ${
+                      activeDropdown === "class" ? "rotate-90 text-primary" : ""
+                    }`}
+                  />
+                </button>
+
+                {activeDropdown === "class" && (
+                  <div className="absolute left-0 right-0 top-full mt-1.5 z-50 rounded-2xl border border-border bg-popover p-2 shadow-2xl backdrop-blur-xl animate-in fade-in slide-in-from-top-2 duration-150">
+                    <div className="max-h-48 overflow-y-auto space-y-0.5 pr-1">
+                      {EDUCATION_LEVELS.map((lvl) => (
+                        <button
+                          key={lvl.id}
+                          type="button"
+                          onClick={() => {
+                            setSelectedLevel(lvl.id);
+                            setActiveDropdown(null);
+                          }}
+                          className={`flex w-full items-center justify-between rounded-xl px-3 py-2 text-xs font-semibold transition-colors cursor-pointer ${
+                            selectedLevel === lvl.id
+                              ? "bg-primary/15 text-primary"
+                              : "text-foreground hover:bg-surface-2"
+                          }`}
+                        >
+                          <div className="flex items-center gap-2">
+                            <span>{lvl.icon}</span>
+                            <span>{lvl.label}</span>
+                          </div>
+                          {selectedLevel === lvl.id && (
+                            <Check className="h-3.5 w-3.5 stroke-[3]" />
+                          )}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                )}
               </div>
             </div>
 
-            {/* Confirm Actions */}
-            <div className="pt-2 border-t border-border/40 flex flex-col gap-2">
+            {/* Action Button */}
+            <div className="pt-2 border-t border-border/40">
               <button
                 type="button"
                 onClick={() => void handleFinalSubmit()}
@@ -368,13 +524,10 @@ export function UserPreferencesModal({
                 {isSaving ? (
                   <>
                     <Loader2 className="h-4 w-4 animate-spin" />
-                    <span>Saving to Profile & Syncing JWT...</span>
+                    <span>Saving...</span>
                   </>
                 ) : (
-                  <>
-                    <Check className="h-4 w-4 stroke-[3]" />
-                    <span>Save & Sync to Account</span>
-                  </>
+                  <span>Save Preferences</span>
                 )}
               </button>
             </div>
@@ -396,20 +549,20 @@ export function UserPreferencesModal({
               <div className="space-y-0.5 min-w-0 flex-1">
                 <h2
                   id="preferences-setup-title"
-                  className="text-lg sm:text-xl font-extrabold tracking-tight text-foreground"
+                  className="text-base sm:text-lg font-extrabold tracking-tight text-foreground"
                 >
                   {step === 1
-                    ? "Choose Your Translation Language"
+                    ? "Choose Language"
                     : step === 2
-                      ? "Choose Your Reading & AI Style"
-                      : "Choose Your Class or Study Goal"}
+                      ? "Choose AI Style"
+                      : "Choose Class or Goal"}
                 </h2>
                 <p className="text-xs text-muted-foreground leading-relaxed">
                   {step === 1
-                    ? "Select the language you want documents, translations, and audio narration in."
+                    ? "Select translation and speech language."
                     : step === 2
-                      ? "Select how AI should translate and explain pages for your reading style."
-                      : "Select your standard or goal to personalize books, study materials, and library."}
+                      ? "Select reading and explanation style."
+                      : "Personalize study level and library."}
                 </p>
               </div>
             </div>
