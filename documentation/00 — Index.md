@@ -27,7 +27,8 @@
 - [[Dependencies]] — Every package dependency, grouped by concern
 - [[Development Guidelines]] — Local setup, scripts, and coding conventions
 - [[End-to-End Pipeline]] — Full PDF → Translation → TTS data flow
-- [[Global Library]] — Shared R2-backed document vault and cross-device sync
+- [[Global Library]] — Offline-first R2 document vault with persistent IndexedDB caching
+- [[Advertising & Sponsorship]] — Self-serve sponsor dock with local creative caching
 - [[Authentication]] — Firebase Google Sign-In and Firestore reviews
 - [[Authorization Matrix]] — Role×Action permission matrix for all system functions
 - [[AI Response Sanitization]] — Post-processing pipeline for clean AI outputs
@@ -38,4 +39,4 @@
 
 ---
 
-_Last updated: 2026-08-25_
+_Last updated: 2026-09-04_

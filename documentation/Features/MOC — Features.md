@@ -27,9 +27,10 @@
 - [[Text-to-Speech]] — Dynamic TTS orchestration, sentence splitting, voice preferences.
 - [[Piper Neural TTS]] — Local WASM-based neural engine, dual-storage voice caching, direct synthesis pipeline.
 
-### Account & Export
+### Account & Monetization
 
 - [[Authentication]] — Google Sign-In (Firebase Auth) and Firestore-backed reviews.
+- [[Advertising & Sponsorship]] — Self-serve sponsored slots, local IndexedDB creative caching, and admin approval pipeline.
 - [[Export System]] — Document and translation data exporter supporting Markdown and structured JSON.
 - [[Memory & Storage Audit]] — Comprehensive audit of memory hotspots and optimization strategies.
 
