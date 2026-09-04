@@ -434,7 +434,7 @@ export function PageWorkstation({
 
       {/* ─── Single page card ─── */}
       <div
-        className="relative flex-1 overflow-auto px-5 py-4 page-card-enter"
+        className="relative flex-1 overflow-auto overscroll-contain px-5 py-4 page-card-enter"
         key={activePage}
         onClick={(e) => {
           const target = e.target as HTMLElement;

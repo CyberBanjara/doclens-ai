@@ -253,7 +253,7 @@ function ExtractedTextTab({
 
   return (
     <div
-      className="h-full overflow-auto px-6 py-5 page-card-enter"
+      className="h-full overflow-auto overscroll-contain px-6 py-5 page-card-enter"
       key={activePage}
       onClick={(e) => {
         const target = e.target as HTMLElement;
