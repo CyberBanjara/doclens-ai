@@ -447,12 +447,18 @@ export function classifyR2Book(file: R2File): ClassifiedBook {
       }
     }
 
-    // Extract Chapter number
-    const chMatch = displayName.match(/(?:chapter|theme|ch|unit)\s*(\d+)/i);
-    if (chMatch && chMatch[1]) {
-      chapterNumber = parseInt(chMatch[1], 10);
-    } else if (/prelim|intro|toc|cover/i.test(displayName)) {
+    // Extract Index / Chapter number from the 1st whole word/token
+    const firstTokenMatch = displayName.trim().match(/^(\d+)/);
+
+    if (firstTokenMatch) {
+      chapterNumber = parseInt(firstTokenMatch[1], 10);
+    } else if (
+      /\b(prelims?|preface|toc|table\s+of\s+contents|cover|front\s*matter)\b/i.test(displayName) ||
+      /^\s*(?:intro|introduction)\b/i.test(displayName)
+    ) {
       chapterNumber = 0;
+    } else if (/\b(appendix|glossary|index|back\s*matter|epilogue)\b/i.test(displayName)) {
+      chapterNumber = 998;
     }
   }
 
@@ -512,12 +518,15 @@ export function filterBooks(
     return true;
   });
 
-  // Sort numerically by Chapter Number (Chapter 1, Chapter 2... Chapter 10)
+  // Sort numerically in ascending order by Chapter Number (Chapter 1, 2... 9, 10), then natural title sort
   return filtered.sort((a, b) => {
     if (a.chapterNumber !== b.chapterNumber) {
       return a.chapterNumber - b.chapterNumber;
     }
-    return a.displayName.localeCompare(b.displayName, undefined, { numeric: true });
+    return a.displayName.localeCompare(b.displayName, undefined, {
+      numeric: true,
+      sensitivity: "base",
+    });
   });
 }
 
