@@ -171,9 +171,10 @@ export const uploadToR2 = createServerFn({ method: "POST" })
       const buffer = Buffer.from(data.base64Data, "base64");
       const digest = crypto.createHash("md5").update(buffer).digest("hex");
 
-      const cleanFileName = data.fileName.includes("/")
+      const rawFileName = data.fileName.includes("/")
         ? data.fileName.split("/").pop() || data.fileName
         : data.fileName;
+      const cleanFileName = rawFileName.replace(/[\r\n\t]+/g, " ").replace(/\s+/g, " ").trim();
 
       // Construct explicit file hierarchy from selected subject and class (no auto-classification)
       let targetPrefix: string;
@@ -214,11 +215,14 @@ export const uploadToR2 = createServerFn({ method: "POST" })
 
       await s3.send(cmd);
 
+      const cleanBaseUrl = publicBaseUrl ? publicBaseUrl.replace(/\/+$/, "") : "";
+      const encodedTargetKey = targetKey.split("/").map((seg) => encodeURIComponent(seg)).join("/");
+
       return {
         success: true,
         key: targetKey,
         category: targetPrefix,
-        url: publicBaseUrl ? `${publicBaseUrl}/${targetKey}` : undefined,
+        url: cleanBaseUrl ? `${cleanBaseUrl}/${encodedTargetKey}` : undefined,
       };
     } catch (err: any) {
       if (err?.$metadata?.httpStatusCode === 412) {
@@ -257,6 +261,7 @@ export const listR2Files = createServerFn({ method: "GET" }).handler(async () =>
   "use server";
   try {
     const { s3, bucketName, publicBaseUrl, sdk } = await getS3Client({ writeAccess: false });
+    const cleanBaseUrl = publicBaseUrl ? publicBaseUrl.replace(/\/+$/, "") : "";
     const rawFiles: { key: string; size: number; lastModified?: string; url?: string }[] = [];
     const thumbnailKeys = new Set<string>();
     let continuationToken: string | undefined;
@@ -277,25 +282,26 @@ export const listR2Files = createServerFn({ method: "GET" }).handler(async () =>
           continue;
         }
         if (obj.Key.startsWith(".thumbnails/")) continue;
+        const encodedKey = obj.Key.split("/").map((seg) => encodeURIComponent(seg)).join("/");
         rawFiles.push({
           key: obj.Key,
           size: obj.Size || 0,
           lastModified: obj.LastModified ? obj.LastModified.toISOString() : undefined,
-          url: publicBaseUrl ? `${publicBaseUrl}/${obj.Key}` : undefined,
+          url: cleanBaseUrl ? `${cleanBaseUrl}/${encodedKey}` : undefined,
         });
       }
 
       continuationToken = data.IsTruncated ? data.NextContinuationToken : undefined;
     } while (continuationToken);
 
-    const cleanBaseUrl = publicBaseUrl ? publicBaseUrl.replace(/\/+$/, "") : "";
     const files = rawFiles.map((file) => {
       const hasThumb = thumbnailKeys.has(file.key);
+      const encodedKey = file.key.split("/").map((seg) => encodeURIComponent(seg)).join("/");
       return {
         ...file,
         hasThumbnail: hasThumb,
         thumbnailUrl:
-          hasThumb && cleanBaseUrl ? `${cleanBaseUrl}/thumbnails/${file.key}.jpg` : undefined,
+          hasThumb && cleanBaseUrl ? `${cleanBaseUrl}/thumbnails/${encodedKey}.jpg` : undefined,
       };
     });
 
@@ -321,7 +327,8 @@ export const uploadThumbnailToR2 = createServerFn({ method: "POST" })
     try {
       const { s3, bucketName, sdk } = await getS3Client({ writeAccess: true });
       const buffer = Buffer.from(data.base64Data, "base64");
-      const thumbKey = `thumbnails/${data.fileKey}.jpg`;
+      const cleanFileKey = data.fileKey.replace(/[\r\n\t]+/g, " ").replace(/\s+/g, " ").trim();
+      const thumbKey = `thumbnails/${cleanFileKey}.jpg`;
 
       await s3.send(
         new sdk.PutObjectCommand({
@@ -345,7 +352,8 @@ export const getThumbnailFromR2 = createServerFn({ method: "POST" })
     "use server";
     try {
       const { s3, bucketName, publicBaseUrl, sdk } = await getS3Client({ writeAccess: false });
-      const thumbKey = `thumbnails/${data.fileKey}.jpg`;
+      const cleanFileKey = data.fileKey.replace(/[\r\n\t]+/g, " ").replace(/\s+/g, " ").trim();
+      const thumbKey = `thumbnails/${cleanFileKey}.jpg`;
 
       // Verify if the thumbnail object actually exists in the R2 bucket
       try {
@@ -361,7 +369,9 @@ export const getThumbnailFromR2 = createServerFn({ method: "POST" })
       }
 
       if (publicBaseUrl) {
-        return { found: true, url: `${publicBaseUrl}/${thumbKey}` };
+        const cleanBaseUrl = publicBaseUrl.replace(/\/+$/, "");
+        const encodedThumbKey = thumbKey.split("/").map((seg) => encodeURIComponent(seg)).join("/");
+        return { found: true, url: `${cleanBaseUrl}/${encodedThumbKey}` };
       }
 
       const response = await s3.send(
