@@ -82,7 +82,9 @@ function GlobalLibraryPage() {
   const [uploadDialogOpen, setUploadDialogOpen] = useState(false);
   const [uploadFile, setUploadFile] = useState<File | null>(null);
   const [uploadCategory, setUploadCategory] = useState<string>("history");
-  const [uploadEducationLevel, setUploadEducationLevel] = useState<string>("class-10");
+  const [uploadEducationLevel, setUploadEducationLevel] = useState<string>(
+    (user?.educationLevel as string) || getSavedEducationLevel() || "class-10",
+  );
   const [uploadingDirect, setUploadingDirect] = useState(false);
 
   // Initialize Education Level from user session or localStorage
@@ -90,6 +92,7 @@ function GlobalLibraryPage() {
     const savedLevel = (user?.educationLevel as EducationLevel) || getSavedEducationLevel();
     if (savedLevel) {
       setEducationLevel(savedLevel);
+      setUploadEducationLevel(savedLevel);
     } else {
       // First time user visiting Global Library
       setIsFirstTime(true);
@@ -439,7 +442,16 @@ function GlobalLibraryPage() {
 
           {canManageCloud && (
             <button
-              onClick={() => setUploadDialogOpen(true)}
+              onClick={() => {
+                setUploadEducationLevel(
+                  (user?.educationLevel as string) ||
+                    educationLevel ||
+                    getSavedEducationLevel() ||
+                    "class-10",
+                );
+                setUploadCategory(activeCategory || "history");
+                setUploadDialogOpen(true);
+              }}
               disabled={!user || loading || syncingThumbnails || !!importingKey || !!deletingKey}
               className="flex items-center gap-1.5 h-8 px-2.5 rounded-xl border border-border bg-surface text-xs font-semibold text-foreground transition-colors hover:bg-surface-2 disabled:opacity-50 cursor-pointer shadow-sm"
               aria-label="Upload PDF to R2"

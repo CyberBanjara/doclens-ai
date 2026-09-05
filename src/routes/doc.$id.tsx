@@ -492,10 +492,15 @@ function DocPage() {
   const [uploading, setUploading] = useState(false);
   const [showUploadCategoryModal, setShowUploadCategoryModal] = useState(false);
   const [uploadSubject, setUploadSubject] = useState("history");
-  const [uploadEducationLevel, setUploadEducationLevel] = useState("class-10");
+  const [uploadEducationLevel, setUploadEducationLevel] = useState(
+    (user?.educationLevel as string) || getSavedEducationLevel() || "class-10",
+  );
 
   const handleUploadToR2 = () => {
     if (uploading || !doc) return;
+    const initialLevel =
+      (user?.educationLevel as string) || getSavedEducationLevel() || "class-10";
+    setUploadEducationLevel(initialLevel);
     setShowUploadCategoryModal(true);
   };
 

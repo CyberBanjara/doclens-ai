@@ -163,7 +163,7 @@ export const uploadToR2 = createServerFn({ method: "POST" })
     }
 
     // 1. Verify role privilege before mutating R2 vault
-    await assertRoleSession(["admin", "moderator", "editor"]);
+    const sessionUser = await assertRoleSession(["admin", "moderator", "editor"]);
 
     try {
       // 2. Use write-capable credentials
@@ -176,13 +176,14 @@ export const uploadToR2 = createServerFn({ method: "POST" })
         : data.fileName;
       const cleanFileName = rawFileName.replace(/[\r\n\t]+/g, " ").replace(/\s+/g, " ").trim();
 
-      // Construct explicit file hierarchy from selected subject and class (no auto-classification)
+      // Construct explicit file hierarchy from selected subject and class (using JWT session educationLevel fallback)
+      const effectiveEducationLevel = data.educationLevel || sessionUser.educationLevel || "";
       let targetPrefix: string;
       if (data.subject) {
         const cleanSubj = sanitizeCategory(data.subject);
         const cleanLevel =
-          data.educationLevel && data.educationLevel !== "general"
-            ? sanitizeCategory(data.educationLevel)
+          effectiveEducationLevel && effectiveEducationLevel !== "general"
+            ? sanitizeCategory(effectiveEducationLevel)
             : "";
         targetPrefix = cleanLevel ? `${cleanSubj}/${cleanLevel}` : cleanSubj;
       } else if (data.category) {
@@ -230,12 +231,13 @@ export const uploadToR2 = createServerFn({ method: "POST" })
         const cleanFileName = data.fileName.includes("/")
           ? data.fileName.split("/").pop() || data.fileName
           : data.fileName;
+        const effectiveEducationLevel = data.educationLevel || sessionUser?.educationLevel || "";
         let targetPrefix: string;
         if (data.subject) {
           const cleanSubj = sanitizeCategory(data.subject);
           const cleanLevel =
-            data.educationLevel && data.educationLevel !== "general"
-              ? sanitizeCategory(data.educationLevel)
+            effectiveEducationLevel && effectiveEducationLevel !== "general"
+              ? sanitizeCategory(effectiveEducationLevel)
               : "";
           targetPrefix = cleanLevel ? `${cleanSubj}/${cleanLevel}` : cleanSubj;
         } else if (data.category) {
@@ -244,12 +246,14 @@ export const uploadToR2 = createServerFn({ method: "POST" })
           targetPrefix = "miscellaneous";
         }
         const targetKey = `${targetPrefix}/${cleanFileName}`;
+        const cleanBaseUrl = publicBaseUrl ? publicBaseUrl.replace(/\/+$/, "") : "";
+        const encodedTargetKey = targetKey.split("/").map((seg) => encodeURIComponent(seg)).join("/");
         return {
           success: true,
           alreadyExists: true,
           key: targetKey,
           category: targetPrefix,
-          url: publicBaseUrl ? `${publicBaseUrl}/${targetKey}` : undefined,
+          url: cleanBaseUrl ? `${cleanBaseUrl}/${encodedTargetKey}` : undefined,
         };
       }
       console.error("R2 Upload error:", err);
