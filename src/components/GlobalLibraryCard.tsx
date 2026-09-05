@@ -1,9 +1,8 @@
 import { useState } from "react";
-import { HardDrive, Calendar, Trash2, Download, Check } from "lucide-react";
-import { formatBytes, formatDate, type R2File } from "@/lib/file-utils";
+import { Trash2, Download, Check } from "lucide-react";
+import { formatBytes, type R2File } from "@/lib/file-utils";
 import {
   getSubjectCategoryMeta,
-  getEducationLevelMeta,
   type ClassifiedBook,
 } from "@/lib/classification";
 import { useR2Thumbnail } from "@/hooks/useR2Thumbnail";
@@ -30,7 +29,6 @@ export function GlobalLibraryCard({
   onOpenLocalDoc,
 }: GlobalLibraryCardProps) {
   const catMeta = getSubjectCategoryMeta(file.category);
-  const levelMeta = getEducationLevelMeta(file.educationLevel);
   const { thumbnailUrl, loading: thumbLoading } = useR2Thumbnail(
     file.key,
     localDocId,
@@ -45,7 +43,7 @@ export function GlobalLibraryCard({
   return (
     <div className="group relative flex flex-col overflow-hidden rounded-2xl border border-border/80 bg-surface/60 backdrop-blur-xl shadow-md transition-all duration-300 hover:-translate-y-1.5 hover:shadow-2xl hover:shadow-primary/10 hover:border-primary/40">
       {/* E-Book Top Thumbnail / 3D Book Cover Header */}
-      <div className="relative h-40 sm:h-48 md:h-52 w-full overflow-hidden bg-gradient-to-br from-surface-2/80 to-surface border-b border-border/50 select-none">
+      <div className="relative h-44 sm:h-52 md:h-56 w-full overflow-hidden bg-gradient-to-br from-surface-2/80 to-surface border-b border-border/50 select-none">
         {/* Book Spine 3D Depth Shadow Effect */}
         <div className="pointer-events-none absolute left-0 inset-y-0 w-3 sm:w-4 bg-gradient-to-r from-black/45 via-black/20 to-transparent z-20" />
         {/* Right Page Edge Sheen */}
@@ -59,7 +57,7 @@ export function GlobalLibraryCard({
               onError={() => setImgError(true)}
               className="h-full w-full object-cover object-top opacity-95 transition-transform duration-500 group-hover:scale-105"
             />
-            <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent" />
+            <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-black/20" />
           </div>
         ) : thumbLoading && localDocId ? (
           <div className="flex h-full w-full items-center justify-center bg-surface-2/40">
@@ -85,27 +83,16 @@ export function GlobalLibraryCard({
           </div>
         )}
 
-        {/* Top Badges Overlay */}
-        <div className="absolute top-2.5 left-2.5 right-2.5 flex items-center justify-between pointer-events-none z-20 gap-1.5">
-          {/* Category Tag */}
-          <span className="flex items-center gap-1 rounded-full border border-border/60 bg-surface/90 backdrop-blur-md px-2 py-0.5 sm:px-2.5 sm:py-1 text-[9px] sm:text-[10px] font-bold text-foreground shadow-sm truncate">
-            <span>{catMeta.icon}</span>
-            <span className="truncate">{catMeta.label}</span>
+        {/* Top Right File Size Pill */}
+        <div className="absolute top-2.5 right-2.5 z-20 pointer-events-none">
+          <span className="flex items-center rounded-full border border-white/20 bg-black/60 backdrop-blur-md px-2 py-0.5 text-[10px] font-medium text-white/90 shadow-sm">
+            {formatBytes(file.size)}
           </span>
-
-          {/* Education Level Tag */}
-          {file.educationLevel !== "general" && (
-            <span
-              className={`rounded-full border backdrop-blur-md px-2 py-0.5 text-[9px] sm:text-[10px] font-bold shadow-sm ${levelMeta.badgeBg}`}
-            >
-              {levelMeta.shortLabel}
-            </span>
-          )}
         </div>
       </div>
 
       {/* Book Card Body Content */}
-      <div className="flex flex-1 flex-col p-3 sm:p-4 space-y-2.5">
+      <div className="flex flex-1 flex-col p-3.5 sm:p-4 justify-between space-y-3">
         <div>
           <h3
             className="line-clamp-2 text-xs sm:text-sm font-bold text-foreground leading-snug group-hover:text-primary transition-colors h-8 sm:h-9"
@@ -113,18 +100,6 @@ export function GlobalLibraryCard({
           >
             {file.displayName}
           </h3>
-        </div>
-
-        {/* File Metadata */}
-        <div className="flex items-center justify-between text-[10px] sm:text-[11px] text-muted-foreground pt-0.5">
-          <span className="flex items-center gap-1 font-medium truncate">
-            <HardDrive className="h-3 w-3 shrink-0 text-muted-foreground/70" />
-            {formatBytes(file.size)}
-          </span>
-          <span className="hidden sm:flex items-center gap-1 font-medium">
-            <Calendar className="h-3 w-3 shrink-0 text-muted-foreground/70" />
-            {formatDate(file.lastModified)}
-          </span>
         </div>
 
         {/* E-Book Footer Actions */}
@@ -178,3 +153,4 @@ export function GlobalLibraryCard({
     </div>
   );
 }
+
