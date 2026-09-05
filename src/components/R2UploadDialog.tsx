@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import {
   Dialog,
   DialogContent,
@@ -21,7 +21,10 @@ import {
   CloudUpload,
   FileText,
   FolderTree,
+  Plus,
   RotateCcw,
+  Trash2,
+  X,
 } from "lucide-react";
 
 export interface R2UploadDialogProps {
@@ -30,37 +33,62 @@ export interface R2UploadDialogProps {
   onOpenChange: (open: boolean) => void;
   uploadFile?: File | null;
   onFileChange?: (file: File | null) => void;
+  uploadFiles?: File[];
+  onFilesChange?: (files: File[]) => void;
   existingDocFileName?: string;
   uploadCategory: string;
   onCategoryChange: (category: string) => void;
   uploadEducationLevel: string;
   onEducationLevelChange: (level: string) => void;
   uploadingDirect: boolean;
-  onSubmit: (customFileName: string) => void;
+  uploadProgress?: { current: number; total: number; currentFileName?: string } | null;
+  onSubmit: (customFileName?: string) => void;
 }
 
-/** 2-Step (Subject -> Class) Upload-to-R2 modal with folder hierarchy and editable filename. */
+function formatFileSize(bytes: number): string {
+  if (!bytes || bytes === 0) return "0 B";
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+}
+
+/** 2-Step (Subject -> Class) Upload-to-R2 modal with multi-file batch support and folder hierarchy preview. */
 export function R2UploadDialog({
   isMobile,
   open,
   onOpenChange,
   uploadFile,
   onFileChange,
+  uploadFiles,
+  onFilesChange,
   existingDocFileName,
   uploadCategory,
   onCategoryChange,
   uploadEducationLevel,
   onEducationLevelChange,
   uploadingDirect,
+  uploadProgress,
   onSubmit,
 }: R2UploadDialogProps) {
-  // Step state: 1 = Subject, 2 = Class
   const [step, setStep] = useState<1 | 2>(1);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
-  const initialFileName = existingDocFileName || uploadFile?.name || "document.pdf";
+  // Determine current active files
+  const files: File[] =
+    uploadFiles && uploadFiles.length > 0
+      ? uploadFiles
+      : uploadFile
+      ? [uploadFile]
+      : [];
+
+  const isMultiFile = files.length > 1;
+  const isSingleDoc = Boolean(existingDocFileName || files.length === 1);
+  const isFileReady = Boolean(existingDocFileName || files.length > 0);
+
+  const initialFileName = existingDocFileName || files[0]?.name || "document.pdf";
   const [customFileName, setCustomFileName] = useState(initialFileName);
 
-  // Reset to Step 1 & sync filename whenever modal opens
+  // Reset to Step 1 & sync filename whenever modal opens or files change
   useEffect(() => {
     if (open) {
       setStep(1);
@@ -74,7 +102,7 @@ export function R2UploadDialog({
     UPLOAD_EDUCATION_LEVELS.find((l) => l.id === uploadEducationLevel) ||
     UPLOAD_EDUCATION_LEVELS[1];
 
-  // Clean filename and ensure .pdf extension
+  // Clean single filename and ensure .pdf extension
   const trimmedName = customFileName.trim().replace(/[\/\\]/g, "_") || initialFileName;
   const finalFileName = trimmedName.toLowerCase().endsWith(".pdf")
     ? trimmedName
@@ -85,18 +113,74 @@ export function R2UploadDialog({
       ? `${uploadCategory}/${uploadEducationLevel}/`
       : `${uploadCategory}/`;
 
-  const previewPath = `${folderPrefix}${finalFileName}`;
-  const isFileReady = Boolean(existingDocFileName || uploadFile);
+  const totalBytes = files.reduce((acc, f) => acc + (f.size || 0), 0);
+
+  const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const selected = e.target.files;
+    if (!selected || selected.length === 0) return;
+
+    const incoming = Array.from(selected).filter(
+      (f) => f.type === "application/pdf" || f.name.toLowerCase().endsWith(".pdf"),
+    );
+
+    if (incoming.length === 0) return;
+
+    if (onFilesChange) {
+      const existingNames = new Set(files.map((f) => f.name));
+      const merged = [...files, ...incoming.filter((f) => !existingNames.has(f.name))];
+      onFilesChange(merged);
+      if (merged.length === 1) {
+        setCustomFileName(merged[0].name);
+      }
+    } else if (onFileChange) {
+      onFileChange(incoming[0]);
+      setCustomFileName(incoming[0].name);
+    }
+
+    // Reset input so re-selecting same files triggers change event
+    if (fileInputRef.current) {
+      fileInputRef.current.value = "";
+    }
+  };
+
+  const handleRemoveFile = (indexToRemove: number) => {
+    if (onFilesChange) {
+      const updated = files.filter((_, i) => i !== indexToRemove);
+      onFilesChange(updated);
+      if (updated.length === 1) {
+        setCustomFileName(updated[0].name);
+      }
+    } else if (onFileChange) {
+      onFileChange(null);
+    }
+  };
+
+  const handleClearAllFiles = () => {
+    if (onFilesChange) {
+      onFilesChange([]);
+    } else if (onFileChange) {
+      onFileChange(null);
+    }
+  };
 
   const dialogHeaderContent = (
     <div className="space-y-3">
-      <div className="flex items-center gap-2.5">
-        <div className="flex h-8 w-8 items-center justify-center rounded-xl bg-primary/10 text-primary border border-primary/20 shrink-0">
-          <CloudUpload className="h-4 w-4" />
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-2.5">
+          <div className="flex h-8 w-8 items-center justify-center rounded-xl bg-primary/10 text-primary border border-primary/20 shrink-0">
+            <CloudUpload className="h-4 w-4" />
+          </div>
+          <div>
+            <DialogTitle className="text-base font-bold text-foreground">
+              Upload to Cloudflare R2
+            </DialogTitle>
+          </div>
         </div>
-        <DialogTitle className="text-base font-bold text-foreground">
-          Upload to Cloudflare R2
-        </DialogTitle>
+        {files.length > 1 && (
+          <span className="rounded-full bg-primary/10 border border-primary/20 px-2.5 py-0.5 text-[11px] font-semibold text-primary">
+            {files.length} Files Selected
+          </span>
+        )}
       </div>
 
       {/* Step Navigation Pills */}
@@ -147,24 +231,105 @@ export function R2UploadDialog({
   const uploadBody = (
     <div className="space-y-3.5">
       {/* File input (if uploading from disk in Global Library) */}
-      {onFileChange && (
-        <div className="space-y-1.5">
-          <label className="text-xs font-bold text-foreground flex items-center gap-1.5">
-            <FileText className="h-3.5 w-3.5 text-primary" />
-            <span>PDF Document</span>
-          </label>
+      {(onFilesChange || onFileChange) && (
+        <div className="space-y-2">
+          <div className="flex items-center justify-between">
+            <label className="text-xs font-bold text-foreground flex items-center gap-1.5">
+              <FileText className="h-3.5 w-3.5 text-primary" />
+              <span>PDF Document{onFilesChange ? "s (Batch)" : ""}</span>
+            </label>
+            {files.length > 0 && (
+              <div className="flex items-center gap-2">
+                <span className="text-[11px] text-muted-foreground font-mono">
+                  {formatFileSize(totalBytes)}
+                </span>
+                {files.length > 1 && (
+                  <button
+                    type="button"
+                    onClick={handleClearAllFiles}
+                    className="text-[11px] text-destructive hover:underline flex items-center gap-1 cursor-pointer"
+                  >
+                    <Trash2 className="h-3 w-3" />
+                    <span>Clear all</span>
+                  </button>
+                )}
+              </div>
+            )}
+          </div>
+
           <input
+            ref={fileInputRef}
             type="file"
+            multiple={Boolean(onFilesChange)}
             accept="application/pdf,.pdf"
-            onChange={(e) => {
-              if (e.target.files && e.target.files[0]) {
-                const file = e.target.files[0];
-                onFileChange(file);
-                setCustomFileName(file.name);
-              }
-            }}
-            className="w-full rounded-xl border border-border bg-surface p-2 text-xs text-foreground file:mr-3 file:rounded-lg file:border-0 file:bg-primary/10 file:px-3 file:py-1 file:text-xs file:font-semibold file:text-primary hover:file:bg-primary/20 cursor-pointer"
+            onChange={handleFileSelect}
+            className="hidden"
+            id="r2-file-input"
           />
+
+          {files.length === 0 ? (
+            <label
+              htmlFor="r2-file-input"
+              className="flex flex-col items-center justify-center gap-2 rounded-xl border-2 border-dashed border-border/80 bg-surface/40 hover:bg-surface-2/60 hover:border-primary/50 p-4 text-center cursor-pointer transition-all group"
+            >
+              <div className="flex h-10 w-10 items-center justify-center rounded-full bg-primary/10 text-primary group-hover:scale-105 transition-transform">
+                <CloudUpload className="h-5 w-5" />
+              </div>
+              <div className="space-y-0.5">
+                <p className="text-xs font-semibold text-foreground">
+                  Click to select PDF{onFilesChange ? "s" : ""}
+                </p>
+                <p className="text-[11px] text-muted-foreground">
+                  {onFilesChange
+                    ? "Select one or multiple PDF chapters to upload in batch"
+                    : "Select a PDF document"}
+                </p>
+              </div>
+            </label>
+          ) : (
+            <div className="space-y-1.5">
+              {/* Files Queue List */}
+              <div className="max-h-32 overflow-y-auto space-y-1.5 pr-0.5 custom-scrollbar">
+                {files.map((file, idx) => (
+                  <div
+                    key={`${file.name}-${idx}`}
+                    className="flex items-center justify-between gap-2 rounded-lg border border-border/70 bg-surface/80 px-2.5 py-1.5 text-xs text-foreground group hover:border-border transition-colors"
+                  >
+                    <div className="flex items-center gap-2 min-w-0 flex-1">
+                      <FileText className="h-3.5 w-3.5 text-primary shrink-0" />
+                      <span className="truncate font-medium text-foreground text-xs">
+                        {file.name}
+                      </span>
+                    </div>
+                    <div className="flex items-center gap-2 shrink-0">
+                      <span className="text-[10px] text-muted-foreground font-mono">
+                        {formatFileSize(file.size)}
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => handleRemoveFile(idx)}
+                        className="text-muted-foreground hover:text-destructive rounded p-0.5 transition-colors cursor-pointer"
+                        title="Remove file"
+                      >
+                        <X className="h-3.5 w-3.5" />
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+
+              {/* Add more files button */}
+              {onFilesChange && (
+                <label
+                  htmlFor="r2-file-input"
+                  className="flex items-center justify-center gap-1.5 rounded-lg border border-dashed border-border/80 hover:border-primary/50 bg-surface/30 hover:bg-surface-2/60 py-1.5 text-xs font-semibold text-muted-foreground hover:text-primary cursor-pointer transition-all"
+                >
+                  <Plus className="h-3.5 w-3.5" />
+                  <span>Add more PDF files</span>
+                </label>
+              )}
+            </div>
+          )}
         </div>
       )}
 
@@ -243,14 +408,16 @@ export function R2UploadDialog({
         </div>
       )}
 
-      {/* Target R2 Path Hierarchy with Editable Filename */}
+      {/* Target R2 Path Hierarchy with Editable Filename for single file or batch note for multiple */}
       <div className="space-y-1.5 pt-0.5">
         <div className="flex items-center justify-between text-xs font-semibold text-muted-foreground">
           <div className="flex items-center gap-1.5 text-foreground">
             <FolderTree className="h-3.5 w-3.5 text-primary" />
             <span>Target R2 Path</span>
           </div>
-          <span className="text-[11px] text-muted-foreground font-normal">Editable filename</span>
+          <span className="text-[11px] text-muted-foreground font-normal">
+            {isMultiFile ? "Shared destination folder" : "Editable filename"}
+          </span>
         </div>
 
         <div className="flex flex-col sm:flex-row sm:items-center rounded-xl border border-border/80 bg-black/40 overflow-hidden shadow-inner focus-within:border-primary/60 focus-within:ring-1 focus-within:ring-primary/40 transition-all">
@@ -258,24 +425,32 @@ export function R2UploadDialog({
             <span>{folderPrefix}</span>
           </div>
           <div className="relative flex-1 flex items-center min-w-0">
-            <input
-              type="text"
-              value={customFileName}
-              onChange={(e) => setCustomFileName(e.target.value)}
-              placeholder="filename.pdf"
-              className="w-full bg-transparent px-3 py-2 font-mono text-xs text-emerald-400 placeholder:text-muted-foreground/40 focus:outline-none"
-              spellCheck={false}
-            />
-            {customFileName !== initialFileName && (
-              <button
-                type="button"
-                onClick={() => setCustomFileName(initialFileName)}
-                title="Reset filename"
-                className="mr-2 flex items-center gap-1 text-[10px] text-muted-foreground hover:text-foreground px-1.5 py-0.5 rounded bg-surface border border-border/60 hover:bg-surface-2 transition-colors cursor-pointer shrink-0"
-              >
-                <RotateCcw className="h-2.5 w-2.5" />
-                <span>Reset</span>
-              </button>
+            {isMultiFile ? (
+              <div className="px-3 py-2 font-mono text-xs text-emerald-400 select-none">
+                <span>[ {files.length} files will preserve their original names ]</span>
+              </div>
+            ) : (
+              <>
+                <input
+                  type="text"
+                  value={customFileName}
+                  onChange={(e) => setCustomFileName(e.target.value)}
+                  placeholder="filename.pdf"
+                  className="w-full bg-transparent px-3 py-2 font-mono text-xs text-emerald-400 placeholder:text-muted-foreground/40 focus:outline-none"
+                  spellCheck={false}
+                />
+                {customFileName !== initialFileName && (
+                  <button
+                    type="button"
+                    onClick={() => setCustomFileName(initialFileName)}
+                    title="Reset filename"
+                    className="mr-2 flex items-center gap-1 text-[10px] text-muted-foreground hover:text-foreground px-1.5 py-0.5 rounded bg-surface border border-border/60 hover:bg-surface-2 transition-colors cursor-pointer shrink-0"
+                  >
+                    <RotateCcw className="h-2.5 w-2.5" />
+                    <span>Reset</span>
+                  </button>
+                )}
+              </>
             )}
           </div>
         </div>
@@ -317,19 +492,27 @@ export function R2UploadDialog({
         ) : (
           <button
             type="button"
-            onClick={() => onSubmit(finalFileName)}
+            onClick={() => onSubmit(isMultiFile ? undefined : finalFileName)}
             disabled={!isFileReady || uploadingDirect}
             className="flex items-center gap-1.5 rounded-xl bg-primary px-5 py-2 text-xs font-bold text-primary-foreground hover:opacity-90 disabled:opacity-50 transition-opacity cursor-pointer shadow-md shadow-primary/20"
           >
             {uploadingDirect ? (
               <>
                 <span className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-primary-foreground border-t-transparent" />
-                <span>Uploading…</span>
+                <span>
+                  {uploadProgress
+                    ? `Uploading ${uploadProgress.current}/${uploadProgress.total}…`
+                    : "Uploading…"}
+                </span>
               </>
             ) : (
               <>
                 <CloudUpload className="h-3.5 w-3.5" />
-                <span>Upload Document</span>
+                <span>
+                  {isMultiFile
+                    ? `Upload ${files.length} Documents`
+                    : "Upload Document"}
+                </span>
               </>
             )}
           </button>
@@ -355,7 +538,7 @@ export function R2UploadDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-md">
+      <DialogContent className="sm:max-w-lg">
         <DialogHeader>{dialogHeaderContent}</DialogHeader>
         <div className="py-1">{uploadBody}</div>
         <DialogFooter>{uploadFooter}</DialogFooter>
@@ -363,3 +546,4 @@ export function R2UploadDialog({
     </Dialog>
   );
 }
+

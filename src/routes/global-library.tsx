@@ -80,7 +80,12 @@ function GlobalLibraryPage() {
 
   // R2 Direct Upload states (Admin)
   const [uploadDialogOpen, setUploadDialogOpen] = useState(false);
-  const [uploadFile, setUploadFile] = useState<File | null>(null);
+  const [uploadFiles, setUploadFiles] = useState<File[]>([]);
+  const [uploadProgress, setUploadProgress] = useState<{
+    current: number;
+    total: number;
+    currentFileName?: string;
+  } | null>(null);
   const [uploadCategory, setUploadCategory] = useState<string>("history");
   const [uploadEducationLevel, setUploadEducationLevel] = useState<string>(
     (user?.educationLevel as string) || getSavedEducationLevel() || "class-10",
@@ -111,54 +116,90 @@ function GlobalLibraryPage() {
   }, [user]);
 
   const handleDirectUpload = async (customFileName?: string) => {
-    if (!uploadFile || uploadingDirect) return;
+    if (uploadFiles.length === 0 || uploadingDirect) return;
     setUploadingDirect(true);
-    const targetFileName = customFileName?.trim() || uploadFile.name || "document.pdf";
-    const normalizedFileName = targetFileName.toLowerCase().endsWith(".pdf")
-      ? targetFileName
-      : `${targetFileName}.pdf`;
-    const toastId = toast.loading(`Uploading "${normalizedFileName}" to Cloudflare R2...`);
+
+    const total = uploadFiles.length;
+    let successCount = 0;
+    const toastId = toast.loading(
+      total > 1
+        ? `Preparing upload for ${total} documents to R2...`
+        : `Uploading "${uploadFiles[0].name}" to Cloudflare R2...`,
+    );
+
     try {
       const { uploadToR2, uploadThumbnailToR2 } = await import("@/lib/r2");
       const { renderPageToJpegBlob } = await import("@/hooks/useThumbnail");
       const { fileToBase64 } = await import("@/lib/file-utils");
 
-      const base64Data = await fileToBase64(uploadFile);
+      for (let i = 0; i < total; i++) {
+        const file = uploadFiles[i];
+        const targetFileName =
+          total === 1 && customFileName?.trim() ? customFileName.trim() : file.name;
+        const normalizedFileName = targetFileName.toLowerCase().endsWith(".pdf")
+          ? targetFileName
+          : `${targetFileName}.pdf`;
 
-      const res = await uploadToR2({
-        data: {
-          fileName: normalizedFileName,
-          contentType: uploadFile.type || "application/pdf",
-          base64Data,
-          subject: uploadCategory,
-          educationLevel: uploadEducationLevel,
-        },
-      });
+        setUploadProgress({
+          current: i + 1,
+          total,
+          currentFileName: normalizedFileName,
+        });
 
-      try {
-        const thumbBlob = await renderPageToJpegBlob(uploadFile);
-        const thumbBase64 = await fileToBase64(thumbBlob);
-        await uploadThumbnailToR2({
+        toast.loading(
+          total > 1
+            ? `Uploading (${i + 1}/${total}): "${normalizedFileName}"...`
+            : `Uploading "${normalizedFileName}" to Cloudflare R2...`,
+          { id: toastId },
+        );
+
+        const base64Data = await fileToBase64(file);
+
+        const res = await uploadToR2({
           data: {
-            fileKey: res.key,
-            base64Data: thumbBase64,
+            fileName: normalizedFileName,
+            contentType: file.type || "application/pdf",
+            base64Data,
+            subject: uploadCategory,
+            educationLevel: uploadEducationLevel,
           },
         });
-      } catch (thumbErr) {
-        console.warn("Could not generate thumbnail during direct upload:", thumbErr);
+
+        try {
+          const thumbBlob = await renderPageToJpegBlob(file);
+          const thumbBase64 = await fileToBase64(thumbBlob);
+          await uploadThumbnailToR2({
+            data: {
+              fileKey: res.key,
+              base64Data: thumbBase64,
+            },
+          });
+        } catch (thumbErr) {
+          console.warn(`Could not generate thumbnail for ${normalizedFileName}:`, thumbErr);
+        }
+
+        successCount++;
       }
 
-      toast.success(`Successfully uploaded "${normalizedFileName}" to R2 (${res.category})!`, {
-        id: toastId,
-      });
+      toast.success(
+        total > 1
+          ? `Successfully uploaded ${successCount} PDF(s) to R2 (${uploadCategory}/${uploadEducationLevel})!`
+          : `Successfully uploaded "${uploadFiles[0].name}" to R2!`,
+        { id: toastId },
+      );
       setUploadDialogOpen(false);
-      setUploadFile(null);
+      setUploadFiles([]);
+      setUploadProgress(null);
       void fetchFiles(false, true);
     } catch (e: any) {
       console.error("Direct upload failed:", e);
-      toast.error(e?.message || "Failed to upload file to Cloudflare R2.", { id: toastId });
+      toast.error(
+        e?.message || `Failed to upload documents (${successCount}/${total} succeeded).`,
+        { id: toastId },
+      );
     } finally {
       setUploadingDirect(false);
+      setUploadProgress(null);
     }
   };
 
@@ -725,14 +766,21 @@ function GlobalLibraryPage() {
       <R2UploadDialog
         isMobile={isMobile}
         open={uploadDialogOpen}
-        onOpenChange={setUploadDialogOpen}
-        uploadFile={uploadFile}
-        onFileChange={setUploadFile}
+        onOpenChange={(open) => {
+          setUploadDialogOpen(open);
+          if (!open) {
+            setUploadFiles([]);
+            setUploadProgress(null);
+          }
+        }}
+        uploadFiles={uploadFiles}
+        onFilesChange={setUploadFiles}
         uploadCategory={uploadCategory}
         onCategoryChange={setUploadCategory}
         uploadEducationLevel={uploadEducationLevel}
         onEducationLevelChange={setUploadEducationLevel}
         uploadingDirect={uploadingDirect}
+        uploadProgress={uploadProgress}
         onSubmit={(customFileName) => void handleDirectUpload(customFileName)}
       />
 
