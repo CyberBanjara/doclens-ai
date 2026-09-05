@@ -1,5 +1,5 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 import {
   ArrowLeft,
@@ -243,6 +243,17 @@ function GlobalLibraryPage() {
       cancelled = true;
     };
   }, []);
+
+  // Automatically refresh the library once user logs in (or clear when logging out)
+  const prevUserRef = useRef(user);
+  useEffect(() => {
+    if (!prevUserRef.current && user) {
+      void fetchFiles(false, true);
+    } else if (prevUserRef.current && !user) {
+      setFiles([]);
+    }
+    prevUserRef.current = user;
+  }, [user]);
 
   // Classify all raw files into standardized 4 categories + education level
   const classifiedFiles: ClassifiedBook[] = useMemo(() => {

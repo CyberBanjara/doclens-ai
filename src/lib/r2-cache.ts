@@ -25,7 +25,7 @@ export async function getCachedR2Files(options?: {
   const forceRefresh = options?.forceRefresh ?? false;
 
   // 1. If in-memory is already populated and not force-refreshing, return immediately
-  if (!forceRefresh && inMemoryFiles !== null) {
+  if (!forceRefresh && inMemoryFiles !== null && inMemoryFiles.length > 0) {
     return { files: inMemoryFiles };
   }
 

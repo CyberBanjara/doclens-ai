@@ -93,6 +93,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       const authenticatedUser = await apiLoginWithGoogle();
       setUser(authenticatedUser);
       syncUserToLocalStorage(authenticatedUser);
+      try {
+        const { clearCachedR2Files } = await import("@/lib/r2-cache");
+        await clearCachedR2Files();
+      } catch {}
       toast.success(`Welcome, ${authenticatedUser.name || "User"}!`, {
         description: `Signed in as ${authenticatedUser.email} (${authenticatedUser.role})`,
       });
@@ -117,6 +121,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     try {
       await apiLogout();
       setUser(null);
+      try {
+        const { clearCachedR2Files } = await import("@/lib/r2-cache");
+        await clearCachedR2Files();
+      } catch {}
       toast.success("Signed out successfully");
     } catch (err: any) {
       console.error("Sign out error:", err);
