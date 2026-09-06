@@ -255,9 +255,14 @@ function GlobalLibraryPage() {
     prevUserRef.current = user;
   }, [user]);
 
-  // Classify all raw files into standardized 4 categories + education level
+  // Classify all raw files into standardized 4 categories + education level (ignoring ads/)
   const classifiedFiles: ClassifiedBook[] = useMemo(() => {
-    return files.map(classifyR2Book);
+    return files
+      .filter((f) => {
+        const lowerKey = f.key.toLowerCase();
+        return !lowerKey.startsWith("ads/") && !lowerKey.startsWith(".ads/") && lowerKey !== "ads";
+      })
+      .map(classifyR2Book);
   }, [files]);
 
   // Aggregate Subject Category stats specifically for the currently selected Education Level
@@ -290,6 +295,21 @@ function GlobalLibraryPage() {
     }
     return map;
   }, [classifiedFiles, educationLevel]);
+
+  // Dynamically determine which subject categories have > 0 documents for current education level
+  const visibleCategories = useMemo(() => {
+    return SUBJECT_CATEGORIES.filter((cat) => (categoryStats[cat.id]?.count || 0) > 0);
+  }, [categoryStats]);
+
+  // If current activeCategory has 0 documents (or is hidden), auto-switch to first available category with documents
+  useEffect(() => {
+    if (visibleCategories.length > 0) {
+      const isCurrentActiveVisible = visibleCategories.some((c) => c.id === activeCategory);
+      if (!isCurrentActiveVisible) {
+        setActiveCategory(visibleCategories[0].id);
+      }
+    }
+  }, [visibleCategories, activeCategory]);
 
   // Filter books matching current education level and active subject category
   const filteredFiles = useMemo(() => {
@@ -649,9 +669,9 @@ function GlobalLibraryPage() {
                     )}
                   </div>
 
-                  {/* Category Pills Marquee (Strictly the 4 categories, No All Documents) */}
+                  {/* Category Pills Marquee (Dynamically only subjects with > 0 chapters) */}
                   <CategoryMarqueeRow
-                    items={SUBJECT_CATEGORIES.map((cat) => ({
+                    items={visibleCategories.map((cat) => ({
                       key: cat.id,
                       label: cat.label,
                       icon: cat.icon,

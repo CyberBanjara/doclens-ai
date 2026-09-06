@@ -286,6 +286,10 @@ export const listR2Files = createServerFn({ method: "GET" }).handler(async () =>
           continue;
         }
         if (obj.Key.startsWith(".thumbnails/")) continue;
+        const lowerKey = obj.Key.toLowerCase();
+        if (lowerKey.startsWith("ads/") || lowerKey.startsWith(".ads/") || lowerKey === "ads") {
+          continue;
+        }
         const encodedKey = obj.Key.split("/").map((seg) => encodeURIComponent(seg)).join("/");
         rawFiles.push({
           key: obj.Key,
@@ -510,6 +514,16 @@ export const reorganizeR2Files = createServerFn({ method: "POST" }).handler(asyn
       for (const obj of data.Contents || []) {
         if (!obj.Key) continue;
         const oldKey = obj.Key;
+        const lowerKey = oldKey.toLowerCase();
+        if (
+          lowerKey.startsWith("thumbnails/") ||
+          lowerKey.startsWith(".thumbnails/") ||
+          lowerKey.startsWith("ads/") ||
+          lowerKey.startsWith(".ads/") ||
+          lowerKey === "ads"
+        ) {
+          continue;
+        }
 
         // If file is already categorized (has prefix followed by filename)
         const parts = oldKey.split("/");

@@ -37,6 +37,10 @@ export function CategoryVerticalHeap({
     return getEducationLevelMeta(currentEducationLevel);
   }, [currentEducationLevel]);
 
+  const visibleCategories = useMemo(() => {
+    return SUBJECT_CATEGORIES.filter((cat) => (categoryStats[cat.id]?.count || 0) > 0);
+  }, [categoryStats]);
+
   return (
     <aside className="hidden lg:block w-72 shrink-0 space-y-5">
       {/* Education Level Selector Card */}
@@ -98,66 +102,72 @@ export function CategoryVerticalHeap({
           </h3>
         </div>
         <span className="rounded-full bg-primary/10 px-2 py-0.5 text-[10px] font-mono font-bold text-primary border border-primary/20">
-          4 categories
+          {visibleCategories.length} {visibleCategories.length === 1 ? "category" : "categories"}
         </span>
       </div>
 
-      {/* Vertical Heap Stack (Strictly the 4 Categories, No All Documents) */}
+      {/* Vertical Heap Stack (Dynamically only subjects with > 0 chapters) */}
       <div className="space-y-2 relative">
-        {SUBJECT_CATEGORIES.map((cat) => {
-          const count = categoryStats[cat.id]?.count || 0;
-          const isActive = activeCategory === cat.id;
+        {visibleCategories.length === 0 ? (
+          <div className="rounded-2xl border border-dashed border-border/70 p-4 text-center text-xs text-muted-foreground">
+            No subjects found for this class
+          </div>
+        ) : (
+          visibleCategories.map((cat) => {
+            const count = categoryStats[cat.id]?.count || 0;
+            const isActive = activeCategory === cat.id;
 
-          return (
-            <button
-              key={cat.id}
-              onClick={() => onSelectCategory(cat.id)}
-              className={`group relative flex w-full items-center justify-between rounded-2xl p-3 text-left transition-all duration-300 cursor-pointer ${
-                isActive
-                  ? "border border-primary/40 bg-surface-2/80 shadow-md shadow-primary/5 text-foreground ring-1 ring-primary/20 translate-x-1"
-                  : "border border-border/60 bg-surface/40 text-muted-foreground hover:border-border hover:bg-surface-2/40 hover:text-foreground hover:translate-x-1"
-              }`}
-            >
-              {/* Active Left Pill Bar */}
-              {isActive && (
-                <div className="absolute left-0 top-3 bottom-3 w-1 rounded-r-full bg-primary shadow-sm" />
-              )}
-
-              <div className="flex items-center gap-3 min-w-0 pl-1">
-                <div
-                  className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-xl text-base shadow-inner border ${cat.borderAccent} bg-gradient-to-br ${cat.gradient}`}
-                >
-                  {cat.icon}
-                </div>
-                <div className="min-w-0 flex-1">
-                  <span
-                    className={`block truncate text-xs font-semibold ${
-                      isActive
-                        ? "text-foreground"
-                        : "text-foreground/80 group-hover:text-foreground"
-                    }`}
-                  >
-                    {cat.label}
-                  </span>
-                  <span className="text-[10px] text-muted-foreground">
-                    {count === 1 ? "1 chapter" : `${count} chapters`}
-                  </span>
-                </div>
-              </div>
-
-              {/* Count Badge */}
-              <span
-                className={`ml-2 shrink-0 rounded-full border px-2 py-0.5 text-[10px] font-mono font-semibold transition-colors ${
+            return (
+              <button
+                key={cat.id}
+                onClick={() => onSelectCategory(cat.id)}
+                className={`group relative flex w-full items-center justify-between rounded-2xl p-3 text-left transition-all duration-300 cursor-pointer ${
                   isActive
-                    ? cat.badgeBg
-                    : "border-border/60 bg-surface/60 text-muted-foreground group-hover:border-border group-hover:text-foreground"
+                    ? "border border-primary/40 bg-surface-2/80 shadow-md shadow-primary/5 text-foreground ring-1 ring-primary/20 translate-x-1"
+                    : "border border-border/60 bg-surface/40 text-muted-foreground hover:border-border hover:bg-surface-2/40 hover:text-foreground hover:translate-x-1"
                 }`}
               >
-                {count}
-              </span>
-            </button>
-          );
-        })}
+                {/* Active Left Pill Bar */}
+                {isActive && (
+                  <div className="absolute left-0 top-3 bottom-3 w-1 rounded-r-full bg-primary shadow-sm" />
+                )}
+
+                <div className="flex items-center gap-3 min-w-0 pl-1">
+                  <div
+                    className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-xl text-base shadow-inner border ${cat.borderAccent} bg-gradient-to-br ${cat.gradient}`}
+                  >
+                    {cat.icon}
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <span
+                      className={`block truncate text-xs font-semibold ${
+                        isActive
+                          ? "text-foreground"
+                          : "text-foreground/80 group-hover:text-foreground"
+                      }`}
+                    >
+                      {cat.label}
+                    </span>
+                    <span className="text-[10px] text-muted-foreground">
+                      {count === 1 ? "1 chapter" : `${count} chapters`}
+                    </span>
+                  </div>
+                </div>
+
+                {/* Count Badge */}
+                <span
+                  className={`ml-2 shrink-0 rounded-full border px-2 py-0.5 text-[10px] font-mono font-semibold transition-colors ${
+                    isActive
+                      ? cat.badgeBg
+                      : "border-border/60 bg-surface/60 text-muted-foreground group-hover:border-border group-hover:text-foreground"
+                  }`}
+                >
+                  {count}
+                </span>
+              </button>
+            );
+          })
+        )}
       </div>
     </aside>
   );
