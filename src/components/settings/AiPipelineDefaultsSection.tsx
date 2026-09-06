@@ -243,7 +243,7 @@ export function AiPipelineDefaultsSection({
                 <div className="space-y-0.5">
                   {currentStyles.map((s) => {
                     const isSelected = style === s.id;
-                    const isPopular = s.id === "Native" || s.id === "Simple" || s.id === "AI";
+                    const isPopular = s.id === "Story";
 
                     return (
                       <button

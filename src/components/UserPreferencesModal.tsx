@@ -43,7 +43,6 @@ export const ALL_STYLE_OPTIONS: StyleOption[] = [
     description: "Direct, fluent translation preserving original structure.",
     icon: BookOpen,
     badge: "Translate",
-    popular: true,
   },
   {
     id: "Mixed",
@@ -62,7 +61,6 @@ export const ALL_STYLE_OPTIONS: StyleOption[] = [
     description: "Simple language with everyday analogies and zero jargon.",
     icon: Lightbulb,
     badge: "Explain",
-    popular: true,
   },
   {
     id: "Standard",
@@ -81,6 +79,7 @@ export const ALL_STYLE_OPTIONS: StyleOption[] = [
     description: "Concepts taught through engaging stories and scenarios.",
     icon: Compass,
     badge: "Explain",
+    popular: true,
   },
   {
     id: "Deep",
@@ -99,7 +98,6 @@ export const ALL_STYLE_OPTIONS: StyleOption[] = [
     description: "Holistic synthesis connecting core ideas logically.",
     icon: Cpu,
     badge: "Explain",
-    popular: true,
   },
 ];
 
