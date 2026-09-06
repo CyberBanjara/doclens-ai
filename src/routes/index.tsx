@@ -1,7 +1,7 @@
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
-import { useCallback, useRef, useState } from "react";
+import { useCallback, useRef } from "react";
 import { toast } from "sonner";
-import { ArrowRight, FolderOpen, Globe, Plus, UploadCloud } from "lucide-react";
+import { ArrowRight, FolderOpen, Globe } from "lucide-react";
 import { SidebarLayout } from "@/components/SidebarLayout";
 import { createDoc, StorageError } from "@/lib/storage";
 
@@ -20,8 +20,6 @@ export const Route = createFileRoute("/")({
 
 function HomePage() {
   const navigate = useNavigate();
-  const [isDragging, setIsDragging] = useState(false);
-  const [isProcessing, setIsProcessing] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const handleProcessFile = useCallback(
@@ -32,7 +30,6 @@ function HomePage() {
         return;
       }
 
-      setIsProcessing(true);
       const toastId = toast.loading(`Importing "${file.name}"...`);
       try {
         const buf = await file.arrayBuffer();
@@ -46,34 +43,10 @@ function HomePage() {
           toast.error("Failed to process document. Please try again.", { id: toastId });
           console.error(e);
         }
-      } finally {
-        setIsProcessing(false);
       }
     },
     [navigate],
   );
-
-  const handleDragOver = (e: React.DragEvent) => {
-    e.preventDefault();
-    e.stopPropagation();
-    setIsDragging(true);
-  };
-
-  const handleDragLeave = (e: React.DragEvent) => {
-    e.preventDefault();
-    e.stopPropagation();
-    setIsDragging(false);
-  };
-
-  const handleDrop = (e: React.DragEvent) => {
-    e.preventDefault();
-    e.stopPropagation();
-    setIsDragging(false);
-    const file = e.dataTransfer.files?.[0];
-    if (file) {
-      void handleProcessFile(file);
-    }
-  };
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -95,40 +68,48 @@ function HomePage() {
         onChange={handleFileChange}
       />
 
-      <div className="mx-auto max-w-5xl px-4 py-8 sm:px-8 sm:py-16 space-y-12 pb-28 md:pb-16">
+      <div className="mx-auto max-w-4xl px-4 py-8 sm:px-8 sm:py-16 space-y-10 sm:space-y-12 pb-28 md:pb-16">
         {/* Title / Intro */}
-        <div className="space-y-3 text-center max-w-xl mx-auto pt-4 sm:pt-8">
-          <h1 className="text-3xl sm:text-5xl font-semibold tracking-tight text-foreground font-display">
+        <div className="space-y-3.5 text-center max-w-xl mx-auto pt-4 sm:pt-8">
+          <div className="inline-flex items-center gap-2 rounded-full border border-primary/25 bg-primary/10 px-3.5 py-1 text-xs font-semibold text-primary shadow-xs">
+            <span>✨ Local AI &amp; Curriculum Reader</span>
+          </div>
+          <h1 className="text-4xl sm:text-5xl font-extrabold tracking-tight text-foreground font-display">
             Anuwad
           </h1>
-          <p className="text-base text-muted-foreground font-normal leading-relaxed">
-            Browser-based document reader & AI translator
+          <p className="text-sm sm:text-base text-muted-foreground font-normal leading-relaxed max-w-md mx-auto">
+            Read curriculum textbooks and your own documents in your mother tongue.
           </p>
         </div>
 
-        {/* ─── Three Primary Horizontal Options ─── */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 pt-4">
+        {/* ─── 2-Card Modern Grid (Global Library & Local Library) ─── */}
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-5 sm:gap-6 max-w-3xl mx-auto">
           {/* 1. Global Library */}
           <Link
             to="/global-library"
-            className="group flex flex-col justify-between rounded-[18px] border border-border/80 bg-surface/50 p-6 backdrop-blur-md transition-all duration-200 hover:border-primary/60 hover:bg-surface-2/70 active:scale-[0.98] shadow-sm"
+            className="group relative flex flex-col justify-between rounded-3xl border border-border/80 bg-surface/50 p-6 sm:p-7 backdrop-blur-xl transition-all duration-300 hover:border-primary/50 hover:bg-surface-2/80 hover:shadow-xl hover:shadow-primary/5 hover:-translate-y-0.5 active:scale-[0.99]"
           >
             <div className="space-y-5">
-              <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-primary/10 text-primary transition-transform group-hover:scale-105">
-                <Globe className="h-6 w-6" />
+              <div className="flex items-center justify-between">
+                <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-primary/10 text-primary border border-primary/20 shadow-inner transition-transform duration-300 group-hover:scale-110">
+                  <Globe className="h-6 w-6" />
+                </div>
+                <span className="rounded-full bg-primary/10 border border-primary/20 px-2.5 py-0.5 text-[10px] font-bold text-primary">
+                  NCERT Books
+                </span>
               </div>
-              <div>
-                <h2 className="text-xl font-semibold text-foreground tracking-tight group-hover:text-primary transition-colors">
+              <div className="space-y-1.5">
+                <h2 className="text-xl font-bold text-foreground tracking-tight group-hover:text-primary transition-colors">
                   Global Library
                 </h2>
-                <p className="mt-1.5 text-xs text-muted-foreground leading-relaxed">
-                  Browse community archives, manuscripts, and public books.
+                <p className="text-xs sm:text-[13px] text-muted-foreground leading-relaxed">
+                  Browse and read NCERT curriculum textbooks and study chapters across classes.
                 </p>
               </div>
             </div>
 
-            <div className="mt-8 flex items-center gap-1.5 text-xs font-medium text-primary">
-              <span>Open Global Library</span>
+            <div className="mt-7 flex items-center gap-1.5 text-xs font-bold text-primary">
+              <span>Explore NCERT Books</span>
               <ArrowRight className="h-3.5 w-3.5 transition-transform group-hover:translate-x-1" />
             </div>
           </Link>
@@ -136,68 +117,32 @@ function HomePage() {
           {/* 2. Local Library */}
           <Link
             to="/library"
-            className="group flex flex-col justify-between rounded-[18px] border border-border/80 bg-surface/50 p-6 backdrop-blur-md transition-all duration-200 hover:border-primary/60 hover:bg-surface-2/70 active:scale-[0.98] shadow-sm"
+            className="group relative flex flex-col justify-between rounded-3xl border border-border/80 bg-surface/50 p-6 sm:p-7 backdrop-blur-xl transition-all duration-300 hover:border-primary/50 hover:bg-surface-2/80 hover:shadow-xl hover:shadow-primary/5 hover:-translate-y-0.5 active:scale-[0.99]"
           >
             <div className="space-y-5">
-              <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-primary/10 text-primary transition-transform group-hover:scale-105">
-                <FolderOpen className="h-6 w-6" />
+              <div className="flex items-center justify-between">
+                <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-primary/10 text-primary border border-primary/20 shadow-inner transition-transform duration-300 group-hover:scale-110">
+                  <FolderOpen className="h-6 w-6" />
+                </div>
+                <span className="rounded-full bg-surface-2 border border-border px-2.5 py-0.5 text-[10px] font-bold text-muted-foreground">
+                  Your Uploads
+                </span>
               </div>
-              <div>
-                <h2 className="text-xl font-semibold text-foreground tracking-tight group-hover:text-primary transition-colors">
+              <div className="space-y-1.5">
+                <h2 className="text-xl font-bold text-foreground tracking-tight group-hover:text-primary transition-colors">
                   Local Library
                 </h2>
-                <p className="mt-1.5 text-xs text-muted-foreground leading-relaxed">
-                  View your stored documents, reading progress, and page translations.
+                <p className="text-xs sm:text-[13px] text-muted-foreground leading-relaxed">
+                  Upload your own books and PDFs for private reading, translation, and progress tracking.
                 </p>
               </div>
             </div>
 
-            <div className="mt-8 flex items-center gap-1.5 text-xs font-medium text-primary">
-              <span>Open Local Library</span>
+            <div className="mt-7 flex items-center gap-1.5 text-xs font-bold text-primary">
+              <span>Open My Library</span>
               <ArrowRight className="h-3.5 w-3.5 transition-transform group-hover:translate-x-1" />
             </div>
           </Link>
-
-          {/* 3. Add New Book / PDF */}
-          <div
-            onDragOver={handleDragOver}
-            onDragLeave={handleDragLeave}
-            onDrop={handleDrop}
-            onClick={() => fileInputRef.current?.click()}
-            className={`group flex flex-col justify-between rounded-[18px] border-2 border-dashed p-6 backdrop-blur-md transition-all duration-200 cursor-pointer active:scale-[0.98] ${
-              isDragging
-                ? "border-primary bg-primary/10"
-                : "border-primary/30 bg-primary/5 hover:border-primary hover:bg-primary/10"
-            }`}
-          >
-            <div className="space-y-5">
-              <div className="flex h-12 w-12 items-center justify-center rounded-full bg-primary text-primary-foreground shadow-sm transition-transform group-hover:scale-105">
-                {isProcessing ? (
-                  <span className="h-5 w-5 animate-spin rounded-full border-2 border-primary-foreground border-t-transparent" />
-                ) : (
-                  <UploadCloud className="h-6 w-6" />
-                )}
-              </div>
-              <div>
-                <h2 className="text-xl font-semibold text-foreground tracking-tight group-hover:text-primary transition-colors">
-                  Add New Book / PDF
-                </h2>
-                <p className="mt-1.5 text-xs text-muted-foreground leading-relaxed">
-                  Drop a PDF file here or click to browse and import.
-                </p>
-              </div>
-            </div>
-
-            <div className="mt-8 flex items-center gap-2">
-              <button
-                type="button"
-                className="inline-flex items-center gap-1.5 rounded-full bg-primary px-4 py-2 text-xs font-semibold text-primary-foreground shadow-sm transition-all hover:opacity-90 active:scale-95"
-              >
-                <Plus className="h-3.5 w-3.5" />
-                <span>Select PDF</span>
-              </button>
-            </div>
-          </div>
         </div>
 
         {/* Footer */}
