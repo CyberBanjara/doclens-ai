@@ -14,7 +14,7 @@ import {
   ChevronDown,
 } from "lucide-react";
 import { SidebarLayout } from "@/components/SidebarLayout";
-import { deleteFromR2, downloadFromR2 } from "@/lib/r2";
+import { deleteFromR2, getR2DownloadUrl } from "@/lib/r2";
 import { getCachedR2Files, setCachedR2Files } from "@/lib/r2-cache";
 import { createDoc, listDocs, type DocSummary } from "@/lib/storage";
 import { LoadingLogo } from "@/components/LoadingLogo";
@@ -335,15 +335,25 @@ function GlobalLibraryPage() {
     setImportingKey(file.key);
     const toastId = toast.loading(`Downloading "${file.key}"...`);
     try {
-      const res = await downloadFromR2({ data: { key: file.key } });
+      let pdfUrl = file.url;
+      if (!pdfUrl) {
+        const res = await getR2DownloadUrl({ data: { key: file.key } });
+        pdfUrl = res.url;
+      }
+
+      const response = await fetch(pdfUrl);
+      if (!response.ok) {
+        throw new Error(
+          `Failed to download PDF from storage (${response.status} ${response.statusText})`,
+        );
+      }
       toast.loading("Saving to local Library...", { id: toastId });
 
-      const blob = base64ToBlob(res.base64Data, res.contentType);
+      const blob = await response.blob();
       const cleanName = file.key.split("/").pop() || file.key;
-      const docFile = new File([blob], cleanName, { type: res.contentType });
-      const arrayBuffer = await docFile.arrayBuffer();
+      const docFile = new File([blob], cleanName, { type: blob.type || "application/pdf" });
 
-      const docRec = await createDoc(docFile, arrayBuffer, file.key);
+      const docRec = await createDoc(docFile, blob, file.key);
 
       // Copy cached thumbnail to local doc if already available
       try {
@@ -412,7 +422,7 @@ function GlobalLibraryPage() {
     );
     let syncedCount = 0;
     try {
-      const { getThumbnailFromR2, downloadFromR2 } = await import("@/lib/r2");
+      const { getThumbnailFromR2, getR2DownloadUrl } = await import("@/lib/r2");
       const { renderPageToJpegBlob } = await import("@/hooks/useThumbnail");
       const { base64ToBlob } = await import("@/lib/file-utils");
       const { uploadBlobAsThumbnailToR2 } = await import("@/hooks/useR2Thumbnail");
@@ -433,9 +443,18 @@ function GlobalLibraryPage() {
               `Generating thumbnail (${i + 1}/${classDocuments.length}): "${file.displayName || file.key}"...`,
               { id: toastId },
             );
-            const res = await downloadFromR2({ data: { key: file.key } });
-            const pdfBlob = base64ToBlob(res.base64Data, res.contentType);
-            res.base64Data = "";
+            let pdfUrl = file.url;
+            if (!pdfUrl) {
+              const res = await getR2DownloadUrl({ data: { key: file.key } });
+              pdfUrl = res.url;
+            }
+            const response = await fetch(pdfUrl);
+            if (!response.ok) {
+              throw new Error(
+                `Failed to download PDF (${response.status} ${response.statusText})`,
+              );
+            }
+            const pdfBlob = await response.blob();
             const thumbBlob = await renderPageToJpegBlob(pdfBlob);
             await saveThumbnailBlob(r2CacheKey, thumbBlob);
             const ok = await uploadBlobAsThumbnailToR2(file.key, thumbBlob);

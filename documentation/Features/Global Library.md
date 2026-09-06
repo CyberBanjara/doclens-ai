@@ -48,7 +48,7 @@
 └───────────────────────┘
 ```
 
-- **`src/lib/r2.ts`** — TanStack Start server functions (`createServerFn`) wrapping AWS S3 SDK against R2: `listR2Files` (with embedded thumbnail discovery), `uploadToR2`, `uploadThumbnailToR2`, `getThumbnailFromR2`, `downloadFromR2`, `deleteFromR2`, and `reorganizeR2Files`.
+- **`src/lib/r2.ts`** — TanStack Start server functions (`createServerFn`) wrapping AWS S3 SDK against R2: `listR2Files` (with embedded thumbnail discovery), `uploadToR2`, `uploadThumbnailToR2`, `getThumbnailFromR2`, `getR2DownloadUrl`, `deleteFromR2`, and `reorganizeR2Files`.
 - **`src/lib/r2-cache.ts`** — Persistent IndexedDB + in-memory cache for `listR2Files()` metadata (`cached_r2_files` & `cached_r2_files_at`). Only reaches out to R2 on empty cache or explicit `forceRefresh: true`.
 - **`src/hooks/useR2Thumbnail.ts`** — Client-side thumbnail hook with IndexedDB Blob persistence, negative cache sentinels, and zero serverFn overhead when thumbnail URLs are embedded.
 - **`src/lib/storage/thumbnails.ts`** — IndexedDB `THUMBNAILS` store helpers: `getThumbnail()`, `saveThumbnailBlob()`, `saveThumbnailUrl()`, `markThumbnailNotFound()`, and `deleteThumbnail()`.

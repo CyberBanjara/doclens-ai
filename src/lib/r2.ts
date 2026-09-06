@@ -469,64 +469,25 @@ export const deleteFromR2 = createServerFn({ method: "POST" })
     }
   });
 
-export const downloadFromR2 = createServerFn({ method: "POST" })
+export const getR2DownloadUrl = createServerFn({ method: "POST" })
   .validator((input: { key: string }) => input)
   .handler(async ({ data }) => {
     "use server";
     try {
-      const { s3, bucketName, sdk } = await getS3Client({ writeAccess: false });
-      const response = await s3.send(
-        new sdk.GetObjectCommand({
-          Bucket: bucketName,
-          Key: data.key,
-        }),
-      );
-
-      const body = response.Body;
-      if (!body) {
-        throw new Error("File body is empty.");
+      const { publicBaseUrl } = await getS3Client({ writeAccess: false });
+      const cleanBaseUrl = publicBaseUrl ? publicBaseUrl.replace(/\/+$/, "") : "";
+      if (!cleanBaseUrl) {
+        throw new Error("Missing Cloudflare R2 public base URL configuration (R2_PUBLIC_BASE_URL).");
       }
-
-      const chunks: Buffer[] = [];
-      const stream = body as any;
-
-      return new Promise<{ base64Data: string; contentType: string }>((resolve, reject) => {
-        if (typeof stream.on === "function") {
-          stream.on("data", (chunk: any) => chunks.push(Buffer.from(chunk)));
-          stream.on("error", (err: any) => reject(err));
-          stream.on("end", () => {
-            const buffer = Buffer.concat(chunks);
-            resolve({
-              base64Data: buffer.toString("base64"),
-              contentType: response.ContentType || "application/pdf",
-            });
-          });
-        } else {
-          // Fallback for Web Stream environment
-          void (async () => {
-            try {
-              const reader = stream.getReader();
-              while (true) {
-                const { done, value } = await reader.read();
-                if (done) break;
-                chunks.push(Buffer.from(value));
-              }
-              const buffer = Buffer.concat(chunks);
-              resolve({
-                base64Data: buffer.toString("base64"),
-                contentType: response.ContentType || "application/pdf",
-              });
-            } catch (e) {
-              reject(e);
-            }
-          })();
-        }
-      });
+      const encodedKey = data.key.split("/").map((seg) => encodeURIComponent(seg)).join("/");
+      return { url: `${cleanBaseUrl}/${encodedKey}` };
     } catch (err: any) {
-      console.error("R2 Download error:", err);
-      throw new Error(err?.message || `Failed to download file "${data.key}" from R2.`);
+      console.error("R2 getDownloadUrl error:", err);
+      throw new Error(err?.message || `Failed to get public download URL for "${data.key}".`);
     }
   });
+
+export const downloadFromR2 = getR2DownloadUrl;
 
 export const reorganizeR2Files = createServerFn({ method: "POST" }).handler(async () => {
   "use server";

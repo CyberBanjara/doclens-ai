@@ -130,7 +130,7 @@ The system enforces strict directional credential isolation:
 - **Profile update & JWT refresh endpoint:** [update-profile.post.ts](file:///home/sanskar/Desktop/doclens-ai/server/api/auth/update-profile.post.ts) — Updates user profile claims (`nativeLanguage`, `style`, `educationLevel`, `name`, `photoURL`), syncs Firestore, and issues updated JWT session cookie
 - **Supabase Server Functions & Credential Isolation:** [supabase.ts](file:///home/sanskar/Desktop/doclens-ai/src/lib/supabase.ts) — `getSupabaseClient({ writeAccess })`, `fetchAvailableLanguagesForBook`, `fetchSupabaseLanguagePage`, `fetchSupabaseLanguageBook`, `saveSupabaseLanguagePage`, `batchSaveSupabaseLanguagePages`
 - **Sync Orchestration:** [sync.ts](file:///home/sanskar/Desktop/doclens-ai/src/lib/sync.ts) — `syncFromSupabase` (Read), `syncToSupabase` (Write)
-- **R2 Two-Layer Protected Operations:** [r2.ts](file:///home/sanskar/Desktop/doclens-ai/src/lib/r2.ts) — `assertRoleSession`, `getS3Client({ writeAccess })`, `uploadToR2`, `deleteFromR2`, `uploadThumbnailToR2`, `downloadFromR2`
+- **R2 Two-Layer Protected Operations:** [r2.ts](file:///home/sanskar/Desktop/doclens-ai/src/lib/r2.ts) — `assertRoleSession`, `getS3Client({ writeAccess })`, `uploadToR2`, `deleteFromR2`, `uploadThumbnailToR2`, `getR2DownloadUrl`
 - **Admin route guard:** [admin.tsx](file:///home/sanskar/Desktop/doclens-ai/src/routes/admin.tsx) — Client-side `isAdmin` check
 - **Global Library auth wall:** [global-library.tsx](file:///home/sanskar/Desktop/doclens-ai/src/routes/global-library.tsx) — Sign-in popup for unauthenticated users
 - **Firestore user schema:** `users/{uid}` — `{ name, email, photoURL, role, nativeLanguage, style, educationLevel, lastLoginAt, createdAt, updatedAt }`
