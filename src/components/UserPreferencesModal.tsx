@@ -99,6 +99,7 @@ export const ALL_STYLE_OPTIONS: StyleOption[] = [
     description: "Holistic synthesis connecting core ideas logically.",
     icon: Cpu,
     badge: "Explain",
+    popular: true,
   },
 ];
 
@@ -462,9 +463,16 @@ export function UserPreferencesModal({
                         </div>
                         <div className="min-w-0 flex-1">
                           <div className="flex items-center justify-between gap-1">
-                            <span className="font-semibold text-xs text-foreground truncate">
-                              {opt.title}
-                            </span>
+                            <div className="flex items-center gap-1.5 min-w-0">
+                              <span className="font-semibold text-xs text-foreground truncate">
+                                {opt.title}
+                              </span>
+                              {opt.popular && (
+                                <span className="shrink-0 rounded-full bg-amber-500/15 border border-amber-500/30 px-1.5 py-0.5 text-[9px] font-bold text-amber-600 dark:text-amber-400 leading-none shadow-xs">
+                                  Popular
+                                </span>
+                              )}
+                            </div>
                             {isSelected && (
                               <Check className="h-3 w-3 shrink-0 text-primary stroke-[3]" />
                             )}

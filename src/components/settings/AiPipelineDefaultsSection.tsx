@@ -243,6 +243,7 @@ export function AiPipelineDefaultsSection({
                 <div className="space-y-0.5">
                   {currentStyles.map((s) => {
                     const isSelected = style === s.id;
+                    const isPopular = s.id === "Native" || s.id === "Simple" || s.id === "AI";
 
                     return (
                       <button
@@ -258,7 +259,14 @@ export function AiPipelineDefaultsSection({
                             : "text-foreground font-medium hover:bg-surface-elevated"
                         }`}
                       >
-                        <span className="truncate">{s.label}</span>
+                        <div className="flex items-center gap-1.5 min-w-0">
+                          <span className="truncate">{s.label}</span>
+                          {isPopular && (
+                            <span className="shrink-0 rounded-full bg-amber-500/15 border border-amber-500/30 px-1.5 py-0.5 text-[8px] font-bold text-amber-600 dark:text-amber-400 leading-none shadow-xs">
+                              Popular
+                            </span>
+                          )}
+                        </div>
                         {isSelected && <Check className="h-3.5 w-3.5 text-primary shrink-0 ml-1.5" />}
                       </button>
                     );
