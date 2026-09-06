@@ -142,11 +142,12 @@ export function AdBannerWidget() {
     };
   }, [loadAds]);
 
-  // Don't render inside reader view, Global Library, or if dismissed
+  // Don't render inside reader view, Global Library, Settings, or if dismissed
   const isReaderView = location.pathname.startsWith("/doc/");
   const isGlobalLibrary = location.pathname.startsWith("/global-library");
-  if (isReaderView || isGlobalLibrary || isDismissed) {
-    if (isDismissed && !isReaderView && !isGlobalLibrary) {
+  const isSettings = location.pathname.startsWith("/settings");
+  if (isReaderView || isGlobalLibrary || isSettings || isDismissed) {
+    if (isDismissed && !isReaderView && !isGlobalLibrary && !isSettings) {
       return (
         <button
           onClick={() => setIsDismissed(false)}

@@ -139,7 +139,7 @@ export function ProfileDropdown() {
             {user.nativeLanguage && (
               <div className="mt-1.5 flex items-center justify-between">
                 <span className="text-[10px] uppercase tracking-wider text-muted-foreground">
-                  Language
+                  Mother Tongue
                 </span>
                 <span className="inline-flex items-center rounded-md border border-primary/30 bg-primary/10 px-2 py-0.5 text-[10px] font-bold text-primary">
                   {user.nativeLanguage}

@@ -96,17 +96,17 @@ export function LanguageSelectionModal({
                 id="language-selection-title"
                 className="text-lg sm:text-xl font-extrabold tracking-tight text-foreground"
               >
-                Which translation language do you want to use?
+                Which mother tongue do you want to read in?
               </h2>
             </div>
             <p className="text-xs text-muted-foreground leading-relaxed">
               {bookTitle ? (
                 <span>
-                  Select your preferred language for{" "}
+                  Select your mother tongue for reading{" "}
                   <strong className="text-foreground">{bookTitle}</strong>.
                 </span>
               ) : (
-                "Choose a translation language to load pre-translated pages."
+                "Choose your mother tongue to read pre-translated pages."
               )}
             </p>
           </div>
@@ -124,7 +124,7 @@ export function LanguageSelectionModal({
               <div className="flex items-center justify-between text-[11px] font-semibold uppercase tracking-wider text-primary">
                 <span className="flex items-center gap-1.5">
                   <Sparkles className="h-3.5 w-3.5" />
-                  Available Translations for this book
+                  Available Translations in Your Mother Tongue
                 </span>
                 <span className="text-[10px] text-muted-foreground font-normal lowercase">
                   ({availableLanguages.length}{" "}
@@ -198,7 +198,7 @@ export function LanguageSelectionModal({
                   onClick={() => setShowAllLanguages(true)}
                   className="text-xs text-muted-foreground hover:text-primary transition-colors underline cursor-pointer"
                 >
-                  Choose a different language instead
+                  Choose a different mother tongue instead
                 </button>
               </div>
             </div>
@@ -206,7 +206,7 @@ export function LanguageSelectionModal({
             /* Show all standard languages catalog if no pre-translations or user wants a different language */
             <div className="space-y-2">
               <div className="flex items-center justify-between text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
-                <span>All Supported Translation Languages</span>
+                <span>All Supported Mother Tongues & Languages</span>
                 {hasAvailable && (
                   <button
                     type="button"

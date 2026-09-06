@@ -54,7 +54,7 @@ export function ExplainSetupDialog({ open, language, style, onOpenChange, onConf
     <>
       <div className="space-y-3">
         <div className="font-mono text-[10px] uppercase tracking-widest text-muted-foreground">
-          explanation language
+          mother tongue / language
         </div>
         <div className="flex flex-wrap gap-2">
           {QUICK_LANGS.map((lang) => (
@@ -77,7 +77,7 @@ export function ExplainSetupDialog({ open, language, style, onOpenChange, onConf
         <input
           value={customLanguage}
           onChange={(e) => setCustomLanguage(e.target.value)}
-          placeholder="Custom language..."
+          placeholder="Custom mother tongue..."
           className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm outline-none focus:border-primary"
         />
       </div>
@@ -115,7 +115,7 @@ export function ExplainSetupDialog({ open, language, style, onOpenChange, onConf
           <DrawerHeader>
             <DrawerTitle>Set explanation preferences</DrawerTitle>
             <DrawerDescription>
-              Choose the language and explanation style for this document.
+              Choose your mother tongue and explanation style for this document.
             </DrawerDescription>
           </DrawerHeader>
           <div className="overflow-y-auto px-6 pb-2">{body}</div>
@@ -146,7 +146,7 @@ export function ExplainSetupDialog({ open, language, style, onOpenChange, onConf
           <DialogHeader className="min-w-0 flex-1 pr-2">
             <DialogTitle>Set explanation preferences</DialogTitle>
             <DialogDescription>
-              Choose the language and explanation style for this document.
+              Choose your mother tongue and explanation style for this document.
             </DialogDescription>
           </DialogHeader>
           <div className="flex flex-shrink-0 items-center gap-2 pr-7">

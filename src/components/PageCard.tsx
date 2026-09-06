@@ -529,7 +529,7 @@ function OverrideControls({
           options={Object.entries(MODE_LABELS).map(([k, v]) => [k, v] as [string, string])}
         />
         <SmallSelect
-          label="Language"
+          label="Mother Tongue"
           value={eff.language}
           onChange={(v) => onSetOverride({ language: v })}
           options={langOptions}

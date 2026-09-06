@@ -20,17 +20,17 @@ export function OutputLanguageSection({
     <section className="glass-panel flex flex-col gap-4 rounded-[18px] p-4 md:p-6">
       <div className="flex items-center gap-3">
         <Languages className="h-5 w-5 text-primary" />
-        <h3 className="text-lg font-semibold text-foreground">Output Language</h3>
+        <h3 className="text-lg font-semibold text-foreground">Mother Tongue</h3>
       </div>
       <p className="text-sm text-muted-foreground">
-        Default language for AI-generated summaries, translations, and text-to-speech.
+        Select your mother tongue for AI translations, explanations, and text-to-speech.
       </p>
       <div className="relative">
         <input
           value={customLang}
           onChange={(e) => onCustomLangChange(e.target.value)}
           onKeyDown={(e) => e.key === "Enter" && onCustomLangSubmit()}
-          placeholder="Search or type a custom language..."
+          placeholder="Search your mother tongue (Hindi, Telugu, Bengali...)"
           className="w-full rounded-[10px] border border-border bg-background py-2 pl-10 pr-4 text-sm outline-none transition-colors focus:border-primary"
         />
         <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />

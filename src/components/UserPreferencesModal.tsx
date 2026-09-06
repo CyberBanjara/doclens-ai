@@ -268,14 +268,14 @@ export function UserPreferencesModal({
               Preferences
             </h2>
             <p className="text-xs text-muted-foreground">
-              Select your language, style, and study goal.
+              Select your mother tongue, style, and study goal.
             </p>
           </div>
         </div>
 
         {/* 3 Parameter Boxes */}
         <div className="space-y-2.5">
-          {/* Box 1: Language */}
+          {/* Box 1: Mother Tongue */}
           <div className="rounded-xl border border-border/70 bg-surface/40 overflow-hidden transition-all duration-200">
             <button
               type="button"
@@ -292,7 +292,7 @@ export function UserPreferencesModal({
                 </div>
                 <div className="min-w-0">
                   <div className="font-mono text-[10px] uppercase tracking-wider text-muted-foreground">
-                    Language
+                    Mother Tongue
                   </div>
                   <div className="text-sm font-semibold text-foreground truncate">
                     {currentLangObj ? (
@@ -306,7 +306,7 @@ export function UserPreferencesModal({
                       selectedLang
                     ) : (
                       <span className="text-muted-foreground font-normal">
-                        Select language...
+                        Select your mother tongue...
                       </span>
                     )}
                   </div>
@@ -334,7 +334,7 @@ export function UserPreferencesModal({
                   <Search className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
                   <input
                     type="text"
-                    placeholder="Search languages (Hindi, Telugu, English...)"
+                    placeholder="Search your mother tongue (Hindi, Telugu, English...)"
                     value={searchQuery}
                     onChange={(e) => setSearchQuery(e.target.value)}
                     autoFocus

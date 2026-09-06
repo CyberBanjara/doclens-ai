@@ -130,7 +130,7 @@ export function VoiceOnboardingDialog({ open, onOpenChange, onReady }: VoiceOnbo
     <>
       <div className="space-y-3">
         <div className="font-mono text-[10px] uppercase tracking-widest text-muted-foreground">
-          language
+          mother tongue
         </div>
         <div className="flex flex-wrap gap-2">
           {LANGUAGES.map((lang) => (
@@ -156,11 +156,11 @@ export function VoiceOnboardingDialog({ open, onOpenChange, onReady }: VoiceOnbo
         </div>
         {!pickedLanguage ? (
           <div className="rounded-lg bg-surface-2/40 px-3 py-2 text-xs italic text-muted-foreground">
-            Please select a language above to view available voices.
+            Please select your mother tongue above to view available voices.
           </div>
         ) : voicesForLanguage.length === 0 ? (
           <div className="rounded-lg bg-surface-2/40 px-3 py-2 text-xs italic text-muted-foreground">
-            No voices available for this language yet.
+            No voices available for this mother tongue yet.
           </div>
         ) : (
           <select
@@ -240,7 +240,7 @@ export function VoiceOnboardingDialog({ open, onOpenChange, onReady }: VoiceOnbo
               Choose a voice
             </DrawerTitle>
             <DrawerDescription>
-              Pick a language and voice to hear this page read aloud. Neural voices may need a
+              Pick your mother tongue and voice to hear this page read aloud. Neural voices may need a
               one-time download.
             </DrawerDescription>
           </DrawerHeader>
@@ -260,10 +260,10 @@ export function VoiceOnboardingDialog({ open, onOpenChange, onReady }: VoiceOnbo
               <Volume2 className="h-4 w-4 text-primary" />
               Choose a voice
             </DialogTitle>
-            <DialogDescription>
-              Pick a language and voice to hear this page read aloud. Neural voices may need a
+            <DrawerDescription>
+              Pick your mother tongue and voice to hear this page read aloud. Neural voices may need a
               one-time download.
-            </DialogDescription>
+            </DrawerDescription>
           </DialogHeader>
         </div>
 
