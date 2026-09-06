@@ -341,7 +341,7 @@ function SettingsPage() {
 
   return (
     <SidebarLayout
-      pageTitle="General Settings"
+      pageTitle="Anuwad"
       onNewDocument={async (f) => {
         try {
           const buf = await f.arrayBuffer();

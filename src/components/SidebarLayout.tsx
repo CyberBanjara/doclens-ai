@@ -9,8 +9,8 @@ import { useAuth } from "@/context/AuthContext";
 
 interface SidebarLayoutProps {
   children: React.ReactNode;
-  /** Title shown in the top bar */
-  pageTitle: string;
+  /** Title shown in the top bar (defaults to "Anuwad") */
+  pageTitle?: string;
   /** Optional content for the right side of the top bar */
   topBarRight?: React.ReactNode;
   /** Callback when a file is selected via the "New Document" button */
@@ -27,7 +27,7 @@ const BASE_NAV_ITEMS = [
 
 export function SidebarLayout({
   children,
-  pageTitle,
+  pageTitle = "Anuwad",
   topBarRight,
   onNewDocument,
 }: SidebarLayoutProps) {

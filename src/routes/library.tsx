@@ -108,7 +108,7 @@ function LibraryPage() {
   }, [docs, searchQuery]);
 
   return (
-    <SidebarLayout pageTitle="Library" onNewDocument={handleFile}>
+    <SidebarLayout pageTitle="Anuwad" onNewDocument={handleFile}>
       {isMobile ? (
         <div className="space-y-4 px-4 pb-24 pt-3">
           {keyStatus !== "valid" && (

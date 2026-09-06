@@ -516,7 +516,7 @@ function GlobalLibraryPage() {
 
   return (
     <SidebarLayout
-      pageTitle="Global Library"
+      pageTitle="Anuwad"
       topBarRight={
         <div className="flex items-center gap-2">
           {/* Education Level Switcher Pill Button */}
