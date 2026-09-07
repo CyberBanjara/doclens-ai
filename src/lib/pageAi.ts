@@ -12,6 +12,8 @@ import {
   isOmniRouterConfigured,
   getOmniSelectedModel,
   getOmniDefaultModelSync,
+  getSelectedModel,
+  getDefaultModelSync,
 } from "@/lib/openrouter";
 import { dispatchDocEvent } from "@/lib/docEvents";
 import { cleanAiText } from "./cleanAiText";
@@ -36,10 +38,12 @@ export function effective(globals: Globals, ov?: PageOverrides) {
     }
   }
 
-  let defaultModelForProvider = globals.modelId;
+  let defaultModelForProvider = globals.modelId || getSelectedModel() || getDefaultModelSync();
   if (provider === "omnirouter") {
     defaultModelForProvider =
       globals.omniModelId || getOmniSelectedModel() || getOmniDefaultModelSync();
+  } else {
+    defaultModelForProvider = globals.modelId || getSelectedModel() || getDefaultModelSync();
   }
 
   return {

@@ -922,6 +922,8 @@ export interface BuildPagePayloadInput {
   temperature: number;
   pageNumber: number;
   pageText: string;
+  /** Context delta and continuity memory from preceding pages */
+  previousContext?: string;
 }
 
 export function buildPagePayload(i: BuildPagePayloadInput): Record<string, unknown> {
@@ -935,8 +937,14 @@ export function buildPagePayload(i: BuildPagePayloadInput): Record<string, unkno
       "You are an expert document translator in a PDF reader.",
       "The content below is extracted from a PDF page.",
       `TASK: Translate into ${lang}.\nSTYLE: ${style.label} — ${style.instruction}`,
-      "RULES: Preserve the original structure, headings, lists, and logical flow. Output only the translated text — no explanations, preamble, or commentary.",
+      "RULES: Preserve the original structure, headings, lists, and logical flow.",
       `FORMAT: ${FORMAT_RULES}`,
+      "STRUCTURED OUTPUT REQUIREMENT:",
+      "You MUST respond with a JSON object containing two fields:",
+      "1. \"translation\": (string) The complete, fluent translation of the current page into the target language. No markdown code fences, bullet characters, or extraneous commentary.",
+      "2. \"context_delta\": (string) A concise summary of newly introduced or consistent terminology translations, character/entity naming, tone, and narrative/concept developments from this page to guide the translation of subsequent pages.",
+      "Example JSON format:",
+      '{"translation": "...", "context_delta": "..."}',
     ].join("\n\n");
   } else {
     const style =
@@ -952,17 +960,162 @@ export function buildPagePayload(i: BuildPagePayloadInput): Record<string, unkno
       `TASK: Explain in ${lang}.\nSTYLE: ${style.label} — ${style.instruction}`,
       `RULES: ${EXPLAIN_RULES}`,
       `FORMAT: ${FORMAT_RULES}`,
+      "STRUCTURED OUTPUT REQUIREMENT:",
+      "You MUST respond with a JSON object containing two fields:",
+      "1. \"translation\": (string) The complete, clean explanation/synthesis of the current page. No markdown formatting, bullet characters, or extraneous commentary.",
+      "2. \"context_delta\": (string) A concise summary of core concepts, technical term definitions, and analytical insights from this page to maintain pedagogical continuity across pages.",
+      "Example JSON format:",
+      '{"translation": "...", "context_delta": "..."}',
     ].join("\n\n");
   }
+
+  const userContentParts: string[] = [];
+  if (i.previousContext && i.previousContext.trim()) {
+    userContentParts.push(i.previousContext.trim());
+  }
+  userContentParts.push(`--- Page ${i.pageNumber} ---\n${i.pageText}`);
 
   return {
     model: i.modelId || getDefaultModelSync(),
     stream: true,
     temperature: i.temperature ?? 0.3,
     max_tokens: 4000,
+    response_format: { type: "json_object" },
     messages: [
       { role: "system", content: system },
-      { role: "user", content: `--- Page ${i.pageNumber} ---\n${i.pageText}` },
+      { role: "user", content: userContentParts.join("\n\n") },
     ],
+  };
+}
+
+/**
+ * Progressively extracts the in-progress `translation` value from a streaming JSON response buffer.
+ * Allows the UI to render clean translated sentences in real time without flashing raw JSON syntax.
+ */
+export function extractStreamingTranslation(rawBuffer: string): string {
+  if (!rawBuffer) return "";
+  const trimmed = rawBuffer.trim();
+
+  // If buffer doesn't look like JSON yet, return it as-is if it's plain text
+  if (!trimmed.startsWith("{") && !trimmed.startsWith("```")) {
+    return rawBuffer;
+  }
+
+  // Strip optional leading markdown fence
+  let content = trimmed;
+  if (content.startsWith("```json")) {
+    content = content.slice(7);
+  } else if (content.startsWith("```")) {
+    content = content.slice(3);
+  }
+
+  // Find "translation"\s*:\s*"
+  const match = /"translation"\s*:\s*"/i.exec(content);
+  if (!match) {
+    return "";
+  }
+
+  const startIndex = match.index + match[0].length;
+  let inEscape = false;
+  let result = "";
+
+  for (let i = startIndex; i < content.length; i++) {
+    const char = content[i];
+    if (inEscape) {
+      if (char === "n") result += "\n";
+      else if (char === "t") result += "\t";
+      else if (char === "r") result += "\r";
+      else if (char === '"') result += '"';
+      else if (char === "\\") result += "\\";
+      else result += char;
+      inEscape = false;
+    } else if (char === "\\") {
+      inEscape = true;
+    } else if (char === '"') {
+      // Reached the closing quote of the translation string
+      break;
+    } else {
+      result += char;
+    }
+  }
+
+  return result;
+}
+
+/**
+ * Parses the final structured response from the LLM into { translation, context_delta }.
+ * Resilient against markdown fences, unescaped whitespace, and non-JSON fallbacks.
+ */
+export function parseStructuredTranslationResponse(rawText: string): {
+  translation: string;
+  context_delta: string;
+} {
+  if (!rawText || !rawText.trim()) {
+    return { translation: "", context_delta: "" };
+  }
+
+  const trimmed = rawText.trim();
+
+  // Try extracting JSON from markdown code fences if present
+  let jsonString = trimmed;
+  const fenceMatch = /```(?:json)?\s*([\s\S]*?)\s*```/i.exec(trimmed);
+  if (fenceMatch) {
+    jsonString = fenceMatch[1].trim();
+  } else {
+    const firstBrace = trimmed.indexOf("{");
+    const lastBrace = trimmed.lastIndexOf("}");
+    if (firstBrace !== -1 && lastBrace > firstBrace) {
+      jsonString = trimmed.slice(firstBrace, lastBrace + 1);
+    }
+  }
+
+  try {
+    const parsed = JSON.parse(jsonString);
+    if (parsed && typeof parsed === "object") {
+      const translation =
+        typeof parsed.translation === "string"
+          ? parsed.translation
+          : typeof parsed.content === "string"
+            ? parsed.content
+            : typeof parsed.text === "string"
+              ? parsed.text
+              : "";
+      const context_delta =
+        typeof parsed.context_delta === "string"
+          ? parsed.context_delta
+          : typeof parsed.contextDelta === "string"
+            ? parsed.contextDelta
+            : typeof parsed.context === "string"
+              ? parsed.context
+              : "";
+
+      if (translation || context_delta) {
+        return { translation, context_delta };
+      }
+    }
+  } catch {
+    // JSON parse failed, try regex extraction
+    const transMatch = /"translation"\s*:\s*"((?:[^"\\]|\\.)*)"/s.exec(jsonString);
+    const deltaMatch = /"context_delta"\s*:\s*"((?:[^"\\]|\\.)*)"/s.exec(jsonString);
+
+    if (transMatch) {
+      const unescape = (s: string) => {
+        try {
+          return JSON.parse(`"${s}"`);
+        } catch {
+          return s.replace(/\\n/g, "\n").replace(/\\"/g, '"');
+        }
+      };
+      return {
+        translation: unescape(transMatch[1]),
+        context_delta: deltaMatch ? unescape(deltaMatch[1]) : "",
+      };
+    }
+  }
+
+  // Graceful fallback if the LLM returned pure plain text translation without JSON
+  return {
+    translation: trimmed,
+    context_delta: "",
   };
 }

@@ -35,10 +35,16 @@ export interface PageAi {
   customRequest?: Record<string, unknown> | null;
   isCustom?: boolean;
   result?: string;
+  contextDelta?: string;
   error?: string;
   overrides?: PageOverrides;
   settingsHash?: string;
   updatedAt?: number;
+}
+
+export interface StructuredTranslationResult {
+  translation: string;
+  contextDelta?: string;
 }
 
 /** Per-page data record stored independently for memory-friendly lazy loading. */

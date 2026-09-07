@@ -23,6 +23,8 @@ import { effective, summarize } from "@/lib/pageAi";
 import { HighlightableText } from "./HighlightableText";
 import { LoadingLogo } from "@/components/LoadingLogo";
 
+import { getPreviousContext } from "@/lib/contextStore";
+
 const STYLES = EXPLANATION_STYLES.map((s) => s.id);
 const QUICK_LANGS = [
   "हिंदी",
@@ -60,6 +62,7 @@ export function PageCardLoader(props: CardLoaderProps) {
     pageNumber,
     status: summary?.status ?? "idle",
   }));
+  const [prevContext, setPrevContext] = useState<string>("");
 
   // Track stream buffer to eliminate any frame lag / empty flash when isRunning transitions to false
   const streamCacheRef = useRef("");
@@ -89,6 +92,20 @@ export function PageCardLoader(props: CardLoaderProps) {
     };
   }, [docId, pageNumber, summary?.status, summary?.settingsHash, summary?.hasResult, isRunning]);
 
+  // Fetch previous continuity context for this page
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      const eff = effective(props.globals, pageAi.overrides);
+      const ctx = await getPreviousContext(docId, pageNumber, eff);
+      if (cancelled) return;
+      setPrevContext(ctx);
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [docId, pageNumber, pageAi.overrides, props.globals, summary?.status]);
+
   const handleUpdate = async (patch: Partial<PageAi>) => {
     setPageAi((prev) => ({ ...prev, ...patch, pageNumber }));
     await upsertPageAi(docId, pageNumber, patch);
@@ -117,6 +134,7 @@ export function PageCardLoader(props: CardLoaderProps) {
       models={props.models}
       omniModels={props.omniModels}
       streamBuf={streamBuf}
+      previousContext={prevContext}
       fallbackResult={streamCacheRef.current}
       isRunning={isRunning}
       onUpdate={handleUpdate}
@@ -138,6 +156,7 @@ interface CardProps {
   models: ORModel[];
   omniModels?: ORModel[];
   streamBuf: string;
+  previousContext?: string;
   fallbackResult?: string;
   isRunning: boolean;
   onUpdate: (patch: Partial<PageAi>) => void;
@@ -153,6 +172,7 @@ function PageCard({
   models,
   omniModels,
   streamBuf,
+  previousContext,
   fallbackResult,
   isRunning,
   onUpdate,
@@ -173,11 +193,20 @@ function PageCard({
       temperature: eff.temperature,
       pageNumber,
       pageText,
+      previousContext,
     });
-  }, [eff.modelId, eff.mode, eff.language, eff.style, eff.temperature, pageNumber, pageText]);
+  }, [eff.modelId, eff.mode, eff.language, eff.style, eff.temperature, pageNumber, pageText, previousContext]);
 
   const previewPayload = state.isCustom && state.customRequest ? state.customRequest : autoPayload;
   const overrideCount = state.overrides ? Object.keys(state.overrides).length : 0;
+
+  // Reactively keep JSON draft in sync with parameter overrides unless custom request is active
+  useEffect(() => {
+    if (!state.isCustom) {
+      setDraft(JSON.stringify(previewPayload, null, 2));
+      setDraftError("");
+    }
+  }, [previewPayload, state.isCustom]);
 
   const setOverride = (patch: Partial<PageOverrides>) => {
     onUpdate({ overrides: { ...(state.overrides ?? {}), ...patch } });

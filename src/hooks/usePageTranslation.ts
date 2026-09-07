@@ -14,6 +14,8 @@ import {
   streamOmniRouterCompletion,
   isOmniRouterConfigured,
   OmniRouterError,
+  extractStreamingTranslation,
+  parseStructuredTranslationResponse,
   type Globals,
 } from "@/lib/openrouter";
 import {
@@ -25,6 +27,7 @@ import {
 } from "@/lib/storage";
 import { cleanAiText, effective, hashFor, summarize, dispatchPageReady } from "@/lib/pageAi";
 import { fetchSupabaseLanguagePage, saveSupabaseLanguagePage } from "@/lib/supabase";
+import { getPreviousContext, mergeContextDelta } from "@/lib/contextStore";
 
 /**
  * Throttle stream state updates to maintain 60fps rendering without choking React.
@@ -176,6 +179,8 @@ export function usePageTranslation(
       if (selOverride) selectionOverridesRef.current.delete(pageNumber);
       const effectiveText = selOverride ?? pageRec.text;
 
+      const previousContext = await getPreviousContext(docId, pageNumber, eff);
+
       let payload: Record<string, unknown>;
       if (state.isCustom && state.customRequest) {
         payload = { ...state.customRequest, stream: true };
@@ -188,6 +193,7 @@ export function usePageTranslation(
           temperature: eff.temperature,
           pageNumber,
           pageText: effectiveText,
+          previousContext,
         });
       }
 
@@ -214,7 +220,8 @@ export function usePageTranslation(
         if (!mountedRef.current) return;
         if (bufferRef.current === lastUiRef.current) return;
         lastUiRef.current = bufferRef.current;
-        const snapshot = cleanAiText(bufferRef.current);
+        const liveExtracted = extractStreamingTranslation(bufferRef.current);
+        const snapshot = cleanAiText(liveExtracted || bufferRef.current);
         setStreamBufs((b) => ({ ...b, [pageNumber]: snapshot }));
       };
 
@@ -254,7 +261,8 @@ export function usePageTranslation(
             lastUiRef.current = "";
             toast.info("OmniRouter failed. Automatically switched to OpenRouter fallback.");
 
-            const fallbackPayload = state.isCustom && state.customRequest
+            const fallbackPayload =
+              state.isCustom && state.customRequest
                 ? { ...state.customRequest, model: openRouterModel, stream: true }
                 : buildPagePayload({
                     modelId: openRouterModel,
@@ -264,6 +272,7 @@ export function usePageTranslation(
                     temperature: eff.temperature,
                     pageNumber,
                     pageText: effectiveText,
+                    previousContext,
                   });
 
             const openRouterKey = getKey();
@@ -271,19 +280,49 @@ export function usePageTranslation(
               ensureKeyReady();
               throw new OpenRouterError("No OpenRouter API key configured.", 401, "auth");
             }
-            await streamCompletion({ key: openRouterKey, payload: fallbackPayload, signal: ctrl.signal, onDelta: onDeltaHandler });
+            await streamCompletion({
+              key: openRouterKey,
+              payload: fallbackPayload,
+              signal: ctrl.signal,
+              onDelta: onDeltaHandler,
+            });
           }
         } else {
           await streamCompletion({ key, payload, signal: ctrl.signal, onDelta: onDeltaHandler });
         }
 
         flushUi();
-        const result = cleanAiText(bufferRef.current);
-        await upsertPageAi(docId, pageNumber, { status: "done", result, error: undefined, settingsHash: hash });
-        onPageAiChangeRef.current?.(pageNumber, summarize({ ...state, status: "done", result, settingsHash: hash }));
+        const structured = parseStructuredTranslationResponse(bufferRef.current);
+        const result = cleanAiText(structured.translation);
+        const contextDelta = structured.context_delta?.trim();
+
+        await upsertPageAi(docId, pageNumber, {
+          status: "done",
+          result,
+          contextDelta: contextDelta || undefined,
+          error: undefined,
+          settingsHash: hash,
+        });
+
+        if (contextDelta) {
+          void mergeContextDelta(docId, pageNumber, contextDelta);
+        }
+
+        onPageAiChangeRef.current?.(
+          pageNumber,
+          summarize({
+            ...state,
+            status: "done",
+            result,
+            contextDelta: contextDelta || undefined,
+            settingsHash: hash,
+          }),
+        );
 
         if (isDefaultTranslation && bookId) {
-          void saveSupabaseLanguagePage({ data: { language: eff.language, bookId, pageNumber, content: result, docId } });
+          void saveSupabaseLanguagePage({
+            data: { language: eff.language, bookId, pageNumber, content: result, docId },
+          });
         }
         return result;
       } catch (e) {
