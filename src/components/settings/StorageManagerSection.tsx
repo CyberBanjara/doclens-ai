@@ -88,12 +88,12 @@ export function StorageManagerSection() {
     try {
       await clearSelectedStorage(selected);
       toast.success("Selected data deleted successfully.", {
-        description: "Refreshing application...",
+        description: "Hard refreshing application...",
       });
 
       setTimeout(() => {
-        window.location.href = "/settings";
-      }, 600);
+        window.location.reload();
+      }, 300);
     } catch (err) {
       console.error("Storage delete failed:", err);
       toast.error("Failed to delete selected storage. Please try again.");

@@ -132,7 +132,8 @@ async function getNeuralTtsEngine(): Promise<{ mod: any; catalog: any[] }> {
     try {
       const resp = await fetch("/voices.json");
       if (resp.ok) {
-        catalog = await resp.json();
+        const raw = await resp.json();
+        catalog = Array.isArray(raw) ? raw : Object.values(raw || {});
       }
     } catch (err) {
       console.warn("Could not load /voices.json, falling back to vits-web default:", err);
@@ -140,7 +141,8 @@ async function getNeuralTtsEngine(): Promise<{ mod: any; catalog: any[] }> {
 
     if (!catalog.length) {
       try {
-        catalog = await mod.voices();
+        const fallback = await mod.voices();
+        catalog = Array.isArray(fallback) ? fallback : Object.values(fallback || {});
       } catch (err) {
         console.error("Failed to load VITS fallback voices:", err);
       }
@@ -148,6 +150,7 @@ async function getNeuralTtsEngine(): Promise<{ mod: any; catalog: any[] }> {
 
     // Register all voice paths into PATH_MAP
     for (const v of catalog) {
+      if (!v || !v.key) continue;
       const fileKeys = Object.keys(v.files || {});
       const onnxKey = fileKeys.find(
         (k: string) => k.endsWith(".onnx") && !k.endsWith(".onnx.json"),
@@ -315,21 +318,24 @@ export function TtsProvider({ children }: { children: React.ReactNode }) {
 
     // Build neural voice list from the raw catalog + cached IDs
     let neural: TtsVoice[] = [];
-    if (catalog.length > 0) {
+    const catalogList = Array.isArray(catalog) ? catalog : Object.values(catalog || {});
+    if (catalogList.length > 0) {
       const cachedIds = await getCachedVoiceIds();
-      neural = catalog.map((v: any) => {
-        const langTag = v.language.code.replace("_", "-");
-        const englishName = v.language.name_english;
-        return {
-          voiceURI: v.key,
-          name: `✨ Neural ${v.name} (${englishName})`,
-          lang: langTag,
-          localService: true,
-          default: false,
-          isNeural: true,
-          isDownloaded: cachedIds.includes(v.key),
-        };
-      });
+      neural = catalogList
+        .filter((v: any) => v && v.key && v.language)
+        .map((v: any) => {
+          const langTag = v.language?.code ? v.language.code.replace("_", "-") : "en-US";
+          const englishName = v.language?.name_english || "";
+          return {
+            voiceURI: v.key,
+            name: `✨ Neural ${v.name} (${englishName})`,
+            lang: langTag,
+            localService: true,
+            default: false,
+            isNeural: true,
+            isDownloaded: cachedIds.includes(v.key),
+          };
+        });
     }
 
     const combined = [...native, ...neural];

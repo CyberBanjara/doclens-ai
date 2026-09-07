@@ -33,14 +33,40 @@ export function isOpfsSupported(): boolean {
   );
 }
 
+let voiceDbPromise: Promise<IDBPDatabase> | null = null;
+
 export async function getDB(): Promise<IDBPDatabase> {
-  return openDB(DB_NAME, DB_VERSION, {
-    upgrade(db) {
-      if (!db.objectStoreNames.contains(STORE_NAME)) {
-        db.createObjectStore(STORE_NAME);
-      }
-    },
-  });
+  if (!voiceDbPromise) {
+    voiceDbPromise = openDB(DB_NAME, DB_VERSION, {
+      upgrade(db) {
+        if (!db.objectStoreNames.contains(STORE_NAME)) {
+          db.createObjectStore(STORE_NAME);
+        }
+      },
+      blocking() {
+        if (voiceDbPromise) {
+          voiceDbPromise.then((d) => d.close()).catch(() => {});
+          voiceDbPromise = null;
+        }
+      },
+      terminated() {
+        voiceDbPromise = null;
+      },
+    });
+  }
+  return voiceDbPromise;
+}
+
+export async function closeVoiceDb(): Promise<void> {
+  if (voiceDbPromise) {
+    try {
+      const d = await voiceDbPromise;
+      d.close();
+    } catch {
+      // ignore
+    }
+    voiceDbPromise = null;
+  }
 }
 
 export async function getCachedFile(filename: string): Promise<Blob | null> {
@@ -164,8 +190,7 @@ export async function clearAllVoiceCache(): Promise<void> {
   if (isOpfsSupported()) {
     try {
       const root = await navigator.storage.getDirectory();
-      const dir = await root.getDirectoryHandle("piper", { create: false });
-      await (dir as any).remove({ recursive: true });
+      await root.removeEntry("piper", { recursive: true }).catch(() => {});
     } catch (err) {
       // Ignored
     }
@@ -251,14 +276,26 @@ export function initVoiceCache() {
         // Cache MISS -> download, write to cache synchronously, then return Response
         try {
           const blob = await fetchAndCache(filename, targetUrl, init);
-          return new Response(blob, {
+          let blobToReturn = blob;
+          if (filename.endsWith(".json")) {
+            try {
+              const text = await blob.text();
+              const json = JSON.parse(text);
+              if (!json.speaker_id_map || typeof json.speaker_id_map !== "object") {
+                json.speaker_id_map = {};
+                blobToReturn = new Blob([JSON.stringify(json)], { type: "application/json" });
+                await saveCachedFile(filename, blobToReturn);
+              }
+            } catch (e) {}
+          }
+          return new Response(blobToReturn, {
             status: 200,
             statusText: "OK",
             headers: {
               "Content-Type": targetUrl.endsWith(".json")
                 ? "application/json"
                 : "application/octet-stream",
-              "Content-Length": String(blob.size),
+              "Content-Length": String(blobToReturn.size),
             },
           });
         } catch (err) {
@@ -278,7 +315,26 @@ export async function downloadVoice(
 ): Promise<void> {
   const fetchFn = originalFetch || window.fetch;
 
-  const onnxPath = PATH_MAP[voiceId];
+  let onnxPath = PATH_MAP[voiceId];
+  if (!onnxPath) {
+    try {
+      const resp = await fetchFn("/voices.json");
+      if (resp.ok) {
+        const raw = await resp.json();
+        const catalog = Array.isArray(raw) ? raw : Object.values(raw || {});
+        for (const v of catalog) {
+          if (!v || !v.key) continue;
+          const fileKeys = Object.keys(v.files || {});
+          const key = fileKeys.find((k: string) => k.endsWith(".onnx") && !k.endsWith(".onnx.json"));
+          if (key) {
+            registerVoicePath(v.key, key);
+          }
+        }
+        onnxPath = PATH_MAP[voiceId];
+      }
+    } catch (e) {}
+  }
+
   if (!onnxPath) {
     throw new Error(`Unknown voice ID: ${voiceId}`);
   }
@@ -294,7 +350,17 @@ export async function downloadVoice(
   // 1. Download json configuration file
   const jsonRes = await fetchFn(jsonUrl);
   if (!jsonRes.ok) throw new Error(`Failed to download voice config file`);
-  const jsonBlob = await jsonRes.blob();
+  const jsonText = await jsonRes.text();
+  let jsonBlob: Blob;
+  try {
+    const json = JSON.parse(jsonText);
+    if (!json.speaker_id_map || typeof json.speaker_id_map !== "object") {
+      json.speaker_id_map = {};
+    }
+    jsonBlob = new Blob([JSON.stringify(json)], { type: "application/json" });
+  } catch (e) {
+    jsonBlob = new Blob([jsonText], { type: "application/json" });
+  }
   await saveCachedFile(jsonFilename, jsonBlob);
 
   // 2. Download/Cache ONNX model file with progress tracking

@@ -186,6 +186,15 @@ export function db() {
           });
         }
       },
+      blocking() {
+        if (dbPromise) {
+          dbPromise.then((d) => d.close()).catch(() => {});
+          dbPromise = null;
+        }
+      },
+      terminated() {
+        dbPromise = null;
+      },
     });
   }
   return dbPromise;

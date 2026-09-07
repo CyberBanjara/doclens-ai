@@ -1,5 +1,5 @@
 import { closeDb } from "./idbUtils";
-import { clearAllVoiceCache, getCachedVoiceIds, isOpfsSupported } from "@/lib/voiceCache";
+import { clearAllVoiceCache, closeVoiceDb, getCachedVoiceIds, isOpfsSupported } from "@/lib/voiceCache";
 import { listDocs } from "./docs";
 
 /** Known IndexedDB databases used by DocLens / Anuwad or related dependencies */
@@ -12,8 +12,7 @@ const KNOWN_IDB_DATABASES = [
 ];
 
 /**
- * Safely delete an IndexedDB database by name, returning a Promise that
- * resolves even if blocked or in case of errors.
+ * Safely and rapidly delete an IndexedDB database by name.
  */
 function deleteIDBDatabase(name: string): Promise<void> {
   return new Promise((resolve) => {
@@ -36,12 +35,12 @@ function deleteIDBDatabase(name: string): Promise<void> {
       request.onsuccess = () => finish();
       request.onerror = () => finish();
       request.onblocked = () => {
-        console.warn(`[Storage] Deletion blocked for IndexedDB database: "${name}"`);
+        // Continue without hanging even if blocked
         finish();
       };
 
-      // Fallback timeout in case the browser stalls
-      setTimeout(finish, 1500);
+      // 300ms fallback timeout in case the browser stalls
+      setTimeout(finish, 300);
     } catch (e) {
       console.warn(`[Storage] Failed to delete IndexedDB "${name}":`, e);
       resolve();
@@ -53,8 +52,11 @@ function deleteIDBDatabase(name: string): Promise<void> {
  * Close any active connections and delete all IndexedDB databases.
  */
 export async function clearAllIndexedDB(): Promise<void> {
-  // 1. Close active connections in this window
-  await closeDb().catch(() => {});
+  // 1. Close all active database connections immediately
+  await Promise.allSettled([
+    closeDb().catch(() => {}),
+    closeVoiceDb().catch(() => {}),
+  ]);
 
   const dbNamesToDelete = new Set<string>(KNOWN_IDB_DATABASES);
 
@@ -76,39 +78,56 @@ export async function clearAllIndexedDB(): Promise<void> {
     }
   }
 
-  // 3. Delete all discovered and known databases
-  await Promise.all(Array.from(dbNamesToDelete).map((name) => deleteIDBDatabase(name)));
+  // 3. Delete all discovered and known databases in parallel
+  await Promise.allSettled(Array.from(dbNamesToDelete).map((name) => deleteIDBDatabase(name)));
 }
 
 /**
- * Clear all Origin Private File System (OPFS) files and directories.
+ * Rapidly clear all Origin Private File System (OPFS) files and directories.
  */
 export async function clearAllOpfs(): Promise<void> {
-  // Clear via voiceCache helper
-  await clearAllVoiceCache().catch(() => {});
+  if (!isOpfsSupported()) return;
 
-  // Clear root OPFS directory entries
+  const tasks: Promise<any>[] = [
+    clearAllVoiceCache().catch(() => {}),
+  ];
+
   if (
     typeof navigator !== "undefined" &&
     navigator.storage &&
     typeof navigator.storage.getDirectory === "function"
   ) {
-    try {
-      const root = await navigator.storage.getDirectory();
-      // Handle entries iterator (supported across modern Chromium, Brave, Edge, Firefox 111+, Safari 15.2+)
-      if ((root as any).entries) {
-        for await (const [name] of (root as any).entries()) {
-          await root.removeEntry(name, { recursive: true }).catch(() => {});
+    tasks.push(
+      (async () => {
+        try {
+          const root = await navigator.storage.getDirectory();
+          // Remove known folders immediately
+          await root.removeEntry("piper", { recursive: true }).catch(() => {});
+
+          // Remove all root directory entries
+          const deletePromises: Promise<any>[] = [];
+          if (typeof (root as any).entries === "function") {
+            for await (const [name] of (root as any).entries()) {
+              deletePromises.push(root.removeEntry(name, { recursive: true }).catch(() => {}));
+            }
+          } else if (typeof (root as any).keys === "function") {
+            for await (const name of (root as any).keys()) {
+              deletePromises.push(root.removeEntry(name, { recursive: true }).catch(() => {}));
+            }
+          } else if (Symbol.asyncIterator in root) {
+            for await (const [name] of (root as any)) {
+              deletePromises.push(root.removeEntry(name, { recursive: true }).catch(() => {}));
+            }
+          }
+          await Promise.allSettled(deletePromises);
+        } catch (e) {
+          console.warn("[Storage] Failed to clear OPFS root directory:", e);
         }
-      } else if ((root as any).keys) {
-        for await (const name of (root as any).keys()) {
-          await root.removeEntry(name, { recursive: true }).catch(() => {});
-        }
-      }
-    } catch (e) {
-      console.warn("[Storage] Failed to clear OPFS root directory:", e);
-    }
+      })(),
+    );
   }
+
+  await Promise.allSettled(tasks);
 }
 
 /**

@@ -14,9 +14,9 @@ import {
   DrawerHeader,
   DrawerTitle,
 } from "@/components/ui/drawer";
-import { Loader2, Volume2 } from "lucide-react";
+import { Check, Download, Loader2, Sparkles, Volume2, VolumeX } from "lucide-react";
 import { markTtsVoiceSetupComplete, useTts } from "@/context/TtsContext";
-import { LANGUAGES, filterVoicesByLanguage } from "@/lib/voiceLanguageMap";
+import { filterVoicesByLanguage } from "@/lib/voiceLanguageMap";
 import {
   getOutputLanguage,
   setOutputLanguage as persistOutputLanguage,
@@ -34,7 +34,7 @@ interface VoiceOnboardingDialogProps {
 
 export function VoiceOnboardingDialog({ open, onOpenChange, onReady }: VoiceOnboardingDialogProps) {
   const isMobile = useIsMobile();
-  const { user, updateProfile } = useAuth();
+  const { user } = useAuth();
   const {
     outputLanguage,
     availableVoices,
@@ -44,9 +44,13 @@ export function VoiceOnboardingDialog({ open, onOpenChange, onReady }: VoiceOnbo
     refreshVoices,
   } = useTts();
 
-  const [pickedLanguage, setPickedLanguage] = useState(() => getOutputLanguage() || outputLanguage || "");
+  const currentLanguage = useMemo(() => {
+    return user?.nativeLanguage || getOutputLanguage() || outputLanguage || "हिंदी";
+  }, [user?.nativeLanguage, outputLanguage]);
+
   const [pickedVoiceUri, setPickedVoiceUri] = useState<string | null>(null);
   const [downloading, setDownloading] = useState(false);
+  const [downloadingUri, setDownloadingUri] = useState<string | null>(null);
   const [progress, setProgress] = useState(0);
   const [error, setError] = useState<string | null>(null);
 
@@ -54,41 +58,60 @@ export function VoiceOnboardingDialog({ open, onOpenChange, onReady }: VoiceOnbo
   useEffect(() => {
     if (open) {
       void refreshVoices(true);
-      const activeLang = getOutputLanguage() || outputLanguage || "";
-      setPickedLanguage(activeLang);
       setPickedVoiceUri(null);
       setDownloading(false);
+      setDownloadingUri(null);
       setProgress(0);
       setError(null);
     }
-  }, [open, outputLanguage, refreshVoices]);
+  }, [open, refreshVoices]);
 
   const voicesForLanguage = useMemo(() => {
-    if (!pickedLanguage) return [];
-    return filterVoicesByLanguage(availableVoices, pickedLanguage).sort((a, b) => {
+    if (!currentLanguage) return [];
+    return filterVoicesByLanguage(availableVoices, currentLanguage).sort((a, b) => {
       if (a.isNeural && !b.isNeural) return -1;
       if (!a.isNeural && b.isNeural) return 1;
       return a.name.localeCompare(b.name);
     });
-  }, [availableVoices, pickedLanguage]);
+  }, [availableVoices, currentLanguage]);
+
+  const hasVoices = voicesForLanguage.length > 0;
 
   const effectiveVoiceUri = useMemo(() => {
     if (pickedVoiceUri && voicesForLanguage.some((v) => v.voiceURI === pickedVoiceUri)) {
       return pickedVoiceUri;
     }
     return (
-      voicesForLanguage.find((v) => v.isNeural)?.voiceURI ?? voicesForLanguage[0]?.voiceURI ?? null
+      voicesForLanguage.find((v) => v.isNeural && v.isDownloaded)?.voiceURI ??
+      voicesForLanguage.find((v) => v.isNeural)?.voiceURI ??
+      voicesForLanguage[0]?.voiceURI ??
+      null
     );
   }, [pickedVoiceUri, voicesForLanguage]);
 
-  const handlePickLanguage = (langId: string) => {
-    setPickedLanguage(langId);
-    setPickedVoiceUri(null);
+  const handleDownloadCard = async (voiceUri: string) => {
+    if (downloading) return;
     setError(null);
+    if (!isOnline()) {
+      setError(OFFLINE_MESSAGE);
+      return;
+    }
+    setDownloading(true);
+    setDownloadingUri(voiceUri);
+    setProgress(0);
+    try {
+      await downloadVoice(voiceUri, setProgress);
+      await refreshVoices(true);
+    } catch (err) {
+      setError(getFriendlyErrorMessage(err, "Failed to download voice model. Please try again."));
+    } finally {
+      setDownloading(false);
+      setDownloadingUri(null);
+    }
   };
 
   const handleStart = async () => {
-    if (!pickedLanguage || !effectiveVoiceUri || downloading) return;
+    if (!effectiveVoiceUri || downloading) return;
     setError(null);
 
     const voice = voicesForLanguage.find((v) => v.voiceURI === effectiveVoiceUri);
@@ -98,27 +121,25 @@ export function VoiceOnboardingDialog({ open, onOpenChange, onReady }: VoiceOnbo
       return;
     }
 
-    setOutputLanguage(pickedLanguage);
-    persistOutputLanguage(pickedLanguage);
+    setOutputLanguage(currentLanguage);
+    persistOutputLanguage(currentLanguage);
     setSelectedVoiceUri(effectiveVoiceUri);
-
-    if (user) {
-      void updateProfile({ nativeLanguage: pickedLanguage }).catch((err) =>
-        console.warn("Failed to sync voice onboarding language to Firebase/JWT:", err),
-      );
-    }
 
     if (voice?.isNeural && !voice.isDownloaded) {
       setDownloading(true);
+      setDownloadingUri(effectiveVoiceUri);
       setProgress(0);
       try {
         await downloadVoice(effectiveVoiceUri, setProgress);
+        await refreshVoices(true);
       } catch (err) {
         setDownloading(false);
+        setDownloadingUri(null);
         setError(getFriendlyErrorMessage(err, "Failed to download voice model. Please try again."));
         return;
       }
       setDownloading(false);
+      setDownloadingUri(null);
     }
 
     markTtsVoiceSetupComplete();
@@ -127,106 +148,178 @@ export function VoiceOnboardingDialog({ open, onOpenChange, onReady }: VoiceOnbo
   };
 
   const body = (
-    <>
-      <div className="space-y-3">
-        <div className="font-mono text-[10px] uppercase tracking-widest text-muted-foreground">
-          mother tongue
+    <div className="space-y-3">
+      {!hasVoices ? (
+        <div className="rounded-xl border border-amber-500/25 bg-amber-500/10 p-4 text-amber-700 dark:text-amber-400">
+          <div className="flex items-start gap-3">
+            <VolumeX className="h-5 w-5 shrink-0 text-amber-600 dark:text-amber-400 mt-0.5" />
+            <div className="space-y-1">
+              <h4 className="text-sm font-semibold text-foreground">
+                No voice available for {currentLanguage}
+              </h4>
+              <p className="text-xs text-muted-foreground leading-relaxed">
+                There are currently no neural speech models or device voices available for {currentLanguage}. Audio playback is not supported for this language.
+              </p>
+            </div>
+          </div>
         </div>
-        <div className="flex flex-wrap gap-2">
-          {LANGUAGES.map((lang) => (
-            <button
-              key={lang.id}
-              onClick={() => handlePickLanguage(lang.id)}
-              disabled={downloading}
-              className={`rounded-md border px-3 py-1.5 text-sm transition-colors disabled:opacity-50 ${
-                pickedLanguage === lang.id
-                  ? "border-primary bg-primary/15 text-primary"
-                  : "border-border bg-background text-muted-foreground hover:text-foreground"
-              }`}
-            >
-              {lang.native}
-            </button>
-          ))}
-        </div>
-      </div>
+      ) : (
+        <div className="max-h-[50vh] overflow-y-auto pr-1 space-y-2.5">
+          {voicesForLanguage.map((v) => {
+            const isSelected = effectiveVoiceUri === v.voiceURI;
+            const isThisDownloading = downloading && downloadingUri === v.voiceURI;
+            const cleanName =
+              v.name
+                .replace(/^✨\s*Neural\s*/i, "")
+                .replace(/\s*\([^)]*\)\s*$/i, "")
+                .trim() || v.name;
 
-      <div className="mt-5 space-y-3">
-        <div className="font-mono text-[10px] uppercase tracking-widest text-muted-foreground">
-          voice
-        </div>
-        {!pickedLanguage ? (
-          <div className="rounded-lg bg-surface-2/40 px-3 py-2 text-xs italic text-muted-foreground">
-            Please select your mother tongue above to view available voices.
-          </div>
-        ) : voicesForLanguage.length === 0 ? (
-          <div className="rounded-lg bg-surface-2/40 px-3 py-2 text-xs italic text-muted-foreground">
-            No voices available for this mother tongue yet.
-          </div>
-        ) : (
-          <select
-            value={effectiveVoiceUri ?? ""}
-            onChange={(e) => setPickedVoiceUri(e.target.value || null)}
-            disabled={downloading}
-            className="w-full rounded-lg border border-border bg-surface px-2.5 py-2 text-sm text-foreground outline-none focus:border-primary disabled:opacity-60"
-          >
-            {voicesForLanguage.map((v) => (
-              <option key={v.voiceURI} value={v.voiceURI}>
-                {v.name} ({v.lang}){v.isNeural && v.isDownloaded ? " — downloaded" : ""}
-              </option>
-            ))}
-          </select>
-        )}
-      </div>
+            return (
+              <div
+                key={v.voiceURI}
+                onClick={() => {
+                  if (!downloading) {
+                    setPickedVoiceUri(v.voiceURI);
+                  }
+                }}
+                className={`group relative flex flex-col rounded-xl border p-3.5 transition-all duration-200 cursor-pointer ${
+                  isSelected
+                    ? "border-primary bg-primary/[0.06] shadow-sm ring-1 ring-primary/40"
+                    : "border-border bg-card/60 hover:border-primary/40 hover:bg-surface-2/40"
+                } ${downloading && !isThisDownloading ? "opacity-60 pointer-events-none" : ""}`}
+              >
+                <div className="flex items-center justify-between gap-3">
+                  <div className="flex items-center gap-3 min-w-0">
+                    {/* Radio circle */}
+                    <div
+                      className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-full border transition-colors ${
+                        isSelected
+                          ? "border-primary bg-primary text-primary-foreground"
+                          : "border-muted-foreground/30 group-hover:border-primary/50"
+                      }`}
+                    >
+                      {isSelected && <Check className="h-3 w-3 stroke-[3]" />}
+                    </div>
 
-      {downloading && (
-        <div className="mt-5 space-y-2">
-          <div className="flex items-center justify-between text-xs font-medium text-muted-foreground">
-            <span className="flex items-center gap-1.5">
-              <Loader2 className="h-3.5 w-3.5 animate-spin text-primary" />
-              Downloading voice model…
-            </span>
-            <span className="font-mono text-primary">{progress}%</span>
-          </div>
-          <div className="h-1.5 w-full overflow-hidden rounded-full bg-surface-2">
-            <div
-              className="h-full bg-primary transition-all duration-200"
-              style={{ width: `${progress}%` }}
-            />
-          </div>
+                    {/* Voice details */}
+                    <div className="min-w-0">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <span className="text-sm font-semibold text-foreground truncate">
+                          {cleanName}
+                        </span>
+                        {v.isNeural ? (
+                          <span className="flex items-center gap-1 rounded-full bg-primary/10 px-2 py-0.5 text-[10px] font-medium text-primary">
+                            <Sparkles className="h-2.5 w-2.5" />
+                            Neural HD
+                          </span>
+                        ) : (
+                          <span className="rounded-full bg-surface-2 px-2 py-0.5 text-[10px] font-medium text-muted-foreground">
+                            System
+                          </span>
+                        )}
+                      </div>
+                      <p className="text-[11px] text-muted-foreground truncate mt-0.5">
+                        {v.lang}
+                      </p>
+                    </div>
+                  </div>
+
+                  {/* Status / Action */}
+                  <div className="shrink-0">
+                    {v.isNeural ? (
+                      v.isDownloaded ? (
+                        <span className="flex items-center gap-1 rounded-md bg-emerald-500/10 px-2 py-1 text-[11px] font-medium text-emerald-600 dark:text-emerald-400">
+                          <Check className="h-3 w-3" />
+                          Ready
+                        </span>
+                      ) : isThisDownloading ? (
+                        <span className="flex items-center gap-1 rounded-md bg-primary/10 px-2 py-1 text-[11px] font-semibold text-primary font-mono tabular-nums">
+                          <Loader2 className="h-3 w-3 animate-spin" />
+                          {progress}%
+                        </span>
+                      ) : (
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setPickedVoiceUri(v.voiceURI);
+                            void handleDownloadCard(v.voiceURI);
+                          }}
+                          className="flex items-center gap-1 rounded-md border border-primary/30 bg-primary/10 px-2.5 py-1 text-[11px] font-medium text-primary hover:bg-primary/20 transition-colors"
+                        >
+                          <Download className="h-3 w-3" />
+                          Download
+                        </button>
+                      )
+                    ) : (
+                      <span className="rounded-md bg-surface-2 px-2 py-1 text-[11px] font-medium text-muted-foreground">
+                        Ready
+                      </span>
+                    )}
+                  </div>
+                </div>
+
+                {/* Inline Progress Bar (When downloading this card) */}
+                {isThisDownloading && (
+                  <div className="mt-3 w-full">
+                    <div className="h-1.5 w-full overflow-hidden rounded-full bg-primary/20">
+                      <div
+                        className="h-full bg-gradient-to-r from-primary to-primary/80 transition-all duration-200 relative overflow-hidden rounded-full"
+                        style={{ width: `${progress}%` }}
+                      >
+                        <div className="absolute inset-0 bg-white/30 animate-pulse" />
+                      </div>
+                    </div>
+                  </div>
+                )}
+              </div>
+            );
+          })}
         </div>
       )}
 
       {error && (
-        <div className="mt-5 rounded-md border border-destructive/40 bg-destructive/10 px-3 py-2 text-xs text-destructive">
+        <div className="rounded-md border border-destructive/40 bg-destructive/10 px-3 py-2 text-xs text-destructive">
           {error}
         </div>
       )}
-    </>
+    </div>
   );
 
   const footerButtons = (
     <>
-      <button
-        onClick={() => onOpenChange(false)}
-        disabled={downloading}
-        className="rounded-md border border-border bg-background px-3 py-1.5 text-sm text-muted-foreground hover:text-foreground disabled:opacity-50"
-      >
-        Cancel
-      </button>
-      <button
-        onClick={handleStart}
-        disabled={!pickedLanguage || !effectiveVoiceUri || downloading}
-        className="flex items-center gap-1.5 rounded-md bg-primary px-3 py-1.5 text-sm font-semibold text-primary-foreground disabled:opacity-40"
-      >
-        {downloading ? (
-          <>
-            <Loader2 className="h-3.5 w-3.5 animate-spin" />
-            Downloading…
-          </>
-        ) : (
-          "Start Reading"
-        )}
-      </button>
+      {!hasVoices ? (
+        <button
+          onClick={() => onOpenChange(false)}
+          className="rounded-md bg-primary px-4 py-1.5 text-sm font-semibold text-primary-foreground hover:opacity-90"
+        >
+          Got it
+        </button>
+      ) : (
+        <>
+          <button
+            onClick={() => onOpenChange(false)}
+            disabled={downloading}
+            className="rounded-md border border-border bg-background px-3 py-1.5 text-sm text-muted-foreground hover:text-foreground disabled:opacity-50"
+          >
+            Cancel
+          </button>
+          <button
+            onClick={handleStart}
+            disabled={!effectiveVoiceUri || downloading}
+            className="flex items-center gap-1.5 rounded-md bg-primary px-3.5 py-1.5 text-sm font-semibold text-primary-foreground disabled:opacity-40"
+          >
+            {downloading ? (
+              <>
+                <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                Downloading…
+              </>
+            ) : (
+              "Start Reading"
+            )}
+          </button>
+        </>
+      )}
     </>
   );
 
@@ -239,9 +332,8 @@ export function VoiceOnboardingDialog({ open, onOpenChange, onReady }: VoiceOnbo
               <Volume2 className="h-4 w-4 text-primary" />
               Choose a voice
             </DrawerTitle>
-            <DrawerDescription>
-              Pick your mother tongue and voice to hear this page read aloud. Neural voices may need a
-              one-time download.
+            <DrawerDescription className="sr-only">
+              Voice options available for this language
             </DrawerDescription>
           </DrawerHeader>
           <div className="overflow-y-auto px-6 pb-2">{body}</div>
@@ -253,23 +345,22 @@ export function VoiceOnboardingDialog({ open, onOpenChange, onReady }: VoiceOnbo
 
   return (
     <Dialog open={open} onOpenChange={(next) => !downloading && onOpenChange(next)}>
-      <DialogContent className="max-h-[85vh] overflow-hidden p-0 sm:max-w-[560px]">
-        <div className="border-b border-border px-6 py-5">
+      <DialogContent className="max-h-[85vh] overflow-hidden p-0 sm:max-w-[500px]">
+        <div className="border-b border-border px-6 py-4">
           <DialogHeader>
-            <DialogTitle className="flex items-center gap-2">
-              <Volume2 className="h-4 w-4 text-primary" />
+            <DialogTitle className="flex items-center gap-2 text-base">
+              <Volume2 className="h-4.5 w-4.5 text-primary" />
               Choose a voice
             </DialogTitle>
-            <DrawerDescription>
-              Pick your mother tongue and voice to hear this page read aloud. Neural voices may need a
-              one-time download.
-            </DrawerDescription>
+            <DialogDescription className="sr-only">
+              Voice options available for this language
+            </DialogDescription>
           </DialogHeader>
         </div>
 
-        <div className="max-h-[calc(85vh-160px)] overflow-auto px-6 py-5">{body}</div>
+        <div className="max-h-[calc(85vh-140px)] overflow-auto px-6 py-4">{body}</div>
 
-        <div className="flex items-center justify-end gap-2 border-t border-border px-6 py-4">
+        <div className="flex items-center justify-end gap-2 border-t border-border px-6 py-3.5">
           {footerButtons}
         </div>
       </DialogContent>
