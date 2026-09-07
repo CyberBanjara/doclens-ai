@@ -70,7 +70,7 @@ export function PageCardLoader(props: CardLoaderProps) {
     streamCacheRef.current = streamBuf;
   }
 
-  // Fetch own data on mount / when key changes / when summary status flips to "done" elsewhere.
+  // Fetch own data on mount / when key changes / when summary status flips or language changes
   useEffect(() => {
     let cancelled = false;
     (async () => {
@@ -81,16 +81,21 @@ export function PageCardLoader(props: CardLoaderProps) {
         setColumns(rec.columns);
         if (rec.pageAi) {
           setPageAi(rec.pageAi);
+        } else {
+          streamCacheRef.current = "";
+          setPageAi({ pageNumber, status: "idle" });
         }
       } else {
         setText("");
+        streamCacheRef.current = "";
         setPageAi({ pageNumber, status: "idle" });
       }
     })();
     return () => {
       cancelled = true;
     };
-  }, [docId, pageNumber, summary?.status, summary?.settingsHash, summary?.hasResult, isRunning]);
+  }, [docId, pageNumber, summary?.status, summary?.settingsHash, summary?.hasResult, isRunning, props.globals.language]);
+
 
   // Fetch previous continuity context for this page
   useEffect(() => {

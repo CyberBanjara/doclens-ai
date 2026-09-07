@@ -131,8 +131,8 @@ const LANGUAGE_SLUG_MAP: Record<string, string> = {
  * Resolves a language identifier (in any script or name) to a normalized
  * language slug (e.g., 'hindi', 'telugu', 'bengali').
  */
-export function getLanguageSlug(language: string): string {
-  if (!language || !language.trim()) {
+export function getLanguageSlug(language: string | unknown): string {
+  if (!language || typeof language !== "string" || !language.trim()) {
     return "hindi";
   }
 

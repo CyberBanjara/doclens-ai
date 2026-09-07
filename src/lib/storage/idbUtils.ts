@@ -92,6 +92,10 @@ export function normalizeDoc(raw: any): DocRecord | undefined {
     aiDoneCount: typeof raw.aiDoneCount === "number" ? raw.aiDoneCount : 0,
     lastReadPage: typeof raw.lastReadPage === "number" ? raw.lastReadPage : undefined,
     isScannedPdf: typeof raw.isScannedPdf === "boolean" ? raw.isScannedPdf : undefined,
+    bookId: raw.bookId || raw.fileName,
+    selectedLanguage: typeof raw.selectedLanguage === "string" ? raw.selectedLanguage : undefined,
+    selectedStyle: typeof raw.selectedStyle === "string" ? raw.selectedStyle : undefined,
+    hasChosenLanguage: typeof raw.hasChosenLanguage === "boolean" ? raw.hasChosenLanguage : false,
   };
 }
 

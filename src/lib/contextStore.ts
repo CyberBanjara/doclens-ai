@@ -118,4 +118,8 @@ export function clearDocContext(docId?: string) {
   } else {
     docContextCache.clear();
   }
+  if (typeof window !== "undefined") {
+    window.dispatchEvent(new CustomEvent("doclens:context-cleared", { detail: { docId } }));
+  }
 }
+

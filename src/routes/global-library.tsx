@@ -239,10 +239,21 @@ function GlobalLibraryPage() {
         void fetchFiles();
       }
     })();
+
+    const handleReconciled = () => {
+      void fetchFiles(true);
+    };
+
+    window.addEventListener("doclens:docs-reconciled", handleReconciled);
+    window.addEventListener("doclens:output-language-changed", handleReconciled);
+
     return () => {
       cancelled = true;
+      window.removeEventListener("doclens:docs-reconciled", handleReconciled);
+      window.removeEventListener("doclens:output-language-changed", handleReconciled);
     };
   }, []);
+
 
   // Automatically refresh the library once user logs in (or clear when logging out)
   const prevUserRef = useRef(user);

@@ -381,25 +381,44 @@ export function TtsProvider({ children }: { children: React.ReactNode }) {
     void refreshVoices(false);
   }, [refreshVoices]);
 
-  // Sync outputLanguage when window regains focus or storage changes
+  const stopRef = useRef<(() => void) | null>(null);
+
+  // Sync outputLanguage when window regains focus, storage changes, or language is switched
   useEffect(() => {
-    const syncLanguage = () => {
-      const lang = getOutputLanguage();
-      setOutputLanguageState(lang);
-      outputLanguageRef.current = lang;
+    const syncLanguage = (e?: any) => {
+      const raw = e?.detail;
+      const lang =
+        (typeof raw === "string" ? raw : raw?.language) || getOutputLanguage() || "";
+      if (lang && typeof lang === "string" && lang !== outputLanguageRef.current) {
+        if (isPlayingRef.current) {
+          stopRef.current?.();
+        }
+        setOutputLanguageState(lang);
+        outputLanguageRef.current = lang;
+      }
     };
     window.addEventListener("focus", syncLanguage);
     window.addEventListener("storage", syncLanguage);
+    window.addEventListener("doclens:output-language-changed", syncLanguage);
+    window.addEventListener("doclens:workspace-reconciled", syncLanguage);
     return () => {
       window.removeEventListener("focus", syncLanguage);
       window.removeEventListener("storage", syncLanguage);
+      window.removeEventListener("doclens:output-language-changed", syncLanguage);
+      window.removeEventListener("doclens:workspace-reconciled", syncLanguage);
     };
   }, []);
 
-  const setOutputLanguage = useCallback((lang: string) => {
-    setOutputLanguageState(lang);
-    outputLanguageRef.current = lang;
+  const setOutputLanguage = useCallback((lang: string | { language?: string }) => {
+    const strLang = (typeof lang === "string" ? lang : lang?.language) || "";
+    if (isPlayingRef.current && strLang !== outputLanguageRef.current) {
+      stopRef.current?.();
+    }
+    setOutputLanguageState(strLang);
+    outputLanguageRef.current = strLang;
   }, []);
+
+
 
   // Filtered voices by selected language
   const filteredVoices = useMemo(() => {
@@ -964,6 +983,8 @@ export function TtsProvider({ children }: { children: React.ReactNode }) {
     setCurrentTextSource,
     setActivePageNumber,
   ]);
+  stopRef.current = stop;
+
 
   const nextSentence = useCallback(() => {
     if (!isPlayingRef.current) return;

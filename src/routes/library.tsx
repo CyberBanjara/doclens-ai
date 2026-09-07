@@ -55,16 +55,27 @@ function LibraryPage() {
 
   useEffect(() => {
     let cancelled = false;
-    (async () => {
+    const fetchList = async () => {
       const list = await listDocs();
       if (cancelled) return;
       setDocs(list);
       setLoading(false);
-    })();
+    };
+
+    void fetchList();
+
+    window.addEventListener("doclens:docs-reconciled", fetchList);
+    window.addEventListener("doclens:output-language-changed", fetchList);
+    window.addEventListener("doclens:library-changed", fetchList);
+
     return () => {
       cancelled = true;
+      window.removeEventListener("doclens:docs-reconciled", fetchList);
+      window.removeEventListener("doclens:output-language-changed", fetchList);
+      window.removeEventListener("doclens:library-changed", fetchList);
     };
   }, []);
+
 
   const handleFile = async (f: File) => {
     try {

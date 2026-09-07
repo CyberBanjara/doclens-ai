@@ -210,18 +210,21 @@ function DocPage() {
         : null,
     );
 
-    if (syncEnabled && doc && chosenLang) {
+    if (doc && chosenLang) {
       const toastId = toast.loading(`Checking ${chosenLang} translations...`);
       try {
         await syncFromSupabase(id, doc.fileName, chosenLang, true);
         const sum = await getPageAiSummary(id);
         setAiSummary(sum);
+        const freshDoc = await getDoc(id);
+        if (freshDoc) setDoc(freshDoc);
         toast.success(`Active translation language: ${chosenLang}`, { id: toastId });
       } catch (e) {
         console.warn("Language sync note:", e);
         toast.dismiss(toastId);
       }
     }
+
 
     // Immediately trigger AI translation for active page
     dispatchDocEvent("doclens:ensure-page-ready", {
@@ -232,6 +235,37 @@ function DocPage() {
 
   useEffect(() => {
     let cancelled = false;
+
+    // Sync translations when user changes language in the workspace or settings
+    const handleLangChange = (e: any) => {
+      const raw = e?.detail;
+      const newLang = (typeof raw === "string" ? raw : raw?.language) || "";
+      if (!newLang) return;
+      void (async () => {
+        try {
+          const docRec = await getDoc(id);
+          if (!docRec) return;
+          await updateDoc(id, { selectedLanguage: newLang });
+          await syncFromSupabase(id, docRec.fileName, newLang, true);
+          if (!cancelled) {
+            const updatedRec = await getDoc(id);
+            if (updatedRec) {
+              setDoc(updatedRec);
+            }
+            const sum = await getPageAiSummary(id);
+            if (!cancelled) {
+              setAiSummary(sum);
+            }
+          }
+        } catch (err) {
+          console.warn("Language sync check note:", err);
+        }
+      })();
+    };
+
+    window.addEventListener("doclens:output-language-changed" as any, handleLangChange);
+    window.addEventListener("doclens:workspace-reconciled" as any, handleLangChange);
+
     (async () => {
       let configEnabled = false;
       try {
@@ -256,7 +290,7 @@ function DocPage() {
 
       // Before Step 3 (Supabase fetch) and Step 4 (AI translation):
       // For anonymous users or 1st-time users, check if language and style are configured
-      const hasLang = !!(user?.nativeLanguage || currentRec.selectedLanguage || hasStoredLanguage());
+      const hasLang = !!(user?.nativeLanguage || hasStoredLanguage() || currentRec.selectedLanguage);
       const hasSty = !!(currentRec.selectedStyle || hasStoredStyle());
       const isConfigured = hasLang && hasSty && (currentRec.hasChosenLanguage || hasCompletedAiPreferenceSetup());
 
@@ -266,20 +300,26 @@ function DocPage() {
         }
       }
 
-      // Automatically resolve active language
+      // Automatically resolve active language: user profile -> global preference -> doc record -> default
       const activeLang =
-        user?.nativeLanguage || currentRec.selectedLanguage || getOutputLanguage();
+        user?.nativeLanguage || getOutputLanguage() || currentRec.selectedLanguage || "हिंदी";
 
-      if (activeLang && currentRec.selectedLanguage !== activeLang) {
-        void updateDoc(id, { selectedLanguage: activeLang });
+      const languageChanged = currentRec.selectedLanguage !== activeLang;
+      if (activeLang && languageChanged) {
+        await updateDoc(id, { selectedLanguage: activeLang });
         currentRec.selectedLanguage = activeLang;
       }
 
-      if (configEnabled && pc > 0 && isConfigured && activeLang) {
+      if (pc > 0 && activeLang) {
         // Step 3: Run background sync from Supabase for the active native language
         void (async () => {
           try {
-            const updated = await syncFromSupabase(id, currentRec.fileName, activeLang, false);
+            const updated = await syncFromSupabase(
+              id,
+              currentRec.fileName,
+              activeLang,
+              languageChanged,
+            );
             if (updated && !cancelled) {
               const updatedRec = await getDoc(id);
               if (updatedRec) {
@@ -295,32 +335,6 @@ function DocPage() {
           }
         })();
       }
-
-      // Sync translations when user changes language in the workspace or settings
-      const handleLangChange = (e: any) => {
-        const newLang = e?.detail;
-        if (!newLang || !configEnabled) return;
-        void (async () => {
-          try {
-            await updateDoc(id, { selectedLanguage: newLang });
-            await syncFromSupabase(id, currentRec.fileName, newLang, true);
-            if (!cancelled) {
-              const updatedRec = await getDoc(id);
-              if (updatedRec) {
-                setDoc(updatedRec);
-                const sum = await getPageAiSummary(id);
-                if (!cancelled) {
-                  setAiSummary(sum);
-                }
-              }
-            }
-          } catch (err) {
-            console.warn("Language sync check note:", err);
-          }
-        })();
-      };
-
-      window.addEventListener("doclens:output-language-changed" as any, handleLangChange);
 
       // Compute isScannedPdf if not set on existing document (sample first 5 pages)
       if (currentRec.isScannedPdf === undefined && pc > 0) {
@@ -361,8 +375,10 @@ function DocPage() {
     })();
     return () => {
       cancelled = true;
-      window.removeEventListener("doclens:output-language-changed" as any, () => {});
+      window.removeEventListener("doclens:output-language-changed" as any, handleLangChange);
+      window.removeEventListener("doclens:workspace-reconciled" as any, handleLangChange);
     };
+
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id]);
 
@@ -460,7 +476,7 @@ function DocPage() {
         try {
           const freshDoc = (await getDoc(id)) || currentDoc;
           const activeLang =
-            user?.nativeLanguage || freshDoc.selectedLanguage || getOutputLanguage();
+            user?.nativeLanguage || getOutputLanguage() || freshDoc.selectedLanguage || "हिंदी";
           if (activeLang) {
             await syncFromSupabase(id, freshDoc.fileName, activeLang, false);
             const updatedRec = await getDoc(id);
@@ -909,7 +925,7 @@ function DocPage() {
       <UserPreferencesModal
         open={preferencesModalOpen}
         initialLanguage={
-          user?.nativeLanguage || doc?.selectedLanguage || getOutputLanguage()
+          user?.nativeLanguage || getOutputLanguage() || doc?.selectedLanguage || "हिंदी"
         }
         initialStyle={user?.style || doc?.selectedStyle || getStyle()}
         initialMode={getMode()}

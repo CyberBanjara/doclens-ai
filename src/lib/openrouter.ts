@@ -249,16 +249,27 @@ export function getOutputLanguage(): string {
   return localStorage.getItem(LANG_LS)?.trim() ?? "";
 }
 
+import { clearDocContext } from "./contextStore";
+
 export function setOutputLanguage(lang: string) {
   if (typeof window === "undefined") return;
-  if (lang) {
-    localStorage.setItem(LANG_LS, lang.trim());
+  const trimmed = lang?.trim() || "";
+  if (trimmed) {
+    localStorage.setItem(LANG_LS, trimmed);
   } else {
     localStorage.removeItem(LANG_LS);
   }
-  window.dispatchEvent(new CustomEvent(OUTPUT_LANGUAGE_CHANGE_EVT, { detail: lang }));
-  window.dispatchEvent(new CustomEvent(GLOBALS_CHANGE_EVT, { detail: { language: lang } }));
+  clearDocContext();
+  window.dispatchEvent(new CustomEvent(OUTPUT_LANGUAGE_CHANGE_EVT, { detail: trimmed }));
+  window.dispatchEvent(new CustomEvent(GLOBALS_CHANGE_EVT, { detail: { language: trimmed } }));
+
+  if (trimmed) {
+    void import("./sync").then(({ reconcileAllDocsLanguage }) => {
+      void reconcileAllDocsLanguage(trimmed);
+    }).catch((err) => console.warn("Failed to trigger reconcileAllDocsLanguage:", err));
+  }
 }
+
 
 function hasStoredValue(key: string): boolean {
   if (typeof window === "undefined") return false;

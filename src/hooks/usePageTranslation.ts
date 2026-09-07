@@ -56,13 +56,30 @@ export function usePageTranslation(
   /** One-shot text overrides keyed by pageNumber (from PDF selection translate). */
   const selectionOverridesRef = useRef<Map<number, string>>(new Map());
 
-  // Abort everything in flight on unmount.
+  // Abort everything in flight on unmount or when language is switched/reconciled
   useEffect(() => {
+    const handleLanguageReset = () => {
+      abortMap.current.forEach((c) => c.abort());
+      abortMap.current.clear();
+      inFlightRuns.current.clear();
+      selectionOverridesRef.current.clear();
+      if (mountedRef.current) {
+        setRunningPages(new Set());
+        setStreamBufs({});
+      }
+    };
+
+    window.addEventListener("doclens:output-language-changed", handleLanguageReset);
+    window.addEventListener("doclens:workspace-reconciled", handleLanguageReset);
+
     return () => {
       abortMap.current.forEach((c) => c.abort());
       abortMap.current.clear();
+      window.removeEventListener("doclens:output-language-changed", handleLanguageReset);
+      window.removeEventListener("doclens:workspace-reconciled", handleLanguageReset);
     };
-  }, []);
+  }, [mountedRef]);
+
 
   const runPage = useCallback(
     async (pageNumber: number): Promise<string | undefined> => {

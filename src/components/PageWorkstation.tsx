@@ -88,6 +88,7 @@ export function PageWorkstation({
 
   useEffect(() => {
     const onFocus = () => {
+      autoTranslatedInitialPageRef.current = {};
       void readEffectiveGlobals().then((next) => {
         if (!mountedRef.current) return;
         globalsRef.current = next;
@@ -98,12 +99,15 @@ export function PageWorkstation({
     window.addEventListener("focus", onFocus);
     window.addEventListener("doclens:globals-changed", onFocus);
     window.addEventListener("doclens:output-language-changed", onFocus);
+    window.addEventListener("doclens:workspace-reconciled", onFocus);
     return () => {
       window.removeEventListener("focus", onFocus);
       window.removeEventListener("doclens:globals-changed", onFocus);
       window.removeEventListener("doclens:output-language-changed", onFocus);
+      window.removeEventListener("doclens:workspace-reconciled", onFocus);
     };
   }, []);
+
 
   const shouldShowExplainSetup = useCallback(() => {
     if (typeof window === "undefined") return false;

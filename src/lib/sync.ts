@@ -1,8 +1,9 @@
 import { createServerFn } from "@tanstack/react-start";
 import { fetchSupabaseLanguageBook, batchSaveSupabaseLanguagePages } from "./supabase";
-import { getDoc, updateDoc, db, pageKey, getAllPages, withDocLock } from "./storage";
+import { getDoc, updateDoc, db, pageKey, pageRange, getAllPages, withDocLock, listDocs } from "./storage";
 import { isGlobalSyncEnabled } from "./env";
 import { getOutputLanguage } from "./openrouter";
+import { clearDocContext } from "./contextStore";
 
 export const getSyncConfig = createServerFn({ method: "GET" }).handler(async () => {
   "use server";
@@ -10,6 +11,40 @@ export const getSyncConfig = createServerFn({ method: "GET" }).handler(async () 
     enabled: isGlobalSyncEnabled(),
   };
 });
+
+/**
+ * Purges all local language-specific translations and context for a document.
+ * Guarantees a fresh, blank slate for the newly active language.
+ */
+export async function purgeDocLanguageTranslations(
+  docId: string,
+  language: string,
+): Promise<boolean> {
+  clearDocContext(docId);
+  let resetAny = false;
+  await withDocLock(docId, async () => {
+    const d = await db();
+    const PAGES = "pageData";
+    const tx = d.transaction(PAGES, "readwrite");
+    let cur = await tx.store.openCursor(pageRange(docId));
+    while (cur) {
+      const val = cur.value;
+      if (val.pageAi) {
+        resetAny = true;
+        delete val.pageAi;
+        await cur.update(val);
+      }
+      cur = await cur.continue();
+    }
+    await tx.done;
+  });
+  await updateDoc(docId, {
+    aiDoneCount: 0,
+    selectedLanguage: language,
+    aiResults: [],
+  });
+  return resetAny;
+}
 
 /**
  * Synchronizes document translations for the selected language from Supabase.
@@ -23,12 +58,18 @@ export async function syncFromSupabase(
   targetLanguage?: string,
   resetMissing = false,
 ): Promise<boolean> {
-  if (!isGlobalSyncEnabled()) return false;
-  try {
-    const docRec = await getDoc(docId);
-    const language = targetLanguage || docRec?.selectedLanguage || getOutputLanguage() || "हिंदी";
-    const bookId = docRec?.bookId || fileName || docId;
+  const docRec = await getDoc(docId);
+  const language = targetLanguage || getOutputLanguage() || docRec?.selectedLanguage || "हिंदी";
+  const bookId = docRec?.bookId || fileName || docId;
 
+  if (!isGlobalSyncEnabled()) {
+    if (resetMissing) {
+      return await purgeDocLanguageTranslations(docId, language);
+    }
+    return false;
+  }
+
+  try {
     const res = await fetchSupabaseLanguageBook({
       data: {
         language,
@@ -39,26 +80,7 @@ export async function syncFromSupabase(
 
     if (!res || !res.found || !res.pages || res.pages.length === 0) {
       if (resetMissing) {
-        // User switched language to a language with no translations yet: clear previous language translations
-        let resetAny = false;
-        await withDocLock(docId, async () => {
-          const d = await db();
-          const PAGES = "pageData";
-          const tx = d.transaction(PAGES, "readwrite");
-          const localPages = await getAllPages(docId);
-          for (const lp of localPages) {
-            if (lp.pageAi) {
-              resetAny = true;
-              await tx.store.put({ ...lp, pageAi: undefined });
-            }
-          }
-          await tx.done;
-        });
-        await updateDoc(docId, {
-          aiDoneCount: 0,
-          selectedLanguage: language,
-        });
-        return resetAny;
+        return await purgeDocLanguageTranslations(docId, language);
       }
       return false;
     }
@@ -103,10 +125,9 @@ export async function syncFromSupabase(
         } else if (resetMissing && localPage.pageAi !== undefined) {
           // If switching language, reset local translation for pages without translation in this language
           updatedAny = true;
-          await tx.store.put({
-            ...localPage,
-            pageAi: undefined,
-          });
+          const cleanPage = { ...localPage };
+          delete cleanPage.pageAi;
+          await tx.store.put(cleanPage);
         }
       }
 
@@ -144,8 +165,63 @@ export async function syncFromSupabase(
     return updatedAny;
   } catch (e) {
     console.error("Failed to sync from Supabase dedicated language table:", e);
+    if (resetMissing) {
+      return await purgeDocLanguageTranslations(docId, language);
+    }
   }
   return false;
+}
+
+/**
+ * Reconciles a single document's state and pages with the target language.
+ * Checks Supabase for the selected language version:
+ * - If found: keeps/fetches it into local storage.
+ * - If not found: cleans and removes old language-specific data, presenting a clean blank state.
+ */
+export async function reconcileDocumentLanguage(
+  docId: string,
+  targetLanguage: string,
+): Promise<boolean> {
+  if (!docId || !targetLanguage) return false;
+  clearDocContext(docId);
+  const docRec = await getDoc(docId);
+  if (!docRec) return false;
+  await updateDoc(docId, { selectedLanguage: targetLanguage });
+  return await syncFromSupabase(docId, docRec.fileName, targetLanguage, true);
+}
+
+/**
+ * Reconciles ALL documents in the local library with the newly selected language.
+ * Immediately resets context memory and checks Supabase for each document.
+ * If translations in targetLanguage exist, they are populated; otherwise, existing language
+ * data is purged to guarantee the selected language is the single source of truth.
+ */
+export async function reconcileAllDocsLanguage(targetLanguage: string): Promise<void> {
+  if (!targetLanguage) return;
+  clearDocContext();
+
+  try {
+    const allDocs = await listDocs();
+    if (allDocs.length > 0) {
+      await Promise.allSettled(
+        allDocs.map((d) => reconcileDocumentLanguage(d.id, targetLanguage)),
+      );
+    }
+  } catch (err) {
+    console.error("Failed to reconcile all docs language:", err);
+  } finally {
+    if (typeof window !== "undefined") {
+      window.dispatchEvent(
+        new CustomEvent("doclens:docs-reconciled", { detail: { language: targetLanguage } }),
+      );
+      window.dispatchEvent(
+        new CustomEvent("doclens:workspace-reconciled", { detail: targetLanguage }),
+      );
+      window.dispatchEvent(
+        new CustomEvent("doclens:library-changed", { detail: { language: targetLanguage } }),
+      );
+    }
+  }
 }
 
 /**

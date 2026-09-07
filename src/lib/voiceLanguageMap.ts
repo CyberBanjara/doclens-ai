@@ -262,7 +262,8 @@ const LANGUAGE_ALIASES: Record<string, string[]> = {
   "bahasa melayu": ["ms"],
 };
 
-export function resolveLanguagePrefixes(language: string): string[] | null {
+export function resolveLanguagePrefixes(language: string | unknown): string[] | null {
+  if (!language || typeof language !== "string" || !language.trim()) return null;
   const normalized = language.trim().toLowerCase();
   if (LANGUAGE_ALIASES[normalized]) return LANGUAGE_ALIASES[normalized];
 
@@ -298,8 +299,8 @@ function voiceMatchesPrefixes(voiceLang: string, prefixes: string[]): boolean {
  * If no alias mapping is found, falls back to substring matching against
  * the voice's lang or name fields for future-proofing.
  */
-export function filterVoicesByLanguage(voices: TtsVoice[], language: string): TtsVoice[] {
-  if (!language || !language.trim()) return voices;
+export function filterVoicesByLanguage(voices: TtsVoice[], language: string | unknown): TtsVoice[] {
+  if (!language || typeof language !== "string" || !language.trim()) return voices;
 
   const prefixes = resolveLanguagePrefixes(language);
 
@@ -327,9 +328,9 @@ export function filterPiperCatalogByLanguage(
     };
     quality: string;
   }>,
-  language: string,
+  language: string | unknown,
 ): typeof piperVoices {
-  if (!language || !language.trim()) return piperVoices;
+  if (!language || typeof language !== "string" || !language.trim()) return piperVoices;
 
   const prefixes = resolveLanguagePrefixes(language);
 
