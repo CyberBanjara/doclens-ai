@@ -1,5 +1,5 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 import {
   ArrowLeft,
@@ -54,7 +54,14 @@ export const Route = createFileRoute("/global-library")({
 function GlobalLibraryPage() {
   const isMobile = useIsMobile();
   const navigate = useNavigate();
-  const { user, isAdmin, isPrivileged, loading: authLoading, signInWithGoogle, updateProfile } = useAuth();
+  const {
+    user,
+    isAdmin,
+    isPrivileged,
+    loading: authLoading,
+    signInWithGoogle,
+    updateProfile,
+  } = useAuth();
   const canManageCloud = isAdmin || isPrivileged;
   const canDeleteCloud = isAdmin || user?.role === "moderator";
 
@@ -248,11 +255,15 @@ function GlobalLibraryPage() {
 
     window.addEventListener("doclens:docs-reconciled", handleReconciled);
     window.addEventListener("doclens:output-language-changed", handleReconciled);
+    window.addEventListener("doclens:library-changed", handleReconciled);
+    window.addEventListener("focus", handleReconciled);
 
     return () => {
       cancelled = true;
       window.removeEventListener("doclens:docs-reconciled", handleReconciled);
       window.removeEventListener("doclens:output-language-changed", handleReconciled);
+      window.removeEventListener("doclens:library-changed", handleReconciled);
+      window.removeEventListener("focus", handleReconciled);
     };
   }, [user]);
 
@@ -340,16 +351,53 @@ function GlobalLibraryPage() {
     return map;
   }, [classifiedFiles]);
 
-  // Map of local doc filename -> doc id
-  const localDocsMap = useMemo(() => {
-    const map: Record<string, string> = {};
-    for (const d of localDocs) {
-      if (d.fileName) {
-        map[d.fileName.toLowerCase()] = d.id;
-      }
-    }
-    return map;
-  }, [localDocs]);
+  // Match R2 book to a local library document (by key, bookId, fileName, or displayName)
+  const findLocalDoc = useCallback(
+    (file: ClassifiedBook): DocSummary | undefined => {
+      if (!localDocs || localDocs.length === 0) return undefined;
+
+      const fileKeyLower = file.key.toLowerCase();
+      const fileBaseName = (file.key.split("/").pop() || "").toLowerCase();
+      const fileBaseNoExt = fileBaseName.replace(/\.pdf$/i, "");
+      const displayNameLower = (file.displayName || "").toLowerCase();
+      const displayNameNoExt = displayNameLower.replace(/\.pdf$/i, "");
+
+      return localDocs.find((doc) => {
+        const docBookId = (doc.bookId || "").toLowerCase();
+        const docBookIdBase = (doc.bookId?.split("/").pop() || "").toLowerCase();
+        const docBookIdNoExt = docBookIdBase.replace(/\.pdf$/i, "");
+        const docFileName = (doc.fileName || "").toLowerCase();
+        const docFileNameNoExt = docFileName.replace(/\.pdf$/i, "");
+
+        // 1. Direct key / bookId matches
+        if (docBookId && (docBookId === fileKeyLower || docBookId === fileBaseName)) return true;
+        if (docBookIdBase && (docBookIdBase === fileBaseName || docBookIdNoExt === fileBaseNoExt))
+          return true;
+
+        // 2. Exact filename matches
+        if (docFileName && (docFileName === fileBaseName || docFileName === fileKeyLower))
+          return true;
+        if (
+          docFileNameNoExt &&
+          (docFileNameNoExt === fileBaseNoExt || docFileNameNoExt === displayNameNoExt)
+        )
+          return true;
+
+        // 3. Display name matches
+        if (
+          displayNameLower &&
+          (docFileName === displayNameLower || docBookId === displayNameLower)
+        )
+          return true;
+
+        // 4. Base clean names match
+        if (fileBaseNoExt && docFileNameNoExt && fileBaseNoExt === docFileNameNoExt) return true;
+
+        return false;
+      });
+    },
+    [localDocs],
+  );
 
   const handleImport = async (file: R2File) => {
     if (importingKey) return;
@@ -537,8 +585,8 @@ function GlobalLibraryPage() {
                 Access Global Library
               </h2>
               <p className="text-xs sm:text-sm text-muted-foreground leading-relaxed max-w-xs mx-auto">
-                Sign in with your Google account to access, sync, and download shared NCERT curriculum
-                chapters from the Global Library.
+                Sign in with your Google account to access, sync, and download shared NCERT
+                curriculum chapters from the Global Library.
               </p>
             </div>
 
@@ -838,16 +886,14 @@ function GlobalLibraryPage() {
                 ) : (
                   <div className="grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-2 xl:grid-cols-3">
                     {filteredFiles.map((file) => {
-                      const cleanName = file.displayName || file.key.split("/").pop() || file.key;
-                      const localId =
-                        localDocsMap[cleanName.toLowerCase()] ||
-                        localDocsMap[file.key.toLowerCase()] ||
-                        null;
+                      const matchedDoc = findLocalDoc(file);
+                      const localId = matchedDoc?.id || null;
 
                       return (
                         <GlobalLibraryCard
                           key={file.key}
                           file={file}
+                          localDoc={matchedDoc}
                           localDocId={localId}
                           importing={importingKey === file.key}
                           deleting={deletingKey === file.key}
