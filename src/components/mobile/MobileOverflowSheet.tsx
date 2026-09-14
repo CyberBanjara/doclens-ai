@@ -19,9 +19,11 @@ interface MobileOverflowSheetProps {
   uploading: boolean;
   syncingSupabase: boolean;
   syncEnabled: boolean;
+  isAdmin?: boolean;
   onAnalyze: () => void;
   onUploadToR2: () => void;
   onSyncToSupabase: () => void;
+  onFullBookTranslation?: () => void;
 }
 
 /** Houses the header actions that don't belong in the primary reading chrome. */
@@ -35,9 +37,11 @@ export function MobileOverflowSheet({
   uploading,
   syncingSupabase,
   syncEnabled,
+  isAdmin = false,
   onAnalyze,
   onUploadToR2,
   onSyncToSupabase,
+  onFullBookTranslation,
 }: MobileOverflowSheetProps) {
   const close = () => onOpenChange(false);
 
@@ -60,6 +64,17 @@ export function MobileOverflowSheet({
       },
     });
   } else {
+    if (isAdmin && onFullBookTranslation) {
+      items.push({
+        icon: <Sparkles className="h-4 w-4 text-primary" />,
+        label: "Full Book Translation (Admin)",
+        onClick: () => {
+          onFullBookTranslation();
+          close();
+        },
+      });
+    }
+
     items.push({
       icon: <RefreshCw className="h-4 w-4" />,
       label: analyzing ? status || "Re-extracting…" : "Re-extract Pages",

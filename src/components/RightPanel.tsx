@@ -70,56 +70,21 @@ export function RightPanel({
   // Handle continuous play page transition event
   useEffect(() => {
     return listenDocEvent("doclens:tts-next-page", (d) => {
-      if (d.currentPage === activePage && activePage < pageCount) {
-        setActivePage(activePage + 1);
+      if (d.currentPage === activePage) {
+        if (activePage < pageCount) {
+          setActivePage(activePage + 1);
+        } else {
+          stop();
+        }
       }
     });
-  }, [activePage, pageCount, setActivePage]);
+  }, [activePage, pageCount, setActivePage, stop]);
 
-  // Auto-play when advancing pages on the "Original Text" tab. Raw extracted
-  // text needs no generation step (it's already in IDB from analysis), so
-  // this simple "play as soon as data is loaded" logic is still correct here.
-  // The "AI Assistant" tab's auto-play is handled by useAiTabAutoPlay below,
-  // since that content needs to be generated first.
-  //
-  // `activePageData` is refetched on every aiSummary change, which fires
-  // repeatedly while a page's AI text is streaming in — without the guard
-  // below, each of those refetches would re-run this effect and
-  // call play() again for the same page (activePageNumber only catches up to
-  // activePage after React re-renders, which isn't guaranteed to happen
-  // before the next streaming update lands), resynthesizing/replaying
-  // sentence 0 and corrupting the pre-synthesis pipeline for the sentences
-  // after it.
-  const autoPlayedTransitionRef = useRef<string | null>(null);
-  useEffect(() => {
-    if (tab !== "text") return;
-    const isPendingTransition =
-      isPlaying && activePageNumber !== null && activePageNumber !== activePage;
-
-    if (!isPendingTransition) {
-      autoPlayedTransitionRef.current = null;
-      return;
-    }
-
-    if (activePageData && activePageData.pageNumber === activePage) {
-      const transitionKey = `${activePage}:${tab}`;
-      if (autoPlayedTransitionRef.current === transitionKey) return;
-      autoPlayedTransitionRef.current = transitionKey;
-
-      const textToRead = activePageData?.text;
-      if (textToRead) {
-        play(textToRead, "original", activePage, 0);
-      } else {
-        stop();
-      }
-    }
-  }, [activePage, activePageData, isPlaying, activePageNumber, tab, play, stop]);
-
-  // Seamless AI-tab auto-read: requests translation for the active/look-ahead
-  // page and plays it once ready — see hooks/useAiTabAutoPlay.ts.
+  // Seamless continuous play auto-read across pages for both AI Assistant and Original Text
   useAiTabAutoPlay({
     docId,
     activePage,
+    activePageData,
     tab,
     pageCount,
     analyzing,
@@ -128,6 +93,7 @@ export function RightPanel({
     activePageNumber,
     currentTextSource,
     play,
+    stop,
     requestVoiceOnboarding,
   });
 

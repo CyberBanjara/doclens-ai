@@ -56,6 +56,9 @@ export function TtsPlayer({ text, source, pageNumber, onNeedsVoiceOnboarding }: 
   const isCurrentActive =
     isPlaying && currentTextSource === source && activePageNumber === pageNumber;
 
+  const isTransitioningToThisPage =
+    isPlaying && continuousPlay && activePageNumber !== null && activePageNumber !== pageNumber;
+
   const progressPercent = useMemo(() => {
     if (!isCurrentActive || sentences.length === 0) return 0;
     return ((currentSentenceIndex + 1) / sentences.length) * 100;
@@ -118,7 +121,11 @@ export function TtsPlayer({ text, source, pageNumber, onNeedsVoiceOnboarding }: 
             <h4 className="text-[13px] font-bold text-foreground flex items-center gap-1.5">
               <Volume2 className="h-4 w-4 text-primary" />
               <span>
-                {isCurrentActive ? `Reading Page ${pageNumber}` : `Read Page ${pageNumber}`}
+                {isCurrentActive
+                  ? `Reading Page ${pageNumber}`
+                  : isTransitioningToThisPage
+                    ? `Loading Page ${pageNumber}...`
+                    : `Read Page ${pageNumber}`}
               </span>
               <span className="text-[10px] text-muted-foreground uppercase tracking-wider bg-surface-2 px-1.5 py-0.5 rounded">
                 {source === "ai" ? "AI Summary" : "Original Text"}
@@ -127,6 +134,11 @@ export function TtsPlayer({ text, source, pageNumber, onNeedsVoiceOnboarding }: 
             {isCurrentActive && activeSentenceText && (
               <p className="mt-1 truncate text-xs text-muted-foreground italic max-w-[280px] sm:max-w-md">
                 "{activeSentenceText}"
+              </p>
+            )}
+            {isTransitioningToThisPage && (
+              <p className="mt-1 truncate text-xs text-primary/80 italic max-w-[280px] sm:max-w-md animate-pulse">
+                Preparing next page speech...
               </p>
             )}
           </div>
@@ -155,10 +167,16 @@ export function TtsPlayer({ text, source, pageNumber, onNeedsVoiceOnboarding }: 
             <button
               onClick={handlePlayToggle}
               className="flex h-9 w-9 items-center justify-center rounded-full bg-primary text-primary-foreground shadow-md transition-all hover:scale-105 active:scale-95 disabled:opacity-80"
-              title={isCurrentActive && !isPaused ? "Pause" : "Play"}
-              disabled={isCurrentActive && isNeuralLoading}
+              title={
+                isCurrentActive && !isPaused
+                  ? "Pause"
+                  : isTransitioningToThisPage
+                    ? "Loading next page..."
+                    : "Play"
+              }
+              disabled={(isCurrentActive && isNeuralLoading) || isTransitioningToThisPage}
             >
-              {isCurrentActive && isNeuralLoading ? (
+              {(isCurrentActive && isNeuralLoading) || isTransitioningToThisPage ? (
                 <Loader2 className="h-4 w-4 animate-spin" />
               ) : isCurrentActive && !isPaused ? (
                 <Pause className="h-4 w-4 fill-current" />
@@ -167,7 +185,7 @@ export function TtsPlayer({ text, source, pageNumber, onNeedsVoiceOnboarding }: 
               )}
             </button>
 
-            {isCurrentActive && (
+            {(isCurrentActive || isTransitioningToThisPage) && (
               <button
                 onClick={stop}
                 className="flex h-8 w-8 items-center justify-center rounded-lg text-destructive transition-all hover:bg-destructive/10"

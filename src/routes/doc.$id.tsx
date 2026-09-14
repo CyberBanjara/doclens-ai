@@ -49,7 +49,12 @@ import { useAuth } from "@/context/AuthContext";
 import { checkTextQuality } from "@/lib/textCleaning";
 import { R2UploadDialog } from "@/components/R2UploadDialog";
 import { dispatchDocEvent } from "@/lib/docEvents";
-import { ChevronLeft, ChevronRight, Cloud, RefreshCw, Settings, Zap } from "lucide-react";
+import { BookOpen, ChevronLeft, ChevronRight, Cloud, RefreshCw, Settings, Zap } from "lucide-react";
+import { useFullBookTranslation } from "@/hooks/useFullBookTranslation";
+import {
+  FullBookTranslationModal,
+  FullBookTranslationDock,
+} from "@/components/FullBookTranslationModal";
 
 const extractPdfPagesClient = createClientOnlyFn(
   async (
@@ -119,6 +124,7 @@ function DocPage() {
 
   // One-time Preferences Setup (Language & Class)
   const [preferencesModalOpen, setPreferencesModalOpen] = useState(false);
+  const [fullBookModalOpen, setFullBookModalOpen] = useState(false);
 
   /** Sync page changes to the URL query param (?page=N) */
   const setActivePage = useCallback(
@@ -136,6 +142,26 @@ function DocPage() {
     },
     [id, navigate],
   );
+
+  /** Called by per-row workstation cards to keep the doc-level summary in sync. */
+  const handlePageAiChange = useCallback(
+    (pageNumber: number, entry: PageAiSummaryEntry | null) => {
+      setAiSummary((prev) => {
+        const next = { ...prev };
+        if (entry) next[pageNumber] = entry;
+        else delete next[pageNumber];
+        return next;
+      });
+    },
+    [],
+  );
+
+  const fullBookState = useFullBookTranslation({
+    docId: id,
+    pageCount,
+    onPageAiChange: handlePageAiChange,
+    onPageChange: setActivePage,
+  });
 
   const goToLastTranslatedPage = useCallback(() => {
     const entries = Object.entries(aiSummary).filter(([_, entry]) => entry.status === "done");
@@ -644,15 +670,7 @@ function DocPage() {
     }
   }, [doc, pageCount, analyzing, id]);
 
-  /** Called by per-row workstation cards to keep the doc-level summary in sync. */
-  const handlePageAiChange = (pageNumber: number, entry: PageAiSummaryEntry | null) => {
-    setAiSummary((prev) => {
-      const next = { ...prev };
-      if (entry) next[pageNumber] = entry;
-      else delete next[pageNumber];
-      return next;
-    });
-  };
+
 
   /* ─── Edge states ─── */
 
@@ -815,6 +833,28 @@ function DocPage() {
                 )}
               </button>
             )}
+            {pageCount > 0 && isAdmin && (
+              <button
+                onClick={() => setFullBookModalOpen(true)}
+                className={`flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-xs font-semibold transition-all shadow-xs cursor-pointer ${
+                  fullBookState.isTranslating && !fullBookState.isPaused
+                    ? "bg-amber-500/15 text-amber-500 hover:bg-amber-500/25 border border-amber-500/30 animate-pulse"
+                    : fullBookState.isPaused
+                      ? "bg-amber-500/10 text-amber-400 hover:bg-amber-500/20 border border-amber-500/20"
+                      : "bg-primary/10 text-primary hover:bg-primary/20 border border-primary/20"
+                }`}
+                title="Translate all pages sequentially (Admin)"
+              >
+                <BookOpen className="h-3.5 w-3.5" />
+                <span className="hidden sm:inline">
+                  {fullBookState.isTranslating && !fullBookState.isPaused
+                    ? `Translating (${fullBookState.completedCount}/${fullBookState.totalTargetPages})`
+                    : fullBookState.isPaused
+                      ? "Resume Translation"
+                      : "Translate Book"}
+                </span>
+              </button>
+            )}
             <Link
               to="/settings"
               className="flex h-8 w-8 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-surface-2 hover:text-foreground"
@@ -881,9 +921,11 @@ function DocPage() {
               uploading={uploading}
               syncingSupabase={syncingSupabase}
               syncEnabled={canManageCloud}
+              isAdmin={isAdmin}
               onAnalyze={handleAnalyze}
               onUploadToR2={handleUploadToR2}
               onSyncToSupabase={handleSyncToSupabase}
+              onFullBookTranslation={() => setFullBookModalOpen(true)}
             />
           </div>
         ) : (
@@ -932,6 +974,30 @@ function DocPage() {
         initialEducationLevel={user?.educationLevel || getSavedEducationLevel() || ""}
         onSave={handleSavePreferences}
       />
+
+      {/* Admin Full Book Translation Modal */}
+      {isAdmin && (
+        <FullBookTranslationModal
+          open={fullBookModalOpen}
+          onOpenChange={setFullBookModalOpen}
+          state={fullBookState}
+          targetLanguage={
+            user?.nativeLanguage || getOutputLanguage() || doc?.selectedLanguage || "हिंदी"
+          }
+          pageCount={pageCount}
+          aiDoneCount={
+            doc?.aiDoneCount ?? Object.values(aiSummary).filter((e) => e.status === "done").length
+          }
+        />
+      )}
+
+      {/* Admin Full Book Translation Floating Progress Dock */}
+      {isAdmin && (
+        <FullBookTranslationDock
+          state={fullBookState}
+          onOpenModal={() => setFullBookModalOpen(true)}
+        />
+      )}
     </div>
   );
 }
