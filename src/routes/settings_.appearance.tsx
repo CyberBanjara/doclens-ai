@@ -53,9 +53,7 @@ function AppearanceSettingsPage() {
 
   const handleNewDocument = async (f: File) => {
     try {
-      const buf = await f.arrayBuffer();
-      const rec = await createDoc(f, buf);
-      toast.success(`"${f.name}" added to library.`);
+      const rec = await createDoc(f);
       navigate({ to: "/doc/$id", params: { id: rec.id } });
     } catch (e) {
       if (e instanceof StorageError && e.code === "QUOTA_EXCEEDED") {

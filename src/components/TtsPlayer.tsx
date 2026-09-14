@@ -41,6 +41,7 @@ export function TtsPlayer({ text, source, pageNumber, onNeedsVoiceOnboarding }: 
     outputLanguage,
     continuousPlay,
     isNeuralLoading,
+    isLoadingVoices,
     play,
     pause,
     resume,
@@ -222,7 +223,12 @@ export function TtsPlayer({ text, source, pageNumber, onNeedsVoiceOnboarding }: 
                   <label className="text-[11px] font-medium text-muted-foreground">
                     {languageLabel} Voices
                   </label>
-                  {sortedVoices.length === 0 ? (
+                  {isLoadingVoices && sortedVoices.length === 0 ? (
+                    <div className="flex items-center gap-1.5 text-[11px] text-muted-foreground bg-surface-2/40 px-2 py-1.5 rounded-lg">
+                      <Loader2 className="h-3 w-3 animate-spin text-primary shrink-0" />
+                      <span>Loading voices…</span>
+                    </div>
+                  ) : sortedVoices.length === 0 ? (
                     <div className="text-[11px] text-muted-foreground bg-surface-2/40 px-2 py-1.5 rounded-lg italic">
                       No voices available for {languageLabel}. Install voices in{" "}
                       <a href="/settings" className="text-primary underline">

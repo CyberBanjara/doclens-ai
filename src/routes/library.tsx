@@ -79,8 +79,7 @@ function LibraryPage() {
 
   const handleFile = async (f: File) => {
     try {
-      const buf = await f.arrayBuffer();
-      const rec = await createDoc(f, buf);
+      const rec = await createDoc(f);
       navigate({ to: "/doc/$id", params: { id: rec.id } });
     } catch (e) {
       if (e instanceof StorageError && e.code === "QUOTA_EXCEEDED") {

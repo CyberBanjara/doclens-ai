@@ -37,7 +37,13 @@ export async function listDocs(): Promise<DocSummary[]> {
     .sort((a, b) => b.lastOpenedAt - a.lastOpenedAt);
 }
 
+// In-memory cache for documents created in the current session so routes can access them immediately
+const pendingDocs = new Map<string, { rec: DocRecord; blob: Blob }>();
+
 export async function getDoc(id: string): Promise<DocRecord | undefined> {
+  const pending = pendingDocs.get(id);
+  if (pending) return pending.rec;
+
   const d = await db();
   const raw = await d.get(STORE, id);
   if (!raw) return undefined;
@@ -46,6 +52,9 @@ export async function getDoc(id: string): Promise<DocRecord | undefined> {
 
 /** Load PDF binary as a Blob (cheaper than ArrayBuffer for pdf.js). */
 export async function getDocBlob(id: string): Promise<Blob | null> {
+  const pending = pendingDocs.get(id);
+  if (pending) return pending.blob;
+
   const d = await db();
   const v = await d.get(BLOBS, id);
   if (v instanceof Blob) return v;
@@ -60,16 +69,19 @@ export async function getDocBlob(id: string): Promise<Blob | null> {
 
 export async function createDoc(
   file: File,
-  data: ArrayBuffer | Blob,
+  data?: ArrayBuffer | Blob,
   customBookId?: string,
 ): Promise<DocRecord> {
-  const d = await db();
   const id = uuid();
   const now = Date.now();
   // Prefer storing as Blob so we don't pin a separate ArrayBuffer in memory later.
-  const blob =
-    data instanceof Blob ? data : new Blob([data], { type: file.type || "application/pdf" });
-  await safePut(d, BLOBS, blob, id);
+  const blob: Blob =
+    data instanceof Blob
+      ? data
+      : data
+        ? new Blob([data], { type: file.type || "application/pdf" })
+        : file;
+
   const rec: DocRecord = {
     id,
     fileName: file.name,
@@ -83,8 +95,18 @@ export async function createDoc(
     bookId: customBookId || file.name,
     hasChosenLanguage: false,
   };
+
+  // Register in memory immediately so workspace can access doc & blob with 0ms latency
+  pendingDocs.set(id, { rec, blob });
+
+  const d = await db();
+  await safePut(d, BLOBS, blob, id);
   await safePut(d, STORE, rec);
   await setLastOpened(id);
+
+  // Clean up pending memory cache once committed to IDB
+  pendingDocs.delete(id);
+
   return rec;
 }
 

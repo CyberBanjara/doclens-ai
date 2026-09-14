@@ -30,17 +30,14 @@ function HomePage() {
         return;
       }
 
-      const toastId = toast.loading(`Importing "${file.name}"...`);
       try {
-        const buf = await file.arrayBuffer();
-        const rec = await createDoc(file, buf);
-        toast.success(`"${file.name}" ready!`, { id: toastId });
+        const rec = await createDoc(file);
         navigate({ to: "/doc/$id", params: { id: rec.id } });
       } catch (e) {
         if (e instanceof StorageError && e.code === "QUOTA_EXCEEDED") {
-          toast.error(e.message, { id: toastId });
+          toast.error(e.message);
         } else {
-          toast.error("Failed to process document. Please try again.", { id: toastId });
+          toast.error("Failed to process document. Please try again.");
           console.error(e);
         }
       }

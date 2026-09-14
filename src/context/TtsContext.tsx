@@ -80,6 +80,7 @@ interface TtsContextType {
   allNeuralVoices: TtsVoice[];
   continuousPlay: boolean;
   isNeuralLoading: boolean;
+  isLoadingVoices: boolean;
   outputLanguage: string;
   play: (text: string, source: TtsSource, pageNumber: number, startIndex?: number) => void;
   pause: () => void;
@@ -104,9 +105,61 @@ interface PreSynthesizedEntry {
   promise: Promise<Blob> | null;
 }
 
+let rawCatalogCache: any[] | null = null;
+let catalogFetchPromise: Promise<any[]> | null = null;
+
+/**
+ * Fast decoupled metadata catalog fetcher.
+ * Loads /voices.json without initializing the heavy WASM runtime or ONNX backend.
+ */
+async function getNeuralCatalog(): Promise<any[]> {
+  if (typeof window === "undefined") return [];
+  if (rawCatalogCache && rawCatalogCache.length > 0) return rawCatalogCache;
+  if (catalogFetchPromise) return catalogFetchPromise;
+
+  catalogFetchPromise = (async () => {
+    // 1. Initialize OPFS/IndexedDB voice cache first
+    try {
+      await initVoiceCache();
+    } catch (err) {
+      console.warn("Failed to initialize voice cache:", err);
+    }
+
+    // 2. Fetch /voices.json (fast static metadata ~187KB)
+    try {
+      const resp = await fetch("/voices.json");
+      if (resp.ok) {
+        const raw = await resp.json();
+        const catalog = Array.isArray(raw) ? raw : Object.values(raw || {});
+        if (catalog.length > 0) {
+          rawCatalogCache = catalog;
+          return catalog;
+        }
+      }
+    } catch (err) {
+      console.warn("Could not load /voices.json directly:", err);
+    }
+
+    // 3. Fallback to vits-web voice listing only if static fetch failed
+    try {
+      const mod = await import("@diffusionstudio/vits-web");
+      const fallback = await mod.voices();
+      const catalog = Array.isArray(fallback) ? fallback : Object.values(fallback || {});
+      rawCatalogCache = catalog;
+      return catalog;
+    } catch (err) {
+      console.error("Failed to load fallback voices:", err);
+    }
+
+    return [];
+  })();
+
+  return catalogFetchPromise;
+}
+
 let neuralEnginePromise: Promise<{ mod: any; catalog: any[] }> | null = null;
 
-/** Lazy singleton for the heavy neural TTS engine & ONNX runtime. */
+/** Lazy singleton for the heavy neural TTS engine & ONNX runtime (loaded on demand for playback/downloads). */
 async function getNeuralTtsEngine(): Promise<{ mod: any; catalog: any[] }> {
   if (typeof window === "undefined") {
     throw new Error("Neural TTS can only run in the browser.");
@@ -117,36 +170,10 @@ async function getNeuralTtsEngine(): Promise<{ mod: any; catalog: any[] }> {
   }
 
   neuralEnginePromise = (async () => {
-    // 1. Initialize OPFS/IndexedDB voice cache first
-    try {
-      await initVoiceCache();
-    } catch (err) {
-      console.warn("Failed to initialize voice cache:", err);
-    }
+    const catalog = await getNeuralCatalog();
 
-    // 2. Dynamically import @diffusionstudio/vits-web
+    // Dynamically import @diffusionstudio/vits-web
     const mod = await import("@diffusionstudio/vits-web");
-
-    // 3. Fetch voices metadata
-    let catalog: any[] = [];
-    try {
-      const resp = await fetch("/voices.json");
-      if (resp.ok) {
-        const raw = await resp.json();
-        catalog = Array.isArray(raw) ? raw : Object.values(raw || {});
-      }
-    } catch (err) {
-      console.warn("Could not load /voices.json, falling back to vits-web default:", err);
-    }
-
-    if (!catalog.length) {
-      try {
-        const fallback = await mod.voices();
-        catalog = Array.isArray(fallback) ? fallback : Object.values(fallback || {});
-      } catch (err) {
-        console.error("Failed to load VITS fallback voices:", err);
-      }
-    }
 
     // Register all voice paths into PATH_MAP
     for (const v of catalog) {
@@ -161,7 +188,7 @@ async function getNeuralTtsEngine(): Promise<{ mod: any; catalog: any[] }> {
       }
     }
 
-    // 4. Import onnxruntime-web to configure memory & session pooling
+    // Import onnxruntime-web to configure memory & session pooling
     try {
       const ort: any = await import("onnxruntime-web");
       if (ort.env && ort.env.wasm) {
@@ -289,6 +316,7 @@ export function TtsProvider({ children }: { children: React.ReactNode }) {
 
   const [neuralVoices, setNeuralVoices] = useState<TtsVoice[]>([]);
   const [isNeuralLoading, setIsNeuralLoading] = useState<boolean>(false);
+  const [isLoadingVoices, setIsLoadingVoices] = useState<boolean>(true);
 
   // References for playback and synthesis
   const rateRef = useRef(rate);
@@ -345,21 +373,25 @@ export function TtsProvider({ children }: { children: React.ReactNode }) {
     return combined;
   }, []);
 
-  // Public voice refresher: on demand, optionally initializes the neural catalog
+  // Public voice refresher: loads neural catalog fast from static JSON
   const refreshVoices = useCallback(
-    async (includeNeural: boolean = false): Promise<TtsVoice[]> => {
-      let catalog = rawCatalogRef.current;
-      if (includeNeural && (!ttsRef.current || catalog.length === 0)) {
-        try {
-          const { mod, catalog: loadedCatalog } = await getNeuralTtsEngine();
-          ttsRef.current = mod;
-          rawCatalogRef.current = loadedCatalog;
-          catalog = loadedCatalog;
-        } catch (err) {
-          console.error("[TTS] Failed to load neural engine during voice refresh:", err);
+    async (includeNeural: boolean = true): Promise<TtsVoice[]> => {
+      setIsLoadingVoices(true);
+      try {
+        let catalog = rawCatalogRef.current;
+        if (includeNeural && catalog.length === 0) {
+          try {
+            const loadedCatalog = await getNeuralCatalog();
+            rawCatalogRef.current = loadedCatalog;
+            catalog = loadedCatalog;
+          } catch (err) {
+            console.error("[TTS] Failed to load neural catalog during voice refresh:", err);
+          }
         }
+        return await refreshVoicesInternal(catalog);
+      } finally {
+        setIsLoadingVoices(false);
       }
-      return await refreshVoicesInternal(catalog);
     },
     [refreshVoicesInternal],
   );
@@ -381,10 +413,10 @@ export function TtsProvider({ children }: { children: React.ReactNode }) {
     }
   }, [refreshVoicesInternal]);
 
-  // Initial load: ONLY fetch native browser voices on startup (minimal memory footprint!)
+  // Initial load: fetch native browser voices & neural voice catalog upfront (<10ms)
   useEffect(() => {
     if (typeof window === "undefined") return;
-    void refreshVoices(false);
+    void refreshVoices(true);
   }, [refreshVoices]);
 
   const stopRef = useRef<(() => void) | null>(null);
@@ -1115,6 +1147,7 @@ export function TtsProvider({ children }: { children: React.ReactNode }) {
         allNeuralVoices: neuralVoices,
         continuousPlay,
         isNeuralLoading,
+        isLoadingVoices,
         outputLanguage,
         play,
         pause,

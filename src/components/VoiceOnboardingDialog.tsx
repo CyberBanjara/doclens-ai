@@ -38,6 +38,7 @@ export function VoiceOnboardingDialog({ open, onOpenChange, onReady }: VoiceOnbo
   const {
     outputLanguage,
     availableVoices,
+    isLoadingVoices,
     setOutputLanguage,
     setSelectedVoiceUri,
     downloadVoice,
@@ -54,7 +55,7 @@ export function VoiceOnboardingDialog({ open, onOpenChange, onReady }: VoiceOnbo
   const [progress, setProgress] = useState(0);
   const [error, setError] = useState<string | null>(null);
 
-  // Reset local picks and load neural voice catalog each time the dialog is (re)opened
+  // Reset local picks and ensure neural voice catalog is fresh each time the dialog is (re)opened
   useEffect(() => {
     if (open) {
       void refreshVoices(true);
@@ -149,7 +150,19 @@ export function VoiceOnboardingDialog({ open, onOpenChange, onReady }: VoiceOnbo
 
   const body = (
     <div className="space-y-3">
-      {!hasVoices ? (
+      {isLoadingVoices && !hasVoices ? (
+        <div className="flex flex-col items-center justify-center py-10 text-center space-y-3">
+          <Loader2 className="h-6 w-6 animate-spin text-primary" />
+          <div className="space-y-1">
+            <h4 className="text-sm font-semibold text-foreground">
+              Loading available voices…
+            </h4>
+            <p className="text-xs text-muted-foreground">
+              Discovering neural voices for {currentLanguage}
+            </p>
+          </div>
+        </div>
+      ) : !hasVoices ? (
         <div className="rounded-xl border border-amber-500/25 bg-amber-500/10 p-4 text-amber-700 dark:text-amber-400">
           <div className="flex items-start gap-3">
             <VolumeX className="h-5 w-5 shrink-0 text-amber-600 dark:text-amber-400 mt-0.5" />
