@@ -1,58 +1,23 @@
 import { cleanAiText } from "./cleanAiText";
 
+const SENTENCE_DELIMITER_REGEX =
+  /([.!?|।॥]+(?:\s+|\n+|$)|[\u3002\uff01\uff1f]+|\n\n+)/;
+
+const NON_SENTENCE_ENDING_ABBREV =
+  /\b(?:[A-Za-z]|Adm|Assn|Ave|Blvd|Bldg|Brig|Capt|Cmdr|Col|Comdr|Corp|Cpl|Ct|Dept|Dr|Drs|Fig|Figs|Fr|Ft|Gen|Gov|Hon|Inc|Jr|Lieut|Ln|Lt|Ltd|Maj|Messrs|Mmes|Mr|Mrs|Ms|Mt|Mx|No|Nos|Pl|Pres|Prof|Rd|Rep|Reps|Rev|Sen|Sens|Sgt|Sr|St|Ste|Univ|Jan|Feb|Mar|Apr|Aug|Sep|Sept|Oct|Nov|Dec|dept|ed|eds|est|fig|figs|misc|pp|ref|refs|vol|vols|vs)\.$/i;
+
 /**
  * Splits input text into clean sentence chunks.
- * Uses punctuation rules for Latin and East Asian languages.
+ * Uses sentence-terminating punctuation rules and paragraph breaks
+ * without arbitrarily breaking on single line wraps within sentences.
  */
 export function splitSentences(text: string): string[] {
   if (!text) return [];
   const cleaned = cleanAiText(text);
   if (!cleaned) return [];
 
-  // Split by newlines, keeping the newlines in the tokens array
-  const tokens = cleaned.split(/(\r?\n+)/);
-  const chunks: string[] = [];
-  let currentChunk = "";
-
-  for (let i = 0; i < tokens.length; i++) {
-    const token = tokens[i];
-    if (!token) continue;
-
-    // If it's a newline token, append to current chunk and flush
-    if (/^\r?\n+$/.test(token)) {
-      currentChunk += token;
-      chunks.push(currentChunk);
-      currentChunk = "";
-      continue;
-    }
-
-    // Split the text line by punctuation/special characters
-    const subChunks = splitLineByPunctuation(token);
-    for (let j = 0; j < subChunks.length; j++) {
-      if (j === subChunks.length - 1) {
-        currentChunk += subChunks[j];
-      } else {
-        chunks.push(subChunks[j]);
-      }
-    }
-  }
-
-  if (currentChunk) {
-    chunks.push(currentChunk);
-  }
-
-  return chunks;
-}
-
-function splitLineByPunctuation(text: string): string[] {
-  // Matches sentence-terminating punctuation marks (. | ! ? etc.) followed by space or end of string.
-  // We exclude commas (,) to let the native TTS engine handle them continuously with a natural micro-pause.
-  const delimiterRegex = /([.|!?\u0964\u0965]+(?:\s+|$))/;
-  const tokens = text.split(delimiterRegex);
-
-  const chunks: string[] = [];
-  const nonSentenceEndingAbbrev =
-    /\b(?:[A-Za-z]|Adm|Assn|Ave|Blvd|Bldg|Brig|Capt|Cmdr|Col|Comdr|Corp|Cpl|Ct|Dept|Dr|Drs|Fig|Figs|Fig|Fr|Ft|Gen|Gov|Hon|Inc|Jr|Lieut|Ln|Lt|Ltd|Maj|Messrs|Mmes|Mr|Mrs|Ms|Mt|Mx|No|Nos|Pl|Pres|Prof|Rd|Rep|Reps|Rev|Sen|Sens|Sgt|Sr|St|Ste|Univ|Jan|Feb|Mar|Apr|Aug|Sep|Sept|Oct|Nov|Dec|dept|ed|eds|est|fig|figs|misc|pp|ref|refs|vol|vols|vs)\.$/;
+  const tokens = cleaned.split(SENTENCE_DELIMITER_REGEX);
+  const rawChunks: string[] = [];
 
   for (let i = 0; i < tokens.length; i += 2) {
     const part = tokens[i];
@@ -61,27 +26,30 @@ function splitLineByPunctuation(text: string): string[] {
     if (part) {
       const fullPart = part + sep;
       // If the previous chunk ended with an abbreviation, merge them
-      if (chunks.length && nonSentenceEndingAbbrev.test(chunks[chunks.length - 1].trim())) {
-        chunks[chunks.length - 1] += " " + fullPart;
+      if (
+        rawChunks.length > 0 &&
+        NON_SENTENCE_ENDING_ABBREV.test(rawChunks[rawChunks.length - 1].trim())
+      ) {
+        rawChunks[rawChunks.length - 1] += fullPart;
       } else {
-        chunks.push(fullPart);
+        rawChunks.push(fullPart);
       }
     } else if (sep) {
-      if (chunks.length) {
-        chunks[chunks.length - 1] += sep;
+      if (rawChunks.length > 0) {
+        rawChunks[rawChunks.length - 1] += sep;
       } else {
-        chunks.push(sep);
+        rawChunks.push(sep);
       }
     }
   }
 
   // Safety fallback: only if a chunk has no punctuation and is extremely long (> 500 chars),
-  // split it by space. Otherwise, keep it intact to avoid arbitrary boundaries.
+  // split it by word boundary. Otherwise, keep it intact.
   const finalChunks: string[] = [];
-  for (const chunk of chunks) {
+  for (const chunk of rawChunks) {
     if (chunk.length > 500) {
       finalChunks.push(...splitByLength(chunk, 500));
-    } else {
+    } else if (chunk.trim().length > 0) {
       finalChunks.push(chunk);
     }
   }
@@ -98,11 +66,11 @@ function splitByLength(text: string, limit: number): string[] {
     if (current.length + word.length <= limit) {
       current += word;
     } else {
-      if (current) chunks.push(current.trim());
+      if (current.trim()) chunks.push(current);
       current = word;
     }
   }
-  if (current) chunks.push(current.trim());
+  if (current.trim()) chunks.push(current);
   return chunks.filter(Boolean);
 }
 
