@@ -120,7 +120,9 @@ function SettingsPage() {
   const [search, setSearch] = useState("");
   const [tab, setTab] = useState<FilterTab>("free");
   const [mode, setModeState] = useState<GlobalMode>("explain");
-  const [style, setStyleState] = useState<ProcessingStyle>(() => (getStyle() as ProcessingStyle) || ("" as any));
+  const [style, setStyleState] = useState<ProcessingStyle>(
+    () => (getStyle() as ProcessingStyle) || ("" as any),
+  );
   const [temperature, setTemp] = useState(0.3);
   const [downloadProgress, setDownloadProgress] = useState<Record<string, number>>({});
   const isOpfs = useMemo(() => isOpfsSupported(), []);

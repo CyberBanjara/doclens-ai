@@ -174,7 +174,10 @@ export const uploadToR2 = createServerFn({ method: "POST" })
       const rawFileName = data.fileName.includes("/")
         ? data.fileName.split("/").pop() || data.fileName
         : data.fileName;
-      const cleanFileName = rawFileName.replace(/[\r\n\t]+/g, " ").replace(/\s+/g, " ").trim();
+      const cleanFileName = rawFileName
+        .replace(/[\r\n\t]+/g, " ")
+        .replace(/\s+/g, " ")
+        .trim();
 
       // Construct explicit file hierarchy from selected subject and class (using JWT session educationLevel fallback)
       const effectiveEducationLevel = data.educationLevel || sessionUser.educationLevel || "";
@@ -217,8 +220,12 @@ export const uploadToR2 = createServerFn({ method: "POST" })
       await s3.send(cmd);
 
       const cleanBaseUrl = publicBaseUrl ? publicBaseUrl.replace(/\/+$/, "") : "";
-      const encodedTargetKey = targetKey.split("/").map((seg) => encodeURIComponent(seg)).join("/");
+      const encodedTargetKey = targetKey
+        .split("/")
+        .map((seg) => encodeURIComponent(seg))
+        .join("/");
 
+      invalidateServerR2Cache();
       return {
         success: true,
         key: targetKey,
@@ -247,7 +254,10 @@ export const uploadToR2 = createServerFn({ method: "POST" })
         }
         const targetKey = `${targetPrefix}/${cleanFileName}`;
         const cleanBaseUrl = publicBaseUrl ? publicBaseUrl.replace(/\/+$/, "") : "";
-        const encodedTargetKey = targetKey.split("/").map((seg) => encodeURIComponent(seg)).join("/");
+        const encodedTargetKey = targetKey
+          .split("/")
+          .map((seg) => encodeURIComponent(seg))
+          .join("/");
         return {
           success: true,
           alreadyExists: true,
@@ -261,8 +271,32 @@ export const uploadToR2 = createServerFn({ method: "POST" })
     }
   });
 
+interface CachedR2ServerList {
+  files: Array<{
+    key: string;
+    size: number;
+    lastModified?: string;
+    url?: string;
+    hasThumbnail?: boolean;
+    thumbnailUrl?: string;
+  }>;
+  timestamp: number;
+}
+
+let serverR2FilesCache: CachedR2ServerList | null = null;
+const SERVER_CACHE_TTL_MS = 5 * 60 * 1000; // 5 minutes
+
+export function invalidateServerR2Cache() {
+  serverR2FilesCache = null;
+}
+
 export const listR2Files = createServerFn({ method: "GET" }).handler(async () => {
   "use server";
+  const now = Date.now();
+  if (serverR2FilesCache && now - serverR2FilesCache.timestamp < SERVER_CACHE_TTL_MS) {
+    return { files: serverR2FilesCache.files };
+  }
+
   try {
     const { s3, bucketName, publicBaseUrl, sdk } = await getS3Client({ writeAccess: false });
     const cleanBaseUrl = publicBaseUrl ? publicBaseUrl.replace(/\/+$/, "") : "";
@@ -290,7 +324,9 @@ export const listR2Files = createServerFn({ method: "GET" }).handler(async () =>
         if (lowerKey.startsWith("ads/") || lowerKey.startsWith(".ads/") || lowerKey === "ads") {
           continue;
         }
-        const encodedKey = obj.Key.split("/").map((seg) => encodeURIComponent(seg)).join("/");
+        const encodedKey = obj.Key.split("/")
+          .map((seg) => encodeURIComponent(seg))
+          .join("/");
         rawFiles.push({
           key: obj.Key,
           size: obj.Size || 0,
@@ -304,7 +340,10 @@ export const listR2Files = createServerFn({ method: "GET" }).handler(async () =>
 
     const files = rawFiles.map((file) => {
       const hasThumb = thumbnailKeys.has(file.key);
-      const encodedKey = file.key.split("/").map((seg) => encodeURIComponent(seg)).join("/");
+      const encodedKey = file.key
+        .split("/")
+        .map((seg) => encodeURIComponent(seg))
+        .join("/");
       return {
         ...file,
         hasThumbnail: hasThumb,
@@ -313,6 +352,7 @@ export const listR2Files = createServerFn({ method: "GET" }).handler(async () =>
       };
     });
 
+    serverR2FilesCache = { files, timestamp: now };
     return { files };
   } catch (err: any) {
     console.error("R2 List error:", err);
@@ -335,7 +375,10 @@ export const uploadThumbnailToR2 = createServerFn({ method: "POST" })
     try {
       const { s3, bucketName, sdk } = await getS3Client({ writeAccess: true });
       const buffer = Buffer.from(data.base64Data, "base64");
-      const cleanFileKey = data.fileKey.replace(/[\r\n\t]+/g, " ").replace(/\s+/g, " ").trim();
+      const cleanFileKey = data.fileKey
+        .replace(/[\r\n\t]+/g, " ")
+        .replace(/\s+/g, " ")
+        .trim();
       const thumbKey = `thumbnails/${cleanFileKey}.jpg`;
 
       await s3.send(
@@ -347,6 +390,7 @@ export const uploadThumbnailToR2 = createServerFn({ method: "POST" })
           ContentType: "image/jpeg",
         }),
       );
+      invalidateServerR2Cache();
       return { success: true, key: thumbKey };
     } catch (err: any) {
       console.warn("R2 Thumbnail Upload error:", err?.message);
@@ -360,7 +404,10 @@ export const getThumbnailFromR2 = createServerFn({ method: "POST" })
     "use server";
     try {
       const { s3, bucketName, publicBaseUrl, sdk } = await getS3Client({ writeAccess: false });
-      const cleanFileKey = data.fileKey.replace(/[\r\n\t]+/g, " ").replace(/\s+/g, " ").trim();
+      const cleanFileKey = data.fileKey
+        .replace(/[\r\n\t]+/g, " ")
+        .replace(/\s+/g, " ")
+        .trim();
       const thumbKey = `thumbnails/${cleanFileKey}.jpg`;
 
       // Verify if the thumbnail object actually exists in the R2 bucket
@@ -378,7 +425,10 @@ export const getThumbnailFromR2 = createServerFn({ method: "POST" })
 
       if (publicBaseUrl) {
         const cleanBaseUrl = publicBaseUrl.replace(/\/+$/, "");
-        const encodedThumbKey = thumbKey.split("/").map((seg) => encodeURIComponent(seg)).join("/");
+        const encodedThumbKey = thumbKey
+          .split("/")
+          .map((seg) => encodeURIComponent(seg))
+          .join("/");
         return { found: true, url: `${cleanBaseUrl}/${encodedThumbKey}` };
       }
 
@@ -466,6 +516,7 @@ export const deleteFromR2 = createServerFn({ method: "POST" })
       } catch {
         // Thumbnail cleanup error ignored
       }
+      invalidateServerR2Cache();
       return { success: true };
     } catch (err: any) {
       console.error("R2 Delete error:", err);
@@ -481,9 +532,14 @@ export const getR2DownloadUrl = createServerFn({ method: "POST" })
       const { publicBaseUrl } = await getS3Client({ writeAccess: false });
       const cleanBaseUrl = publicBaseUrl ? publicBaseUrl.replace(/\/+$/, "") : "";
       if (!cleanBaseUrl) {
-        throw new Error("Missing Cloudflare R2 public base URL configuration (R2_PUBLIC_BASE_URL).");
+        throw new Error(
+          "Missing Cloudflare R2 public base URL configuration (R2_PUBLIC_BASE_URL).",
+        );
       }
-      const encodedKey = data.key.split("/").map((seg) => encodeURIComponent(seg)).join("/");
+      const encodedKey = data.key
+        .split("/")
+        .map((seg) => encodeURIComponent(seg))
+        .join("/");
       return { url: `${cleanBaseUrl}/${encodedKey}` };
     } catch (err: any) {
       console.error("R2 getDownloadUrl error:", err);
@@ -556,6 +612,7 @@ export const reorganizeR2Files = createServerFn({ method: "POST" }).handler(asyn
       continuationToken = data.IsTruncated ? data.NextContinuationToken : undefined;
     } while (continuationToken);
 
+    invalidateServerR2Cache();
     return {
       success: true,
       movedCount: movedFiles.length,

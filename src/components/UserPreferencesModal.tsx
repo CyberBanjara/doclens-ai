@@ -17,10 +17,7 @@ import {
   Cpu,
 } from "lucide-react";
 import { LANGUAGES, type LanguageInfo } from "@/lib/voiceLanguageMap";
-import {
-  type ProcessingStyle,
-  type GlobalMode,
-} from "@/lib/openrouter";
+import { type ProcessingStyle, type GlobalMode } from "@/lib/openrouter";
 import { EDUCATION_LEVELS, type EducationLevel } from "@/lib/classification";
 
 export interface StyleOption {
@@ -49,7 +46,8 @@ export const ALL_STYLE_OPTIONS: StyleOption[] = [
     mode: "translate",
     title: "Mixed / Bilingual",
     subtitle: "Native Script + English Terms",
-    description: "Native script translation with English abbreviations and keywords (no Hinglish text/script).",
+    description:
+      "Native script translation with English abbreviations and keywords (no Hinglish text/script).",
     icon: MessageSquare,
     badge: "Translate",
   },
@@ -230,9 +228,7 @@ export function UserPreferencesModal({
     const finalStyle = (selectedStyle || initialStyle || "Native") as ProcessingStyle;
     const finalMode = selectedMode;
     const finalLevel =
-      (selectedLevel as EducationLevel) ||
-      (initialEducationLevel as EducationLevel) ||
-      undefined;
+      (selectedLevel as EducationLevel) || (initialEducationLevel as EducationLevel) || undefined;
 
     if (!finalLang || !finalStyle) return;
 
@@ -280,9 +276,7 @@ export function UserPreferencesModal({
               type="button"
               onClick={() => toggleDropdown("lang")}
               className={`w-full flex items-center justify-between p-3.5 text-left transition-colors cursor-pointer hover:bg-surface-2/60 ${
-                activeDropdown === "lang"
-                  ? "bg-primary/5 border-b border-border/70"
-                  : ""
+                activeDropdown === "lang" ? "bg-primary/5 border-b border-border/70" : ""
               }`}
             >
               <div className="flex items-center gap-3 min-w-0">
@@ -388,9 +382,7 @@ export function UserPreferencesModal({
               type="button"
               onClick={() => toggleDropdown("style")}
               className={`w-full flex items-center justify-between p-3.5 text-left transition-colors cursor-pointer hover:bg-surface-2/60 ${
-                activeDropdown === "style"
-                  ? "bg-primary/5 border-b border-border/70"
-                  : ""
+                activeDropdown === "style" ? "bg-primary/5 border-b border-border/70" : ""
               }`}
             >
               <div className="flex items-center gap-3 min-w-0">
@@ -410,9 +402,7 @@ export function UserPreferencesModal({
                         </span>
                       </span>
                     ) : (
-                      <span className="text-muted-foreground font-normal">
-                        Select style...
-                      </span>
+                      <span className="text-muted-foreground font-normal">Select style...</span>
                     )}
                   </div>
                 </div>
@@ -493,9 +483,7 @@ export function UserPreferencesModal({
               type="button"
               onClick={() => toggleDropdown("level")}
               className={`w-full flex items-center justify-between p-3.5 text-left transition-colors cursor-pointer hover:bg-surface-2/60 ${
-                activeDropdown === "level"
-                  ? "bg-primary/5 border-b border-border/70"
-                  : ""
+                activeDropdown === "level" ? "bg-primary/5 border-b border-border/70" : ""
               }`}
             >
               <div className="flex items-center gap-3 min-w-0">
@@ -597,4 +585,3 @@ export function UserPreferencesModal({
     </div>
   );
 }
-

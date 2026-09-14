@@ -1,5 +1,10 @@
 import { closeDb } from "./idbUtils";
-import { clearAllVoiceCache, closeVoiceDb, getCachedVoiceIds, isOpfsSupported } from "@/lib/voiceCache";
+import {
+  clearAllVoiceCache,
+  closeVoiceDb,
+  getCachedVoiceIds,
+  isOpfsSupported,
+} from "@/lib/voiceCache";
 import { listDocs } from "./docs";
 
 /** Known IndexedDB databases used by DocLens / Anuwad or related dependencies */
@@ -53,10 +58,7 @@ function deleteIDBDatabase(name: string): Promise<void> {
  */
 export async function clearAllIndexedDB(): Promise<void> {
   // 1. Close all active database connections immediately
-  await Promise.allSettled([
-    closeDb().catch(() => {}),
-    closeVoiceDb().catch(() => {}),
-  ]);
+  await Promise.allSettled([closeDb().catch(() => {}), closeVoiceDb().catch(() => {})]);
 
   const dbNamesToDelete = new Set<string>(KNOWN_IDB_DATABASES);
 
@@ -88,9 +90,7 @@ export async function clearAllIndexedDB(): Promise<void> {
 export async function clearAllOpfs(): Promise<void> {
   if (!isOpfsSupported()) return;
 
-  const tasks: Promise<any>[] = [
-    clearAllVoiceCache().catch(() => {}),
-  ];
+  const tasks: Promise<any>[] = [clearAllVoiceCache().catch(() => {})];
 
   if (
     typeof navigator !== "undefined" &&
@@ -115,7 +115,7 @@ export async function clearAllOpfs(): Promise<void> {
               deletePromises.push(root.removeEntry(name, { recursive: true }).catch(() => {}));
             }
           } else if (Symbol.asyncIterator in root) {
-            for await (const [name] of (root as any)) {
+            for await (const [name] of root as any) {
               deletePromises.push(root.removeEntry(name, { recursive: true }).catch(() => {}));
             }
           }

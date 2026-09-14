@@ -325,7 +325,9 @@ export async function downloadVoice(
         for (const v of catalog) {
           if (!v || !v.key) continue;
           const fileKeys = Object.keys(v.files || {});
-          const key = fileKeys.find((k: string) => k.endsWith(".onnx") && !k.endsWith(".onnx.json"));
+          const key = fileKeys.find(
+            (k: string) => k.endsWith(".onnx") && !k.endsWith(".onnx.json"),
+          );
           if (key) {
             registerVoicePath(v.key, key);
           }

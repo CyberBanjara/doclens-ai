@@ -13,12 +13,7 @@ import {
   parseStructuredTranslationResponse,
   type Globals,
 } from "@/lib/openrouter";
-import {
-  getDoc,
-  getPageData,
-  upsertPageAi,
-  type PageAi,
-} from "@/lib/storage";
+import { getDoc, getPageData, upsertPageAi, type PageAi } from "@/lib/storage";
 import { cleanAiText, effective, hashFor, dispatchPageReady } from "@/lib/pageAi";
 import { fetchSupabaseLanguagePage, saveSupabaseLanguagePage } from "@/lib/supabase";
 import { getPreviousContext, mergeContextDelta } from "@/lib/contextStore";
@@ -132,9 +127,7 @@ export async function executePageTranslation({
 
   const modelId =
     eff.modelId ||
-    (isOmni
-      ? currentGlobals.omniModelId || ""
-      : getSelectedModel() || getDefaultModelSync());
+    (isOmni ? currentGlobals.omniModelId || "" : getSelectedModel() || getDefaultModelSync());
 
   const effectiveText = customTextOverride ?? pageRec.text;
   const previousContext = await getPreviousContext(docId, pageNumber, eff);

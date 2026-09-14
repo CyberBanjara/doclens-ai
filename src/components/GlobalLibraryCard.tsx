@@ -1,10 +1,7 @@
 import { useState } from "react";
 import { Trash2, Download, Check } from "lucide-react";
 import { formatBytes, type R2File } from "@/lib/file-utils";
-import {
-  getSubjectCategoryMeta,
-  type ClassifiedBook,
-} from "@/lib/classification";
+import { getSubjectCategoryMeta, type ClassifiedBook } from "@/lib/classification";
 import { useR2Thumbnail } from "@/hooks/useR2Thumbnail";
 
 interface GlobalLibraryCardProps {
@@ -153,4 +150,3 @@ export function GlobalLibraryCard({
     </div>
   );
 }
-

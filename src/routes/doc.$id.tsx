@@ -144,17 +144,14 @@ function DocPage() {
   );
 
   /** Called by per-row workstation cards to keep the doc-level summary in sync. */
-  const handlePageAiChange = useCallback(
-    (pageNumber: number, entry: PageAiSummaryEntry | null) => {
-      setAiSummary((prev) => {
-        const next = { ...prev };
-        if (entry) next[pageNumber] = entry;
-        else delete next[pageNumber];
-        return next;
-      });
-    },
-    [],
-  );
+  const handlePageAiChange = useCallback((pageNumber: number, entry: PageAiSummaryEntry | null) => {
+    setAiSummary((prev) => {
+      const next = { ...prev };
+      if (entry) next[pageNumber] = entry;
+      else delete next[pageNumber];
+      return next;
+    });
+  }, []);
 
   const fullBookState = useFullBookTranslation({
     docId: id,
@@ -251,7 +248,6 @@ function DocPage() {
       }
     }
 
-
     // Immediately trigger AI translation for active page
     dispatchDocEvent("doclens:ensure-page-ready", {
       docId: id,
@@ -316,9 +312,14 @@ function DocPage() {
 
       // Before Step 3 (Supabase fetch) and Step 4 (AI translation):
       // For anonymous users or 1st-time users, check if language and style are configured
-      const hasLang = !!(user?.nativeLanguage || hasStoredLanguage() || currentRec.selectedLanguage);
+      const hasLang = !!(
+        user?.nativeLanguage ||
+        hasStoredLanguage() ||
+        currentRec.selectedLanguage
+      );
       const hasSty = !!(currentRec.selectedStyle || hasStoredStyle());
-      const isConfigured = hasLang && hasSty && (currentRec.hasChosenLanguage || hasCompletedAiPreferenceSetup());
+      const isConfigured =
+        hasLang && hasSty && (currentRec.hasChosenLanguage || hasCompletedAiPreferenceSetup());
 
       if (!authLoading) {
         if (!isConfigured) {
@@ -540,8 +541,7 @@ function DocPage() {
 
   const handleUploadToR2 = () => {
     if (uploading || !doc) return;
-    const initialLevel =
-      (user?.educationLevel as string) || getSavedEducationLevel() || "class-10";
+    const initialLevel = (user?.educationLevel as string) || getSavedEducationLevel() || "class-10";
     setUploadEducationLevel(initialLevel);
     setShowUploadCategoryModal(true);
   };
@@ -669,8 +669,6 @@ function DocPage() {
       void handleAnalyze();
     }
   }, [doc, pageCount, analyzing, id]);
-
-
 
   /* ─── Edge states ─── */
 

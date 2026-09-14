@@ -75,11 +75,7 @@ export function R2UploadDialog({
 
   // Determine current active files
   const files: File[] =
-    uploadFiles && uploadFiles.length > 0
-      ? uploadFiles
-      : uploadFile
-      ? [uploadFile]
-      : [];
+    uploadFiles && uploadFiles.length > 0 ? uploadFiles : uploadFile ? [uploadFile] : [];
 
   const isMultiFile = files.length > 1;
   const isSingleDoc = Boolean(existingDocFileName || files.length === 1);
@@ -508,11 +504,7 @@ export function R2UploadDialog({
             ) : (
               <>
                 <CloudUpload className="h-3.5 w-3.5" />
-                <span>
-                  {isMultiFile
-                    ? `Upload ${files.length} Documents`
-                    : "Upload Document"}
-                </span>
+                <span>{isMultiFile ? `Upload ${files.length} Documents` : "Upload Document"}</span>
               </>
             )}
           </button>
@@ -546,4 +538,3 @@ export function R2UploadDialog({
     </Dialog>
   );
 }
-

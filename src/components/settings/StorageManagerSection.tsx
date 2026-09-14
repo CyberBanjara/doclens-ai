@@ -8,11 +8,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import {
-  clearSelectedStorage,
-  getStorageOverview,
-  type StorageOverview,
-} from "@/lib/storage";
+import { clearSelectedStorage, getStorageOverview, type StorageOverview } from "@/lib/storage";
 import { toast } from "sonner";
 
 interface StorageItemOption {
@@ -59,7 +55,9 @@ export function StorageManagerSection() {
       id: "voices",
       title: "Offline Neural Voices",
       description: "Downloaded neural voice models for offline text-to-speech.",
-      badge: stats ? `${stats.voiceCount} ${stats.voiceCount === 1 ? "voice" : "voices"}` : undefined,
+      badge: stats
+        ? `${stats.voiceCount} ${stats.voiceCount === 1 ? "voice" : "voices"}`
+        : undefined,
     },
   ];
 
@@ -208,9 +206,7 @@ export function StorageManagerSection() {
                   <span>Deleting...</span>
                 </>
               ) : (
-                <span>
-                  Delete Selected {selectedCount > 0 ? `(${selectedCount})` : ""}
-                </span>
+                <span>Delete Selected {selectedCount > 0 ? `(${selectedCount})` : ""}</span>
               )}
             </button>
           </DialogFooter>

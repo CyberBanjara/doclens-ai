@@ -84,6 +84,7 @@ function HomePage() {
           {/* 1. Global Library */}
           <Link
             to="/global-library"
+            preload="intent"
             className="group relative flex flex-col justify-between rounded-3xl border border-border/80 bg-surface/50 p-6 sm:p-7 backdrop-blur-xl transition-all duration-300 hover:border-primary/50 hover:bg-surface-2/80 hover:shadow-xl hover:shadow-primary/5 hover:-translate-y-0.5 active:scale-[0.99]"
           >
             <div className="space-y-5">
@@ -114,6 +115,7 @@ function HomePage() {
           {/* 2. Local Library */}
           <Link
             to="/library"
+            preload="intent"
             className="group relative flex flex-col justify-between rounded-3xl border border-border/80 bg-surface/50 p-6 sm:p-7 backdrop-blur-xl transition-all duration-300 hover:border-primary/50 hover:bg-surface-2/80 hover:shadow-xl hover:shadow-primary/5 hover:-translate-y-0.5 active:scale-[0.99]"
           >
             <div className="space-y-5">
@@ -130,7 +132,8 @@ function HomePage() {
                   Local Library
                 </h2>
                 <p className="text-xs sm:text-[13px] text-muted-foreground leading-relaxed">
-                  Upload your own books and PDFs for private reading, translation, and progress tracking.
+                  Upload your own books and PDFs for private reading, translation, and progress
+                  tracking.
                 </p>
               </div>
             </div>

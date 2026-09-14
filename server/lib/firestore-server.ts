@@ -284,7 +284,10 @@ export async function updateUserProfileInFirestore(
     });
 
     if (!res.ok) {
-      console.warn(`Firestore REST update profile notice for ${uid} (${res.status}):`, await res.text());
+      console.warn(
+        `Firestore REST update profile notice for ${uid} (${res.status}):`,
+        await res.text(),
+      );
       return null;
     }
 
@@ -313,7 +316,10 @@ export async function listUsersFromFirestore(idToken?: string): Promise<UserProf
     let res = await fetch(url, { headers });
     // If authenticated fetch failed (e.g. token expired), fallback to public REST read allowed by firestore.rules
     if (!res.ok && idToken) {
-      console.warn("Firestore list users with idToken failed, attempting fallback read:", await res.text());
+      console.warn(
+        "Firestore list users with idToken failed, attempting fallback read:",
+        await res.text(),
+      );
       res = await fetch(url);
     }
 

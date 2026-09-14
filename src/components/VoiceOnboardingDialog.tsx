@@ -17,10 +17,7 @@ import {
 import { Check, Download, Loader2, Sparkles, Volume2, VolumeX } from "lucide-react";
 import { markTtsVoiceSetupComplete, useTts } from "@/context/TtsContext";
 import { filterVoicesByLanguage } from "@/lib/voiceLanguageMap";
-import {
-  getOutputLanguage,
-  setOutputLanguage as persistOutputLanguage,
-} from "@/lib/openrouter";
+import { getOutputLanguage, setOutputLanguage as persistOutputLanguage } from "@/lib/openrouter";
 import { getFriendlyErrorMessage, isOnline, OFFLINE_MESSAGE } from "@/lib/network";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { useAuth } from "@/context/AuthContext";
@@ -154,9 +151,7 @@ export function VoiceOnboardingDialog({ open, onOpenChange, onReady }: VoiceOnbo
         <div className="flex flex-col items-center justify-center py-10 text-center space-y-3">
           <Loader2 className="h-6 w-6 animate-spin text-primary" />
           <div className="space-y-1">
-            <h4 className="text-sm font-semibold text-foreground">
-              Loading available voices…
-            </h4>
+            <h4 className="text-sm font-semibold text-foreground">Loading available voices…</h4>
             <p className="text-xs text-muted-foreground">
               Discovering neural voices for {currentLanguage}
             </p>
@@ -171,7 +166,8 @@ export function VoiceOnboardingDialog({ open, onOpenChange, onReady }: VoiceOnbo
                 No voice available for {currentLanguage}
               </h4>
               <p className="text-xs text-muted-foreground leading-relaxed">
-                There are currently no neural speech models or device voices available for {currentLanguage}. Audio playback is not supported for this language.
+                There are currently no neural speech models or device voices available for{" "}
+                {currentLanguage}. Audio playback is not supported for this language.
               </p>
             </div>
           </div>
@@ -231,9 +227,7 @@ export function VoiceOnboardingDialog({ open, onOpenChange, onReady }: VoiceOnbo
                           </span>
                         )}
                       </div>
-                      <p className="text-[11px] text-muted-foreground truncate mt-0.5">
-                        {v.lang}
-                      </p>
+                      <p className="text-[11px] text-muted-foreground truncate mt-0.5">{v.lang}</p>
                     </div>
                   </div>
 

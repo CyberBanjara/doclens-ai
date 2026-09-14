@@ -235,7 +235,9 @@ export function FullBookTranslationModal({
               >
                 <div
                   className={`mt-0.5 flex h-4 w-4 shrink-0 items-center justify-center rounded-full border ${
-                    !overwriteExisting ? "border-primary bg-primary text-primary-foreground" : "border-muted-foreground"
+                    !overwriteExisting
+                      ? "border-primary bg-primary text-primary-foreground"
+                      : "border-muted-foreground"
                   }`}
                 >
                   {!overwriteExisting && <div className="h-1.5 w-1.5 rounded-full bg-white" />}
@@ -245,7 +247,8 @@ export function FullBookTranslationModal({
                     Translate Untranslated Pages ({untranslatedCount} pages)
                   </div>
                   <p className="text-[11px] text-muted-foreground mt-0.5">
-                    Skips already translated pages and only translates pages that have not yet been processed.
+                    Skips already translated pages and only translates pages that have not yet been
+                    processed.
                   </p>
                 </div>
               </div>
@@ -260,7 +263,9 @@ export function FullBookTranslationModal({
               >
                 <div
                   className={`mt-0.5 flex h-4 w-4 shrink-0 items-center justify-center rounded-full border ${
-                    overwriteExisting ? "border-primary bg-primary text-primary-foreground" : "border-muted-foreground"
+                    overwriteExisting
+                      ? "border-primary bg-primary text-primary-foreground"
+                      : "border-muted-foreground"
                   }`}
                 >
                   {overwriteExisting && <div className="h-1.5 w-1.5 rounded-full bg-white" />}
@@ -332,7 +337,8 @@ export function FullBookTranslationModal({
             Full Book Translation (Admin)
           </DialogTitle>
           <DialogDescription className="text-xs text-muted-foreground">
-            Automated sequential page-by-page translation for the entire document with continuity chaining
+            Automated sequential page-by-page translation for the entire document with continuity
+            chaining
           </DialogDescription>
         </DialogHeader>
         {content}
@@ -387,9 +393,7 @@ export function FullBookTranslationDock({
               {state.completedCount}/{state.totalTargetPages} ({progressPercent}%)
             </span>
           </div>
-          <div className="text-[10px] text-muted-foreground">
-            Page {state.currentPage ?? "—"}
-          </div>
+          <div className="text-[10px] text-muted-foreground">Page {state.currentPage ?? "—"}</div>
         </div>
       </div>
 

@@ -122,6 +122,7 @@ export function SidebarLayout({
               <Link
                 key={item.to}
                 to={item.to}
+                preload="intent"
                 className={`flex items-center gap-3 rounded-lg px-4 py-2.5 text-sm font-semibold transition-all duration-200 ${
                   isActive
                     ? "bg-primary/10 text-primary"

@@ -112,16 +112,7 @@ export function useAiTabAutoPlay({
         }
       }
     }
-  }, [
-    activePage,
-    activePageData,
-    isPlaying,
-    continuousPlay,
-    activePageNumber,
-    tab,
-    docId,
-    stop,
-  ]);
+  }, [activePage, activePageData, isPlaying, continuousPlay, activePageNumber, tab, docId, stop]);
 
   // 4. Listen for real-time page-ready events when background generation completes
   useEffect(() => {

@@ -88,3 +88,22 @@ export async function clearCachedR2Files() {
     console.warn("Failed clearing R2 files from IndexedDB:", e);
   }
 }
+
+/**
+ * Warm up the R2 files cache in the background (low priority)
+ * so navigating to Global Library is instantaneous.
+ */
+export function warmR2FilesCache(): void {
+  if (typeof window === "undefined") return;
+  if (inMemoryFiles !== null && inMemoryFiles.length > 0) return;
+
+  const runWarmup = () => {
+    void getCachedR2Files({ forceRefresh: false }).catch(() => {});
+  };
+
+  if ("requestIdleCallback" in window) {
+    (window as any).requestIdleCallback(runWarmup, { timeout: 3000 });
+  } else {
+    setTimeout(runWarmup, 800);
+  }
+}

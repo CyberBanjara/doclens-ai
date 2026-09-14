@@ -76,7 +76,6 @@ function LibraryPage() {
     };
   }, []);
 
-
   const handleFile = async (f: File) => {
     try {
       const rec = await createDoc(f);

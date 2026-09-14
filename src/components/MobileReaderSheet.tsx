@@ -63,7 +63,7 @@ export function MobileReaderSheet({
 
       const target = e.target as HTMLElement | null;
       scrollContainer = target?.closest(
-        ".overflow-auto, .overflow-y-auto, [data-scrollable]"
+        ".overflow-auto, .overflow-y-auto, [data-scrollable]",
       ) as HTMLElement | null;
     };
 
@@ -158,7 +158,9 @@ export function MobileReaderSheet({
     const target = e.target as HTMLElement;
     if (target.closest("button, input, select, textarea, a, [role='button']")) return;
 
-    const scrollContainer = target.closest(".overflow-auto, .overflow-y-auto") as HTMLElement | null;
+    const scrollContainer = target.closest(
+      ".overflow-auto, .overflow-y-auto",
+    ) as HTMLElement | null;
     if (scrollContainer && scrollContainer.scrollTop > 0) return;
 
     const startY = e.clientY;

@@ -194,9 +194,7 @@
         "md5_digest": "1f555643ff6f7d9133679d730f3f6016"
       }
     },
-    "aliases": [
-      "ca-upc_ona-x-low"
-    ]
+    "aliases": ["ca-upc_ona-x-low"]
   },
   "ca_ES-upc_pau-x_low": {
     "key": "ca_ES-upc_pau-x_low",
@@ -226,9 +224,7 @@
         "md5_digest": "4ff8699c4439c9f49180457f0becc49e"
       }
     },
-    "aliases": [
-      "ca-upc_pau-x-low"
-    ]
+    "aliases": ["ca-upc_pau-x-low"]
   },
   "cs_CZ-jirka-low": {
     "key": "cs_CZ-jirka-low",
@@ -416,9 +412,7 @@
         "md5_digest": "628cc03fca8f5d2c454824d6252955ad"
       }
     },
-    "aliases": [
-      "da-nst_talesyntese-medium"
-    ]
+    "aliases": ["da-nst_talesyntese-medium"]
   },
   "de_DE-eva_k-x_low": {
     "key": "de_DE-eva_k-x_low",
@@ -448,9 +442,7 @@
         "md5_digest": "02b01f3d47b2798ece347b2c7e94c9e9"
       }
     },
-    "aliases": [
-      "de-eva_k-x-low"
-    ]
+    "aliases": ["de-eva_k-x-low"]
   },
   "de_DE-karlsson-low": {
     "key": "de_DE-karlsson-low",
@@ -480,9 +472,7 @@
         "md5_digest": "6e2f3eec10cf7fceb0b68b67eccd06a4"
       }
     },
-    "aliases": [
-      "de-karlsson-low"
-    ]
+    "aliases": ["de-karlsson-low"]
   },
   "de_DE-kerstin-low": {
     "key": "de_DE-kerstin-low",
@@ -512,9 +502,7 @@
         "md5_digest": "69ec1bc99fc7e19c9ddcdf712920a6c7"
       }
     },
-    "aliases": [
-      "de-kerstin-low"
-    ]
+    "aliases": ["de-kerstin-low"]
   },
   "de_DE-mls-medium": {
     "key": "de_DE-mls-medium",
@@ -811,9 +799,7 @@
         "md5_digest": "e0aacaf7b834938c4e3ad1fb3f68ef87"
       }
     },
-    "aliases": [
-      "de-pavoque-low"
-    ]
+    "aliases": ["de-pavoque-low"]
   },
   "de_DE-ramona-low": {
     "key": "de_DE-ramona-low",
@@ -843,9 +829,7 @@
         "md5_digest": "c970992423b5fc7a26340a9363e15952"
       }
     },
-    "aliases": [
-      "de-ramona-low"
-    ]
+    "aliases": ["de-ramona-low"]
   },
   "de_DE-thorsten-high": {
     "key": "de_DE-thorsten-high",
@@ -905,9 +889,7 @@
         "md5_digest": "203f58b93f0372564e745f1e05ea47bb"
       }
     },
-    "aliases": [
-      "de-thorsten-low"
-    ]
+    "aliases": ["de-thorsten-low"]
   },
   "de_DE-thorsten-medium": {
     "key": "de_DE-thorsten-medium",
@@ -1096,9 +1078,7 @@
         "md5_digest": "b116c3cbdebac99ade9af03807cb9301"
       }
     },
-    "aliases": [
-      "en-gb-alan-low"
-    ]
+    "aliases": ["en-gb-alan-low"]
   },
   "en_GB-alan-medium": {
     "key": "en_GB-alan-medium",
@@ -1386,9 +1366,7 @@
         "md5_digest": "77ac998c8b37842ef98594567f141629"
       }
     },
-    "aliases": [
-      "en-gb-southern_english_female-low"
-    ]
+    "aliases": ["en-gb-southern_english_female-low"]
   },
   "en_GB-vctk-medium": {
     "key": "en_GB-vctk-medium",
@@ -1558,9 +1536,7 @@
         "md5_digest": "e1cdd84aa7493b8fbe1e6471f6f93cea"
       }
     },
-    "aliases": [
-      "en-us-amy-low"
-    ]
+    "aliases": ["en-us-amy-low"]
   },
   "en_US-amy-medium": {
     "key": "en_US-amy-medium",
@@ -1849,9 +1825,7 @@
         "md5_digest": "0585e0a798d093c9ee090b99d9c8f68e"
       }
     },
-    "aliases": [
-      "en-us-kathleen-low"
-    ]
+    "aliases": ["en-us-kathleen-low"]
   },
   "en_US-kristin-medium": {
     "key": "en_US-kristin-medium",
@@ -2026,9 +2000,7 @@
         "md5_digest": "999cbf2c337d8fb2f21b0fa2c95e9e85"
       }
     },
-    "aliases": [
-      "en-us-lessac-low"
-    ]
+    "aliases": ["en-us-lessac-low"]
   },
   "en_US-lessac-medium": {
     "key": "en_US-lessac-medium",
@@ -2058,9 +2030,7 @@
         "md5_digest": "42f2dd4a98149e12fc70b301d9579dfd"
       }
     },
-    "aliases": [
-      "en-us-lessac-medium"
-    ]
+    "aliases": ["en-us-lessac-medium"]
   },
   "en_US-libritts-high": {
     "key": "en_US-libritts-high",
@@ -2995,9 +2965,7 @@
         "md5_digest": "cdeac934f1154489924a071470b22365"
       }
     },
-    "aliases": [
-      "en-us-libritts-high"
-    ]
+    "aliases": ["en-us-libritts-high"]
   },
   "en_US-libritts_r-medium": {
     "key": "en_US-libritts_r-medium",
@@ -4112,9 +4080,7 @@
         "md5_digest": "9c966517ed0bfbffbfdb218e99dbeadd"
       }
     },
-    "aliases": [
-      "en-us-ryan-high"
-    ]
+    "aliases": ["en-us-ryan-high"]
   },
   "en_US-ryan-low": {
     "key": "en_US-ryan-low",
@@ -4144,9 +4110,7 @@
         "md5_digest": "030252d21b0bd1048c37a9eb7f94eb17"
       }
     },
-    "aliases": [
-      "en-us-ryan-low"
-    ]
+    "aliases": ["en-us-ryan-low"]
   },
   "en_US-ryan-medium": {
     "key": "en_US-ryan-medium",
@@ -4176,9 +4140,7 @@
         "md5_digest": "79d9200481a9dcabfa1803cb9e31c28a"
       }
     },
-    "aliases": [
-      "en-us-ryan-medium"
-    ]
+    "aliases": ["en-us-ryan-medium"]
   },
   "en_US-sam-medium": {
     "key": "en_US-sam-medium",
@@ -4268,9 +4230,7 @@
         "md5_digest": "19cb47bbe9e07e8d7937cfd39027d3a9"
       }
     },
-    "aliases": [
-      "es-carlfm-x-low"
-    ]
+    "aliases": ["es-carlfm-x-low"]
   },
   "es_ES-davefx-medium": {
     "key": "es_ES-davefx-medium",
@@ -4330,9 +4290,7 @@
         "md5_digest": "a345cefedda92347f53ea9a84d1b3983"
       }
     },
-    "aliases": [
-      "es-mls_10246-low"
-    ]
+    "aliases": ["es-mls_10246-low"]
   },
   "es_ES-mls_9972-low": {
     "key": "es_ES-mls_9972-low",
@@ -4362,9 +4320,7 @@
         "md5_digest": "4ba8c18ce72a202a49312ee1914ca6b0"
       }
     },
-    "aliases": [
-      "es-mls_9972-low"
-    ]
+    "aliases": ["es-mls_9972-low"]
   },
   "es_ES-sharvard-medium": {
     "key": "es_ES-sharvard-medium",
@@ -4762,9 +4718,7 @@
         "md5_digest": "93ccf398abae82b7d7a3d420658e26f1"
       }
     },
-    "aliases": [
-      "fi-harri-low"
-    ]
+    "aliases": ["fi-harri-low"]
   },
   "fi_FI-harri-medium": {
     "key": "fi_FI-harri-medium",
@@ -4824,9 +4778,7 @@
         "md5_digest": "9317af9efdb0d9986d42357b180f06e2"
       }
     },
-    "aliases": [
-      "fr-gilles-low"
-    ]
+    "aliases": ["fr-gilles-low"]
   },
   "fr_FR-mls-medium": {
     "key": "fr_FR-mls-medium",
@@ -5012,9 +4964,7 @@
         "md5_digest": "35d860ab0a8497966c73da525728e711"
       }
     },
-    "aliases": [
-      "fr-mls_1840-low"
-    ]
+    "aliases": ["fr-mls_1840-low"]
   },
   "fr_FR-siwis-low": {
     "key": "fr_FR-siwis-low",
@@ -5044,9 +4994,7 @@
         "md5_digest": "5d4a6b6e8d4a476e9b415ec0c1f030da"
       }
     },
-    "aliases": [
-      "fr-siwis-low"
-    ]
+    "aliases": ["fr-siwis-low"]
   },
   "fr_FR-siwis-medium": {
     "key": "fr_FR-siwis-medium",
@@ -5076,9 +5024,7 @@
         "md5_digest": "2b9ea48b15e9e1fd25f95b415caaf66f"
       }
     },
-    "aliases": [
-      "fr-siwis-medium"
-    ]
+    "aliases": ["fr-siwis-medium"]
   },
   "fr_FR-tom-medium": {
     "key": "fr_FR-tom-medium",
@@ -5441,9 +5387,7 @@
         "md5_digest": "a055aad199d8cc58e52913ff2af461d8"
       }
     },
-    "aliases": [
-      "is-bui-medium"
-    ]
+    "aliases": ["is-bui-medium"]
   },
   "is_IS-salka-medium": {
     "key": "is_IS-salka-medium",
@@ -5473,9 +5417,7 @@
         "md5_digest": "0f3d286069e4c7bead9b40ece3bbefe6"
       }
     },
-    "aliases": [
-      "is-salka-medium"
-    ]
+    "aliases": ["is-salka-medium"]
   },
   "is_IS-steinn-medium": {
     "key": "is_IS-steinn-medium",
@@ -5505,9 +5447,7 @@
         "md5_digest": "45ab46f37e5a6bdf739d58496752e6a0"
       }
     },
-    "aliases": [
-      "is-steinn-medium"
-    ]
+    "aliases": ["is-steinn-medium"]
   },
   "is_IS-ugla-medium": {
     "key": "is_IS-ugla-medium",
@@ -5537,9 +5477,7 @@
         "md5_digest": "a3ba0a35bc26d440ee3b0872e435fcd5"
       }
     },
-    "aliases": [
-      "is-ugla-medium"
-    ]
+    "aliases": ["is-ugla-medium"]
   },
   "it_IT-paola-medium": {
     "key": "it_IT-paola-medium",
@@ -5599,9 +5537,7 @@
         "md5_digest": "3e70f29ab998ac0380edc0cec7395e80"
       }
     },
-    "aliases": [
-      "it-riccardo_fasol-x-low"
-    ]
+    "aliases": ["it-riccardo_fasol-x-low"]
   },
   "it_IT-serena-high": {
     "key": "it_IT-serena-high",
@@ -5754,9 +5690,7 @@
         "md5_digest": "fce637093c4437a1f929280913a86aa5"
       }
     },
-    "aliases": [
-      "kk-iseke-x-low"
-    ]
+    "aliases": ["kk-iseke-x-low"]
   },
   "kk_KZ-issai-high": {
     "key": "kk_KZ-issai-high",
@@ -5793,9 +5727,7 @@
         "md5_digest": "30487d1011336ed15feabd156424cbd9"
       }
     },
-    "aliases": [
-      "kk-issai-high"
-    ]
+    "aliases": ["kk-issai-high"]
   },
   "kk_KZ-raya-x_low": {
     "key": "kk_KZ-raya-x_low",
@@ -5825,9 +5757,7 @@
         "md5_digest": "fb34d2e65fac42f4d6e003d3d30c897e"
       }
     },
-    "aliases": [
-      "kk-raya-x-low"
-    ]
+    "aliases": ["kk-raya-x-low"]
   },
   "ko_KR-kss-medium": {
     "key": "ko_KR-kss-medium",
@@ -6129,9 +6059,7 @@
         "md5_digest": "afe022ba061870d0c9fe085fe9a9f31f"
       }
     },
-    "aliases": [
-      "ne-google-medium"
-    ]
+    "aliases": ["ne-google-medium"]
   },
   "ne_NP-google-x_low": {
     "key": "ne_NP-google-x_low",
@@ -6180,9 +6108,7 @@
         "md5_digest": "70914e596d5de29edda9e714603887d6"
       }
     },
-    "aliases": [
-      "ne-google-x-low"
-    ]
+    "aliases": ["ne-google-x-low"]
   },
   "nl_BE-nathalie-medium": {
     "key": "nl_BE-nathalie-medium",
@@ -6242,9 +6168,7 @@
         "md5_digest": "5df62094bde427374223f91f44476392"
       }
     },
-    "aliases": [
-      "nl-nathalie-x-low"
-    ]
+    "aliases": ["nl-nathalie-x-low"]
   },
   "nl_BE-rdh-medium": {
     "key": "nl_BE-rdh-medium",
@@ -6274,9 +6198,7 @@
         "md5_digest": "dc4487b06fcef6ff270c852ce12947b9"
       }
     },
-    "aliases": [
-      "nl-rdh-medium"
-    ]
+    "aliases": ["nl-rdh-medium"]
   },
   "nl_BE-rdh-x_low": {
     "key": "nl_BE-rdh-x_low",
@@ -6306,9 +6228,7 @@
         "md5_digest": "6d0157bcd5ff281717e663d56dab980e"
       }
     },
-    "aliases": [
-      "nl-rdh-x-low"
-    ]
+    "aliases": ["nl-rdh-x-low"]
   },
   "nl_NL-alex-medium": {
     "key": "nl_NL-alex-medium",
@@ -6451,9 +6371,7 @@
         "md5_digest": "ac4b35e581cea8418909947a29a671bb"
       }
     },
-    "aliases": [
-      "nl-mls_5809-low"
-    ]
+    "aliases": ["nl-mls_5809-low"]
   },
   "nl_NL-mls_7432-low": {
     "key": "nl_NL-mls_7432-low",
@@ -6483,9 +6401,7 @@
         "md5_digest": "5d8ee8e955f077fc99cac61191d00892"
       }
     },
-    "aliases": [
-      "nl-mls_7432-low"
-    ]
+    "aliases": ["nl-mls_7432-low"]
   },
   "nl_NL-pim-medium": {
     "key": "nl_NL-pim-medium",
@@ -6616,9 +6532,7 @@
         "md5_digest": "5fe51d2a4a0e05e85c88a80373000ae1"
       }
     },
-    "aliases": [
-      "no-talesyntese-medium"
-    ]
+    "aliases": ["no-talesyntese-medium"]
   },
   "pl_PL-bass-high": {
     "key": "pl_PL-bass-high",
@@ -6768,9 +6682,7 @@
         "md5_digest": "74ebc618d120896113449ad2f957b7a4"
       }
     },
-    "aliases": [
-      "pl-mls_6892-low"
-    ]
+    "aliases": ["pl-mls_6892-low"]
   },
   "pt_BR-cadu-medium": {
     "key": "pt_BR-cadu-medium",
@@ -6830,9 +6742,7 @@
         "md5_digest": "62cde47b9a3214109e601f90eeadea11"
       }
     },
-    "aliases": [
-      "pt-br-edresson-low"
-    ]
+    "aliases": ["pt-br-edresson-low"]
   },
   "pt_BR-faber-medium": {
     "key": "pt_BR-faber-medium",
@@ -7042,9 +6952,7 @@
         "md5_digest": "397e67453b4ea5a95642673d0debb5ba"
       }
     },
-    "aliases": [
-      "ru-irinia-medium"
-    ]
+    "aliases": ["ru-irinia-medium"]
   },
   "ru_RU-ruslan-medium": {
     "key": "ru_RU-ruslan-medium",
@@ -7497,9 +7405,7 @@
         "md5_digest": "8de03ca7a0aee2a1c088638ec18fdb87"
       }
     },
-    "aliases": [
-      "uk-lada-x-low"
-    ]
+    "aliases": ["uk-lada-x-low"]
   },
   "uk_UA-mykyta-high": {
     "key": "uk_UA-mykyta-high",
@@ -7713,9 +7619,7 @@
         "md5_digest": "25eb4744418cd7b8da0a9096dcfa6e61"
       }
     },
-    "aliases": [
-      "vi-25hours-single-low"
-    ]
+    "aliases": ["vi-25hours-single-low"]
   },
   "vi_VN-vais1000-medium": {
     "key": "vi_VN-vais1000-medium",
@@ -7841,9 +7745,7 @@
         "md5_digest": "6bd1265a94a8f6bcce74a5b1145a7f95"
       }
     },
-    "aliases": [
-      "vi-vivos-x-low"
-    ]
+    "aliases": ["vi-vivos-x-low"]
   },
   "zh_CN-chaowen-medium": {
     "key": "zh_CN-chaowen-medium",
@@ -7933,9 +7835,7 @@
         "md5_digest": "715587a977945498c5741b74eb81a1fd"
       }
     },
-    "aliases": [
-      "zh-cn-huayan-x-low"
-    ]
+    "aliases": ["zh-cn-huayan-x-low"]
   },
   "zh_CN-xiao_ya-medium": {
     "key": "zh_CN-xiao_ya-medium",

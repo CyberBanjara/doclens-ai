@@ -80,7 +80,6 @@ export function usePageTranslation(
     };
   }, [mountedRef]);
 
-
   const runPage = useCallback(
     async (pageNumber: number): Promise<string | undefined> => {
       // Read fresh page text + state from IDB
@@ -189,9 +188,7 @@ export function usePageTranslation(
 
       const modelId =
         eff.modelId ||
-        (isOmni
-          ? currentGlobals.omniModelId || ""
-          : getSelectedModel() || getDefaultModelSync());
+        (isOmni ? currentGlobals.omniModelId || "" : getSelectedModel() || getDefaultModelSync());
 
       if (selOverride) selectionOverridesRef.current.delete(pageNumber);
       const effectiveText = selOverride ?? pageRec.text;
@@ -352,9 +349,15 @@ export function usePageTranslation(
           await upsertPageAi(docId, pageNumber, { status: "error", error: err });
           onPageAiChangeRef.current?.(pageNumber, { ...summarize(state), status: "error" });
           if (!(e instanceof OmniRouterError)) {
-            const isDailyOrQuota = (e instanceof OpenRouterError && /daily_limit|rate_limit|quota|credits/i.test(e.kind)) || /50 free pages|daily limit|rate limit|quota/i.test(err);
+            const isDailyOrQuota =
+              (e instanceof OpenRouterError &&
+                /daily_limit|rate_limit|quota|credits/i.test(e.kind)) ||
+              /50 free pages|daily limit|rate limit|quota/i.test(err);
             if (isDailyOrQuota) {
-              toast.error(err, { duration: 8000, action: { label: "Get Free Key", onClick: () => openApiKeyModal(err, true) } });
+              toast.error(err, {
+                duration: 8000,
+                action: { label: "Get Free Key", onClick: () => openApiKeyModal(err, true) },
+              });
               openApiKeyModal(err, true);
             } else if (e instanceof OpenRouterError && e.kind === "auth") {
               toast.error(err);
@@ -405,4 +408,3 @@ export function usePageTranslation(
 
   return { runningPages, streamBufs, runPageOnce, cancelPage, selectionOverridesRef };
 }
-

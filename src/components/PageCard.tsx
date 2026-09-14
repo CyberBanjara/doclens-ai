@@ -94,8 +94,15 @@ export function PageCardLoader(props: CardLoaderProps) {
     return () => {
       cancelled = true;
     };
-  }, [docId, pageNumber, summary?.status, summary?.settingsHash, summary?.hasResult, isRunning, props.globals.language]);
-
+  }, [
+    docId,
+    pageNumber,
+    summary?.status,
+    summary?.settingsHash,
+    summary?.hasResult,
+    isRunning,
+    props.globals.language,
+  ]);
 
   // Fetch previous continuity context for this page
   useEffect(() => {
@@ -200,7 +207,16 @@ function PageCard({
       pageText,
       previousContext,
     });
-  }, [eff.modelId, eff.mode, eff.language, eff.style, eff.temperature, pageNumber, pageText, previousContext]);
+  }, [
+    eff.modelId,
+    eff.mode,
+    eff.language,
+    eff.style,
+    eff.temperature,
+    pageNumber,
+    pageText,
+    previousContext,
+  ]);
 
   const previewPayload = state.isCustom && state.customRequest ? state.customRequest : autoPayload;
   const overrideCount = state.overrides ? Object.keys(state.overrides).length : 0;

@@ -64,7 +64,8 @@ export function EducationLevelModal({
               {isFirstTime ? "Select Your Class or Goal" : "Change Class or Goal"}
             </h2>
             <p className="text-xs text-muted-foreground leading-relaxed">
-              Personalize your library with relevant curriculum books, NCERTs, and reading materials.
+              Personalize your library with relevant curriculum books, NCERTs, and reading
+              materials.
             </p>
           </div>
         </div>
@@ -92,7 +93,9 @@ export function EducationLevelModal({
                     <div className="flex items-center gap-2.5 min-w-0">
                       <div
                         className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-xl text-lg shadow-inner border transition-transform duration-200 group-hover:scale-105 ${
-                          isChosen ? "border-primary/40 bg-primary/20" : "border-border/60 bg-surface-2"
+                          isChosen
+                            ? "border-primary/40 bg-primary/20"
+                            : "border-border/60 bg-surface-2"
                         }`}
                       >
                         {level.icon}

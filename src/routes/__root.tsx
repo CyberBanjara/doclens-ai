@@ -35,6 +35,7 @@ import { toast } from "sonner";
 
 import { NotFoundComponent } from "@/components/NotFound";
 import { AdBannerWidget } from "@/components/AdBannerWidget";
+import { warmR2FilesCache } from "@/lib/r2-cache";
 
 export const Route = createRootRoute({
   head: () => ({
@@ -340,6 +341,7 @@ function RootComponent() {
 
   useEffect(() => {
     initTheme();
+    warmR2FilesCache();
 
     // Hide and remove preloader once React application is fully mounted, keeping it for at least 2 seconds
     const preloader = document.getElementById("preloader");

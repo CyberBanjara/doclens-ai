@@ -19,9 +19,9 @@ All outputs are additionally sanitized by a post-processing pipeline (`cleanAiTe
 
 ## 2. Translation Styles
 
-| Style ID | Label      | Directive Summary                                                                                                                                    |
-| :------- | :--------- | :--------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `Native` | **Native** | Translate naturally and fluently. Preserve meaning, tone, and nuance. No added explanations.                                                         |
+| Style ID | Label      | Directive Summary                                                                                                                                                                                              |
+| :------- | :--------- | :------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `Native` | **Native** | Translate naturally and fluently. Preserve meaning, tone, and nuance. No added explanations.                                                                                                                   |
 | `Mixed`  | **Mixed**  | Translate primarily into the target language's native script (not Hinglish/Romanized text). Retain English abbreviations when required, along with technical terms, acronyms, and obvious keywords in English. |
 
 ---

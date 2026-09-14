@@ -143,10 +143,9 @@ export function useFullBookTranslation({
         const ctrl = new AbortController();
         abortControllerRef.current = ctrl;
 
-        toast.loading(
-          `Translating Page ${pNum} (${done + 1}/${pagesToProcess.length})...`,
-          { id: toastId },
-        );
+        toast.loading(`Translating Page ${pNum} (${done + 1}/${pagesToProcess.length})...`, {
+          id: toastId,
+        });
 
         try {
           const res = await executePageTranslation({
@@ -179,8 +178,7 @@ export function useFullBookTranslation({
             // Estimate remaining time
             const durationSec = (Date.now() - pageStartTime) / 1000;
             pageDurations.push(durationSec);
-            const avgDuration =
-              pageDurations.reduce((a, b) => a + b, 0) / pageDurations.length;
+            const avgDuration = pageDurations.reduce((a, b) => a + b, 0) / pageDurations.length;
             const remainingPages = pagesToProcess.length - (i + 1);
             setEstimatedSecondsRemaining(Math.round(remainingPages * avgDuration));
           }

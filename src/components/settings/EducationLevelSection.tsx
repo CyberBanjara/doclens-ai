@@ -17,7 +17,8 @@ export function EducationLevelSection({
         <h3 className="text-lg font-semibold text-foreground">Class / Education Level</h3>
       </div>
       <p className="text-sm text-muted-foreground">
-        Your study standard or reading goal. Automatically organizes curriculum books and NCERT materials.
+        Your study standard or reading goal. Automatically organizes curriculum books and NCERT
+        materials.
       </p>
 
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2.5">
@@ -38,7 +39,9 @@ export function EducationLevelSection({
                 <div className="flex items-center gap-2.5 min-w-0">
                   <div
                     className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-xl text-lg shadow-inner border transition-transform duration-200 group-hover:scale-105 ${
-                      isSelected ? "border-primary/40 bg-primary/20" : "border-border/60 bg-surface-2"
+                      isSelected
+                        ? "border-primary/40 bg-primary/20"
+                        : "border-border/60 bg-surface-2"
                     }`}
                   >
                     {level.icon}

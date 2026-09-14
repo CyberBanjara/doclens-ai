@@ -122,4 +122,3 @@ export function clearDocContext(docId?: string) {
     window.dispatchEvent(new CustomEvent("doclens:context-cleared", { detail: { docId } }));
   }
 }
-

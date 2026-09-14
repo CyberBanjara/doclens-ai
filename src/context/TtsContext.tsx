@@ -425,8 +425,7 @@ export function TtsProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     const syncLanguage = (e?: any) => {
       const raw = e?.detail;
-      const lang =
-        (typeof raw === "string" ? raw : raw?.language) || getOutputLanguage() || "";
+      const lang = (typeof raw === "string" ? raw : raw?.language) || getOutputLanguage() || "";
       if (lang && typeof lang === "string" && lang !== outputLanguageRef.current) {
         if (isPlayingRef.current) {
           stopRef.current?.();
@@ -455,8 +454,6 @@ export function TtsProvider({ children }: { children: React.ReactNode }) {
     setOutputLanguageState(strLang);
     outputLanguageRef.current = strLang;
   }, []);
-
-
 
   // Filtered voices by selected language
   const filteredVoices = useMemo(() => {
@@ -1022,7 +1019,6 @@ export function TtsProvider({ children }: { children: React.ReactNode }) {
     setActivePageNumber,
   ]);
   stopRef.current = stop;
-
 
   const nextSentence = useCallback(() => {
     if (!isPlayingRef.current) return;

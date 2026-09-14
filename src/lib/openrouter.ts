@@ -60,7 +60,6 @@ export function setAiProvider(p: AiProvider) {
   emitKeyChange();
 }
 
-
 function emitKeyChange() {
   if (typeof window !== "undefined") {
     window.dispatchEvent(new Event(KEY_CHANGE_EVT));
@@ -152,7 +151,7 @@ export interface OpenApiKeyModalDetail {
 
 /** Subscribe to any key/status change (cross-tab + in-tab). */
 export function onKeyChange(cb: () => void): () => void {
-  if (typeof window === "undefined") return () => { };
+  if (typeof window === "undefined") return () => {};
   const h = () => cb();
   window.addEventListener(KEY_CHANGE_EVT, h);
   window.addEventListener("storage", h);
@@ -176,8 +175,8 @@ export function openApiKeyModal(
       isDailyLimit ||
       (reasonOrDetail
         ? /50 free pages|daily limit|daily free limit|rate limit|too many requests|free tier/i.test(
-          reasonOrDetail,
-        )
+            reasonOrDetail,
+          )
         : false);
     detail = {
       reason: reasonOrDetail,
@@ -264,12 +263,13 @@ export function setOutputLanguage(lang: string) {
   window.dispatchEvent(new CustomEvent(GLOBALS_CHANGE_EVT, { detail: { language: trimmed } }));
 
   if (trimmed) {
-    void import("./sync").then(({ reconcileAllDocsLanguage }) => {
-      void reconcileAllDocsLanguage(trimmed);
-    }).catch((err) => console.warn("Failed to trigger reconcileAllDocsLanguage:", err));
+    void import("./sync")
+      .then(({ reconcileAllDocsLanguage }) => {
+        void reconcileAllDocsLanguage(trimmed);
+      })
+      .catch((err) => console.warn("Failed to trigger reconcileAllDocsLanguage:", err));
   }
 }
-
 
 function hasStoredValue(key: string): boolean {
   if (typeof window === "undefined") return false;
@@ -651,9 +651,9 @@ function combinedSignal(
   timeoutMs: number,
 ): { signal: AbortSignal; cleanup: () => void } {
   const timeout = AbortSignal.timeout(timeoutMs);
-  if (!userSignal) return { signal: timeout, cleanup: () => { } };
+  if (!userSignal) return { signal: timeout, cleanup: () => {} };
   if (typeof AbortSignal.any === "function") {
-    return { signal: AbortSignal.any([userSignal, timeout]), cleanup: () => { } };
+    return { signal: AbortSignal.any([userSignal, timeout]), cleanup: () => {} };
   }
   const ctrl = new AbortController();
   const onAbort = () => ctrl.abort();
@@ -684,7 +684,7 @@ async function readSseStream(
   let emittedTokens = 0;
 
   const onAbort = () => {
-    reader.cancel().catch(() => { });
+    reader.cancel().catch(() => {});
   };
   signal.addEventListener("abort", onAbort, { once: true });
 
@@ -952,8 +952,8 @@ export function buildPagePayload(i: BuildPagePayloadInput): Record<string, unkno
       `FORMAT: ${FORMAT_RULES}`,
       "STRUCTURED OUTPUT REQUIREMENT:",
       "You MUST respond with a JSON object containing two fields:",
-      "1. \"translation\": (string) The complete, fluent translation of the current page into the target language. No markdown code fences, bullet characters, or extraneous commentary.",
-      "2. \"context_delta\": (string) A concise summary of newly introduced or consistent terminology translations, character/entity naming, tone, and narrative/concept developments from this page to guide the translation of subsequent pages.",
+      '1. "translation": (string) The complete, fluent translation of the current page into the target language. No markdown code fences, bullet characters, or extraneous commentary.',
+      '2. "context_delta": (string) A concise summary of newly introduced or consistent terminology translations, character/entity naming, tone, and narrative/concept developments from this page to guide the translation of subsequent pages.',
       "Example JSON format:",
       '{"translation": "...", "context_delta": "..."}',
     ].join("\n\n");
@@ -973,8 +973,8 @@ export function buildPagePayload(i: BuildPagePayloadInput): Record<string, unkno
       `FORMAT: ${FORMAT_RULES}`,
       "STRUCTURED OUTPUT REQUIREMENT:",
       "You MUST respond with a JSON object containing two fields:",
-      "1. \"translation\": (string) The complete, clean explanation/synthesis of the current page. No markdown formatting, bullet characters, or extraneous commentary.",
-      "2. \"context_delta\": (string) A concise summary of core concepts, technical term definitions, and analytical insights from this page to maintain pedagogical continuity across pages.",
+      '1. "translation": (string) The complete, clean explanation/synthesis of the current page. No markdown formatting, bullet characters, or extraneous commentary.',
+      '2. "context_delta": (string) A concise summary of core concepts, technical term definitions, and analytical insights from this page to maintain pedagogical continuity across pages.',
       "Example JSON format:",
       '{"translation": "...", "context_delta": "..."}',
     ].join("\n\n");

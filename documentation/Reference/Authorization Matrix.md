@@ -40,32 +40,32 @@
 
 ### Server-Side API Endpoints
 
-| Endpoint                      | Method | Anonymous | `user` | `viewer` | `moderator` | `editor` | `admin` | Enforcement                                                                                              |
-| :---------------------------- | :----: | :-------: | :----: | :------: | :---------: | :------: | :-----: | :------------------------------------------------------------------------------------------------------- |
-| `/api/auth/google-login`      |  POST  |    ✅     |   ✅   |    ✅    |     ✅      |    ✅    |   ✅    | Public (verifies Google token, creates session JWT & HttpOnly cookie)                                     |
-| `/api/auth/me`                |  GET   |    ❌     |   ✅   |    ✅    |     ✅      |    ✅    |   ✅    | HttpOnly cookie session (`verifySessionJwt`)                                                             |
-| `/api/auth/update-profile`    |  POST  |    ❌     |   ✅   |    ✅    |     ✅      |    ✅    |   ✅    | Valid session (`getSessionUserFromEvent`); syncs Firestore & issues updated JWT in HttpOnly cookie       |
-| `/api/auth/logout`            |  POST  |    ✅     |   ✅   |    ✅    |     ✅      |    ✅    |   ✅    | Public (clears cookie)                                                                                   |
-| `/api/admin/users`            |  GET   |    ❌     |   ❌   |    ❌    |     ❌      |    ❌    |   ✅    | `requireSessionFromEvent(event, ["admin"])`                                                              |
-| `/api/admin/update-user-role` |  POST  |    ❌     |   ❌   |    ❌    |     ❌      |    ❌    |   ✅    | `requireSessionFromEvent(event, ["admin"])`                                                              |
+| Endpoint                      | Method | Anonymous | `user` | `viewer` | `moderator` | `editor` | `admin` | Enforcement                                                                                        |
+| :---------------------------- | :----: | :-------: | :----: | :------: | :---------: | :------: | :-----: | :------------------------------------------------------------------------------------------------- |
+| `/api/auth/google-login`      |  POST  |    ✅     |   ✅   |    ✅    |     ✅      |    ✅    |   ✅    | Public (verifies Google token, creates session JWT & HttpOnly cookie)                              |
+| `/api/auth/me`                |  GET   |    ❌     |   ✅   |    ✅    |     ✅      |    ✅    |   ✅    | HttpOnly cookie session (`verifySessionJwt`)                                                       |
+| `/api/auth/update-profile`    |  POST  |    ❌     |   ✅   |    ✅    |     ✅      |    ✅    |   ✅    | Valid session (`getSessionUserFromEvent`); syncs Firestore & issues updated JWT in HttpOnly cookie |
+| `/api/auth/logout`            |  POST  |    ✅     |   ✅   |    ✅    |     ✅      |    ✅    |   ✅    | Public (clears cookie)                                                                             |
+| `/api/admin/users`            |  GET   |    ❌     |   ❌   |    ❌    |     ❌      |    ❌    |   ✅    | `requireSessionFromEvent(event, ["admin"])`                                                        |
+| `/api/admin/update-user-role` |  POST  |    ❌     |   ❌   |    ❌    |     ❌      |    ❌    |   ✅    | `requireSessionFromEvent(event, ["admin"])`                                                        |
 
 ### Client-Side Feature Actions
 
 | Action                                            | Anonymous | `user` | `viewer` | `moderator` | `editor` | `admin` | Enforcement & Credential Layer                                                                                   |
 | :------------------------------------------------ | :-------: | :----: | :------: | :---------: | :------: | :-----: | :--------------------------------------------------------------------------------------------------------------- |
-| Upload PDF to local library                       |    ✅     |   ✅   |    ✅    |     ✅      |    ✅    |   ✅    | Local IndexedDB (`docStore`, `docBlobs`) — zero auth needed                                                     |
+| Upload PDF to local library                       |    ✅     |   ✅   |    ✅    |     ✅      |    ✅    |   ✅    | Local IndexedDB (`docStore`, `docBlobs`) — zero auth needed                                                      |
 | Read/open local documents                         |    ✅     |   ✅   |    ✅    |     ✅      |    ✅    |   ✅    | Local IndexedDB                                                                                                  |
 | AI translate/explain pages                        |    ✅     |   ✅   |    ✅    |     ✅      |    ✅    |   ✅    | Requires valid API key (server env or user-provided in settings)                                                 |
 | TTS playback (native + neural)                    |    ✅     |   ✅   |    ✅    |     ✅      |    ✅    |   ✅    | Client-side Web Speech / Kokoro — no auth needed                                                                 |
 | Export (Markdown/JSON)                            |    ✅     |   ✅   |    ✅    |     ✅      |    ✅    |   ✅    | Local IndexedDB data export                                                                                      |
 | Browse Global Library                             |    ❌     |   ✅   |    ✅    |     ✅      |    ✅    |   ✅    | Client sign-in wall (`!user` blurred overlay) + Server `listR2Files` (read-only R2 keys)                         |
 | Import from Global Library (PDF + translations)   |    ❌     |   ✅   |    ✅    |     ✅      |    ✅    |   ✅    | Requires sign-in; downloads R2 PDF + pulls Supabase translations via `VITE_SUPABASE_PUBLISHABLE_KEY`             |
-| **Sync to workspace from Supabase** (Read cache)  |    ✅     |   ✅   |    ✅    |     ✅      |    ✅    |   ✅    | **Universal read:** `syncFromSupabase` uses `VITE_SUPABASE_PUBLISHABLE_KEY` (public read-only key)              |
+| **Sync to workspace from Supabase** (Read cache)  |    ✅     |   ✅   |    ✅    |     ✅      |    ✅    |   ✅    | **Universal read:** `syncFromSupabase` uses `VITE_SUPABASE_PUBLISHABLE_KEY` (public read-only key)               |
 | **Sync to Supabase from workspace** (Write cache) |    ❌     |   ❌   |    ❌    |     ✅      |    ✅    |   ✅    | **Restricted write:** `syncToSupabase` requires write secret (`PIPELINE_CATALOG_SYNC_TOKEN` / `SUPABASE_SECRET`) |
-| Update profile & translation preferences          |    ❌     |   ✅   |    ✅    |     ✅      |    ✅    |   ✅    | `apiUpdateUserProfile` (`POST /api/auth/update-profile`) -> updates Firestore + refreshed session JWT           |
-| Upload PDF to Cloudflare R2 (Global Lib)          |    ❌     |   ❌   |    ❌    |     ✅      |    ✅    |   ✅    | Layer 1: `assertRoleSession(["admin", "moderator", "editor"])` + Layer 2: `STORAGE_DISPATCH_TOKEN_*`            |
-| Sync R2 thumbnails                                |    ❌     |   ❌   |    ❌    |     ✅      |    ✅    |   ✅    | Layer 1: `assertRoleSession(["admin", "moderator", "editor"])` + Layer 2: `STORAGE_DISPATCH_TOKEN_*`            |
-| Delete from Global Library                        |    ❌     |   ❌   |    ❌    |     ✅      |    ❌    |   ✅    | Layer 1: `assertRoleSession(["admin", "moderator"])` + Layer 2: `STORAGE_DISPATCH_TOKEN_*`                      |
+| Update profile & translation preferences          |    ❌     |   ✅   |    ✅    |     ✅      |    ✅    |   ✅    | `apiUpdateUserProfile` (`POST /api/auth/update-profile`) -> updates Firestore + refreshed session JWT            |
+| Upload PDF to Cloudflare R2 (Global Lib)          |    ❌     |   ❌   |    ❌    |     ✅      |    ✅    |   ✅    | Layer 1: `assertRoleSession(["admin", "moderator", "editor"])` + Layer 2: `STORAGE_DISPATCH_TOKEN_*`             |
+| Sync R2 thumbnails                                |    ❌     |   ❌   |    ❌    |     ✅      |    ✅    |   ✅    | Layer 1: `assertRoleSession(["admin", "moderator", "editor"])` + Layer 2: `STORAGE_DISPATCH_TOKEN_*`             |
+| Delete from Global Library                        |    ❌     |   ❌   |    ❌    |     ✅      |    ❌    |   ✅    | Layer 1: `assertRoleSession(["admin", "moderator"])` + Layer 2: `STORAGE_DISPATCH_TOKEN_*`                       |
 | Upload to R2 from workspace                       |    ❌     |   ❌   |    ❌    |     ✅      |    ✅    |   ✅    | Client: `isAdmin \|\| moderator \|\| editor \|\| syncEnabled` + Server Layer 1 role check                        |
 | View admin dashboard                              |    ❌     |   ❌   |    ❌    |     ❌      |    ❌    |   ✅    | Client `isAdmin` check + Server session verification                                                             |
 | List all users                                    |    ❌     |   ❌   |    ❌    |     ❌      |    ❌    |   ✅    | Server: `requireSessionFromEvent(["admin"])`                                                                     |
@@ -93,7 +93,7 @@ The system enforces strict directional credential isolation:
    - **Environment Variables Used:**
      - `PIPELINE_CATALOG_SYNC_TOKEN` (Primary Write Key)
      - Fallback Write Keys: `SUPABASE_WRITE_KEY`, `SUPABASE_SECRET_KEY`, `SUPABASE_SERVICE_ROLE_KEY`
-     - *Note: `VITE_SUPABASE_PUBLISHABLE_KEY` will strictly fail with `Unauthorized [Layer 2 Failed]` if write key is missing.*
+     - _Note: `VITE_SUPABASE_PUBLISHABLE_KEY` will strictly fail with `Unauthorized [Layer 2 Failed]` if write key is missing._
    - **Enforcement:** Validated in `saveSupabaseLanguagePage` and `batchSaveSupabaseLanguagePages`. Data is strictly isolated to the specific language table (`translations_<slug>`) and `book_languages`.
 
 ### Cloudflare R2 Vault (Read vs Write Separation)
@@ -138,4 +138,3 @@ The system enforces strict directional credential isolation:
 ---
 
 _Part of [[MOC — Features]]_
-

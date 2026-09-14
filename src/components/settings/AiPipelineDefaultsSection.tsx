@@ -1,13 +1,5 @@
 import { useState, useRef, useEffect } from "react";
-import {
-  Zap,
-  ChevronDown,
-  Check,
-  Languages,
-  Sparkles,
-  Sliders,
-  Layers,
-} from "lucide-react";
+import { Zap, ChevronDown, Check, Languages, Sparkles, Sliders, Layers } from "lucide-react";
 import {
   EXPLANATION_STYLES,
   TRANSLATION_STYLES,
@@ -53,7 +45,10 @@ function StatusDot({ status }: { status?: "connected" | "disconnected" | "checki
   }
   if (status === "checking") {
     return (
-      <span className="relative flex h-2 w-2 items-center justify-center shrink-0" title="Checking...">
+      <span
+        className="relative flex h-2 w-2 items-center justify-center shrink-0"
+        title="Checking..."
+      >
         <span className="relative inline-flex h-2 w-2 animate-pulse rounded-full bg-amber-500 shadow-[0_0_6px_rgba(245,158,11,0.9)]" />
       </span>
     );
@@ -267,7 +262,9 @@ export function AiPipelineDefaultsSection({
                             </span>
                           )}
                         </div>
-                        {isSelected && <Check className="h-3.5 w-3.5 text-primary shrink-0 ml-1.5" />}
+                        {isSelected && (
+                          <Check className="h-3.5 w-3.5 text-primary shrink-0 ml-1.5" />
+                        )}
                       </button>
                     );
                   })}

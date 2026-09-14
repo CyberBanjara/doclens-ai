@@ -108,7 +108,6 @@ export function PageWorkstation({
     };
   }, []);
 
-
   const shouldShowExplainSetup = useCallback(() => {
     if (typeof window === "undefined") return false;
     return (
@@ -303,9 +302,7 @@ export function PageWorkstation({
       void updateProfile({
         nativeLanguage: settings.language,
         style: settings.style,
-      }).catch((err) =>
-        console.warn("Failed to sync explain preferences to Firebase/JWT:", err),
-      );
+      }).catch((err) => console.warn("Failed to sync explain preferences to Firebase/JWT:", err));
     }
 
     const nextGlobals = {

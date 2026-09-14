@@ -1,6 +1,15 @@
 import { createServerFn } from "@tanstack/react-start";
 import { fetchSupabaseLanguageBook, batchSaveSupabaseLanguagePages } from "./supabase";
-import { getDoc, updateDoc, db, pageKey, pageRange, getAllPages, withDocLock, listDocs } from "./storage";
+import {
+  getDoc,
+  updateDoc,
+  db,
+  pageKey,
+  pageRange,
+  getAllPages,
+  withDocLock,
+  listDocs,
+} from "./storage";
 import { isGlobalSyncEnabled } from "./env";
 import { getOutputLanguage } from "./openrouter";
 import { clearDocContext } from "./contextStore";
@@ -203,9 +212,7 @@ export async function reconcileAllDocsLanguage(targetLanguage: string): Promise<
   try {
     const allDocs = await listDocs();
     if (allDocs.length > 0) {
-      await Promise.allSettled(
-        allDocs.map((d) => reconcileDocumentLanguage(d.id, targetLanguage)),
-      );
+      await Promise.allSettled(allDocs.map((d) => reconcileDocumentLanguage(d.id, targetLanguage)));
     }
   } catch (err) {
     console.error("Failed to reconcile all docs language:", err);

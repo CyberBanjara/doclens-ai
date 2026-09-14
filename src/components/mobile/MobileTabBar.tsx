@@ -23,6 +23,7 @@ export function MobileTabBar() {
           <Link
             key={tab.to}
             to={tab.to}
+            preload="intent"
             className="flex flex-1 flex-col items-center justify-center gap-0.5 py-2.5 active:scale-95 transition-transform"
           >
             <Icon

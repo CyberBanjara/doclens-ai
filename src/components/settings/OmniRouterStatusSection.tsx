@@ -1,11 +1,5 @@
 import { useState, useEffect } from "react";
-import {
-  Server,
-  RefreshCw,
-  Cpu,
-  Check,
-  CheckCircle2,
-} from "lucide-react";
+import { Server, RefreshCw, Cpu, Check, CheckCircle2 } from "lucide-react";
 import { getOmniRouterBaseUrl, getOmniDefaultModelSync } from "@/lib/omnirouter";
 import { toast } from "sonner";
 import type { ORModel } from "@/lib/openrouter";
@@ -67,9 +61,7 @@ export function OmniRouterStatusSection({
         </div>
         <div>
           <h3 className="text-base font-semibold text-foreground">Local AI Server</h3>
-          <p className="text-xs text-muted-foreground">
-            Connect and run local or custom AI models
-          </p>
+          <p className="text-xs text-muted-foreground">Connect and run local or custom AI models</p>
         </div>
       </div>
 
