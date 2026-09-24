@@ -78,7 +78,7 @@ function AppearanceSettingsPage() {
       <div className="mx-auto max-w-7xl space-y-8 p-8 pb-28">
         {/* Page Header */}
         <header className="hidden md:block">
-          <h3 className="text-3xl font-bold tracking-tight text-foreground">Appearance Settings</h3>
+          <h3 className="text-3xl font-bold tracking-tight text-foreground">Themes</h3>
           <p className="mt-1 text-sm text-muted-foreground">
             Customize the look and feel of your workspace.
           </p>

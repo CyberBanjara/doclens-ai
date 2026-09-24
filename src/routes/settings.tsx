@@ -39,6 +39,7 @@ import { clearAllVoiceCache, isOpfsSupported } from "@/lib/voiceCache";
 import { filterVoicesByLanguage } from "@/lib/voiceLanguageMap";
 import { markTtsVoiceSetupComplete, useTts } from "@/context/TtsContext";
 import { getFriendlyErrorMessage } from "@/lib/network";
+import { Palette } from "lucide-react";
 import { AiPipelineDefaultsSection } from "@/components/settings/AiPipelineDefaultsSection";
 import { OutputLanguageSection } from "@/components/settings/OutputLanguageSection";
 import { VoiceCacheManagerSection } from "@/components/settings/VoiceCacheManagerSection";
@@ -46,6 +47,8 @@ import { ApiKeySection } from "@/components/settings/ApiKeySection";
 import { OmniRouterStatusSection } from "@/components/settings/OmniRouterStatusSection";
 import { ModelSelectionSection } from "@/components/settings/ModelSelectionSection";
 import { StorageManagerSection } from "@/components/settings/StorageManagerSection";
+import { ThemeSelectionModal } from "@/components/settings/ThemeSelectionModal";
+import { getTheme, LIGHT_THEMES, DARK_THEMES } from "@/lib/theme";
 import { useAuth } from "@/context/AuthContext";
 
 export const Route = createFileRoute("/settings")({
@@ -126,6 +129,14 @@ function SettingsPage() {
   const [temperature, setTemp] = useState(0.3);
   const [downloadProgress, setDownloadProgress] = useState<Record<string, number>>({});
   const isOpfs = useMemo(() => isOpfsSupported(), []);
+  const [themeModalOpen, setThemeModalOpen] = useState(false);
+  const [currentTheme, setCurrentTheme] = useState(() => getTheme());
+
+  const currentThemeLabel = useMemo(() => {
+    if (currentTheme === "system") return "System";
+    const found = [...LIGHT_THEMES, ...DARK_THEMES].find((t) => t.id === currentTheme);
+    return found ? found.label : currentTheme.charAt(0).toUpperCase() + currentTheme.slice(1);
+  }, [currentTheme]);
   const {
     allNeuralVoices,
     setOutputLanguage: setTtsLanguage,
@@ -359,12 +370,25 @@ function SettingsPage() {
       }}
     >
       <div className="mx-auto max-w-7xl space-y-6 p-4 pb-28 md:space-y-8 md:p-8">
-        {/* Page Header — hidden on mobile, the top bar already shows "General Settings" */}
-        <header className="hidden md:block">
-          <h3 className="text-3xl font-bold tracking-tight text-foreground">General Settings</h3>
-          <p className="mt-1 text-sm text-muted-foreground">
-            Manage your preferences, translation models, and cache.
-          </p>
+        {/* Page Header with Themes Trigger */}
+        <header className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+          <div>
+            <h3 className="text-2xl sm:text-3xl font-bold tracking-tight text-foreground">General Settings</h3>
+            <p className="mt-1 text-xs sm:text-sm text-muted-foreground">
+              Manage your preferences, translation models, cache, and workspace themes.
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={() => setThemeModalOpen(true)}
+            className="flex items-center gap-2.5 self-start sm:self-auto rounded-xl border border-border bg-surface-2/70 px-4 py-2.5 text-sm font-semibold text-foreground transition-all duration-200 hover:bg-surface-2 hover:border-border-strong hover:shadow-md active:scale-95 cursor-pointer shadow-xs"
+          >
+            <Palette className="h-4 w-4 text-primary" />
+            <span>Themes</span>
+            <span className="ml-0.5 rounded-md bg-primary/10 px-2 py-0.5 text-xs font-semibold text-primary">
+              {currentThemeLabel}
+            </span>
+          </button>
         </header>
 
         {/* Row 1: AI Pipeline Defaults (full width) at the top */}
@@ -464,6 +488,13 @@ function SettingsPage() {
 
         {/* Row 4: Storage Management & Reset */}
         <StorageManagerSection />
+
+        {/* Themes Selection Pop-up Modal */}
+        <ThemeSelectionModal
+          open={themeModalOpen}
+          onOpenChange={setThemeModalOpen}
+          onThemeChange={setCurrentTheme}
+        />
       </div>
     </SidebarLayout>
   );

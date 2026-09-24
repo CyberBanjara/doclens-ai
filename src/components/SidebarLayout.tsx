@@ -20,7 +20,6 @@ interface SidebarLayoutProps {
 const BASE_NAV_ITEMS = [
   { to: "/library", label: "Library", icon: "📁" },
   { to: "/global-library", label: "Global Library", icon: "🌐" },
-  { to: "/settings/appearance", label: "Appearance", icon: "🎨" },
   { to: "/settings", label: "General Settings", icon: "⚙" },
   { to: "/support", label: "Support Us", icon: "💖" },
 ] as const;

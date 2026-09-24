@@ -371,7 +371,7 @@ function RootComponent() {
       <TtsProvider>
         <Outlet />
         <GlobalAuthPreferencesWatcher />
-        <AdBannerWidget />
+        {/* <AdBannerWidget /> - Hidden temporarily */}
         <ApiKeyModal />
         <Analytics />
         <SpeedInsights />
