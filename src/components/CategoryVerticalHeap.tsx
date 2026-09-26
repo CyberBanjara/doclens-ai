@@ -1,5 +1,5 @@
 import { useMemo } from "react";
-import { Search, X, Layers, ChevronRight } from "lucide-react";
+import { Search, X, Layers, ChevronRight, Download, Check } from "lucide-react";
 import {
   SUBJECT_CATEGORIES,
   getSubjectCategoryMeta,
@@ -22,6 +22,10 @@ interface CategoryVerticalHeapProps {
   currentEducationLevel: EducationLevel;
   onOpenEducationModal: () => void;
   syncEnabled?: boolean;
+  categoryDownloadedStats?: Record<string, { total: number; downloaded: number }>;
+  onBatchDownloadSubject?: (category: SubjectCategory) => void;
+  downloadingSubject?: string | null;
+  batchProgress?: { current: number; total: number } | null;
 }
 
 export function CategoryVerticalHeap({
@@ -32,6 +36,10 @@ export function CategoryVerticalHeap({
   onSearchChange,
   currentEducationLevel,
   onOpenEducationModal,
+  categoryDownloadedStats,
+  onBatchDownloadSubject,
+  downloadingSubject,
+  batchProgress,
 }: CategoryVerticalHeapProps) {
   const currentLevelMeta = useMemo(() => {
     return getEducationLevelMeta(currentEducationLevel);
@@ -116,12 +124,23 @@ export function CategoryVerticalHeap({
           visibleCategories.map((cat) => {
             const count = categoryStats[cat.id]?.count || 0;
             const isActive = activeCategory === cat.id;
+            const stats = categoryDownloadedStats?.[cat.id] || { total: count, downloaded: 0 };
+            const isAllDownloaded = count > 0 && stats.downloaded >= count;
+            const isDownloading = downloadingSubject === cat.id;
 
             return (
-              <button
+              <div
                 key={cat.id}
+                role="button"
+                tabIndex={0}
                 onClick={() => onSelectCategory(cat.id)}
-                className={`group relative flex w-full items-center justify-between rounded-2xl p-3 text-left transition-all duration-300 cursor-pointer ${
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" || e.key === " ") {
+                    e.preventDefault();
+                    onSelectCategory(cat.id);
+                  }
+                }}
+                className={`group relative flex w-full items-center justify-between rounded-2xl p-3 text-left transition-all duration-300 cursor-pointer select-none outline-none ${
                   isActive
                     ? "border border-primary/40 bg-surface-2/80 shadow-md shadow-primary/5 text-foreground ring-1 ring-primary/20 translate-x-1"
                     : "border border-border/60 bg-surface/40 text-muted-foreground hover:border-border hover:bg-surface-2/40 hover:text-foreground hover:translate-x-1"
@@ -132,7 +151,7 @@ export function CategoryVerticalHeap({
                   <div className="absolute left-0 top-3 bottom-3 w-1 rounded-r-full bg-primary shadow-sm" />
                 )}
 
-                <div className="flex items-center gap-3 min-w-0 pl-1">
+                <div className="flex items-center gap-3 min-w-0 pl-1 flex-1">
                   <div
                     className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-xl text-base shadow-inner border ${cat.borderAccent} bg-gradient-to-br ${cat.gradient}`}
                   >
@@ -148,23 +167,79 @@ export function CategoryVerticalHeap({
                     >
                       {cat.label}
                     </span>
-                    <span className="text-[10px] text-muted-foreground">
-                      {count === 1 ? "1 chapter" : `${count} chapters`}
+                    <span className="text-[10px] text-muted-foreground block truncate">
+                      {isDownloading
+                        ? `Downloading (${batchProgress?.current || 0}/${batchProgress?.total || count})...`
+                        : isAllDownloaded
+                          ? `${count === 1 ? "1 chapter" : `${count} chapters`} • In Library`
+                          : stats.downloaded > 0
+                            ? `${count} chapters (${stats.downloaded} saved)`
+                            : count === 1
+                              ? "1 chapter"
+                              : `${count} chapters`}
                     </span>
                   </div>
                 </div>
 
-                {/* Count Badge */}
-                <span
-                  className={`ml-2 shrink-0 rounded-full border px-2 py-0.5 text-[10px] font-mono font-semibold transition-colors ${
-                    isActive
-                      ? cat.badgeBg
-                      : "border-border/60 bg-surface/60 text-muted-foreground group-hover:border-border group-hover:text-foreground"
-                  }`}
-                >
-                  {count}
-                </span>
-              </button>
+                {/* Right Side: Batch Download Action & Count Badge */}
+                <div className="flex items-center gap-1.5 shrink-0 pl-2">
+                  {onBatchDownloadSubject && count > 0 && (
+                    <button
+                      type="button"
+                      disabled={Boolean(downloadingSubject)}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        onBatchDownloadSubject(cat.id);
+                      }}
+                      className={`relative flex items-center justify-center h-6 px-2 rounded-lg text-[10px] font-bold transition-all cursor-pointer ${
+                        isDownloading
+                          ? "bg-primary/20 text-primary border border-primary/40"
+                          : isAllDownloaded
+                            ? "bg-emerald-500/15 text-emerald-400 border border-emerald-500/30 hover:bg-emerald-500/25"
+                            : "bg-surface-2 border border-border/80 text-muted-foreground hover:bg-primary hover:text-primary-foreground hover:border-primary active:scale-95 shadow-xs"
+                      }`}
+                      title={
+                        isDownloading
+                          ? `Downloading chapters (${batchProgress?.current || 0}/${batchProgress?.total || count})...`
+                          : isAllDownloaded
+                            ? `All ${count} chapters downloaded in Local Library`
+                            : `Download all ${count} chapters to Local Library`
+                      }
+                      aria-label={`Download all ${count} chapters of ${cat.label} to Local Library`}
+                    >
+                      {isDownloading ? (
+                        <span className="flex items-center gap-1">
+                          <span className="h-3 w-3 animate-spin rounded-full border-2 border-current border-t-transparent" />
+                          <span className="font-mono text-[9px]">
+                            {batchProgress ? `${batchProgress.current}/${batchProgress.total}` : ""}
+                          </span>
+                        </span>
+                      ) : isAllDownloaded ? (
+                        <span className="flex items-center gap-1">
+                          <Check className="h-3 w-3 text-emerald-400 stroke-[2.5]" />
+                          <span className="text-[9px] font-medium hidden sm:inline">Saved</span>
+                        </span>
+                      ) : (
+                        <span className="flex items-center gap-1">
+                          <Download className="h-3 w-3" />
+                          <span className="text-[9px] font-medium hidden sm:inline">Get All</span>
+                        </span>
+                      )}
+                    </button>
+                  )}
+
+                  {/* Count Badge */}
+                  <span
+                    className={`shrink-0 rounded-full border px-2 py-0.5 text-[10px] font-mono font-semibold transition-colors ${
+                      isActive
+                        ? cat.badgeBg
+                        : "border-border/60 bg-surface/60 text-muted-foreground group-hover:border-border group-hover:text-foreground"
+                    }`}
+                  >
+                    {count}
+                  </span>
+                </div>
+              </div>
             );
           })
         )}
@@ -172,3 +247,4 @@ export function CategoryVerticalHeap({
     </aside>
   );
 }
+

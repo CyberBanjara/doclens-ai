@@ -690,11 +690,17 @@ function DocPage() {
 
   if (!doc) {
     return (
-      <div className="flex min-h-screen flex-col items-center justify-center bg-background text-foreground">
+      <div className="flex min-h-screen flex-col items-center justify-center bg-background text-foreground gap-4">
         <div className="flex items-center gap-3 text-sm text-muted-foreground">
           <span className="inline-block h-4 w-4 rounded-full border-2 border-primary border-t-transparent spin-slow" />
           Loading document…
         </div>
+        <Link
+          to="/library"
+          className="inline-flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground transition-colors py-2 px-3 rounded-lg border border-border/60 bg-surface/50"
+        >
+          ← Back to Library
+        </Link>
       </div>
     );
   }

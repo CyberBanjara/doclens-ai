@@ -12,6 +12,8 @@ import {
   Upload,
   GraduationCap,
   ChevronDown,
+  Download,
+  Check,
 } from "lucide-react";
 import { SidebarLayout } from "@/components/SidebarLayout";
 import { deleteFromR2, getR2DownloadUrl } from "@/lib/r2";
@@ -399,42 +401,70 @@ function GlobalLibraryPage() {
     [localDocs],
   );
 
+  // Statistics of how many chapters are downloaded per category for the current tier
+  const categoryDownloadedStats = useMemo(() => {
+    const stats: Record<string, { total: number; downloaded: number }> = {};
+    for (const cat of SUBJECT_CATEGORIES) {
+      const subjectFiles = filterBooks(classifiedFiles, educationLevel, cat.id, "");
+      const total = subjectFiles.length;
+      let downloaded = 0;
+      for (const f of subjectFiles) {
+        if (findLocalDoc(f)) {
+          downloaded += 1;
+        }
+      }
+      stats[cat.id] = { total, downloaded };
+    }
+    return stats;
+  }, [classifiedFiles, educationLevel, findLocalDoc]);
+
+  // Core helper to download and save an R2 book to Local Library in IndexedDB
+  const saveR2BookToLocal = async (file: ClassifiedBook | R2File) => {
+    let pdfUrl = file.url;
+    if (!pdfUrl) {
+      const res = await getR2DownloadUrl({ data: { key: file.key } });
+      pdfUrl = res.url;
+    }
+
+    const response = await fetch(pdfUrl);
+    if (!response.ok) {
+      throw new Error(
+        `Failed to download PDF from storage (${response.status} ${response.statusText})`,
+      );
+    }
+
+    const blob = await response.blob();
+    const cleanName = file.key.split("/").pop() || file.key;
+    const docFile = new File([blob], cleanName, { type: blob.type || "application/pdf" });
+
+    const docRec = await createDoc(docFile, blob, file.key);
+
+    // Copy cached thumbnail to local doc if already available
+    try {
+      const { getThumbnail, saveThumbnailBlob } = await import("@/lib/storage");
+      const r2Thumb = await getThumbnail(`r2_thumb_${file.key}`);
+      if (r2Thumb && r2Thumb.startsWith("blob:")) {
+        const thumbBlob = await fetch(r2Thumb).then((r) => r.blob());
+        await saveThumbnailBlob(docRec.id, thumbBlob);
+      }
+    } catch {}
+
+    return docRec;
+  };
+
+  // Single file import handler (imports and opens the document)
   const handleImport = async (file: R2File) => {
     if (importingKey) return;
     setImportingKey(file.key);
     const toastId = toast.loading(`Downloading "${file.key}"...`);
     try {
-      let pdfUrl = file.url;
-      if (!pdfUrl) {
-        const res = await getR2DownloadUrl({ data: { key: file.key } });
-        pdfUrl = res.url;
-      }
+      const docRec = await saveR2BookToLocal(file);
 
-      const response = await fetch(pdfUrl);
-      if (!response.ok) {
-        throw new Error(
-          `Failed to download PDF from storage (${response.status} ${response.statusText})`,
-        );
-      }
-      toast.loading("Saving to local Library...", { id: toastId });
+      const freshDocs = await listDocs().catch(() => []);
+      setLocalDocs(freshDocs);
+      window.dispatchEvent(new CustomEvent("doclens:library-changed"));
 
-      const blob = await response.blob();
-      const cleanName = file.key.split("/").pop() || file.key;
-      const docFile = new File([blob], cleanName, { type: blob.type || "application/pdf" });
-
-      const docRec = await createDoc(docFile, blob, file.key);
-
-      // Copy cached thumbnail to local doc if already available
-      try {
-        const { getThumbnail, saveThumbnailBlob } = await import("@/lib/storage");
-        const r2Thumb = await getThumbnail(`r2_thumb_${file.key}`);
-        if (r2Thumb && r2Thumb.startsWith("blob:")) {
-          const thumbBlob = await fetch(r2Thumb).then((r) => r.blob());
-          await saveThumbnailBlob(docRec.id, thumbBlob);
-        }
-      } catch {}
-
-      toast.success(`Successfully imported "${cleanName}" to your local library!`, { id: toastId });
+      toast.success(`Successfully imported "${file.key.split("/").pop() || file.key}" to your local library!`, { id: toastId });
 
       navigate({ to: "/doc/$id", params: { id: docRec.id } });
     } catch (e: any) {
@@ -442,6 +472,86 @@ function GlobalLibraryPage() {
       toast.error(e?.message || `Failed to import "${file.key}".`, { id: toastId });
     } finally {
       setImportingKey(null);
+    }
+  };
+
+  // Batch download state & handler for an entire subject without opening any PDF
+  const [downloadingSubject, setDownloadingSubject] = useState<string | null>(null);
+  const [batchProgress, setBatchProgress] = useState<{ current: number; total: number } | null>(
+    null,
+  );
+
+  const handleBatchDownloadSubject = async (subjectKey: SubjectCategory | string) => {
+    if (downloadingSubject) return;
+
+    // Find all chapters belonging to this class & subject
+    const subjectFiles = filterBooks(classifiedFiles, educationLevel, subjectKey, "");
+    if (subjectFiles.length === 0) {
+      toast.info("No chapters found in this subject.");
+      return;
+    }
+
+    // Filter to chapters not yet in local library
+    const toDownload = subjectFiles.filter((f) => !findLocalDoc(f));
+    const subjectMeta = getSubjectCategoryMeta(subjectKey);
+
+    if (toDownload.length === 0) {
+      toast.success(
+        `All ${subjectFiles.length} chapters of ${subjectMeta.label} are already in your Local Library!`,
+      );
+      return;
+    }
+
+    setDownloadingSubject(subjectKey);
+    setBatchProgress({ current: 0, total: toDownload.length });
+    const toastId = toast.loading(
+      `Downloading ${toDownload.length} chapters for ${subjectMeta.label} (${currentLevelMeta.label})...`,
+    );
+
+    let successCount = 0;
+    try {
+      for (let i = 0; i < toDownload.length; i++) {
+        const file = toDownload[i];
+        setBatchProgress({ current: i + 1, total: toDownload.length });
+        toast.loading(
+          `Downloading (${i + 1}/${toDownload.length}): ${file.displayName || file.key.split("/").pop()}...`,
+          { id: toastId },
+        );
+
+        try {
+          await saveR2BookToLocal(file);
+          successCount++;
+          // Periodically update local docs so UI immediately reflects "In Library"
+          const freshDocs = await listDocs().catch(() => []);
+          setLocalDocs(freshDocs);
+        } catch (err: any) {
+          console.warn(`Failed batch downloading ${file.key}:`, err);
+        }
+      }
+
+      window.dispatchEvent(new CustomEvent("doclens:library-changed"));
+      const freshDocs = await listDocs().catch(() => []);
+      setLocalDocs(freshDocs);
+
+      if (successCount === toDownload.length) {
+        toast.success(
+          `Successfully saved all ${successCount} ${subjectMeta.label} chapters to your Local Library!`,
+          { id: toastId },
+        );
+      } else if (successCount > 0) {
+        toast.success(
+          `Downloaded ${successCount} of ${toDownload.length} chapters to Local Library.`,
+          { id: toastId },
+        );
+      } else {
+        toast.error(`Failed to batch download chapters for ${subjectMeta.label}.`, { id: toastId });
+      }
+    } catch (e: any) {
+      console.error(e);
+      toast.error(e?.message || `Failed to download ${subjectMeta.label} chapters.`, { id: toastId });
+    } finally {
+      setDownloadingSubject(null);
+      setBatchProgress(null);
     }
   };
 
@@ -745,10 +855,65 @@ function GlobalLibraryPage() {
                 currentEducationLevel={educationLevel}
                 onOpenEducationModal={() => setEducationModalOpen(true)}
                 syncEnabled={syncEnabled}
+                categoryDownloadedStats={categoryDownloadedStats}
+                onBatchDownloadSubject={handleBatchDownloadSubject}
+                downloadingSubject={downloadingSubject}
+                batchProgress={batchProgress}
               />
 
               {/* Right Column: Library Books Container */}
               <main className="flex-1 min-w-0 w-full space-y-4">
+                {/* ──── Desktop Header Bar (Active Subject + Batch Download Action) ──── */}
+                <div className="hidden lg:flex items-center justify-between pb-1 border-b border-border/40">
+                  <div className="flex items-center gap-2.5">
+                    <span className="text-xl">{activeCategoryMeta.icon}</span>
+                    <div>
+                      <h3 className="text-sm font-bold uppercase tracking-wider text-foreground">
+                        {activeCategoryMeta.label}
+                      </h3>
+                      <p className="text-[11px] text-muted-foreground">
+                        {filteredFiles.length} {filteredFiles.length === 1 ? "chapter" : "chapters"} available •{" "}
+                        {categoryDownloadedStats[activeCategory]?.downloaded || 0} of {filteredFiles.length} in Local Library
+                      </p>
+                    </div>
+                  </div>
+
+                  {filteredFiles.length > 0 && (
+                    <button
+                      type="button"
+                      disabled={Boolean(downloadingSubject)}
+                      onClick={() => handleBatchDownloadSubject(activeCategory)}
+                      className={`inline-flex items-center gap-1.5 rounded-xl px-3.5 py-1.5 text-xs font-bold transition-all shadow-sm cursor-pointer ${
+                        downloadingSubject === activeCategory
+                          ? "bg-primary/20 text-primary border border-primary/40"
+                          : (categoryDownloadedStats[activeCategory]?.downloaded || 0) >= filteredFiles.length
+                            ? "bg-emerald-500/15 border border-emerald-500/30 text-emerald-400 hover:bg-emerald-500/25"
+                            : "bg-primary text-primary-foreground hover:opacity-95 active:scale-95 shadow-primary/20"
+                      }`}
+                      title={`Download all ${filteredFiles.length} chapters of ${activeCategoryMeta.label} to Local Library`}
+                    >
+                      {downloadingSubject === activeCategory ? (
+                        <>
+                          <span className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-current border-t-transparent" />
+                          <span>
+                            Downloading ({batchProgress?.current || 0}/{batchProgress?.total || filteredFiles.length})…
+                          </span>
+                        </>
+                      ) : (categoryDownloadedStats[activeCategory]?.downloaded || 0) >= filteredFiles.length ? (
+                        <>
+                          <Check className="h-3.5 w-3.5 text-emerald-400 stroke-[2.5]" />
+                          <span>All in Local Library</span>
+                        </>
+                      ) : (
+                        <>
+                          <Download className="h-3.5 w-3.5" />
+                          <span>Download All ({filteredFiles.length})</span>
+                        </>
+                      )}
+                    </button>
+                  )}
+                </div>
+
                 {/* ──── Mobile View Header (Education Switcher + Search + 4 Category Pills) ──── */}
                 <div className="lg:hidden space-y-3">
                   {/* Mobile Education Level Card */}
@@ -805,17 +970,49 @@ function GlobalLibraryPage() {
                     }))}
                   />
 
-                  {/* Section Title & Count Indicator */}
+                  {/* Section Title & Count Indicator + Mobile Download All */}
                   <div className="flex items-center justify-between px-0.5 pt-1">
                     <div className="flex items-center gap-1.5">
                       <span className="text-sm">{activeCategoryMeta.icon}</span>
                       <h3 className="text-xs font-bold uppercase tracking-wider text-foreground">
                         {activeCategoryMeta.label}
                       </h3>
+                      <span className="text-[10px] font-mono font-bold text-muted-foreground bg-surface-2/80 border border-border/50 rounded-full px-2 py-0.5 ml-1">
+                        {filteredFiles.length} {filteredFiles.length === 1 ? "chapter" : "chapters"}
+                      </span>
                     </div>
-                    <span className="text-[10px] font-mono font-bold text-muted-foreground bg-surface-2/80 border border-border/50 rounded-full px-2 py-0.5">
-                      {filteredFiles.length} {filteredFiles.length === 1 ? "chapter" : "chapters"}
-                    </span>
+
+                    {filteredFiles.length > 0 && (
+                      <button
+                        type="button"
+                        disabled={Boolean(downloadingSubject)}
+                        onClick={() => handleBatchDownloadSubject(activeCategory)}
+                        className={`inline-flex items-center gap-1 rounded-xl px-2.5 py-1 text-[11px] font-bold transition-all shadow-xs cursor-pointer ${
+                          downloadingSubject === activeCategory
+                            ? "bg-primary/20 text-primary border border-primary/40"
+                            : (categoryDownloadedStats[activeCategory]?.downloaded || 0) >= filteredFiles.length
+                              ? "bg-emerald-500/15 border border-emerald-500/30 text-emerald-400"
+                              : "bg-primary text-primary-foreground hover:opacity-95 active:scale-95 shadow-primary/20"
+                        }`}
+                      >
+                        {downloadingSubject === activeCategory ? (
+                          <>
+                            <span className="h-3 w-3 animate-spin rounded-full border-2 border-current border-t-transparent" />
+                            <span>{batchProgress ? `${batchProgress.current}/${batchProgress.total}` : "Downloading…"}</span>
+                          </>
+                        ) : (categoryDownloadedStats[activeCategory]?.downloaded || 0) >= filteredFiles.length ? (
+                          <>
+                            <Check className="h-3 w-3 text-emerald-400 stroke-[2.5]" />
+                            <span>In Library</span>
+                          </>
+                        ) : (
+                          <>
+                            <Download className="h-3 w-3" />
+                            <span>Get All</span>
+                          </>
+                        )}
+                      </button>
+                    )}
                   </div>
                 </div>
 
