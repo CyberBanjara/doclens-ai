@@ -158,17 +158,7 @@ export function FullBookTranslationModal({
           )}
 
           {/* Controls during translation */}
-          <div className="flex items-center justify-between pt-2 border-t border-border">
-            <label className="flex items-center gap-2 text-xs text-muted-foreground cursor-pointer select-none">
-              <input
-                type="checkbox"
-                checked={state.autoFollow}
-                onChange={(e) => state.setAutoFollow(e.target.checked)}
-                className="h-3.5 w-3.5 rounded accent-primary bg-surface-2 border-border"
-              />
-              <span>Follow in reader</span>
-            </label>
-
+          <div className="flex items-center justify-end pt-2 border-t border-border">
             <div className="flex items-center gap-2">
               {state.isPaused ? (
                 <button

@@ -28,88 +28,83 @@ test("Language Switch & Storage Reconciliation Test Suite", async (t) => {
   });
 
   await t.test(
-    "2. Reconciliation Logic Simulation: Keep/Fetch remote translations, purge missing",
+    "2. Non-Destructive Union Sync: Combine local and Supabase translations without purging",
     () => {
-      // Simulate a local document with 3 pages translated in Hindi
+      // Local has pages 2 and 3 translated
       const localPages = [
         {
           pageNumber: 1,
-          text: "Chapter 1 English text",
-          pageAi: {
-            pageNumber: 1,
-            status: "done",
-            result: "अध्याय 1 हिंदी अनुवाद",
-            contextDelta: "हिंदी संदर्भ",
-          },
+          text: "Chapter 1 text",
+          pageAi: undefined,
         },
         {
           pageNumber: 2,
-          text: "Chapter 2 English text",
+          text: "Chapter 2 text",
           pageAi: {
             pageNumber: 2,
             status: "done",
-            result: "अध्याय 2 हिंदी अनुवाद",
-            contextDelta: "हिंदी संदर्भ 2",
+            result: "अध्याय 2 स्थानीय अनुवाद",
+            contextDelta: "संदर्भ 2",
           },
         },
         {
           pageNumber: 3,
-          text: "Chapter 3 English text",
+          text: "Chapter 3 text",
           pageAi: {
             pageNumber: 3,
             status: "done",
-            result: "अध्याय 3 हिंदी अनुवाद",
-            contextDelta: "हिंदी संदर्भ 3",
+            result: "अध्याय 3 स्थानीय अनुवाद",
+            contextDelta: "संदर्भ 3",
           },
         },
       ];
 
-      // User switches to Bangla.
-      // Supabase has translation ONLY for page 1 in Bangla:
-      const supabaseBanglaPages = [{ pageNumber: 1, content: "অধ্যায় ১ বাংলা অনুবাদ" }];
+      // Supabase has translation ONLY for page 1
+      const supabasePages = [{ pageNumber: 1, content: "अध्याय 1 क्लाउड अनुवाद" }];
+      const remoteMap = new Map(supabasePages.map((p) => [p.pageNumber, p.content]));
 
-      const remoteMap = new Map(supabaseBanglaPages.map((p) => [p.pageNumber, p.content]));
-
-      // Execute reconciliation algorithm
+      // Execute non-destructive union algorithm
       const reconciledPages = localPages.map((lp) => {
         const remoteTranslation = remoteMap.get(lp.pageNumber);
+        const hasLocalResult = !!(lp.pageAi?.status === "done" && lp.pageAi?.result?.trim());
+
         if (remoteTranslation) {
-          return {
-            ...lp,
-            pageAi: {
-              pageNumber: lp.pageNumber,
-              status: "done",
-              result: remoteTranslation,
-              updatedAt: Date.now(),
-            },
-          };
-        } else {
-          // Purge old Hindi translation -> blank state
-          return {
-            ...lp,
-            pageAi: undefined,
-          };
+          if (!hasLocalResult) {
+            return {
+              ...lp,
+              pageAi: {
+                pageNumber: lp.pageNumber,
+                status: "done",
+                result: remoteTranslation,
+                updatedAt: Date.now(),
+              },
+            };
+          }
         }
+        // Preserve existing local translation!
+        return lp;
       });
 
-      // Page 1 should have Bangla translation
+      // Page 1 should have Supabase translation
       assert.ok(reconciledPages[0].pageAi);
       assert.equal(reconciledPages[0].pageAi.status, "done");
-      assert.equal(reconciledPages[0].pageAi.result, "অধ্যায় ১ বাংলা অনুবাদ");
+      assert.equal(reconciledPages[0].pageAi.result, "अध्याय 1 क्लाउड अनुवाद");
 
-      // Page 2 & 3 must be completely reset to blank state (no Hindi leftovers)
-      assert.equal(reconciledPages[1].pageAi, undefined);
-      assert.equal(reconciledPages[2].pageAi, undefined);
+      // Page 2 & 3 must remain intact in local storage (never purged!)
+      assert.ok(reconciledPages[1].pageAi);
+      assert.equal(reconciledPages[1].pageAi.result, "अध्याय 2 स्थानीय अनुवाद");
+      assert.ok(reconciledPages[2].pageAi);
+      assert.equal(reconciledPages[2].pageAi.result, "अध्याय 3 स्थानीय अनुवाद");
 
       const aiDoneCount = reconciledPages.filter((p) => p.pageAi?.status === "done").length;
-      assert.equal(aiDoneCount, 1);
+      assert.equal(aiDoneCount, 3); // Union of all 3 pages
     },
   );
 
   await t.test(
-    "3. Reconciliation with Zero remote translations -> Entire doc reset to blank state",
+    "3. Sync with Zero remote translations -> Local translations preserved intact",
     () => {
-      // Simulate a document with Hindi translations
+      // Simulate a document with local translations
       const localPages = [
         {
           pageNumber: 1,
@@ -121,30 +116,30 @@ test("Language Switch & Storage Reconciliation Test Suite", async (t) => {
         },
       ];
 
-      // User switches to Telugu. Supabase has NO translations for Telugu yet.
-      const supabaseTeluguPages = [];
-      const remoteMap = new Map(supabaseTeluguPages.map((p) => [p.pageNumber, p.content]));
+      // Supabase has NO translations yet
+      const supabasePages = [];
+      const remoteMap = new Map(supabasePages.map((p) => [p.pageNumber, p.content]));
 
       const reconciledPages = localPages.map((lp) => {
         const remoteTranslation = remoteMap.get(lp.pageNumber);
-        if (remoteTranslation) {
+        const hasLocalResult = !!(lp.pageAi?.status === "done" && lp.pageAi?.result?.trim());
+        if (remoteTranslation && !hasLocalResult) {
           return {
             ...lp,
             pageAi: { pageNumber: lp.pageNumber, status: "done", result: remoteTranslation },
           };
         }
-        return {
-          ...lp,
-          pageAi: undefined,
-        };
+        return lp;
       });
 
-      // All pages must be in blank/idle state
-      assert.equal(reconciledPages[0].pageAi, undefined);
-      assert.equal(reconciledPages[1].pageAi, undefined);
+      // All local pages must remain intact
+      assert.ok(reconciledPages[0].pageAi);
+      assert.equal(reconciledPages[0].pageAi.result, "हिंदी 1");
+      assert.ok(reconciledPages[1].pageAi);
+      assert.equal(reconciledPages[1].pageAi.result, "हिंदी 2");
 
       const aiDoneCount = reconciledPages.filter((p) => p.pageAi?.status === "done").length;
-      assert.equal(aiDoneCount, 0);
+      assert.equal(aiDoneCount, 2);
     },
   );
 

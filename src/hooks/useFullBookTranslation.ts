@@ -1,6 +1,6 @@
 import { useCallback, useRef, useState, useEffect } from "react";
 import { toast } from "sonner";
-import { executePageTranslation } from "@/lib/pageTranslationRunner";
+import { executePageTranslation, cancelPageTranslation } from "@/lib/pageTranslationRunner";
 import { getPageData, type PageAiSummaryEntry } from "@/lib/storage";
 import { summarize } from "@/lib/pageAi";
 
@@ -20,12 +20,10 @@ export function useFullBookTranslation({
   docId,
   pageCount,
   onPageAiChange,
-  onPageChange,
 }: {
   docId: string;
   pageCount: number;
   onPageAiChange?: (pageNumber: number, entry: PageAiSummaryEntry | null) => void;
-  onPageChange?: (pageNumber: number) => void;
 }) {
   const [isTranslating, setIsTranslating] = useState(false);
   const [isPaused, setIsPaused] = useState(false);
@@ -39,16 +37,19 @@ export function useFullBookTranslation({
 
   const isTranslatingRef = useRef(false);
   const isPausedRef = useRef(false);
-  const abortControllerRef = useRef<AbortController | null>(null);
+  const activeAbortControllerRef = useRef<AbortController | null>(null);
+  const activePageRef = useRef<number | null>(null);
+  const isMountedRef = useRef(true);
   const autoFollowRef = useRef(true);
   autoFollowRef.current = autoFollow;
 
-  // Clean up if unmounted during translation
+  // On unmount: stop queueing NEXT pages, but let the CURRENT actively running page finish and save in background!
   useEffect(() => {
+    isMountedRef.current = true;
     return () => {
-      if (abortControllerRef.current) {
-        abortControllerRef.current.abort();
-      }
+      isMountedRef.current = false;
+      isTranslatingRef.current = false;
+      // Do NOT abort activeAbortControllerRef on unmount; allow the in-flight page to complete and save.
     };
   }, []);
 
@@ -66,18 +67,23 @@ export function useFullBookTranslation({
     toast.info("Resuming full book translation...");
   }, []);
 
+  /** Explicitly stop / cancel full book translation by user action */
   const cancel = useCallback(() => {
     if (!isTranslatingRef.current) return;
     isTranslatingRef.current = false;
     isPausedRef.current = false;
     setIsTranslating(false);
     setIsPaused(false);
-    if (abortControllerRef.current) {
-      abortControllerRef.current.abort();
-      abortControllerRef.current = null;
+
+    if (activePageRef.current !== null) {
+      cancelPageTranslation(docId, activePageRef.current);
+    }
+    if (activeAbortControllerRef.current) {
+      activeAbortControllerRef.current.abort();
+      activeAbortControllerRef.current = null;
     }
     toast.warning("Full book translation stopped.");
-  }, []);
+  }, [docId]);
 
   const start = useCallback(
     async (options?: { overwriteExisting?: boolean; startPage?: number }) => {
@@ -123,38 +129,40 @@ export function useFullBookTranslation({
       );
 
       for (let i = 0; i < pagesToProcess.length; i++) {
-        if (!isTranslatingRef.current) break;
+        if (!isTranslatingRef.current || !isMountedRef.current) break;
 
         // Handle pause loop
         while (isPausedRef.current) {
-          if (!isTranslatingRef.current) break;
+          if (!isTranslatingRef.current || !isMountedRef.current) break;
           await new Promise((res) => setTimeout(res, 400));
         }
-        if (!isTranslatingRef.current) break;
+        if (!isTranslatingRef.current || !isMountedRef.current) break;
 
         const pNum = pagesToProcess[i];
-        setCurrentPage(pNum);
-
-        if (autoFollowRef.current && onPageChange) {
-          onPageChange(pNum);
+        activePageRef.current = pNum;
+        if (isMountedRef.current) {
+          setCurrentPage(pNum);
         }
 
         const pageStartTime = Date.now();
         const ctrl = new AbortController();
-        abortControllerRef.current = ctrl;
+        activeAbortControllerRef.current = ctrl;
 
-        toast.loading(`Translating Page ${pNum} (${done + 1}/${pagesToProcess.length})...`, {
-          id: toastId,
-        });
+        if (isMountedRef.current) {
+          toast.loading(`Translating Page ${pNum} (${done + 1}/${pagesToProcess.length})...`, {
+            id: toastId,
+          });
+        }
 
         try {
           const res = await executePageTranslation({
             docId,
             pageNumber: pNum,
-            signal: ctrl.signal,
             forceRegenerate: overwriteExisting,
             onDelta: (chunk) => {
-              setCurrentStreamingSnippet((prev) => (prev + chunk).slice(-150));
+              if (isMountedRef.current) {
+                setCurrentStreamingSnippet((prev) => (prev + chunk).slice(-150));
+              }
             },
           });
 
@@ -164,10 +172,14 @@ export function useFullBookTranslation({
             }
             console.warn(`[FullBook] Page ${pNum} translation failed:`, res.error);
             failed.push(pNum);
-            setFailedPages([...failed]);
+            if (isMountedRef.current) {
+              setFailedPages([...failed]);
+            }
           } else {
             done++;
-            setCompletedCount(done);
+            if (isMountedRef.current) {
+              setCompletedCount(done);
+            }
 
             // Update workstation summary
             const updatedRec = await getPageData(docId, pNum);
@@ -180,7 +192,9 @@ export function useFullBookTranslation({
             pageDurations.push(durationSec);
             const avgDuration = pageDurations.reduce((a, b) => a + b, 0) / pageDurations.length;
             const remainingPages = pagesToProcess.length - (i + 1);
-            setEstimatedSecondsRemaining(Math.round(remainingPages * avgDuration));
+            if (isMountedRef.current) {
+              setEstimatedSecondsRemaining(Math.round(remainingPages * avgDuration));
+            }
           }
         } catch (err) {
           if (ctrl.signal.aborted) {
@@ -188,38 +202,37 @@ export function useFullBookTranslation({
           }
           console.error(`[FullBook] Error on page ${pNum}:`, err);
           failed.push(pNum);
-          setFailedPages([...failed]);
+          if (isMountedRef.current) {
+            setFailedPages([...failed]);
+          }
         } finally {
-          abortControllerRef.current = null;
+          activeAbortControllerRef.current = null;
+          activePageRef.current = null;
         }
       }
 
       const wasCancelled = !isTranslatingRef.current;
       isTranslatingRef.current = false;
       isPausedRef.current = false;
-      setIsTranslating(false);
-      setIsPaused(false);
-      setCurrentPage(null);
-      setCurrentStreamingSnippet("");
-      setEstimatedSecondsRemaining(null);
 
-      if (wasCancelled) {
-        toast.info(`Full book translation stopped. ${done} pages translated.`, {
-          id: toastId,
-        });
-      } else if (failed.length === 0) {
-        toast.success(
-          `🎉 Full book translation complete! All ${done} pages translated successfully.`,
-          { id: toastId, duration: 6000 },
-        );
-      } else {
-        toast.warning(
-          `Finished with ${done} pages translated. ${failed.length} page(s) encountered issues.`,
-          { id: toastId, duration: 6000 },
-        );
+      if (isMountedRef.current) {
+        setIsTranslating(false);
+        setIsPaused(false);
+        setCurrentPage(null);
+        setEstimatedSecondsRemaining(null);
+
+        if (wasCancelled) {
+          toast.info(`Full book translation stopped. ${done} pages were translated.`);
+        } else if (failed.length === 0) {
+          toast.success(`Full book translation completed! All ${done} pages translated.`);
+        } else {
+          toast.warning(
+            `Translation completed with ${failed.length} failed page(s): ${failed.join(", ")}`,
+          );
+        }
       }
     },
-    [docId, pageCount, onPageAiChange, onPageChange],
+    [docId, pageCount, onPageAiChange],
   );
 
   return {
@@ -231,11 +244,11 @@ export function useFullBookTranslation({
     failedPages,
     currentStreamingSnippet,
     autoFollow,
-    setAutoFollow,
     estimatedSecondsRemaining,
     start,
     pause,
     resume,
     cancel,
+    setAutoFollow,
   };
 }

@@ -157,7 +157,6 @@ function DocPage() {
     docId: id,
     pageCount,
     onPageAiChange: handlePageAiChange,
-    onPageChange: setActivePage,
   });
 
   const goToLastTranslatedPage = useCallback(() => {
@@ -236,7 +235,7 @@ function DocPage() {
     if (doc && chosenLang) {
       const toastId = toast.loading(`Checking ${chosenLang} translations...`);
       try {
-        await syncFromSupabase(id, doc.fileName, chosenLang, true);
+        await syncFromSupabase(id, doc.fileName, chosenLang, false);
         const sum = await getPageAiSummary(id);
         setAiSummary(sum);
         const freshDoc = await getDoc(id);
@@ -268,7 +267,7 @@ function DocPage() {
           const docRec = await getDoc(id);
           if (!docRec) return;
           await updateDoc(id, { selectedLanguage: newLang });
-          await syncFromSupabase(id, docRec.fileName, newLang, true);
+          await syncFromSupabase(id, docRec.fileName, newLang, false);
           if (!cancelled) {
             const updatedRec = await getDoc(id);
             if (updatedRec) {
@@ -345,7 +344,7 @@ function DocPage() {
               id,
               currentRec.fileName,
               activeLang,
-              languageChanged,
+              false,
             );
             if (updated && !cancelled) {
               const updatedRec = await getDoc(id);

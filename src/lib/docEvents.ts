@@ -18,6 +18,14 @@ export interface DocEventMap {
   "doclens:scroll-to-pdf": { pageNumber: number };
   /** Continuous-play playback finished the current page; advance to the next one. */
   "doclens:tts-next-page": { currentPage: number; source: TtsSource | null };
+  /** Background page translation status changed (running, done, idle, error). */
+  "doclens:page-status-changed": {
+    docId: string;
+    pageNumber: number;
+    status: "idle" | "running" | "done" | "error";
+    result?: string;
+    error?: string;
+  };
 }
 
 export function dispatchDocEvent<K extends keyof DocEventMap>(

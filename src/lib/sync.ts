@@ -56,25 +56,23 @@ export async function purgeDocLanguageTranslations(
 }
 
 /**
- * Synchronizes document translations for the selected language from Supabase.
- * Queries the selected language's dedicated table (e.g. `translations_telugu`, `translations_hindi`)
- * using `book_id + page_number`.
- * For the selected language, only its translations are populated; other pages remain blank.
+ * Synchronizes document translations for the selected language with Supabase.
+ * Non-destructive Union Sync:
+ * - Pulls any remote translations from Supabase and populates missing local pages.
+ * - PRESERVES all existing local translations (never purges or overwrites local translations).
+ * - Automatically pushes any local translations missing in Supabase to Supabase in the background.
  */
 export async function syncFromSupabase(
   docId: string,
   fileName: string,
   targetLanguage?: string,
-  resetMissing = false,
+  _resetMissing = false,
 ): Promise<boolean> {
   const docRec = await getDoc(docId);
   const language = targetLanguage || getOutputLanguage() || docRec?.selectedLanguage || "हिंदी";
   const bookId = docRec?.bookId || fileName || docId;
 
   if (!isGlobalSyncEnabled()) {
-    if (resetMissing) {
-      return await purgeDocLanguageTranslations(docId, language);
-    }
     return false;
   }
 
@@ -87,18 +85,12 @@ export async function syncFromSupabase(
       },
     });
 
-    if (!res || !res.found || !res.pages || res.pages.length === 0) {
-      if (resetMissing) {
-        return await purgeDocLanguageTranslations(docId, language);
-      }
-      return false;
-    }
-
-    const { pages } = res;
     const remoteTranslationsMap = new Map<number, string>();
-    for (const p of pages) {
-      if (p.pageNumber > 0 && p.content?.trim()) {
-        remoteTranslationsMap.set(p.pageNumber, p.content.trim());
+    if (res && res.found && res.pages && res.pages.length > 0) {
+      for (const p of res.pages) {
+        if (p.pageNumber > 0 && p.content?.trim()) {
+          remoteTranslationsMap.set(p.pageNumber, p.content.trim());
+        }
       }
     }
 
@@ -106,41 +98,45 @@ export async function syncFromSupabase(
     const localPagesMap = new Map(localPages.map((p) => [p.pageNumber, p]));
 
     let updatedAny = false;
+    const localPagesToPush: Array<{ pageNumber: number; content: string }> = [];
 
     await withDocLock(docId, async () => {
       const d = await db();
       const PAGES = "pageData";
       const tx = d.transaction(PAGES, "readwrite");
 
-      // Update existing local pages
+      // 1. Process existing local pages
       for (const localPage of localPages) {
-        const translatedContent = remoteTranslationsMap.get(localPage.pageNumber);
-        if (translatedContent) {
-          if (
-            localPage.pageAi?.result !== translatedContent ||
-            localPage.pageAi?.status !== "done"
-          ) {
+        const remoteContent = remoteTranslationsMap.get(localPage.pageNumber);
+        const hasLocalResult = !!(
+          localPage.pageAi?.status === "done" && localPage.pageAi?.result?.trim()
+        );
+
+        if (remoteContent) {
+          // If remote has content and local does not have it, fill it into local IDB
+          if (!hasLocalResult) {
             updatedAny = true;
             await tx.store.put({
               ...localPage,
               pageAi: {
                 pageNumber: localPage.pageNumber,
                 status: "done" as const,
-                result: translatedContent,
+                result: remoteContent,
                 updatedAt: Date.now(),
               },
             });
           }
-        } else if (resetMissing && localPage.pageAi !== undefined) {
-          // If switching language, reset local translation for pages without translation in this language
-          updatedAny = true;
-          const cleanPage = { ...localPage };
-          delete cleanPage.pageAi;
-          await tx.store.put(cleanPage);
+        } else if (hasLocalResult) {
+          // Local has translation, but Supabase doesn't have it yet!
+          // NEVER purge! Keep it intact locally and queue for background push to Supabase
+          localPagesToPush.push({
+            pageNumber: localPage.pageNumber,
+            content: localPage.pageAi!.result!.trim(),
+          });
         }
       }
 
-      // If remote has translated pages not in local IDB pages, create placeholder page entries
+      // 2. If remote has translated pages not present in local IDB pages, create placeholder entries
       for (const [pageNum, content] of remoteTranslationsMap.entries()) {
         if (!localPagesMap.has(pageNum)) {
           updatedAny = true;
@@ -165,27 +161,35 @@ export async function syncFromSupabase(
       await tx.done;
     });
 
+    // Count union of all completed translations currently in local storage
+    const allCurrentPages = await getAllPages(docId);
+    const totalDoneCount = allCurrentPages.filter(
+      (p) => p.pageAi?.status === "done" && p.pageAi?.result?.trim(),
+    ).length;
+
     await updateDoc(docId, {
-      aiDoneCount: remoteTranslationsMap.size,
+      aiDoneCount: totalDoneCount,
       selectedLanguage: language,
-      pageCount: Math.max(docRec?.pageCount || 0, pages.length, localPages.length),
+      pageCount: Math.max(docRec?.pageCount || 0, res?.pages?.length || 0, localPages.length),
     });
+
+    // 3. Automatic Background Push to Supabase for local pages missing in Supabase
+    if (localPagesToPush.length > 0 && isGlobalSyncEnabled()) {
+      void syncToSupabase(docId, bookId, language).catch((err) => {
+        console.warn("Background auto-sync of local translations to Supabase note:", err?.message || err);
+      });
+    }
 
     return updatedAny;
   } catch (e) {
     console.error("Failed to sync from Supabase dedicated language table:", e);
-    if (resetMissing) {
-      return await purgeDocLanguageTranslations(docId, language);
-    }
   }
   return false;
 }
 
 /**
  * Reconciles a single document's state and pages with the target language.
- * Checks Supabase for the selected language version:
- * - If found: keeps/fetches it into local storage.
- * - If not found: cleans and removes old language-specific data, presenting a clean blank state.
+ * Merges Supabase translations with local translations non-destructively.
  */
 export async function reconcileDocumentLanguage(
   docId: string,
@@ -196,7 +200,7 @@ export async function reconcileDocumentLanguage(
   const docRec = await getDoc(docId);
   if (!docRec) return false;
   await updateDoc(docId, { selectedLanguage: targetLanguage });
-  return await syncFromSupabase(docId, docRec.fileName, targetLanguage, true);
+  return await syncFromSupabase(docId, docRec.fileName, targetLanguage, false);
 }
 
 /**

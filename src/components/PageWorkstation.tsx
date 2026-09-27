@@ -29,6 +29,7 @@ import { getPageData, type PageAi, type PageAiSummaryEntry } from "@/lib/storage
 
 import { effective, hashFor, dispatchPageReady } from "@/lib/pageAi";
 import { usePageTranslation } from "@/hooks/usePageTranslation";
+import { isPageTranslating } from "@/lib/pageTranslationRunner";
 import { PageCardLoader } from "@/components/PageCard";
 import { dispatchDocEvent, listenDocEvent } from "@/lib/docEvents";
 import { useAuth } from "@/context/AuthContext";
@@ -88,7 +89,6 @@ export function PageWorkstation({
 
   useEffect(() => {
     const onFocus = () => {
-      autoTranslatedInitialPageRef.current = {};
       void readEffectiveGlobals().then((next) => {
         if (!mountedRef.current) return;
         globalsRef.current = next;
@@ -231,6 +231,9 @@ export function PageWorkstation({
       if (analyzing || pageCount <= 0) return;
       const { pageNumber } = d;
 
+      // Fast-path guard: if already translating this page in background, ignore redundant trigger
+      if (isPageTranslating(docId, pageNumber)) return;
+
       void (async () => {
         const pageRec = await getPageData(docId, pageNumber);
         // Do not attempt to generate if page data is not yet saved to storage
@@ -244,50 +247,13 @@ export function PageWorkstation({
           return;
         }
 
-        if (!state.result && state.status !== "running") {
+        if (!state.result && state.status !== "running" && !isPageTranslating(docId, pageNumber)) {
           const result = await runPageOnce(pageNumber);
           if (result) dispatchPageReady(docId, pageNumber, result);
         }
       })();
     });
   }, [docId, runPageOnce, analyzing, pageCount]);
-
-  // ─── Auto-translate currently visible active page when doc is loaded and analyzed ───
-  const autoTranslatedInitialPageRef = useRef<Record<string, number>>({});
-  useEffect(() => {
-    if (!mountedRef.current) return;
-    // Strictly do not run AI translation while document is still extracting or has 0 pages
-    if (analyzing || pageCount <= 0) return;
-    if (!keyReady || !globals.modelId) return;
-    if (!globals.language || !globals.style || !hasCompletedAiPreferenceSetup()) return;
-    if (shouldShowExplainSetup()) return;
-
-    const targetPage = activePage > 0 ? activePage : 1;
-    const pageState = aiSummary[targetPage];
-    const isIdle =
-      !pageState ||
-      (pageState.status !== "done" &&
-        pageState.status !== "running" &&
-        pageState.status !== "error");
-    const lastTranslated = autoTranslatedInitialPageRef.current[docId];
-
-    if (isIdle && lastTranslated !== targetPage) {
-      autoTranslatedInitialPageRef.current[docId] = targetPage;
-      void runPageOnce(targetPage);
-    }
-  }, [
-    docId,
-    pageCount,
-    analyzing,
-    keyReady,
-    globals.modelId,
-    globals.language,
-    globals.style,
-    aiSummary,
-    shouldShowExplainSetup,
-    runPageOnce,
-    activePage,
-  ]);
 
   const handleExplainSetupConfirm = async (settings: {
     language: string;
