@@ -23,6 +23,9 @@ export function registerPdfFonts() {
   if (fontsRegistered) return;
   fontsRegistered = true;
 
+  // Prevent awkward hyphenation breaks in non-Latin/Indic scripts
+  Font.registerHyphenationCallback((word) => [word]);
+
   const fontBase =
     typeof window !== "undefined"
       ? `${window.location.origin}/fonts`
@@ -55,52 +58,76 @@ export function registerPdfFonts() {
     ],
   });
 
-  // Tamil
+  // Tamil (Normal + Bold fallback)
   Font.register({
     family: "NotoSansTamil",
-    src: `${fontBase}/NotoSansTamil-Regular.ttf`,
+    fonts: [
+      { src: `${fontBase}/NotoSansTamil-Regular.ttf`, fontWeight: "normal" },
+      { src: `${fontBase}/NotoSansTamil-Regular.ttf`, fontWeight: "bold" },
+    ],
   });
 
-  // Telugu
+  // Telugu (Normal + Bold fallback)
   Font.register({
     family: "NotoSansTelugu",
-    src: `${fontBase}/NotoSansTelugu-Regular.ttf`,
+    fonts: [
+      { src: `${fontBase}/NotoSansTelugu-Regular.ttf`, fontWeight: "normal" },
+      { src: `${fontBase}/NotoSansTelugu-Regular.ttf`, fontWeight: "bold" },
+    ],
   });
 
-  // Gujarati
+  // Gujarati (Normal + Bold fallback)
   Font.register({
     family: "HindVadodara",
-    src: `${fontBase}/HindVadodara-Regular.ttf`,
+    fonts: [
+      { src: `${fontBase}/HindVadodara-Regular.ttf`, fontWeight: "normal" },
+      { src: `${fontBase}/HindVadodara-Regular.ttf`, fontWeight: "bold" },
+    ],
   });
 
-  // Kannada
+  // Kannada (Normal + Bold fallback)
   Font.register({
     family: "NotoSansKannada",
-    src: `${fontBase}/NotoSansKannada-Regular.ttf`,
+    fonts: [
+      { src: `${fontBase}/NotoSansKannada-Regular.ttf`, fontWeight: "normal" },
+      { src: `${fontBase}/NotoSansKannada-Regular.ttf`, fontWeight: "bold" },
+    ],
   });
 
-  // Malayalam
+  // Malayalam (Normal + Bold fallback)
   Font.register({
     family: "Manjari",
-    src: `${fontBase}/Manjari-Regular.ttf`,
+    fonts: [
+      { src: `${fontBase}/Manjari-Regular.ttf`, fontWeight: "normal" },
+      { src: `${fontBase}/Manjari-Regular.ttf`, fontWeight: "bold" },
+    ],
   });
 
-  // Punjabi / Gurmukhi
+  // Punjabi / Gurmukhi (Normal + Bold fallback)
   Font.register({
     family: "NotoSansGurmukhi",
-    src: `${fontBase}/NotoSansGurmukhi-Regular.ttf`,
+    fonts: [
+      { src: `${fontBase}/NotoSansGurmukhi-Regular.ttf`, fontWeight: "normal" },
+      { src: `${fontBase}/NotoSansGurmukhi-Regular.ttf`, fontWeight: "bold" },
+    ],
   });
 
-  // Odia
+  // Odia (Normal + Bold fallback)
   Font.register({
     family: "NotoSansOriya",
-    src: `${fontBase}/NotoSansOriya-Regular.ttf`,
+    fonts: [
+      { src: `${fontBase}/NotoSansOriya-Regular.ttf`, fontWeight: "normal" },
+      { src: `${fontBase}/NotoSansOriya-Regular.ttf`, fontWeight: "bold" },
+    ],
   });
 
-  // Arabic / Urdu
+  // Arabic / Urdu (Normal + Bold fallback)
   Font.register({
     family: "NotoSansArabic",
-    src: `${fontBase}/NotoSansArabic-Regular.ttf`,
+    fonts: [
+      { src: `${fontBase}/NotoSansArabic-Regular.ttf`, fontWeight: "normal" },
+      { src: `${fontBase}/NotoSansArabic-Regular.ttf`, fontWeight: "bold" },
+    ],
   });
 }
 
@@ -203,7 +230,10 @@ function parseMarkdownBlocks(text: string): MarkdownBlock[] {
 
   function flushParagraph() {
     if (currentParagraph.length > 0) {
-      blocks.push({ type: "paragraph", content: currentParagraph.join(" ") });
+      const merged = currentParagraph.join(" ").trim();
+      if (merged) {
+        blocks.push({ type: "paragraph", content: merged });
+      }
       currentParagraph = [];
     }
   }
@@ -281,20 +311,19 @@ const createPdfStyles = (fontFamily: string) =>
       paddingBottom: 48,
       paddingHorizontal: 44,
       fontFamily,
-      fontSize: 10.5,
-      lineHeight: 1.6,
+      fontSize: 10,
+      lineHeight: 1.5,
       color: "#1E293B",
-      position: "relative",
     },
     // Elegant background watermark on every page
     watermarkContainer: {
       position: "absolute",
       top: 250,
-      left: 100,
-      right: 100,
+      left: 0,
+      right: 0,
       alignItems: "center",
       justifyContent: "center",
-      opacity: 0.055,
+      opacity: 0.05,
     },
     watermarkLogo: {
       width: 140,
@@ -313,21 +342,22 @@ const createPdfStyles = (fontFamily: string) =>
       top: 20,
       left: 44,
       right: 44,
+      height: 22,
       flexDirection: "row",
       justifyContent: "space-between",
       alignItems: "center",
       borderBottomWidth: 0.75,
       borderBottomColor: "#E2E8F0",
-      paddingBottom: 6,
+      paddingBottom: 4,
     },
     headerLeft: {
       flexDirection: "row",
       alignItems: "center",
-      gap: 6,
     },
     headerLogo: {
       width: 16,
       height: 16,
+      marginRight: 6,
     },
     headerBrand: {
       fontSize: 9.5,
@@ -345,12 +375,13 @@ const createPdfStyles = (fontFamily: string) =>
       bottom: 18,
       left: 44,
       right: 44,
+      height: 18,
       flexDirection: "row",
       justifyContent: "space-between",
       alignItems: "center",
       borderTopWidth: 0.75,
       borderTopColor: "#E2E8F0",
-      paddingTop: 5,
+      paddingTop: 4,
     },
     footerLeft: {
       fontSize: 7.5,
@@ -367,8 +398,7 @@ const createPdfStyles = (fontFamily: string) =>
     pageDivider: {
       flexDirection: "row",
       alignItems: "center",
-      marginVertical: 14,
-      gap: 8,
+      marginVertical: 12,
     },
     pageDividerLine: {
       flex: 1,
@@ -381,6 +411,7 @@ const createPdfStyles = (fontFamily: string) =>
       color: "#64748B",
       textTransform: "uppercase",
       letterSpacing: 1,
+      marginHorizontal: 8,
     },
     h1: {
       fontSize: 16,
@@ -404,10 +435,10 @@ const createPdfStyles = (fontFamily: string) =>
       marginBottom: 4,
     },
     paragraph: {
-      fontSize: 10.5,
+      fontSize: 10,
       color: "#334155",
       marginBottom: 8,
-      textAlign: "justify",
+      lineHeight: 1.5,
     },
     bold: {
       fontWeight: "bold",
@@ -422,10 +453,13 @@ const createPdfStyles = (fontFamily: string) =>
       fontWeight: "bold",
       color: "#0F766E",
     },
-    bulletContent: {
+    bulletContentWrapper: {
       flex: 1,
-      fontSize: 10.5,
+    },
+    bulletContent: {
+      fontSize: 10,
       color: "#334155",
+      lineHeight: 1.5,
     },
     blockquote: {
       borderLeftWidth: 2.5,
@@ -451,7 +485,7 @@ interface TranslatedPdfDocumentProps {
   documentTitle: string;
   language: string;
   fontFamily: string;
-  logoUrl: string;
+  logoUrl?: string;
   pages: PageContentItem[];
 }
 
@@ -469,14 +503,14 @@ export function TranslatedPdfDocument({
       <Page size="A4" style={styles.page}>
         {/* Repeating Watermark */}
         <View style={styles.watermarkContainer} fixed>
-          <Image src={logoUrl} style={styles.watermarkLogo} />
+          {logoUrl ? <Image src={logoUrl} style={styles.watermarkLogo} /> : null}
           <Text style={styles.watermarkText}>Anuwad</Text>
         </View>
 
         {/* Repeating Running Header */}
         <View style={styles.header} fixed>
           <View style={styles.headerLeft}>
-            <Image src={logoUrl} style={styles.headerLogo} />
+            {logoUrl ? <Image src={logoUrl} style={styles.headerLogo} /> : null}
             <Text style={styles.headerBrand}>Anuwad</Text>
           </View>
           <Text style={styles.headerRight}>
@@ -498,31 +532,34 @@ export function TranslatedPdfDocument({
 
               {p.blocks.map((b, blockIdx) => {
                 const key = `${pageIdx}-${blockIdx}`;
+                const textContent = b.content ? b.content.trim() : "";
+                if (!textContent && b.type !== "hr") return null;
+
                 if (b.type === "h1") {
                   return (
                     <Text key={key} style={styles.h1}>
-                      {renderInlineText(b.content || "", styles.bold)}
+                      {renderInlineText(textContent, styles.bold)}
                     </Text>
                   );
                 }
                 if (b.type === "h2") {
                   return (
                     <Text key={key} style={styles.h2}>
-                      {renderInlineText(b.content || "", styles.bold)}
+                      {renderInlineText(textContent, styles.bold)}
                     </Text>
                   );
                 }
                 if (b.type === "h3") {
                   return (
                     <Text key={key} style={styles.h3}>
-                      {renderInlineText(b.content || "", styles.bold)}
+                      {renderInlineText(textContent, styles.bold)}
                     </Text>
                   );
                 }
                 if (b.type === "paragraph") {
                   return (
                     <Text key={key} style={styles.paragraph}>
-                      {renderInlineText(b.content || "", styles.bold)}
+                      {renderInlineText(textContent, styles.bold)}
                     </Text>
                   );
                 }
@@ -530,9 +567,11 @@ export function TranslatedPdfDocument({
                   return (
                     <View key={key} style={styles.bulletRow}>
                       <Text style={styles.bulletSign}>•</Text>
-                      <Text style={styles.bulletContent}>
-                        {renderInlineText(b.content || "", styles.bold)}
-                      </Text>
+                      <View style={styles.bulletContentWrapper}>
+                        <Text style={styles.bulletContent}>
+                          {renderInlineText(textContent, styles.bold)}
+                        </Text>
+                      </View>
                     </View>
                   );
                 }
@@ -540,9 +579,11 @@ export function TranslatedPdfDocument({
                   return (
                     <View key={key} style={styles.bulletRow}>
                       <Text style={styles.bulletSign}>{b.num}.</Text>
-                      <Text style={styles.bulletContent}>
-                        {renderInlineText(b.content || "", styles.bold)}
-                      </Text>
+                      <View style={styles.bulletContentWrapper}>
+                        <Text style={styles.bulletContent}>
+                          {renderInlineText(textContent, styles.bold)}
+                        </Text>
+                      </View>
                     </View>
                   );
                 }
@@ -550,7 +591,7 @@ export function TranslatedPdfDocument({
                   return (
                     <View key={key} style={styles.blockquote}>
                       <Text style={styles.paragraph}>
-                        {renderInlineText(b.content || "", styles.bold)}
+                        {renderInlineText(textContent, styles.bold)}
                       </Text>
                     </View>
                   );
@@ -581,63 +622,87 @@ export function TranslatedPdfDocument({
 
 /**
  * Generates and downloads a professionally formatted PDF containing
- * the active translated text using @react-pdf/renderer.
+ * the active translated text (or extracted text fallback) using @react-pdf/renderer.
  */
 export async function exportAsPdf(docId: string): Promise<void> {
-  const doc = await getDoc(docId);
-  const pages = await getAllPages(docId);
-  const activeLanguage = getStoredLanguage() || getOutputLanguage() || "Translated";
+  try {
+    const doc = await getDoc(docId);
+    const pages = await getAllPages(docId);
+    const activeLanguage =
+      doc?.selectedLanguage || getStoredLanguage() || getOutputLanguage() || "Translated";
 
-  const translatedPages: PageContentItem[] = [];
+    const exportPages: PageContentItem[] = [];
+    let isTranslation = true;
 
-  for (const page of pages) {
-    const rawText = page.pageAi?.status === "done" ? page.pageAi.result?.trim() : "";
-    if (rawText) {
-      translatedPages.push({
-        pageNumber: page.pageNumber,
-        blocks: parseMarkdownBlocks(rawText),
-      });
+    // 1. First attempt to gather translated content
+    for (const page of pages) {
+      const rawText = (page.pageAi?.result && page.pageAi.result.trim()) || "";
+      if (rawText) {
+        exportPages.push({
+          pageNumber: page.pageNumber,
+          blocks: parseMarkdownBlocks(rawText),
+        });
+      }
     }
+
+    // 2. If no translated content exists, fall back to extracted document text
+    if (exportPages.length === 0) {
+      isTranslation = false;
+      for (const page of pages) {
+        const rawText = (page.text && page.text.trim()) || "";
+        if (rawText) {
+          exportPages.push({
+            pageNumber: page.pageNumber,
+            blocks: parseMarkdownBlocks(rawText),
+          });
+        }
+      }
+    }
+
+    if (exportPages.length === 0) {
+      toast.error("No document content found to export. Please extract or translate pages first.");
+      return;
+    }
+
+    // Register Unicode / Indic fonts
+    registerPdfFonts();
+
+    const displayLanguage = isTranslation ? activeLanguage : "Extracted";
+    const fontFamily = isTranslation ? resolvePdfFont(activeLanguage) : "NotoSans";
+    const docTitle = doc?.fileName?.replace(/\.[^/.]+$/, "") || "Anuwad-Document";
+    const logoUrl =
+      typeof window !== "undefined"
+        ? `${window.location.origin}/light_13746323.png`
+        : "./public/light_13746323.png";
+
+    const docElement = (
+      <TranslatedPdfDocument
+        documentTitle={docTitle}
+        language={displayLanguage}
+        fontFamily={fontFamily}
+        logoUrl={logoUrl}
+        pages={exportPages}
+      />
+    );
+
+    const blob = await pdf(docElement).toBlob();
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `${docTitle}-${displayLanguage ? displayLanguage.toLowerCase().replace(/\s+/g, "_") : "document"}.pdf`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+
+    // Release temporary object URL to prevent memory leaks
+    setTimeout(() => {
+      URL.revokeObjectURL(url);
+    }, 10000);
+
+    toast.success("Exported as PDF.");
+  } catch (err: any) {
+    console.error("PDF export failed:", err);
+    toast.error(`PDF export failed: ${err?.message || "Please try again"}`);
+    throw err;
   }
-
-  if (translatedPages.length === 0) {
-    toast.error("No translated content found to export. Please translate pages first.");
-    return;
-  }
-
-  // Register Unicode / Indic fonts
-  registerPdfFonts();
-
-  const fontFamily = resolvePdfFont(activeLanguage);
-  const docTitle = doc?.fileName?.replace(/\.[^/.]+$/, "") || "Anuwad-Document";
-  const logoUrl =
-    typeof window !== "undefined"
-      ? `${window.location.origin}/light_13746323.png`
-      : "./public/light_13746323.png";
-
-  const docElement = (
-    <TranslatedPdfDocument
-      documentTitle={docTitle}
-      language={activeLanguage}
-      fontFamily={fontFamily}
-      logoUrl={logoUrl}
-      pages={translatedPages}
-    />
-  );
-
-  const blob = await pdf(docElement).toBlob();
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement("a");
-  a.href = url;
-  a.download = `${docTitle}-${activeLanguage ? activeLanguage.toLowerCase().replace(/\s+/g, "_") : "translated"}.pdf`;
-  document.body.appendChild(a);
-  a.click();
-  document.body.removeChild(a);
-
-  // Release temporary object URL to prevent memory leaks
-  setTimeout(() => {
-    URL.revokeObjectURL(url);
-  }, 10000);
-
-  toast.success("Exported as PDF.");
 }

@@ -28,28 +28,40 @@ export async function exportAsPdf(docId: string): Promise<void> {
 export async function exportAsMarkdown(docId: string) {
   const doc = await getDoc(docId);
   const pages = await getAllPages(docId);
-  const activeLanguage = getStoredLanguage() || getOutputLanguage() || "translated";
+  const activeLanguage =
+    doc?.selectedLanguage || getStoredLanguage() || getOutputLanguage() || "translated";
 
-  const translatedPages = pages
+  let exportPages = pages
     .map((page) => ({
       pageNumber: page.pageNumber,
-      text: page.pageAi?.status === "done" && page.pageAi.result?.trim() ? page.pageAi.result.trim() : "",
+      text: (page.pageAi?.result && page.pageAi.result.trim()) || "",
     }))
     .filter((p) => p.text.length > 0);
 
-  if (translatedPages.length === 0) {
-    toast.error("No translated content found to export. Please translate pages first.");
+  let isTranslation = true;
+  if (exportPages.length === 0) {
+    isTranslation = false;
+    exportPages = pages
+      .map((page) => ({
+        pageNumber: page.pageNumber,
+        text: (page.text && page.text.trim()) || "",
+      }))
+      .filter((p) => p.text.length > 0);
+  }
+
+  if (exportPages.length === 0) {
+    toast.error("No content found to export. Please extract or translate pages first.");
     return;
   }
 
   const lines: string[] = [];
   const baseTitle = doc?.fileName?.replace(/\.[^/.]+$/, "") || "document";
 
-  if (translatedPages.length === 1) {
-    lines.push(translatedPages[0].text);
+  if (exportPages.length === 1) {
+    lines.push(exportPages[0].text);
   } else {
-    for (let i = 0; i < translatedPages.length; i++) {
-      const page = translatedPages[i];
+    for (let i = 0; i < exportPages.length; i++) {
+      const page = exportPages[i];
       if (i > 0) {
         lines.push("\n---\n");
       }
@@ -58,7 +70,10 @@ export async function exportAsMarkdown(docId: string) {
     }
   }
 
-  const filename = `${baseTitle}-${activeLanguage ? activeLanguage.toLowerCase().replace(/\s+/g, "_") : "translated"}.md`;
+  const displayLang = isTranslation
+    ? activeLanguage.toLowerCase().replace(/\s+/g, "_")
+    : "extracted";
+  const filename = `${baseTitle}-${displayLang}.md`;
   downloadBlob(lines.join("\n"), filename, "text/markdown;charset=utf-8");
   toast.success("Exported as Markdown.");
 }
