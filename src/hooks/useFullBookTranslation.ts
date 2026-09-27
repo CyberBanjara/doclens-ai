@@ -14,6 +14,16 @@ export interface FullBookTranslationState {
   currentStreamingSnippet: string;
   autoFollow: boolean;
   estimatedSecondsRemaining: number | null;
+  cooldownRemaining: number | null;
+  rangeStart: number | null;
+  rangeEnd: number | null;
+}
+
+export interface StartFullBookOptions {
+  overwriteExisting?: boolean;
+  startPage?: number;
+  endPage?: number;
+  cooldownSeconds?: number;
 }
 
 export function useFullBookTranslation({
@@ -34,6 +44,9 @@ export function useFullBookTranslation({
   const [currentStreamingSnippet, setCurrentStreamingSnippet] = useState("");
   const [autoFollow, setAutoFollow] = useState(true);
   const [estimatedSecondsRemaining, setEstimatedSecondsRemaining] = useState<number | null>(null);
+  const [cooldownRemaining, setCooldownRemaining] = useState<number | null>(null);
+  const [rangeStart, setRangeStart] = useState<number | null>(null);
+  const [rangeEnd, setRangeEnd] = useState<number | null>(null);
 
   const isTranslatingRef = useRef(false);
   const isPausedRef = useRef(false);
@@ -49,7 +62,6 @@ export function useFullBookTranslation({
     return () => {
       isMountedRef.current = false;
       isTranslatingRef.current = false;
-      // Do NOT abort activeAbortControllerRef on unmount; allow the in-flight page to complete and save.
     };
   }, []);
 
@@ -74,6 +86,7 @@ export function useFullBookTranslation({
     isPausedRef.current = false;
     setIsTranslating(false);
     setIsPaused(false);
+    setCooldownRemaining(null);
 
     if (activePageRef.current !== null) {
       cancelPageTranslation(docId, activePageRef.current);
@@ -86,15 +99,19 @@ export function useFullBookTranslation({
   }, [docId]);
 
   const start = useCallback(
-    async (options?: { overwriteExisting?: boolean; startPage?: number }) => {
+    async (options?: StartFullBookOptions) => {
       if (isTranslatingRef.current || pageCount <= 0) return;
 
       const overwriteExisting = options?.overwriteExisting ?? false;
-      const startPage = Math.max(1, options?.startPage ?? 1);
+      const rawStart = options?.startPage ?? 1;
+      const rawEnd = options?.endPage ?? pageCount;
+      const startPage = Math.max(1, Math.min(rawStart, pageCount));
+      const endPage = Math.max(startPage, Math.min(rawEnd, pageCount));
+      const cooldownSeconds = Math.max(0, options?.cooldownSeconds ?? 0);
 
-      // Determine which pages need translation
+      // Determine which pages in range need translation
       const pagesToProcess: number[] = [];
-      for (let p = startPage; p <= pageCount; p++) {
+      for (let p = startPage; p <= endPage; p++) {
         if (overwriteExisting) {
           pagesToProcess.push(p);
         } else {
@@ -106,7 +123,9 @@ export function useFullBookTranslation({
       }
 
       if (pagesToProcess.length === 0) {
-        toast.info("All pages in this book are already translated!");
+        toast.info(
+          `No untranslated pages found in the selected range (Pages ${startPage}–${endPage}).`,
+        );
         return;
       }
 
@@ -118,14 +137,17 @@ export function useFullBookTranslation({
       setTotalTargetPages(pagesToProcess.length);
       setFailedPages([]);
       setCurrentStreamingSnippet("");
-      setEstimatedSecondsRemaining(pagesToProcess.length * 4);
+      setCooldownRemaining(null);
+      setRangeStart(startPage);
+      setRangeEnd(endPage);
+      setEstimatedSecondsRemaining(pagesToProcess.length * (4 + cooldownSeconds));
 
       const pageDurations: number[] = [];
       const failed: number[] = [];
       let done = 0;
 
       const toastId = toast.loading(
-        `Starting Full Book Translation (0/${pagesToProcess.length} pages)...`,
+        `Starting Full Book Translation (0/${pagesToProcess.length} pages, range ${startPage}-${endPage})...`,
       );
 
       for (let i = 0; i < pagesToProcess.length; i++) {
@@ -193,7 +215,9 @@ export function useFullBookTranslation({
             const avgDuration = pageDurations.reduce((a, b) => a + b, 0) / pageDurations.length;
             const remainingPages = pagesToProcess.length - (i + 1);
             if (isMountedRef.current) {
-              setEstimatedSecondsRemaining(Math.round(remainingPages * avgDuration));
+              setEstimatedSecondsRemaining(
+                Math.round(remainingPages * (avgDuration + cooldownSeconds)),
+              );
             }
           }
         } catch (err) {
@@ -209,6 +233,33 @@ export function useFullBookTranslation({
           activeAbortControllerRef.current = null;
           activePageRef.current = null;
         }
+
+        // Cooldown between requests if more pages are remaining
+        if (
+          i < pagesToProcess.length - 1 &&
+          cooldownSeconds > 0 &&
+          isTranslatingRef.current &&
+          isMountedRef.current
+        ) {
+          let cdLeft = cooldownSeconds;
+          while (cdLeft > 0 && isTranslatingRef.current && isMountedRef.current) {
+            // Handle pause during cooldown
+            while (isPausedRef.current) {
+              if (!isTranslatingRef.current || !isMountedRef.current) break;
+              await new Promise((res) => setTimeout(res, 400));
+            }
+            if (!isTranslatingRef.current || !isMountedRef.current) break;
+
+            if (isMountedRef.current) {
+              setCooldownRemaining(cdLeft);
+            }
+            await new Promise((res) => setTimeout(res, 1000));
+            cdLeft--;
+          }
+          if (isMountedRef.current) {
+            setCooldownRemaining(null);
+          }
+        }
       }
 
       const wasCancelled = !isTranslatingRef.current;
@@ -219,12 +270,15 @@ export function useFullBookTranslation({
         setIsTranslating(false);
         setIsPaused(false);
         setCurrentPage(null);
+        setCooldownRemaining(null);
         setEstimatedSecondsRemaining(null);
 
         if (wasCancelled) {
           toast.info(`Full book translation stopped. ${done} pages were translated.`);
         } else if (failed.length === 0) {
-          toast.success(`Full book translation completed! All ${done} pages translated.`);
+          toast.success(
+            `Full book translation completed! ${done} page(s) translated (range ${startPage}–${endPage}).`,
+          );
         } else {
           toast.warning(
             `Translation completed with ${failed.length} failed page(s): ${failed.join(", ")}`,
@@ -245,6 +299,9 @@ export function useFullBookTranslation({
     currentStreamingSnippet,
     autoFollow,
     estimatedSecondsRemaining,
+    cooldownRemaining,
+    rangeStart,
+    rangeEnd,
     start,
     pause,
     resume,
@@ -252,3 +309,4 @@ export function useFullBookTranslation({
     setAutoFollow,
   };
 }
+
