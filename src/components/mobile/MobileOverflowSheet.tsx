@@ -1,5 +1,5 @@
 import { Link } from "@tanstack/react-router";
-import { Cloud, FileJson, RefreshCw, Settings, Sparkles, Zap } from "lucide-react";
+import { Cloud, FileJson, FileText, FileDown, RefreshCw, Settings, Sparkles, Zap } from "lucide-react";
 import {
   Drawer,
   DrawerContent,
@@ -7,7 +7,7 @@ import {
   DrawerTitle,
   DrawerDescription,
 } from "@/components/ui/drawer";
-import { exportAsMarkdown, exportAsJson } from "@/lib/export";
+import { exportAsPdf, exportAsMarkdown, exportAsJson } from "@/lib/export";
 
 interface MobileOverflowSheetProps {
   open: boolean;
@@ -85,7 +85,15 @@ export function MobileOverflowSheet({
       },
     });
     items.push({
-      icon: <FileJson className="h-4 w-4" />,
+      icon: <FileDown className="h-4 w-4 text-primary" />,
+      label: "Export as PDF",
+      onClick: () => {
+        void exportAsPdf(docId);
+        close();
+      },
+    });
+    items.push({
+      icon: <FileText className="h-4 w-4" />,
       label: "Export as Markdown",
       onClick: () => {
         void exportAsMarkdown(docId);
