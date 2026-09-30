@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { memo, useCallback, useEffect, useRef, useState } from "react";
 import type { PDFPageProxy, PageViewport } from "pdfjs-dist";
 import { LoadingLogo } from "@/components/LoadingLogo";
 import { useIsMobile } from "@/hooks/use-mobile";
@@ -26,7 +26,7 @@ const MAX_RENDERED = 16;
  * Background preloading of other intersecting pages only proceeds after the
  * active page has finished rendering.
  */
-export function PdfViewer({ docId, activePage, setActivePage }: Props) {
+export const PdfViewer = memo(function PdfViewer({ docId, activePage, setActivePage }: Props) {
   const isMobile = useIsMobile();
   const { doc, pageMetas, loading, error } = usePdfDocument(docId);
   /** Pages whose canvas has finished rendering — drives the per-page loading overlay. */
@@ -555,6 +555,12 @@ export function PdfViewer({ docId, activePage, setActivePage }: Props) {
 
   const { selection, handleCopy, handleTranslate } = useTextSelectionToolbar(docId, scrollRef);
 
+  const setPageContainerRef = useCallback((el: HTMLDivElement | null) => {
+    if (el && observerRef.current) {
+      observerRef.current.observe(el);
+    }
+  }, []);
+
   if (loading) {
     return (
       <div className="flex h-full items-center justify-center pdf-viewer-bg">
@@ -603,9 +609,7 @@ export function PdfViewer({ docId, activePage, setActivePage }: Props) {
             <div
               key={meta.pageNumber}
               data-page-number={meta.pageNumber}
-              ref={(el) => {
-                if (el && observerRef.current) observerRef.current.observe(el);
-              }}
+              ref={setPageContainerRef}
               style={{
                 width: meta.cssWidth,
                 maxWidth: "100%",
@@ -666,4 +670,4 @@ export function PdfViewer({ docId, activePage, setActivePage }: Props) {
       </div>
     </>
   );
-}
+});

@@ -106,14 +106,15 @@ export function usePageTranslation(
       }
 
       const currentGlobals = globalsRef.current || readGlobals();
-      const isOmni = (currentGlobals.provider ?? "omnirouter") === "omnirouter";
+      const isOmni = (currentGlobals.provider ?? "openrouter") === "omnirouter";
+      const isOllama = (currentGlobals.provider ?? "openrouter") === "ollama";
 
       if (isOmni && !isOmniRouterConfigured()) {
         setAiProvider("openrouter");
       }
 
       const key = getKey();
-      if (!isOmni && !key) {
+      if (!isOmni && !isOllama && !key) {
         ensureKeyReady();
         await upsertPageAi(docId, pageNumber, {
           status: "error",

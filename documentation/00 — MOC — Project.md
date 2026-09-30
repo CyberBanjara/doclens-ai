@@ -22,7 +22,7 @@
 
 ---
 
-## Technical Architecture
+## Technical Architecture & Core Pipelines
 
 - [[Architecture]] — System architecture and module dependency graph
 - [[Folder Structure]] — Annotated map of the repository
@@ -31,6 +31,7 @@
 - [[MOC — Pipelines]] — PDF Extraction → Translation → TTS
 - [[MOC — APIs]] — External and browser API integrations
 - [[End-to-End Pipeline]] — Complete data flow diagram
+- [[Changelog & Architecture Decisions]] — Full Problem → Reason → Decision → Implementation → Outcome history
 - [[Voice Cache Layer]] — Dual-storage neural voice model caching
 - [[Memory & Storage Audit]] — Audit of large-data storage hotspots and memory optimizations
 
@@ -64,3 +65,5 @@ graph LR
 ```
 
 ---
+
+_Part of [[00 — Index]]_

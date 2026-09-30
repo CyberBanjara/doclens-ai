@@ -21,8 +21,9 @@ import { cleanAiText } from "./cleanAiText";
 export { cleanAiText };
 
 export function effective(globals: Globals, ov?: PageOverrides) {
-  const rawProvider = ov?.provider ?? globals.provider ?? "omnirouter";
-  const provider: AiProvider = rawProvider === "omnirouter" ? "omnirouter" : "openrouter";
+  const rawProvider = ov?.provider ?? globals.provider ?? "openrouter";
+  const provider: AiProvider =
+    rawProvider === "ollama" ? "ollama" : rawProvider === "omnirouter" ? "omnirouter" : "openrouter";
 
   const mode = ov?.mode ?? globals.mode;
   let rawStyle = ov?.style ?? globals.style;
@@ -38,7 +39,10 @@ export function effective(globals: Globals, ov?: PageOverrides) {
   }
 
   let defaultModelForProvider = globals.modelId || getSelectedModel() || getDefaultModelSync();
-  if (provider === "omnirouter") {
+  if (provider === "ollama") {
+    defaultModelForProvider =
+      globals.ollamaModelId || (typeof window !== "undefined" ? localStorage.getItem("doclens.ollama.model") || "" : "");
+  } else if (provider === "omnirouter") {
     defaultModelForProvider =
       globals.omniModelId || getOmniSelectedModel() || getOmniDefaultModelSync();
   } else {

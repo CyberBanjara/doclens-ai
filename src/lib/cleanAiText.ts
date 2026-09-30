@@ -12,6 +12,14 @@ export function cleanAiText(text: string | null | undefined): string {
 
   let cleaned = text;
 
+  // 0. Decode literal escaped newlines, returns, tabs, and slash-newline patterns produced by certain LLMs (e.g. gpt-oss, nvidia models)
+  cleaned = cleaned
+    .replace(/\\r\\n/g, "\n")
+    .replace(/\\n/g, "\n")
+    .replace(/\\r/g, "\n")
+    .replace(/\\t/g, " ")
+    .replace(/(?:\/n)+/g, (match) => (match.length >= 4 ? "\n\n" : "\n"));
+
   // 1. Remove markdown code fences (```lang ... ``` or standalone ```)
   cleaned = cleaned.replace(/```[a-zA-Z0-9_-]*\n?/g, "").replace(/```/g, "");
 

@@ -54,7 +54,10 @@ export function RightPanel({
     setVoiceDialogOpen(true);
   };
 
-  // Load the active page data
+  // Load the active page data only when activePage changes or its own AI status updates
+  const activePageAiStatus = aiSummary[activePage]?.status;
+  const activePageAiUpdatedAt = aiSummary[activePage]?.updatedAt;
+
   useEffect(() => {
     let cancelled = false;
     (async () => {
@@ -65,7 +68,7 @@ export function RightPanel({
     return () => {
       cancelled = true;
     };
-  }, [docId, activePage, aiSummary]);
+  }, [docId, activePage, activePageAiStatus, activePageAiUpdatedAt]);
 
   // Handle continuous play page transition event
   useEffect(() => {

@@ -16,7 +16,7 @@ import {
   Loader2,
 } from "lucide-react";
 import { useMemo } from "react";
-import { getLanguageEnglishName } from "@/lib/voiceLanguageMap";
+import { filterVoicesByLanguage, getLanguageEnglishName } from "@/lib/voiceLanguageMap";
 
 interface TtsPlayerProps {
   text: string | undefined | null;
@@ -94,7 +94,27 @@ export function TtsPlayer({ text, source, pageNumber, onNeedsVoiceOnboarding }: 
       return;
     }
 
-    if (!hasCompletedTtsVoiceSetup()) {
+    const isPiperVoiceReady = () => {
+      if (!hasCompletedTtsVoiceSetup()) {
+        return false;
+      }
+      const targetVoices =
+        filteredVoices.length > 0
+          ? filteredVoices
+          : filterVoicesByLanguage(availableVoices, outputLanguage);
+
+      const neuralVoices = targetVoices.filter((v) => v.isNeural);
+      if (neuralVoices.length > 0) {
+        const selected = targetVoices.find((v) => v.voiceURI === selectedVoiceUri);
+        if (selected) {
+          return selected.isNeural ? Boolean(selected.isDownloaded) : true;
+        }
+        return neuralVoices.some((v) => v.isDownloaded);
+      }
+      return targetVoices.length > 0;
+    };
+
+    if (!isPiperVoiceReady()) {
       onNeedsVoiceOnboarding(() => play(text, source, pageNumber, 0));
       return;
     }

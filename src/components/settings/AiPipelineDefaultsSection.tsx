@@ -14,6 +14,7 @@ interface AiPipelineDefaultsSectionProps {
   onProviderChange?: (provider: AiProvider) => void;
   openRouterStatus?: "connected" | "disconnected" | "checking";
   omniStatus?: "connected" | "disconnected" | "checking";
+  ollamaStatus?: "connected" | "disconnected" | "checking";
   mode: GlobalMode;
   onModeChange: (mode: GlobalMode) => void;
   style: ProcessingStyle | string;
@@ -24,6 +25,7 @@ interface AiPipelineDefaultsSectionProps {
 
 const PROVIDERS: { id: AiProvider; label: string }[] = [
   { id: "omnirouter", label: "OmniRouter (Local)" },
+  { id: "ollama", label: "Ollama (Local)" },
   { id: "openrouter", label: "OpenRouter" },
 ];
 
@@ -65,6 +67,7 @@ export function AiPipelineDefaultsSection({
   onProviderChange,
   openRouterStatus = "connected",
   omniStatus = "disconnected",
+  ollamaStatus = "disconnected",
   mode,
   onModeChange,
   style,
@@ -102,6 +105,7 @@ export function AiPipelineDefaultsSection({
   };
 
   const getProviderStatus = (p: AiProvider) => {
+    if (p === "ollama") return ollamaStatus;
     return p === "omnirouter" ? omniStatus : openRouterStatus;
   };
 

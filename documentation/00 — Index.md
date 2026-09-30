@@ -15,28 +15,32 @@
 | [[MOC — Features]]   | Every feature in detail — PDF viewer, AI translation, TTS, etc. |
 | [[MOC — Components]] | Reusable React components powering the UI                       |
 | [[MOC — Pipelines]]  | The three core data pipelines: Extract → Translate → Speak      |
-| [[MOC — APIs]]       | External services and browser APIs the app depends on           |
+| [[MOC — APIs]]       | External services, local LLM engines, and browser APIs          |
 
 ---
 
 ## 🔗 Quick Links
 
 - [[What is Anuwad]] — Product overview in 60 seconds
+- [[Changelog & Architecture Decisions]] — Comprehensive Problem → Reason → Decision → Implementation → Outcome history
 - [[Architecture]] — System architecture and module dependency graph
 - [[Folder Structure]] — Annotated map of the repository
 - [[Dependencies]] — Every package dependency, grouped by concern
 - [[Development Guidelines]] — Local setup, scripts, and coding conventions
 - [[End-to-End Pipeline]] — Full PDF → Translation → TTS data flow
-- [[Global Library]] — Offline-first R2 document vault with persistent IndexedDB caching
+- [[Full Book Translation]] — Automated sequential chapter and full-book batch translation
+- [[Export System]] — Print-ready Unicode PDF export with bundled TrueType fonts
+- [[Global Library]] — Offline-first R2 document vault with batch downloads & local sync status
 - [[Advertising & Sponsorship]] — Self-serve sponsor dock with local creative caching
 - [[Authentication]] — Firebase Google Sign-In and Firestore reviews
 - [[Authorization Matrix]] — Role×Action permission matrix for all system functions
 - [[AI Response Sanitization]] — Post-processing pipeline for clean AI outputs
 - [[Memory & Storage Audit]] — Audit of large-data storage hotspots and memory optimizations
 - [[Voice Cache Layer]] — Dual-storage neural voice model caching
+- [[Ollama API]] — Native zero-cloud local LLM inference client
 - [[Read Aloud Analysis]] — Read Aloud extension architecture & integration strategy
 - [[Glossary]] — Key terms and abbreviations
 
 ---
 
-_Last updated: 2026-09-04_
+_Last updated: 2026-09-30_

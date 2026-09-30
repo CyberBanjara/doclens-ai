@@ -82,6 +82,7 @@ export async function mergeContextDelta(
   docId: string,
   pageNumber: number,
   delta: string,
+  skipUpsert = false,
 ): Promise<void> {
   if (!docId || !pageNumber || !delta) return;
 
@@ -90,12 +91,14 @@ export async function mergeContextDelta(
 
   cacheContextDelta(docId, pageNumber, cleanDelta);
 
-  try {
-    await upsertPageAi(docId, pageNumber, {
-      contextDelta: cleanDelta,
-    });
-  } catch (err) {
-    console.warn(`[ContextStore] Failed to persist contextDelta for page ${pageNumber}:`, err);
+  if (!skipUpsert) {
+    try {
+      await upsertPageAi(docId, pageNumber, {
+        contextDelta: cleanDelta,
+      });
+    } catch (err) {
+      console.warn(`[ContextStore] Failed to persist contextDelta for page ${pageNumber}:`, err);
+    }
   }
 }
 

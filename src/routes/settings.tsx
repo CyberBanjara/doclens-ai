@@ -24,6 +24,12 @@ import {
   getOmniSelectedModel,
   setOmniSelectedModel,
   getOmniDefaultModelSync,
+  fetchOllamaModels,
+  validateOllamaConnection,
+  getOllamaEndpoint,
+  setOllamaEndpoint,
+  getOllamaSelectedModel,
+  setOllamaSelectedModel,
   getOutputLanguage,
   getStyle,
   type ExplanationStyle,
@@ -45,6 +51,7 @@ import { OutputLanguageSection } from "@/components/settings/OutputLanguageSecti
 import { VoiceCacheManagerSection } from "@/components/settings/VoiceCacheManagerSection";
 import { ApiKeySection } from "@/components/settings/ApiKeySection";
 import { OmniRouterStatusSection } from "@/components/settings/OmniRouterStatusSection";
+import { OllamaStatusSection } from "@/components/settings/OllamaStatusSection";
 import { ModelSelectionSection } from "@/components/settings/ModelSelectionSection";
 import { StorageManagerSection } from "@/components/settings/StorageManagerSection";
 import { ThemeSelectionModal } from "@/components/settings/ThemeSelectionModal";
@@ -117,6 +124,16 @@ function SettingsPage() {
   );
   const [omniError, setOmniError] = useState("");
   const [omniSelected, setOmniSelected] = useState("");
+
+  // Ollama state
+  const [ollamaEndpoint, setOllamaEndpointState] = useState(() => getOllamaEndpoint());
+  const [ollamaModels, setOllamaModels] = useState<ORModel[]>([]);
+  const [loadingOllama, setLoadingOllama] = useState(false);
+  const [ollamaStatus, setOllamaStatus] = useState<"connected" | "disconnected" | "checking">(
+    "checking",
+  );
+  const [ollamaError, setOllamaError] = useState("");
+  const [ollamaSelected, setOllamaSelected] = useState("");
 
   const [language, setLanguage] = useState(() => getOutputLanguage() || "");
   const [customLang, setCustomLang] = useState("");
@@ -227,11 +244,44 @@ function SettingsPage() {
     }
   };
 
+  const loadOllamaModels = async (targetEndpoint?: string) => {
+    const ep = targetEndpoint || ollamaEndpoint || getOllamaEndpoint();
+    setLoadingOllama(true);
+    setOllamaError("");
+    setOllamaStatus("checking");
+    try {
+      const res = await validateOllamaConnection(ep);
+      if (res.ok) {
+        setOllamaStatus("connected");
+        const m = res.models && res.models.length > 0 ? res.models : await fetchOllamaModels(ep);
+        setOllamaModels(m);
+        const stored = getOllamaSelectedModel();
+        if (stored && m.some((x) => x.id === stored)) {
+          setOllamaSelected(stored);
+        } else if (m.length > 0) {
+          const chosen = m[0].id;
+          setOllamaSelected(chosen);
+          setOllamaSelectedModel(chosen);
+        }
+      } else {
+        setOllamaStatus("disconnected");
+        setOllamaError(res.error || "Could not connect to Ollama.");
+      }
+    } catch (e) {
+      setOllamaStatus("disconnected");
+      setOllamaError(getFriendlyErrorMessage(e, "Connection test failed"));
+    } finally {
+      setLoadingOllama(false);
+    }
+  };
+
   useEffect(() => {
     const globals = readGlobals();
     setProvider(globals.provider ?? "openrouter");
     setSelected(globals.modelId);
     setOmniSelected(globals.omniModelId || getOmniSelectedModel() || getOmniDefaultModelSync());
+    setOllamaEndpointState(globals.ollamaEndpoint || getOllamaEndpoint());
+    setOllamaSelected(globals.ollamaModelId || getOllamaSelectedModel());
     void readEffectiveGlobals().then((eff) => {
       if (!globals.modelId) setSelected(eff.modelId);
     });
@@ -246,6 +296,7 @@ function SettingsPage() {
     if (isOmniConfigured) {
       void loadOmniModels();
     }
+    void loadOllamaModels(globals.ollamaEndpoint || getOllamaEndpoint());
     void refreshTtsVoices(true);
   }, [refreshTtsVoices, isOmniConfigured]);
 
@@ -277,7 +328,10 @@ function SettingsPage() {
   };
 
   const handleSelectModel = (id: string) => {
-    if (provider === "omnirouter") {
+    if (provider === "ollama") {
+      setOllamaSelected(id);
+      setOllamaSelectedModel(id);
+    } else if (provider === "omnirouter") {
       setOmniSelected(id);
       setOmniSelectedModel(id);
     } else {
@@ -319,7 +373,8 @@ function SettingsPage() {
     }
   };
 
-  const activeModelList = provider === "omnirouter" ? omniModels : models;
+  const activeModelList =
+    provider === "ollama" ? ollamaModels : provider === "omnirouter" ? omniModels : models;
 
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
@@ -400,6 +455,7 @@ function SettingsPage() {
           }}
           openRouterStatus={openRouterStatus}
           omniStatus={omniStatus}
+          ollamaStatus={ollamaStatus}
           mode={mode}
           onModeChange={(v) => {
             setModeState(v);
@@ -445,7 +501,21 @@ function SettingsPage() {
 
         {/* Row 3: Provider Gateway/API Key Management + Model Selection (50/50 Split) */}
         <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
-          {provider === "omnirouter" ? (
+          {provider === "ollama" ? (
+            <OllamaStatusSection
+              status={ollamaStatus}
+              modelCount={ollamaModels.length}
+              error={ollamaError}
+              onRefresh={(ep) => loadOllamaModels(ep)}
+              selectedModel={ollamaSelected}
+              onSelectModel={handleSelectModel}
+              models={ollamaModels}
+              endpoint={ollamaEndpoint}
+              onEndpointChange={(ep) => {
+                setOllamaEndpointState(ep);
+              }}
+            />
+          ) : provider === "omnirouter" ? (
             <OmniRouterStatusSection
               status={omniStatus}
               modelCount={omniModels.length}
@@ -468,20 +538,44 @@ function SettingsPage() {
             search={search}
             onSearchChange={setSearch}
             keyStatus={
-              provider === "omnirouter"
-                ? omniStatus === "connected"
+              provider === "ollama"
+                ? ollamaStatus === "connected"
                   ? "valid"
-                  : omniStatus === "checking"
+                  : ollamaStatus === "checking"
                     ? "checking"
                     : "invalid"
-                : keyStatus
+                : provider === "omnirouter"
+                  ? omniStatus === "connected"
+                    ? "valid"
+                    : omniStatus === "checking"
+                      ? "checking"
+                      : "invalid"
+                  : keyStatus
             }
             tab={tab}
             onTabChange={setTab}
-            loadingModels={provider === "omnirouter" ? loadingOmni : loadingModels}
-            modelError={provider === "omnirouter" ? omniError : modelError}
+            loadingModels={
+              provider === "ollama"
+                ? loadingOllama
+                : provider === "omnirouter"
+                  ? loadingOmni
+                  : loadingModels
+            }
+            modelError={
+              provider === "ollama"
+                ? ollamaError
+                : provider === "omnirouter"
+                  ? omniError
+                  : modelError
+            }
             filtered={filtered}
-            selected={provider === "omnirouter" ? omniSelected : selected}
+            selected={
+              provider === "ollama"
+                ? ollamaSelected
+                : provider === "omnirouter"
+                  ? omniSelected
+                  : selected
+            }
             onSelectModel={handleSelectModel}
           />
         </div>

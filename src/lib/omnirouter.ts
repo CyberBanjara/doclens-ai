@@ -443,6 +443,9 @@ async function readOmniSseStream(
     return emittedTokens;
   } finally {
     signal.removeEventListener("abort", onAbort);
+    try {
+      reader.releaseLock();
+    } catch {}
   }
 }
 
@@ -500,7 +503,17 @@ export async function streamOmniRouterCompletion(opts: OmniStreamOpts): Promise<
           throw new OmniRouterError("OmniRouter returned an empty stream.", 502, "server");
         }
 
-        const totalChars = await readOmniSseStream(response.body, opts.onDelta, signal);
+        let totalChars = 0;
+        try {
+          totalChars = await readOmniSseStream(response.body, opts.onDelta, signal);
+        } finally {
+          try {
+            if (!response.body.locked) {
+              await response.body.cancel();
+            }
+          } catch {}
+        }
+
         if (totalChars === 0 && !signal.aborted) {
           throw new OmniRouterError(
             "OmniRouter model returned an empty response. Please check model availability or select another model.",
@@ -552,7 +565,17 @@ export async function streamOmniRouterCompletion(opts: OmniStreamOpts): Promise<
         throw new OmniRouterError("OmniRouter returned an empty stream.", 502, "server");
       }
 
-      const totalChars = await readOmniSseStream(response.body, opts.onDelta, signal);
+      let totalChars = 0;
+      try {
+        totalChars = await readOmniSseStream(response.body, opts.onDelta, signal);
+      } finally {
+        try {
+          if (!response.body.locked) {
+            await response.body.cancel();
+          }
+        } catch {}
+      }
+
       if (totalChars === 0 && !signal.aborted) {
         throw new OmniRouterError(
           "OmniRouter model returned an empty response. Please check model availability or select another model.",

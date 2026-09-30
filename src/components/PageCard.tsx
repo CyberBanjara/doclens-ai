@@ -46,6 +46,7 @@ interface CardLoaderProps {
   globals: Globals;
   models: ORModel[];
   omniModels?: ORModel[];
+  ollamaModels?: ORModel[];
   summary?: PageAiSummaryEntry;
   isRunning: boolean;
   streamBuf: string;
@@ -145,6 +146,7 @@ export function PageCardLoader(props: CardLoaderProps) {
       eff={effective(props.globals, pageAi.overrides)}
       models={props.models}
       omniModels={props.omniModels}
+      ollamaModels={props.ollamaModels}
       streamBuf={streamBuf}
       previousContext={prevContext}
       fallbackResult={streamCacheRef.current}
@@ -167,6 +169,7 @@ interface CardProps {
   eff: ReturnType<typeof effective>;
   models: ORModel[];
   omniModels?: ORModel[];
+  ollamaModels?: ORModel[];
   streamBuf: string;
   previousContext?: string;
   fallbackResult?: string;
@@ -183,6 +186,7 @@ function PageCard({
   eff,
   models,
   omniModels,
+  ollamaModels,
   streamBuf,
   previousContext,
   fallbackResult,
@@ -344,6 +348,7 @@ function PageCard({
               eff={eff}
               models={models}
               omniModels={omniModels}
+              ollamaModels={ollamaModels}
               overrides={state.overrides}
               onSetOverride={setOverride}
               onClearOverrides={() => onUpdate({ overrides: undefined })}
@@ -498,6 +503,7 @@ function OverrideControls({
   eff,
   models,
   omniModels,
+  ollamaModels,
   overrides,
   onSetOverride,
   onClearOverrides,
@@ -505,6 +511,7 @@ function OverrideControls({
   eff: ReturnType<typeof effective>;
   models: ORModel[];
   omniModels?: ORModel[];
+  ollamaModels?: ORModel[];
   overrides?: PageOverrides;
   onSetOverride: (patch: Partial<PageOverrides>) => void;
   onClearOverrides: () => void;
@@ -527,11 +534,14 @@ function OverrideControls({
   }, [eff.language]);
 
   const activeModelList = useMemo(() => {
+    if (eff.provider === "ollama") {
+      return ollamaModels && ollamaModels.length > 0 ? ollamaModels : models;
+    }
     if (eff.provider === "omnirouter") {
       return omniModels && omniModels.length > 0 ? omniModels : models;
     }
     return models;
-  }, [eff.provider, omniModels, models]);
+  }, [eff.provider, ollamaModels, omniModels, models]);
 
   const modelOptions = useMemo(() => {
     const list = activeModelList
@@ -546,20 +556,19 @@ function OverrideControls({
   return (
     <div>
       <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
-        {isOmniConfigured && (
-          <SmallSelect
-            label="Provider"
-            value={eff.provider}
-            onChange={(v) => {
-              const nextProvider = v as AiProvider;
-              onSetOverride({ provider: nextProvider, modelId: undefined });
-            }}
-            options={[
-              ["openrouter", "OpenRouter (Default)"],
-              ["omnirouter", "OmniRouter (Local)"],
-            ]}
-          />
-        )}
+        <SmallSelect
+          label="Provider"
+          value={eff.provider}
+          onChange={(v) => {
+            const nextProvider = v as AiProvider;
+            onSetOverride({ provider: nextProvider, modelId: undefined });
+          }}
+          options={[
+            ["openrouter", "OpenRouter (Default)"],
+            ["omnirouter", "OmniRouter (Local)"],
+            ["ollama", "Ollama (Local)"],
+          ]}
+        />
         <SmallSelect
           label="Mode"
           value={eff.mode}

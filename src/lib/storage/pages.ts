@@ -118,6 +118,7 @@ export async function getPageAiSummary(docId: string): Promise<Record<number, Pa
     }
     cur = await cur.continue();
   }
+  await tx.done;
   return out;
 }
 

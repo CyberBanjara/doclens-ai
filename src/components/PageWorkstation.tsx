@@ -5,6 +5,7 @@ import { ExplainSetupDialog } from "@/components/ExplainSetupDialog";
 import {
   fetchModels,
   fetchOmniRouterModels,
+  fetchOllamaModels,
   isOmniRouterConfigured,
   getEffectiveSelectedModel,
   hasCompletedAiPreferenceSetup,
@@ -61,6 +62,7 @@ export function PageWorkstation({
   const [globals, setGlobals] = useState<Globals>(readGlobals);
   const [models, setModels] = useState<ORModel[]>([]);
   const [omniModels, setOmniModels] = useState<ORModel[]>([]);
+  const [ollamaModels, setOllamaModels] = useState<ORModel[]>([]);
 
   const [explainSetupOpen, setExplainSetupOpen] = useState(false);
   const [pendingExplainAction, setPendingExplainAction] = useState<PendingExplainAction | null>(
@@ -151,6 +153,9 @@ export function PageWorkstation({
         .then(setOmniModels)
         .catch(() => {});
     }
+    fetchOllamaModels()
+      .then(setOllamaModels)
+      .catch(() => {});
   }, []);
 
   const [keyStatus, setKeyStatusState] = useState<KeyStatus>("unknown");
@@ -292,7 +297,17 @@ export function PageWorkstation({
 
   /* ---------- Empty / setup states ---------- */
 
-  if (keyReady && !modelResolved && !globals.modelId) {
+  const isOllamaProvider = globals.provider === "ollama";
+  const isOmniProvider = globals.provider === "omnirouter";
+  const isLocalProvider = isOllamaProvider || isOmniProvider;
+  const activeModelId = isOllamaProvider
+    ? globals.ollamaModelId || globals.modelId
+    : isOmniProvider
+      ? globals.omniModelId || globals.modelId
+      : globals.modelId;
+  const providerReady = isLocalProvider || keyReady;
+
+  if (providerReady && !modelResolved && !activeModelId) {
     return (
       <div className="flex h-full items-center justify-center px-6 text-center">
         <div className="flex items-center gap-3 text-sm text-muted-foreground">
@@ -303,7 +318,7 @@ export function PageWorkstation({
     );
   }
 
-  if (!keyReady || !globals.modelId) {
+  if (!providerReady || !activeModelId) {
     const noKey = !hasKey;
     const invalid = keyStatus === "invalid";
     const missing = keyStatus === "missing";
@@ -323,7 +338,7 @@ export function PageWorkstation({
                 : "Select a model in Settings to get started."}
           </p>
           <div className="mt-4 flex items-center justify-center gap-2">
-            {keyReady ? null : (
+            {providerReady ? null : (
               <button
                 onClick={() => openApiKeyModal()}
                 className="rounded-lg bg-primary px-4 py-2 text-xs font-semibold text-primary-foreground transition-opacity hover:opacity-90"
@@ -415,6 +430,7 @@ export function PageWorkstation({
           globals={globals}
           models={models}
           omniModels={omniModels}
+          ollamaModels={ollamaModels}
           summary={aiSummary[activePage]}
           isRunning={runningPages.has(activePage)}
           streamBuf={streamBufs[activePage] ?? ""}

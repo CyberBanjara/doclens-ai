@@ -1,6 +1,7 @@
 # PDF Viewer Feature
 
-> Core visual engine rendering documents inside the workspace.
+> Core visual engine rendering documents inside the workspace with priority-based scheduling and memory optimization.
+> **Source:** `src/components/PdfViewer.tsx`, `src/hooks/usePdfDocument.ts`
 
 ---
 
@@ -9,6 +10,7 @@
 - Renders PDF document pages asynchronously with **priority-based scheduling**.
 - Implements a precise transparent text selection layer layered over structural canvases.
 - Synchronizes selection parameters to trigger contextual action toolbars.
+- Strict React Hook lifecycle safety with unconditional hook registration.
 
 ---
 
@@ -34,14 +36,11 @@ A throttled `scroll` event handler using `requestAnimationFrame` continuously de
 
 ### 4. GPU Eviction Queue
 
-Limits concurrently rendered canvas layers to a maximum of 5. When a 6th page is rendered, the oldest canvas is cleared (via `canvas.width = 0; canvas.height = 0`) to free GPU bitmap memory. The eviction logic protects the active page — it is never evicted.
+Limits concurrently rendered canvas layers to a maximum of 16. When memory pressure increases, off-screen canvases are cleared (via `canvas.width = 0; canvas.height = 0`) to free GPU bitmap memory. The eviction logic protects the active page — it is never evicted.
 
----
+### 5. Hook Order & Ref Stability
 
-## Interactions & Sync
-
-- **Selection Events:** Listens to `selectionchange` on the document to capture selections.
-- **Bi-Directional Scrolling:** Listens to page selectors in the header, executing smooth scroll animations to align with the active page. Clicking a page updates the header selector.
+All React lifecycle hooks (`useCallback`, `useEffect`, `useRef`, `useMemo`) are placed strictly at the top of the component before any loading or error guard returns, preventing React Hook count mismatch errors during document loading transitions.
 
 ---
 

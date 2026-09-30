@@ -54,14 +54,19 @@ export function useFullBookTranslation({
   const activePageRef = useRef<number | null>(null);
   const isMountedRef = useRef(true);
   const autoFollowRef = useRef(true);
+  const toastIdRef = useRef<string | number | null>(null);
   autoFollowRef.current = autoFollow;
 
-  // On unmount: stop queueing NEXT pages, but let the CURRENT actively running page finish and save in background!
+  // On unmount: stop queueing NEXT pages, dismiss active toast, but let the CURRENT actively running page finish and save in background!
   useEffect(() => {
     isMountedRef.current = true;
     return () => {
       isMountedRef.current = false;
       isTranslatingRef.current = false;
+      if (toastIdRef.current) {
+        toast.dismiss(toastIdRef.current);
+        toastIdRef.current = null;
+      }
     };
   }, []);
 
@@ -95,7 +100,12 @@ export function useFullBookTranslation({
       activeAbortControllerRef.current.abort();
       activeAbortControllerRef.current = null;
     }
-    toast.warning("Full book translation stopped.");
+    if (toastIdRef.current) {
+      toast.warning("Full book translation stopped.", { id: toastIdRef.current });
+      toastIdRef.current = null;
+    } else {
+      toast.warning("Full book translation stopped.");
+    }
   }, [docId]);
 
   const start = useCallback(
@@ -149,6 +159,7 @@ export function useFullBookTranslation({
       const toastId = toast.loading(
         `Starting Full Book Translation (0/${pagesToProcess.length} pages, range ${startPage}-${endPage})...`,
       );
+      toastIdRef.current = toastId;
 
       for (let i = 0; i < pagesToProcess.length; i++) {
         if (!isTranslatingRef.current || !isMountedRef.current) break;
@@ -170,11 +181,14 @@ export function useFullBookTranslation({
         const ctrl = new AbortController();
         activeAbortControllerRef.current = ctrl;
 
-        if (isMountedRef.current) {
+        if (isMountedRef.current && toastIdRef.current) {
           toast.loading(`Translating Page ${pNum} (${done + 1}/${pagesToProcess.length})...`, {
-            id: toastId,
+            id: toastIdRef.current,
           });
         }
+
+        let snippetBuffer = "";
+        let snippetTimer: NodeJS.Timeout | null = null;
 
         try {
           const res = await executePageTranslation({
@@ -182,8 +196,15 @@ export function useFullBookTranslation({
             pageNumber: pNum,
             forceRegenerate: overwriteExisting,
             onDelta: (chunk) => {
-              if (isMountedRef.current) {
-                setCurrentStreamingSnippet((prev) => (prev + chunk).slice(-150));
+              if (!isMountedRef.current) return;
+              snippetBuffer = (snippetBuffer + chunk).slice(-150);
+              if (!snippetTimer) {
+                snippetTimer = setTimeout(() => {
+                  snippetTimer = null;
+                  if (isMountedRef.current) {
+                    setCurrentStreamingSnippet(snippetBuffer);
+                  }
+                }, 250);
               }
             },
           });
@@ -230,6 +251,10 @@ export function useFullBookTranslation({
             setFailedPages([...failed]);
           }
         } finally {
+          if (snippetTimer) {
+            clearTimeout(snippetTimer);
+            snippetTimer = null;
+          }
           activeAbortControllerRef.current = null;
           activePageRef.current = null;
         }
@@ -272,7 +297,28 @@ export function useFullBookTranslation({
         setCurrentPage(null);
         setCooldownRemaining(null);
         setEstimatedSecondsRemaining(null);
+      }
 
+      const activeToastId = toastIdRef.current;
+      toastIdRef.current = null;
+
+      if (activeToastId) {
+        if (wasCancelled) {
+          toast.info(`Full book translation stopped. ${done} pages were translated.`, {
+            id: activeToastId,
+          });
+        } else if (failed.length === 0) {
+          toast.success(
+            `Full book translation completed! ${done} page(s) translated (range ${startPage}–${endPage}).`,
+            { id: activeToastId },
+          );
+        } else {
+          toast.warning(
+            `Translation completed with ${failed.length} failed page(s): ${failed.join(", ")}`,
+            { id: activeToastId },
+          );
+        }
+      } else if (isMountedRef.current) {
         if (wasCancelled) {
           toast.info(`Full book translation stopped. ${done} pages were translated.`);
         } else if (failed.length === 0) {

@@ -9,6 +9,9 @@ import {
   readGlobals,
   streamCompletion,
   streamOmniRouterCompletion,
+  streamOllamaCompletion,
+  getOllamaEndpoint,
+  getOllamaSelectedModel,
   isOmniRouterConfigured,
   parseStructuredTranslationResponse,
   type Globals,
@@ -156,6 +159,7 @@ export async function executePageTranslation({
       const state: PageAi = pageRec.pageAi ?? { pageNumber, status: "idle" };
       let eff = effective(currentGlobals, state.overrides);
       let isOmni = eff.provider === "omnirouter";
+      let isOllama = eff.provider === "ollama";
       const hash = hashFor(eff);
 
       // ─────────────────────────────────────────────────────────────────
@@ -207,7 +211,7 @@ export async function executePageTranslation({
       }
 
       const key = getKey();
-      if (!isOmni && !key) {
+      if (!isOmni && !isOllama && !key) {
         const errorMsg = "No OpenRouter API key configured.";
         await upsertPageAi(docId, pageNumber, {
           status: "error",
@@ -218,14 +222,18 @@ export async function executePageTranslation({
 
       const modelId =
         eff.modelId ||
-        (isOmni ? currentGlobals.omniModelId || "" : getSelectedModel() || getDefaultModelSync());
+        (isOllama
+          ? currentGlobals.ollamaModelId || getOllamaSelectedModel() || ""
+          : isOmni
+            ? currentGlobals.omniModelId || ""
+            : getSelectedModel() || getDefaultModelSync());
 
       const effectiveText = customTextOverride ?? pageRec.text;
       const previousContext = await getPreviousContext(docId, pageNumber, eff);
 
       let payload: Record<string, unknown>;
       if (state.isCustom && state.customRequest) {
-        payload = { ...state.customRequest, stream: true };
+        payload = { ...state.customRequest, stream: true, model: modelId };
       } else {
         payload = buildPagePayload({
           modelId,
@@ -258,7 +266,14 @@ export async function executePageTranslation({
         });
       };
 
-      if (isOmni) {
+      if (isOllama) {
+        await streamOllamaCompletion({
+          endpoint: currentGlobals.ollamaEndpoint || getOllamaEndpoint(),
+          payload,
+          signal: internalAbort.signal,
+          onDelta: onChunk,
+        });
+      } else if (isOmni) {
         try {
           await streamOmniRouterCompletion({
             payload,
@@ -323,7 +338,7 @@ export async function executePageTranslation({
       });
 
       if (contextDelta) {
-        await mergeContextDelta(docId, pageNumber, contextDelta);
+        await mergeContextDelta(docId, pageNumber, contextDelta, true);
       }
 
       if (isDefaultTranslation && bookId) {

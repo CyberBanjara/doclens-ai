@@ -1,53 +1,62 @@
 # Translation Pipeline
 
-> The second stage of the document processing pipeline. Translates or explains extracted page text via an LLM.
-> **Source:** `src/lib/openrouter.ts`, `src/components/PageWorkstation.tsx`
+> The second stage of the document processing pipeline. Translates or explains extracted page text via Cloud or Local LLMs.
+> **Source:** `src/lib/pageTranslationRunner.ts`, `src/lib/openrouter.ts`, `src/lib/ollama.ts`, `src/components/PageWorkstation.tsx`
 
 ---
 
 ## Pipeline Stages
 
 ```mermaid
-flowchart LR
-    A[PageExtraction text] --> B["buildPagePayload() — system prompt + page text"]
-    B --> C{settingsHash cached & unchanged?}
-    C -->|Yes| D[Use cached PageAi result]
-    C -->|No| E["streamCompletion() — SSE via OpenRouter"]
-    E --> F[Stream tokens into UI]
-    F --> G[Store PageAi + settingsHash in pageData]
-    D --> G
+flowchart TD
+    A[Page Text Extracted] --> B["executePageTranslation() (pageTranslationRunner.ts)"]
+    B --> C{Settings Hash Match?}
+    C -->|Yes| D[Reuse Stored PageAi Result]
+    C -->|No| E{Provider Selection}
+    E -->|openrouter| F["OpenRouter SSE Stream Proxy"]
+    E -->|omnirouter| G["Local OmniRouter SSE Stream"]
+    E -->|ollama| H["Local Ollama NDJSON Stream (ollama.ts)"]
+    F --> I[Streaming Token Buffer]
+    G --> I
+    H --> I
+    I --> J["cleanAiText() Sanitization"]
+    J --> K["Write to IndexedDB pageData"]
+    K --> L["Dispatch doclens:page-status-changed & doclens:page-ready"]
+    D --> L
 ```
 
 ---
 
 ## Detailed Steps
 
-### 1. Payload Construction
+### 1. Detached Background Execution
+- Translation execution is managed by a singleton module ([`src/lib/pageTranslationRunner.ts`](file:///home/sanskar/Desktop/doclens-ai/src/lib/pageTranslationRunner.ts)) that runs independently of React component lifecycles.
+- When users navigate across pages or switch tabs ("Original Text" vs "AI Assistant"), in-flight translations continue seamlessly in the background without being aborted.
 
-- `buildPagePayload()` (`src/lib/openrouter.ts`) assembles the request: mode-specific system instructions (`MODE_INSTRUCTIONS` — `translate` or `explain`), an explanation style (`EXPLANATION_STYLES`, only used in `explain` mode), target language, temperature, and the extracted page text.
-- There is no separate NLP sentence-segmentation step here — the whole page's extracted text is sent as one payload; sentence-level splitting happens later, at TTS playback time (see [[TTS Pipeline]]).
+### 2. Multi-Provider Resolution
+- Supports three AI providers:
+  1. **OpenRouter:** Cloud inference via live Server-Sent Events (SSE).
+  2. **OmniRouter:** Local inference via local OpenAI-compatible endpoints.
+  3. **Ollama:** Direct local inference via native [[Ollama API]] (`/api/chat`).
 
-### 2. Cache Check via Settings Hash
+### 3. Payload Construction & Cache Check
+- `buildPagePayload()` (`src/lib/openrouter.ts`) constructs mode instructions (`translate` or `explain`), style profiles, target languages, and temperature settings.
+- Computes `computeSettingsHash()` against stored IndexedDB data; reuses cached results when settings are identical.
 
-- `PageWorkstation.tsx` computes a `computeSettingsHash({ modelId, mode, language, style, temperature })` (`src/lib/storage.ts`) and compares it against the page's stored hash. If unchanged, the existing cached `PageAi.result` is reused instead of re-calling the LLM.
+### 4. Post-Processing & Event Dispatch
+- Incoming stream chunks pass through `cleanAiText()` to strip markdown formatting and code blocks for smooth TTS compatibility.
+- Once completed, writes result to `pageData` in [[IndexedDB Storage]] and emits `doclens:page-ready` and `doclens:page-status-changed` events across the UI.
 
-### 3. Streaming Completion
-
-- On a cache miss, `streamCompletion()` calls `completeWithServerOpenRouter()` — a TanStack Start server function that proxies OpenRouter's chat-completions endpoint as a live Server-Sent Events (SSE) stream, so the API key is never exposed to the client.
-- Tokens are parsed from `data:` lines and appended to the UI incrementally as they arrive, with retry/backoff on transient failures.
-
-### 4. Result Storage
-
-- The completed result, its `AiMode`/`AiStatus`, and the settings hash used to produce it are written to the page's `PageAi` record in the `pageData` IndexedDB store (see [[IndexedDB Storage]]).
-
-There is no glossary/terminology-matching step and no automated translation-quality scoring (e.g. BLEU/COMET) in the current pipeline — result quality depends entirely on the selected LLM.
+### 5. Non-Destructive Union Sync
+- Syncing with Supabase utilizes a union merge strategy in [`src/lib/sync.ts`](file:///home/sanskar/Desktop/doclens-ai/src/lib/sync.ts) that merges remote pages with local records without overwriting local custom translations.
 
 ---
 
 ## Relationships
 
-- **Core Technology:** [[OpenRouter API]].
-- **Consumer:** [[TTS Pipeline]] reads the stored `PageAi.result` text.
+- **Providers:** [[OpenRouter API]], [[Ollama API]].
+- **Consumer:** [[TTS Pipeline]] reads the stored clean `PageAi.result` text.
+- **Batch Processing:** [[Full Book Translation]] sequentially coordinates this pipeline across page ranges.
 
 ---
 

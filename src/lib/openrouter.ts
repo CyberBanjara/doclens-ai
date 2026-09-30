@@ -6,9 +6,17 @@ import {
   setOmniSelectedModel,
   isOmniRouterConfigured,
 } from "./omnirouter";
+import {
+  getOllamaEndpoint,
+  setOllamaEndpoint,
+  getOllamaSelectedModel,
+  setOllamaSelectedModel,
+  isOllamaConfigured,
+} from "./ollama";
 
 export type { AiProvider } from "./storage/types";
 export * from "./omnirouter";
+export * from "./ollama";
 
 declare const __OPENROUTER_DEFAULT_KEY__: string | undefined;
 declare const __OPENROUTER_DEFAULT_MODEL__: string | undefined;
@@ -43,15 +51,12 @@ const GLOBAL_KEY_LS = "doclens.openrouter.globalKey";
 export type KeyStatus = "missing" | "valid" | "invalid" | "unknown";
 
 export function getAiProvider(): AiProvider {
-  if (typeof window === "undefined") return "omnirouter";
+  if (typeof window === "undefined") return "openrouter";
   const saved = localStorage.getItem(PROVIDER_LS);
-  if (saved === "openrouter") {
-    return "openrouter";
+  if (saved === "openrouter" || saved === "omnirouter" || saved === "ollama") {
+    return saved as AiProvider;
   }
-  if (saved === "omnirouter") {
-    return "omnirouter";
-  }
-  return "omnirouter";
+  return "openrouter";
 }
 
 export function setAiProvider(p: AiProvider) {
@@ -357,6 +362,8 @@ export interface Globals {
   language: string;
   modelId: string;
   omniModelId?: string;
+  ollamaEndpoint?: string;
+  ollamaModelId?: string;
   style: string;
   temperature: number;
 }
@@ -369,6 +376,8 @@ export function readGlobals(): Globals {
     language: getOutputLanguage(),
     modelId: getSelectedModel() || getDefaultModelSync(),
     omniModelId: getOmniSelectedModel() || getOmniDefaultModelSync(),
+    ollamaEndpoint: getOllamaEndpoint(),
+    ollamaModelId: getOllamaSelectedModel(),
     style: getStyle(mode),
     temperature: getTemperature(),
   };
@@ -385,6 +394,8 @@ export interface TranslationConfig {
   mode: GlobalMode;
   modelId: string;
   omniModelId?: string;
+  ollamaEndpoint?: string;
+  ollamaModelId?: string;
   style: ProcessingStyle | string;
   temperature: number;
 }
@@ -397,6 +408,8 @@ export function getTranslationConfig(): TranslationConfig {
     mode,
     modelId: getSelectedModel() || getDefaultModelSync(),
     omniModelId: getOmniSelectedModel() || getOmniDefaultModelSync(),
+    ollamaEndpoint: getOllamaEndpoint(),
+    ollamaModelId: getOllamaSelectedModel(),
     style: getStyle(mode),
     temperature: getTemperature(),
   };
@@ -434,6 +447,12 @@ export function applyTranslationConfig(
   }
   if (config.omniModelId) {
     setOmniSelectedModel(config.omniModelId);
+  }
+  if (config.ollamaEndpoint) {
+    setOllamaEndpoint(config.ollamaEndpoint);
+  }
+  if (config.ollamaModelId) {
+    setOllamaSelectedModel(config.ollamaModelId);
   }
   if (config.style) {
     setStyle(config.style);
@@ -743,6 +762,9 @@ async function readSseStream(
     return emittedTokens;
   } finally {
     signal.removeEventListener("abort", onAbort);
+    try {
+      reader.releaseLock();
+    } catch {}
   }
 }
 
@@ -800,7 +822,17 @@ export async function streamCompletion(opts: StreamOpts): Promise<void> {
         throw new OpenRouterError("OpenRouter returned an empty stream.", 502, "server");
       }
 
-      const totalChars = await readSseStream(response.body, opts.onDelta, signal, isCustomKey);
+      let totalChars = 0;
+      try {
+        totalChars = await readSseStream(response.body, opts.onDelta, signal, isCustomKey);
+      } finally {
+        try {
+          if (!response.body.locked) {
+            await response.body.cancel();
+          }
+        } catch {}
+      }
+
       if (totalChars === 0 && !signal.aborted) {
         throw new OpenRouterError(
           "The model returned an empty response. Please retry or choose a different model in settings.",
