@@ -296,7 +296,9 @@ function SettingsPage() {
     if (isOmniConfigured) {
       void loadOmniModels();
     }
-    void loadOllamaModels(globals.ollamaEndpoint || getOllamaEndpoint());
+    if (globals.provider === "ollama") {
+      void loadOllamaModels(globals.ollamaEndpoint || getOllamaEndpoint());
+    }
     void refreshTtsVoices(true);
   }, [refreshTtsVoices, isOmniConfigured]);
 
@@ -452,6 +454,11 @@ function SettingsPage() {
           onProviderChange={(p) => {
             setProvider(p);
             setAiProvider(p);
+            if (p === "ollama") {
+              void loadOllamaModels();
+            } else if (p === "omnirouter") {
+              void loadOmniModels();
+            }
           }}
           openRouterStatus={openRouterStatus}
           omniStatus={omniStatus}

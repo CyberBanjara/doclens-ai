@@ -153,10 +153,12 @@ export function PageWorkstation({
         .then(setOmniModels)
         .catch(() => {});
     }
-    fetchOllamaModels()
-      .then(setOllamaModels)
-      .catch(() => {});
-  }, []);
+    if (globals.provider === "ollama") {
+      fetchOllamaModels()
+        .then(setOllamaModels)
+        .catch(() => {});
+    }
+  }, [globals.provider]);
 
   const [keyStatus, setKeyStatusState] = useState<KeyStatus>("unknown");
   useEffect(() => {

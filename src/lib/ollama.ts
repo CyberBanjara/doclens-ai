@@ -52,9 +52,11 @@ export function setOllamaSelectedModel(id: string): void {
   window.dispatchEvent(new CustomEvent(OLLAMA_STATUS_EVT, { detail: { modelId: id } }));
 }
 
-/** Checks whether Ollama is configured (always true as default endpoint is provided). */
+/** Checks whether Ollama is configured or selected as provider. */
 export function isOllamaConfigured(): boolean {
-  return true;
+  if (typeof window === "undefined") return false;
+  const storedProvider = localStorage.getItem("doclens.provider");
+  return storedProvider === "ollama";
 }
 
 export class OllamaError extends Error {
