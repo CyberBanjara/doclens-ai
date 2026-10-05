@@ -1,12 +1,14 @@
-// @lovable.dev/vite-tanstack-config already includes the following — do NOT add them manually
-// or the app will break with duplicate plugins:
-//   - tanstackStart, viteReact, tailwindcss, tsConfigPaths, cloudflare (build-only),
-//     componentTagger (dev-only), VITE_* env injection, @ path alias, React/TanStack dedupe,
-//     error logger plugins, and sandbox detection (port/host/strictPort).
-// You can pass additional config via defineConfig({ vite: { ... } }) if needed.
-import { defineConfig } from "@lovable.dev/vite-tanstack-config";
+import { defineConfig } from "vite";
+import { tanstackStart } from "@tanstack/react-start/plugin/vite";
+import viteReact from "@vitejs/plugin-react";
+import tailwindcss from "@tailwindcss/vite";
+import tsConfigPaths from "vite-tsconfig-paths";
 import { nitro } from "nitro/vite";
 import { loadEnv } from "vite";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
+
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 // Load ALL env vars (including non-VITE_ prefixed) from .env files
 // The empty string prefix '' means "load all", not just VITE_-prefixed
@@ -16,70 +18,90 @@ Object.assign(process.env, env);
 const isVercel = process.env.VERCEL === "1" || env.VERCEL === "1";
 
 export default defineConfig({
-  nitro: false,
-  tanstackStart: {
-    spa: {},
-    prerender: {
-      enabled: false,
-    },
+  server: {
+    host: "::",
+    port: 8080,
   },
-  vite: {
-    // Inject Firebase config at build time from server-side env vars.
-    // These are NOT prefixed with VITE_ so Vite won't auto-expose them.
-    // The `define` option replaces the identifier at compile time, embedding
-    // the values into the minified bundle — no separate network request.
-    define: {
-      __FIREBASE_CONFIG__: JSON.stringify({
-        apiKey: process.env.FIREBASE_API_KEY || env.FIREBASE_API_KEY || "",
-        authDomain: process.env.FIREBASE_AUTH_DOMAIN || env.FIREBASE_AUTH_DOMAIN || "",
-        projectId: process.env.FIREBASE_PROJECT_ID || env.FIREBASE_PROJECT_ID || "",
-        storageBucket: process.env.FIREBASE_STORAGE_BUCKET || env.FIREBASE_STORAGE_BUCKET || "",
-        messagingSenderId:
-          process.env.FIREBASE_MESSAGING_SENDER_ID || env.FIREBASE_MESSAGING_SENDER_ID || "",
-        appId: process.env.FIREBASE_APP_ID || env.FIREBASE_APP_ID || "",
-        measurementId: process.env.FIREBASE_MEASUREMENT_ID || env.FIREBASE_MEASUREMENT_ID || "",
-      }),
-      __OPENROUTER_DEFAULT_KEY__: JSON.stringify(
-        process.env.OPENROUTER_API_KEY || env.OPENROUTER_API_KEY || "",
-      ),
-      __OPENROUTER_DEFAULT_MODEL__: JSON.stringify(
-        process.env.OPENROUTER_DEFAULT_MODEL || env.OPENROUTER_DEFAULT_MODEL || "",
-      ),
-      __OMNIROUTER_BASE_URL__: JSON.stringify(
-        process.env.OMNIROUTER_BASE_URL || env.OMNIROUTER_BASE_URL || "",
-      ),
-      __OMNIROUTER_API_KEY__: JSON.stringify(
-        process.env.OMNIROUTER_API_KEY || env.OMNIROUTER_API_KEY || "",
-      ),
-      __OMNIROUTER_CONFIGURED__: JSON.stringify(
-        Boolean(
-          (process.env.OMNIROUTER_BASE_URL || env.OMNIROUTER_BASE_URL) &&
-          (process.env.OMNIROUTER_API_KEY || env.OMNIROUTER_API_KEY),
-        ),
-      ),
-      __OMNIROUTER_DEFAULT_MODEL__: JSON.stringify(
-        process.env.OMNIROUTER_DEFAULT_MODEL || env.OMNIROUTER_DEFAULT_MODEL || "",
-      ),
-      __RAZORPAY_KEY_ID__: JSON.stringify(
-        process.env.RAZORPAY_KEY_ID ||
-          env.RAZORPAY_KEY_ID ||
-          process.env.VITE_RAZORPAY_KEY_ID ||
-          env.VITE_RAZORPAY_KEY_ID ||
-          "rzp_live_TVWs5Qr4BXQH9u",
-      ),
+  resolve: {
+    alias: {
+      "@": path.resolve(__dirname, "./src"),
     },
-    ssr: {
-      external: ["pdfjs-dist"],
-    },
-    environments: {
-      nitro: {
-        resolve: {
-          external: ["pdfjs-dist"],
-        },
+    dedupe: [
+      "react",
+      "react-dom",
+      "react/jsx-runtime",
+      "react/jsx-dev-runtime",
+      "@tanstack/react-query",
+      "@tanstack/query-core",
+    ],
+  },
+  define: {
+    __FIREBASE_CONFIG__: JSON.stringify({
+      apiKey: process.env.FIREBASE_API_KEY || env.FIREBASE_API_KEY || "",
+      authDomain: process.env.FIREBASE_AUTH_DOMAIN || env.FIREBASE_AUTH_DOMAIN || "",
+      projectId: process.env.FIREBASE_PROJECT_ID || env.FIREBASE_PROJECT_ID || "",
+      storageBucket: process.env.FIREBASE_STORAGE_BUCKET || env.FIREBASE_STORAGE_BUCKET || "",
+      messagingSenderId:
+        process.env.FIREBASE_MESSAGING_SENDER_ID || env.FIREBASE_MESSAGING_SENDER_ID || "",
+      appId: process.env.FIREBASE_APP_ID || env.FIREBASE_APP_ID || "",
+      measurementId: process.env.FIREBASE_MEASUREMENT_ID || env.FIREBASE_MEASUREMENT_ID || "",
+    }),
+    __OPENROUTER_DEFAULT_KEY__: JSON.stringify(
+      process.env.OPENROUTER_API_KEY || env.OPENROUTER_API_KEY || "",
+    ),
+    __OPENROUTER_DEFAULT_MODEL__: JSON.stringify(
+      process.env.OPENROUTER_DEFAULT_MODEL || env.OPENROUTER_DEFAULT_MODEL || "",
+    ),
+    __OMNIROUTER_BASE_URL__: JSON.stringify(
+      process.env.OMNIROUTER_BASE_URL || env.OMNIROUTER_BASE_URL || "",
+    ),
+    __OMNIROUTER_API_KEY__: JSON.stringify(
+      process.env.OMNIROUTER_API_KEY || env.OMNIROUTER_API_KEY || "",
+    ),
+    __OMNIROUTER_CONFIGURED__: JSON.stringify(
+      Boolean(
+        (process.env.OMNIROUTER_BASE_URL || env.OMNIROUTER_BASE_URL) &&
+        (process.env.OMNIROUTER_API_KEY || env.OMNIROUTER_API_KEY),
+      ),
+    ),
+    __OMNIROUTER_DEFAULT_MODEL__: JSON.stringify(
+      process.env.OMNIROUTER_DEFAULT_MODEL || env.OMNIROUTER_DEFAULT_MODEL || "",
+    ),
+    __RAZORPAY_KEY_ID__: JSON.stringify(
+      process.env.RAZORPAY_KEY_ID ||
+        env.RAZORPAY_KEY_ID ||
+        process.env.VITE_RAZORPAY_KEY_ID ||
+        env.VITE_RAZORPAY_KEY_ID ||
+        "rzp_live_TVWs5Qr4BXQH9u",
+    ),
+  },
+  ssr: {
+    external: ["pdfjs-dist"],
+  },
+  environments: {
+    nitro: {
+      resolve: {
+        external: ["pdfjs-dist"],
       },
     },
   },
   plugins: [
+    tailwindcss(),
+    tsConfigPaths({ projects: ["./tsconfig.json"] }),
+    tanstackStart({
+      spa: {},
+      prerender: {
+        enabled: false,
+      },
+      importProtection: {
+        behavior: "error",
+        client: {
+          files: ["**/server/**"],
+          specifiers: ["server-only"],
+        },
+      },
+    }),
+    viteReact(),
     {
       name: "vercel-api-dev-plugin",
       configureServer(server: any) {

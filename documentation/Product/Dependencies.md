@@ -77,7 +77,7 @@
 | Package                                                                                                                  | Purpose                                                                    |
 | ------------------------------------------------------------------------------------------------------------------------ | -------------------------------------------------------------------------- |
 | `vite`                                                                                                                   | Dev server + production bundling                                           |
-| `@lovable.dev/vite-tanstack-config`                                                                                      | Vite/TanStack Start preset (bundles React plugin, path aliases, Tailwind)  |
+| `@tailwindcss/vite`, `@vitejs/plugin-react`, `vite-tsconfig-paths`                                                       | Tailwind CSS v4, React Vite plugin, and TypeScript path resolution plugins |
 | `typescript`, `typescript-eslint`                                                                                        | Type checking + TS-aware linting                                           |
 | `eslint`, `eslint-plugin-react-hooks`, `eslint-plugin-react-refresh`, `eslint-plugin-prettier`, `eslint-config-prettier` | Linting, React Hooks rules, Prettier integration                           |
 | `prettier`                                                                                                               | Code formatting                                                            |
