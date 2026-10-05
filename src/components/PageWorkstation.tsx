@@ -148,7 +148,7 @@ export function PageWorkstation({
         .then(setModels)
         .catch(() => {});
     }
-    if (isOmniRouterConfigured()) {
+    if (globals.provider === "omnirouter" && isOmniRouterConfigured()) {
       fetchOmniRouterModels()
         .then(setOmniModels)
         .catch(() => {});

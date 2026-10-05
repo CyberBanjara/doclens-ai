@@ -293,7 +293,7 @@ function SettingsPage() {
     setCustomKeyInput(savedKey);
     void loadModels();
     void handleValidate(savedKey);
-    if (isOmniConfigured) {
+    if (globals.provider === "omnirouter" && isOmniConfigured) {
       void loadOmniModels();
     }
     if (globals.provider === "ollama") {

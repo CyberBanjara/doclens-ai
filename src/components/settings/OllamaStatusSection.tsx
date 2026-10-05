@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { Bot, RefreshCw, Cpu, Check, CheckCircle2, Globe, AlertCircle } from "lucide-react";
+import { Bot, RefreshCw, Cpu, Check, CheckCircle2, Globe, AlertCircle, ShieldCheck } from "lucide-react";
 import {
   DEFAULT_OLLAMA_ENDPOINT,
   getOllamaEndpoint,
@@ -57,7 +57,7 @@ export function OllamaStatusSection({
     setOllamaEndpoint(trimmed);
     onEndpointChange(trimmed);
     setIsEndpointSaved(true);
-    toast.success(`Ollama endpoint set to "${trimmed}".`);
+    toast.success(`Ollama endpoint saved to "${trimmed}". Testing connection...`);
     onRefresh(trimmed);
     setTimeout(() => setIsEndpointSaved(false), 2000);
   };
@@ -85,7 +85,7 @@ export function OllamaStatusSection({
         <div>
           <h3 className="text-base font-semibold text-foreground">Ollama (Local AI)</h3>
           <p className="text-xs text-muted-foreground">
-            Direct browser connection to your local Ollama instance
+            Direct browser connection to your local Ollama server or LAN IP
           </p>
         </div>
       </div>
@@ -95,7 +95,7 @@ export function OllamaStatusSection({
         <div className="flex items-center justify-between">
           <label className="text-xs font-semibold text-foreground flex items-center gap-1.5">
             <Globe className="h-3.5 w-3.5 text-primary" />
-            <span>Ollama Endpoint</span>
+            <span>Local IP / Ollama Endpoint</span>
           </label>
           {inputEndpoint !== DEFAULT_OLLAMA_ENDPOINT && (
             <button
@@ -122,7 +122,7 @@ export function OllamaStatusSection({
             onKeyDown={(e) => {
               if (e.key === "Enter") handleSaveEndpoint();
             }}
-            placeholder={DEFAULT_OLLAMA_ENDPOINT}
+            placeholder="http://localhost:11434 or http://192.168.x.x:11434"
             className="w-full rounded-lg border border-border bg-background px-3 py-2 text-xs font-mono text-foreground placeholder:text-muted-foreground/60 outline-none transition-colors focus:border-primary focus:ring-1 focus:ring-primary"
           />
           <button
@@ -135,9 +135,21 @@ export function OllamaStatusSection({
           </button>
         </div>
         <p className="text-[10px] text-muted-foreground">
-          Default: <span className="font-mono text-foreground/80">{DEFAULT_OLLAMA_ENDPOINT}</span>.
-          Requests are sent directly from your browser.
+          Default: <span className="font-mono text-foreground/80">{DEFAULT_OLLAMA_ENDPOINT}</span>. Enter your local IP (e.g. <span className="font-mono">http://localhost:11434</span> or <span className="font-mono">http://192.168.1.50:11434</span>) and click <strong>Set &amp; Test</strong>.
         </p>
+      </div>
+
+      {/* Browser Permission Tip */}
+      <div className="flex items-start gap-2.5 rounded-xl border border-primary/20 bg-primary/5 p-3 text-xs text-foreground/90 leading-relaxed">
+        <ShieldCheck className="h-4 w-4 text-primary shrink-0 mt-0.5" />
+        <div className="space-y-1">
+          <p className="font-medium text-foreground">
+            Browser Permission Notice
+          </p>
+          <p className="text-[11px] text-muted-foreground">
+            When saving your local IP or testing the connection, your browser may prompt: <em>&ldquo;www.anuwad.com is asking you to Access other apps and services on this device&rdquo;</em>. Click <strong>Allow</strong> to let Anuwad communicate directly with your local Ollama instance.
+          </p>
+        </div>
       </div>
 
       {/* Connection Status Card */}
@@ -176,7 +188,7 @@ export function OllamaStatusSection({
         <p className="text-xs text-muted-foreground leading-relaxed">
           {status === "connected"
             ? `${modelCount} Ollama model${modelCount === 1 ? "" : "s"} found and ready.`
-            : error || "Make sure Ollama is running on your machine."}
+            : error || "Make sure Ollama is running and click 'Allow' if your browser prompts for local network access."}
         </p>
       </div>
 

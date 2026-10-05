@@ -104,7 +104,7 @@ export function friendlyOllamaError(status: number, body: string, endpoint: stri
 function getOllamaConnectionErrorMessage(endpoint: string, err?: unknown): string {
   const base = `Could not connect to Ollama at ${endpoint}.`;
   const corsHint =
-    "Make sure Ollama is running and OLLAMA_ORIGINS is configured to allow browser access (e.g., OLLAMA_ORIGINS=\"*\" ollama serve).";
+    "Make sure Ollama is running (OLLAMA_ORIGINS=\"*\" ollama serve) and click 'Allow' if your browser prompts to 'Access other apps and services on this device'.";
   if (err instanceof Error && err.message) {
     if (err.name === "AbortError" || err.name === "TimeoutError") {
       return `${base} Connection timed out. ${corsHint}`;

@@ -41,8 +41,15 @@
 | `@tanstack/react-router` | File-based routing, URL-synced state                      |
 | `@tanstack/react-start`  | Server functions (`createServerFn`), SSR app shell        |
 | `react`, `react-dom`     | UI framework (v19)                                        |
-| `vite-tsconfig-paths`    | Resolves the `@/` path alias from `tsconfig.json` in Vite |
 | `nitro`                  | Server runtime powering the deployed server functions     |
+
+## PDF Generation & Payments / Auth Tokens
+
+| Package               | Purpose                                                        |
+| --------------------- | -------------------------------------------------------------- |
+| `@react-pdf/renderer` | Client-side export to formatted PDF documents                  |
+| `razorpay`            | Razorpay payment order and signature verification              |
+| `jose`                | Lightweight JWT signing and cryptographic token verification   |
 
 ## UI & Styling
 
@@ -67,14 +74,15 @@
 
 ## Build Tooling (dev dependencies)
 
-| Package                                                                                                                  | Purpose                                           |
-| ------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------- |
-| `vite`, `@vitejs/plugin-react`                                                                                           | Dev server + production bundling                  |
-| `typescript`, `typescript-eslint`                                                                                        | Type checking + TS-aware linting                  |
-| `eslint`, `eslint-plugin-react-hooks`, `eslint-plugin-react-refresh`, `eslint-plugin-prettier`, `eslint-config-prettier` | Linting, React Hooks rules, Prettier integration  |
-| `prettier`                                                                                                               | Code formatting                                   |
-| `@lovable.dev/vite-tanstack-config`                                                                                      | Shared Vite/TanStack config preset                |
-| `@types/*`                                                                                                               | TypeScript type definitions for React, Node, `ws` |
+| Package                                                                                                                  | Purpose                                                                    |
+| ------------------------------------------------------------------------------------------------------------------------ | -------------------------------------------------------------------------- |
+| `vite`                                                                                                                   | Dev server + production bundling                                           |
+| `@lovable.dev/vite-tanstack-config`                                                                                      | Vite/TanStack Start preset (bundles React plugin, path aliases, Tailwind)  |
+| `typescript`, `typescript-eslint`                                                                                        | Type checking + TS-aware linting                                           |
+| `eslint`, `eslint-plugin-react-hooks`, `eslint-plugin-react-refresh`, `eslint-plugin-prettier`, `eslint-config-prettier` | Linting, React Hooks rules, Prettier integration                           |
+| `prettier`                                                                                                               | Code formatting                                                            |
+| `globals`                                                                                                                | Browser global variables definition for ESLint                             |
+| `@types/*`                                                                                                               | TypeScript type definitions for React, Node, `ws`                          |
 
 ---
 
