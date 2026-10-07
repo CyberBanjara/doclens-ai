@@ -1,5 +1,6 @@
 import { initializeApp, getApp, getApps, type FirebaseApp } from "firebase/app";
 import { getFirestore, type Firestore } from "firebase/firestore";
+import { getAuth, type Auth } from "firebase/auth";
 
 // ---------------------------------------------------------------------------
 // Firebase configuration — injected at BUILD TIME via Vite `define`
@@ -27,12 +28,25 @@ const firebaseConfig =
         measurementId: "",
       };
 
-// Lazy/safe initialization of Firebase App instance
+let appInstance: FirebaseApp | null = null;
+let authInstance: Auth | null = null;
+let firestoreInstance: Firestore | null = null;
+
+// Safe initialization of Firebase App instance
 export function getFirebaseApp(): FirebaseApp {
-  return getApps().length === 0 ? initializeApp(firebaseConfig) : getApp();
+  if (!appInstance) {
+    appInstance = getApps().length === 0 ? initializeApp(firebaseConfig) : getApp();
+  }
+  return appInstance;
 }
 
-let firestoreInstance: Firestore | null = null;
+// Eager / cached initialization of Firebase Auth instance
+export function getFirebaseAuth(): Auth {
+  if (!authInstance) {
+    authInstance = getAuth(getFirebaseApp());
+  }
+  return authInstance;
+}
 
 // Lazy/safe initialization of Firestore database instance
 export function getFirestoreDb(): Firestore | null {
@@ -48,4 +62,15 @@ export function getFirestoreDb(): Firestore | null {
   }
 }
 
+// Warm up Firebase App and Auth immediately on client load
+export function warmFirebaseAuth(): void {
+  if (typeof window === "undefined") return;
+  try {
+    getFirebaseAuth();
+  } catch (err) {
+    console.warn("Failed to pre-warm Firebase Auth:", err);
+  }
+}
+
 export { firebaseConfig };
+

@@ -1,11 +1,10 @@
 import {
-  getAuth,
   GoogleAuthProvider,
   signInWithPopup,
-  signInWithRedirect,
+  getRedirectResult,
   signOut as fbSignOut,
 } from "firebase/auth";
-import { getFirebaseApp, getFirestoreDb } from "./firebase";
+import { getFirebaseApp, getFirestoreDb, getFirebaseAuth, warmFirebaseAuth } from "./firebase";
 
 export type UserRole = "admin" | "editor" | "moderator" | "viewer" | "user";
 
@@ -67,13 +66,55 @@ export function setStoredAuthToken(token: string | null): void {
 }
 
 /**
+ * Check if the user just arrived back from a Google Sign-In redirect and finalize session.
+ */
+export async function checkRedirectResult(): Promise<ClientUser | null> {
+  if (typeof window === "undefined") return null;
+  try {
+    const auth = getFirebaseAuth();
+    const result = await getRedirectResult(auth);
+    if (result && result.user) {
+      const idToken = await result.user.getIdToken(true);
+      setStoredAuthToken(idToken);
+
+      const fallbackUser: ClientUser = {
+        uid: result.user.uid,
+        email: (result.user.email || "").toLowerCase(),
+        name: result.user.displayName || result.user.email?.split("@")[0] || "User",
+        photoURL: result.user.photoURL || "",
+        role: "user",
+      };
+
+      try {
+        const res = await fetch("/api/auth/google-login", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          credentials: "include",
+          body: JSON.stringify({ idToken }),
+        });
+        if (res.ok) {
+          const data = await res.json();
+          if (data?.user) return data.user as ClientUser;
+        }
+      } catch (e) {
+        console.warn("Could not reach /api/auth/google-login on redirect:", e);
+      }
+
+      return fallbackUser;
+    }
+  } catch (err) {
+    console.warn("Redirect result check note:", err);
+  }
+  return null;
+}
+
+/**
  * Get the current fresh ID token from Firebase auth or storage.
  */
 export async function getFreshAuthToken(): Promise<string | null> {
   if (typeof window !== "undefined") {
     try {
-      const app = getFirebaseApp();
-      const auth = getAuth(app);
+      const auth = getFirebaseAuth();
       if (auth.currentUser) {
         const token = await auth.currentUser.getIdToken(false);
         setStoredAuthToken(token);
@@ -115,8 +156,7 @@ export async function getFreshAuthToken(): Promise<string | null> {
  * Trigger Google Sign-In popup to obtain an identity token.
  */
 export async function promptGoogleUser(): Promise<{ idToken: string; user: ClientUser }> {
-  const app = getFirebaseApp();
-  const auth = getAuth(app);
+  const auth = getFirebaseAuth();
   const provider = new GoogleAuthProvider();
   provider.setCustomParameters({ prompt: "select_account" });
 
@@ -125,9 +165,16 @@ export async function promptGoogleUser(): Promise<{ idToken: string; user: Clien
     result = await signInWithPopup(auth, provider);
   } catch (err: any) {
     if (err?.code === "auth/popup-blocked") {
-      console.warn("Firebase auth popup blocked. Redirecting to Google Sign-In...");
-      await signInWithRedirect(auth, provider);
-      throw new Error("Redirecting to Google Sign-In...");
+      throw new Error(
+        "Sign-in popup was blocked by your browser. Please allow popups for this site and click Sign In again.",
+      );
+    }
+    if (
+      err?.code === "auth/popup-closed-by-user" ||
+      err?.code === "auth/cancelled-popup-request" ||
+      err?.message?.includes("closed-by-user")
+    ) {
+      throw err;
     }
     throw err;
   }
@@ -216,8 +263,7 @@ export async function apiLogout(): Promise<void> {
   setStoredAuthToken(null);
 
   try {
-    const app = getFirebaseApp();
-    const auth = getAuth(app);
+    const auth = getFirebaseAuth();
     await fbSignOut(auth);
   } catch (err) {
     console.warn("Client Firebase signout warning:", err);

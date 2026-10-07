@@ -7,7 +7,9 @@ import {
   apiLoginWithGoogle,
   apiLogout,
   apiUpdateUserProfile,
+  checkRedirectResult,
 } from "@/lib/auth-client";
+import { warmFirebaseAuth } from "@/lib/firebase";
 import {
   setOutputLanguage,
   setStyle,
@@ -71,7 +73,28 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   useEffect(() => {
-    refreshUser();
+    // Eagerly pre-warm Firebase Auth SDK so popup trigger is instantaneous
+    warmFirebaseAuth();
+
+    const initAuth = async () => {
+      try {
+        const redirectUser = await checkRedirectResult();
+        if (redirectUser) {
+          setUser(redirectUser);
+          syncUserToLocalStorage(redirectUser);
+          setLoading(false);
+          toast.success(`Welcome back, ${redirectUser.name || "User"}!`, {
+            description: `Signed in as ${redirectUser.email} (${redirectUser.role})`,
+          });
+          return;
+        }
+      } catch (err) {
+        console.warn("Redirect auth check:", err);
+      }
+      await refreshUser();
+    };
+
+    initAuth();
   }, [refreshUser]);
 
   const updateProfile = async (updates: {

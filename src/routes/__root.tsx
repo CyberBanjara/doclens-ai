@@ -36,6 +36,7 @@ import { toast } from "sonner";
 import { NotFoundComponent } from "@/components/NotFound";
 import { AdBannerWidget } from "@/components/AdBannerWidget";
 import { warmR2FilesCache } from "@/lib/r2-cache";
+import { firebaseConfig } from "@/lib/firebase";
 
 export const Route = createRootRoute({
   head: () => ({
@@ -88,6 +89,21 @@ export const Route = createRootRoute({
         rel: "stylesheet",
         href: appCss,
       },
+      // Fast connection establishment for Google Auth & Identity CDN
+      { rel: "preconnect", href: "https://accounts.google.com" },
+      { rel: "dns-prefetch", href: "https://accounts.google.com" },
+      { rel: "preconnect", href: "https://apis.google.com" },
+      { rel: "dns-prefetch", href: "https://apis.google.com" },
+      { rel: "preconnect", href: "https://identitytoolkit.googleapis.com" },
+      { rel: "dns-prefetch", href: "https://identitytoolkit.googleapis.com" },
+      { rel: "preconnect", href: "https://securetoken.googleapis.com" },
+      { rel: "dns-prefetch", href: "https://securetoken.googleapis.com" },
+      ...(firebaseConfig?.authDomain
+        ? [
+            { rel: "preconnect", href: `https://${firebaseConfig.authDomain}` },
+            { rel: "dns-prefetch", href: `https://${firebaseConfig.authDomain}` },
+          ]
+        : []),
     ],
   }),
   ssr: false,
