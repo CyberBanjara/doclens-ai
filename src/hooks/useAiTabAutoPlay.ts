@@ -71,22 +71,7 @@ export function useAiTabAutoPlay({
     }
   };
 
-  // 1. Ensure current active page translation is requested if missing on AI tab
-  useEffect(() => {
-    if (tab !== "ai" || analyzing || pageCount <= 0) return;
-    dispatchDocEvent("doclens:ensure-page-ready", { docId, pageNumber: activePage });
-  }, [docId, activePage, tab, analyzing, pageCount]);
-
-  // 2. Continuous-play look-ahead: pre-translate the next page while the current page is playing
-  useEffect(() => {
-    if (tab !== "ai" || !isPlaying || !continuousPlay || activePageNumber !== activePage) return;
-    const next = activePage + 1;
-    if (next <= pageCount) {
-      dispatchDocEvent("doclens:ensure-page-ready", { docId, pageNumber: next });
-    }
-  }, [tab, isPlaying, continuousPlay, activePageNumber, activePage, pageCount, docId]);
-
-  // 3. Page transition auto-advance playback handler
+  // 1. Page transition auto-advance playback handler for already translated pages
   useEffect(() => {
     const isPendingTransition =
       isPlaying && continuousPlay && activePageNumber !== null && activePageNumber !== activePage;
@@ -97,11 +82,10 @@ export function useAiTabAutoPlay({
       if (tab === "ai") {
         const result = activePageData.pageAi?.result;
         const isDone = activePageData.pageAi?.status === "done";
-        if (isDone && result) {
+        if (isDone && result?.trim()) {
           startPlaybackForPage(result, "ai", activePage);
         } else {
-          // Request generation if not already running
-          dispatchDocEvent("doclens:ensure-page-ready", { docId, pageNumber: activePage });
+          stop();
         }
       } else if (tab === "text") {
         const text = activePageData.text;

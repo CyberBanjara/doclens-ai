@@ -247,39 +247,26 @@ export function PageWorkstation({
   );
 
   // Handle "ensure this page's AI content is ready" requests from RightPanel —
-  // driven by page navigation, continuous-play look-ahead, and AI-tab
-  // catch-up. Fast-paths to doclens:page-ready if already fresh; otherwise
-  // generates it with direct client-side execution.
+  // driven by page navigation and AI-tab catch-up. Dispatches doclens:page-ready
+  // if already translated and ready in storage. Never automatically triggers unprompted translations.
   useEffect(() => {
     return listenDocEvent("doclens:ensure-page-ready", (d) => {
       if (d.docId !== docId) return;
-      // Do not auto-generate while document is still extracting/running OCR/syncing or has no pages
       if (analyzing || pageCount <= 0) return;
       const { pageNumber } = d;
 
-      // Fast-path guard: if already translating this page in background, ignore redundant trigger
-      if (isPageTranslating(docId, pageNumber)) return;
-
       void (async () => {
         const pageRec = await getPageData(docId, pageNumber);
-        // Do not attempt to generate if page data is not yet saved to storage
         if (!pageRec || !pageRec.text?.trim()) return;
 
         const state: PageAi = pageRec?.pageAi ?? { pageNumber, status: "idle" };
 
         if (state.status === "done" && !!state.result) {
-          // If page already has generated content, dispatch it for audio/UI without auto re-generating
           dispatchPageReady(docId, pageNumber, state.result);
-          return;
-        }
-
-        if (!state.result && state.status !== "running" && !isPageTranslating(docId, pageNumber)) {
-          const result = await runPageOnce(pageNumber);
-          if (result) dispatchPageReady(docId, pageNumber, result);
         }
       })();
     });
-  }, [docId, runPageOnce, analyzing, pageCount]);
+  }, [docId, analyzing, pageCount]);
 
   const handleExplainSetupConfirm = async (settings: {
     language: string;

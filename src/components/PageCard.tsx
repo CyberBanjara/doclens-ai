@@ -437,7 +437,7 @@ function PageCard({
 
       {/* ─── Result / Streaming content ─── */}
       {(() => {
-        const displayResult = state.result || (!isRunning && fallbackResult ? fallbackResult : "");
+        const displayResult = state.status === "done" && state.result ? state.result : "";
         return (
           <div className="reader-text">
             {isRunning ? (

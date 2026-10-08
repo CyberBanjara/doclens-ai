@@ -247,8 +247,7 @@ export async function validateOllamaConnection(endpoint?: string): Promise<{
 }
 
 /** Default timeout for Ollama streaming request (ms). */
-const STREAM_TIMEOUT_MS = 90_000;
-const MAX_RETRIES = 1;
+const STREAM_TIMEOUT_MS = 300_000;
 
 export interface OllamaStreamOpts {
   endpoint?: string;
@@ -302,9 +301,10 @@ async function readOllamaStream(
   signal.addEventListener("abort", onAbort, { once: true });
 
   const processLine = (line: string) => {
-    if (!line || line.startsWith(":")) return;
+    const trimmed = line.trim();
+    if (!trimmed || trimmed.startsWith(":")) return;
 
-    let payloadStr = line;
+    let payloadStr = trimmed;
     if (payloadStr.startsWith("data:")) {
       payloadStr = payloadStr.slice(5).trim();
     }
@@ -342,12 +342,14 @@ async function readOllamaStream(
 
   try {
     while (true) {
+      if (signal.aborted) throw new DOMException("Aborted", "AbortError");
       const { value, done } = await reader.read();
       if (done) {
+        buffer += decoder.decode();
         if (buffer.trim()) {
           const remainingLines = buffer.split("\n");
           for (const l of remainingLines) {
-            processLine(l.trim());
+            processLine(l);
           }
         }
         break;
@@ -356,7 +358,7 @@ async function readOllamaStream(
 
       let lineEndIndex: number;
       while ((lineEndIndex = buffer.indexOf("\n")) !== -1) {
-        const line = buffer.slice(0, lineEndIndex).trim();
+        const line = buffer.slice(0, lineEndIndex);
         buffer = buffer.slice(lineEndIndex + 1);
         processLine(line);
       }
@@ -395,91 +397,83 @@ export async function streamOllamaCompletion(opts: OllamaStreamOpts): Promise<vo
   });
 
   try {
-    for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
-      if (signal.aborted) throw new DOMException("Aborted", "AbortError");
+    if (signal.aborted) throw new DOMException("Aborted", "AbortError");
 
-      let response: Response;
-      let usedEndpoint = `${targetEndpoint}/api/chat`;
+    let response: Response;
+    let usedEndpoint = `${targetEndpoint}/api/chat`;
 
-      try {
+    try {
+      response = await fetch(usedEndpoint, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Accept: "application/json, text/event-stream",
+        },
+        body: ollamaNativeBody,
+        signal,
+      });
+
+      // If /api/chat returns 404, fallback to /v1/chat/completions
+      if (response.status === 404) {
+        try {
+          await response.body?.cancel();
+        } catch {}
+        usedEndpoint = `${targetEndpoint}/v1/chat/completions`;
+        const openaiBody = JSON.stringify({
+          model,
+          messages,
+          stream: true,
+          temperature,
+          response_format: { type: "json_object" },
+        });
+
         response = await fetch(usedEndpoint, {
           method: "POST",
           headers: {
             "Content-Type": "application/json",
-            Accept: "application/json, text/event-stream",
+            Accept: "text/event-stream, application/json",
           },
-          body: ollamaNativeBody,
+          body: openaiBody,
           signal,
         });
-
-        // If /api/chat returns 404, fallback to /v1/chat/completions
-        if (response.status === 404) {
-          try {
-            await response.body?.cancel();
-          } catch {}
-          usedEndpoint = `${targetEndpoint}/v1/chat/completions`;
-          const openaiBody = JSON.stringify({
-            model,
-            messages,
-            stream: true,
-            temperature,
-            response_format: { type: "json_object" },
-          });
-
-          response = await fetch(usedEndpoint, {
-            method: "POST",
-            headers: {
-              "Content-Type": "application/json",
-              Accept: "text/event-stream, application/json",
-            },
-            body: openaiBody,
-            signal,
-          });
-        }
-      } catch (fetchErr: unknown) {
-        if (signal.aborted) throw fetchErr;
-        const msg = getOllamaConnectionErrorMessage(targetEndpoint, fetchErr);
-        throw new OllamaError(msg, 0, "network");
       }
+    } catch (fetchErr: unknown) {
+      if (signal.aborted) throw fetchErr;
+      const msg = getOllamaConnectionErrorMessage(targetEndpoint, fetchErr);
+      throw new OllamaError(msg, 0, "network");
+    }
 
-      if (!response.ok) {
-        const bodyText = await response.text();
-        const friendly = friendlyOllamaError(response.status, bodyText, targetEndpoint);
-        if ((response.status === 429 || response.status === 503) && attempt < MAX_RETRIES) {
-          await new Promise((r) => setTimeout(r, 1000));
-          continue;
-        }
-        throw friendly;
-      }
+    if (!response.ok) {
+      const bodyText = await response.text();
+      throw friendlyOllamaError(response.status, bodyText, targetEndpoint);
+    }
 
-      if (!response.body) {
-        throw new OllamaError("Ollama returned an empty stream.", 502, "server");
-      }
+    if (!response.body) {
+      throw new OllamaError("Ollama returned an empty stream.", 502, "server");
+    }
 
-      let totalChars = 0;
+    let totalChars = 0;
+    try {
+      totalChars = await readOllamaStream(
+        response.body,
+        opts.onDelta,
+        signal,
+        targetEndpoint,
+      );
+    } finally {
       try {
-        totalChars = await readOllamaStream(
-          response.body,
-          opts.onDelta,
-          signal,
-          targetEndpoint,
-        );
-      } finally {
-        try {
-          if (!response.body.locked) {
-            await response.body.cancel();
-          }
-        } catch {}
-      }
+        if (!response.body.locked) {
+          await response.body.cancel();
+        }
+      } catch {}
+    }
 
-      if (totalChars === 0 && !signal.aborted) {
-        throw new OllamaError(
-          `Ollama model "${model}" returned an empty response. Please verify that the model is loaded properly.`,
-          502,
-          "server",
-        );
-      }
-      return;
+    if (totalChars === 0 && !signal.aborted) {
+      throw new OllamaError(
+        `Ollama model "${model}" returned an empty response. Please verify that the model is loaded properly.`,
+        502,
+        "server",
+      );
     }
   } finally {
     cleanup();

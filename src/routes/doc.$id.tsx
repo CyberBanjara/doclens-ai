@@ -246,12 +246,6 @@ function DocPage() {
         toast.dismiss(toastId);
       }
     }
-
-    // Immediately trigger AI translation for active page
-    dispatchDocEvent("doclens:ensure-page-ready", {
-      docId: id,
-      pageNumber: activePage || 1,
-    });
   };
 
   useEffect(() => {

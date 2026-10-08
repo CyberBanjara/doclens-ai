@@ -158,6 +158,30 @@ export class OmniRouterError extends Error {
 }
 
 export function friendlyOmniRouterError(status: number, body: string): OmniRouterError {
+  let explicitMsg = "";
+  if (body) {
+    const trimmed = body.trim();
+    if (trimmed.startsWith("{")) {
+      try {
+        const parsed = JSON.parse(trimmed);
+        explicitMsg =
+          typeof parsed.error === "string"
+            ? parsed.error
+            : typeof parsed.error?.message === "string"
+              ? parsed.error.message
+              : typeof parsed.message === "string"
+                ? parsed.message
+                : "";
+      } catch {}
+    } else {
+      explicitMsg = trimmed;
+    }
+  }
+
+  if (explicitMsg) {
+    return new OmniRouterError(explicitMsg, status, status >= 500 ? "server" : status === 401 || status === 403 ? "auth" : status === 429 ? "rate_limit" : "unknown");
+  }
+
   if (status === 401 || status === 403) {
     return new OmniRouterError(
       "OmniRouter authentication failed. Please verify your OMNIROUTER_API_KEY.",
@@ -390,9 +414,10 @@ async function readOmniSseStream(
   signal.addEventListener("abort", onAbort, { once: true });
 
   const processLine = (line: string) => {
-    if (!line || line.startsWith(":")) return;
-    if (line.startsWith("data:")) {
-      const payload = line.slice(5).trim();
+    const trimmed = line.trim();
+    if (!trimmed || trimmed.startsWith(":")) return;
+    if (trimmed.startsWith("data:")) {
+      const payload = trimmed.slice(5).trim();
       if (payload === "[DONE]") return;
       try {
         const parsed = JSON.parse(payload);
@@ -411,6 +436,7 @@ async function readOmniSseStream(
           parsed?.choices?.[0]?.delta?.content ??
           parsed?.choices?.[0]?.delta?.text ??
           parsed?.choices?.[0]?.text ??
+          parsed?.choices?.[0]?.message?.content ??
           "";
 
         if (typeof delta === "string" && delta.length > 0) {
@@ -425,12 +451,14 @@ async function readOmniSseStream(
 
   try {
     while (true) {
+      if (signal.aborted) throw new DOMException("Aborted", "AbortError");
       const { value, done } = await reader.read();
       if (done) {
+        buffer += decoder.decode();
         if (buffer.trim()) {
           const remainingLines = buffer.split("\n");
           for (const l of remainingLines) {
-            processLine(l.trim());
+            processLine(l);
           }
         }
         break;
@@ -439,7 +467,7 @@ async function readOmniSseStream(
 
       let lineEndIndex: number;
       while ((lineEndIndex = buffer.indexOf("\n")) !== -1) {
-        const line = buffer.slice(0, lineEndIndex).trim();
+        const line = buffer.slice(0, lineEndIndex);
         buffer = buffer.slice(lineEndIndex + 1);
         processLine(line);
       }
@@ -469,81 +497,18 @@ export async function streamOmniRouterCompletion(opts: OmniStreamOpts): Promise<
   const { signal, cleanup } = combinedSignal(opts.signal, opts.timeoutMs ?? STREAM_TIMEOUT_MS);
 
   try {
+    if (signal.aborted) throw new DOMException("Aborted", "AbortError");
+
     // 1. Direct local connection (preferred in local development)
     if (directBaseUrl && directApiKey) {
-      for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
-        if (signal.aborted) throw new DOMException("Aborted", "AbortError");
-
-        let response: Response;
-        try {
-          response = await fetch(`${directBaseUrl}/chat/completions`, {
-            method: "POST",
-            headers: {
-              Authorization: `Bearer ${directApiKey}`,
-              "Content-Type": "application/json",
-              "ngrok-skip-browser-warning": "true",
-            },
-            body: JSON.stringify(requestPayload),
-            signal,
-          });
-        } catch (fetchErr: unknown) {
-          if (signal.aborted) throw fetchErr;
-          throw new OmniRouterError(
-            fetchErr instanceof Error
-              ? fetchErr.message
-              : "Failed to connect to OmniRouter endpoint",
-            0,
-            "network",
-          );
-        }
-
-        if (!response.ok) {
-          const bodyText = await response.text();
-          const friendly = friendlyOmniRouterError(response.status, bodyText);
-          if ((response.status === 429 || response.status === 503) && attempt < MAX_RETRIES) {
-            await new Promise((r) => setTimeout(r, 1000));
-            continue;
-          }
-          throw friendly;
-        }
-
-        if (!response.body) {
-          throw new OmniRouterError("OmniRouter returned an empty stream.", 502, "server");
-        }
-
-        let totalChars = 0;
-        try {
-          totalChars = await readOmniSseStream(response.body, opts.onDelta, signal);
-        } finally {
-          try {
-            if (!response.body.locked) {
-              await response.body.cancel();
-            }
-          } catch {}
-        }
-
-        if (totalChars === 0 && !signal.aborted) {
-          throw new OmniRouterError(
-            "OmniRouter model returned an empty response. Please check model availability or select another model.",
-            502,
-            "server",
-          );
-        }
-        return;
-      }
-      return;
-    }
-
-    // 2. Backend proxy fallback
-    for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
-      if (signal.aborted) throw new DOMException("Aborted", "AbortError");
-
       let response: Response;
       try {
-        response = await fetch("/api/omni/chat", {
+        response = await fetch(`${directBaseUrl}/chat/completions`, {
           method: "POST",
           headers: {
+            Authorization: `Bearer ${directApiKey}`,
             "Content-Type": "application/json",
+            "ngrok-skip-browser-warning": "true",
           },
           body: JSON.stringify(requestPayload),
           signal,
@@ -553,7 +518,7 @@ export async function streamOmniRouterCompletion(opts: OmniStreamOpts): Promise<
         throw new OmniRouterError(
           fetchErr instanceof Error
             ? fetchErr.message
-            : "Failed to connect to OmniRouter proxy endpoint",
+            : "Failed to connect to OmniRouter endpoint",
           0,
           "network",
         );
@@ -561,12 +526,7 @@ export async function streamOmniRouterCompletion(opts: OmniStreamOpts): Promise<
 
       if (!response.ok) {
         const bodyText = await response.text();
-        const friendly = friendlyOmniRouterError(response.status, bodyText);
-        if ((response.status === 429 || response.status === 503) && attempt < MAX_RETRIES) {
-          await new Promise((r) => setTimeout(r, 1000));
-          continue;
-        }
-        throw friendly;
+        throw friendlyOmniRouterError(response.status, bodyText);
       }
 
       if (!response.body) {
@@ -592,6 +552,56 @@ export async function streamOmniRouterCompletion(opts: OmniStreamOpts): Promise<
         );
       }
       return;
+    }
+
+    // 2. Backend proxy fallback
+    let response: Response;
+    try {
+      response = await fetch("/api/omni/chat", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(requestPayload),
+        signal,
+      });
+    } catch (fetchErr: unknown) {
+      if (signal.aborted) throw fetchErr;
+      throw new OmniRouterError(
+        fetchErr instanceof Error
+          ? fetchErr.message
+          : "Failed to connect to OmniRouter proxy endpoint",
+        0,
+        "network",
+      );
+    }
+
+    if (!response.ok) {
+      const bodyText = await response.text();
+      throw friendlyOmniRouterError(response.status, bodyText);
+    }
+
+    if (!response.body) {
+      throw new OmniRouterError("OmniRouter returned an empty stream.", 502, "server");
+    }
+
+    let totalChars = 0;
+    try {
+      totalChars = await readOmniSseStream(response.body, opts.onDelta, signal);
+    } finally {
+      try {
+        if (!response.body.locked) {
+          await response.body.cancel();
+        }
+      } catch {}
+    }
+
+    if (totalChars === 0 && !signal.aborted) {
+      throw new OmniRouterError(
+        "OmniRouter model returned an empty response. Please check model availability or select another model.",
+        502,
+        "server",
+      );
     }
   } finally {
     cleanup();

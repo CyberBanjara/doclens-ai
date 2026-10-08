@@ -255,6 +255,7 @@ export async function executePageTranslation({
       let fullBuffer = "";
 
       const onChunk = (chunk: string) => {
+        if (internalAbort.signal.aborted) return;
         fullBuffer += chunk;
         const currentTask = inFlightMap.get(taskKey);
         if (currentTask) currentTask.accumulatedBuffer = fullBuffer;
@@ -275,47 +276,11 @@ export async function executePageTranslation({
           onDelta: onChunk,
         });
       } else if (isOmni) {
-        try {
-          await streamOmniRouterCompletion({
-            payload,
-            signal: internalAbort.signal,
-            onDelta: onChunk,
-          });
-        } catch (omniErr) {
-          if ((omniErr as Error).name === "AbortError" || internalAbort.signal.aborted) throw omniErr;
-          console.warn("OmniRouter failed:", omniErr);
-          
-          const openRouterKey = getKey();
-          if (!openRouterKey) {
-            // Do not mask OmniRouter failure behind OpenRouter missing key or daily limit
-            throw omniErr;
-          }
-
-          console.warn("Falling back to OpenRouter for this translation:", omniErr);
-          const openRouterModel = getSelectedModel() || getDefaultModelSync();
-          fullBuffer = "";
-
-          const fallbackPayload =
-            state.isCustom && state.customRequest
-              ? { ...state.customRequest, model: openRouterModel, stream: true }
-              : buildPagePayload({
-                  modelId: openRouterModel,
-                  mode: eff.mode,
-                  language: eff.language,
-                  style: eff.style,
-                  temperature: eff.temperature,
-                  pageNumber,
-                  pageText: effectiveText,
-                  previousContext,
-                });
-
-          await streamCompletion({
-            key: openRouterKey,
-            payload: fallbackPayload,
-            signal: internalAbort.signal,
-            onDelta: onChunk,
-          });
-        }
+        await streamOmniRouterCompletion({
+          payload,
+          signal: internalAbort.signal,
+          onDelta: onChunk,
+        });
       } else {
         await streamCompletion({
           key: key || "",
@@ -325,12 +290,21 @@ export async function executePageTranslation({
         });
       }
 
+      if (internalAbort.signal.aborted) {
+        throw new DOMException("Aborted", "AbortError");
+      }
+
       const structured = parseStructuredTranslationResponse(fullBuffer);
       const result = cleanAiText(structured.translation);
       const contextDelta = structured.context_delta?.trim();
 
+      // Validate that final response is non-empty
+      if (!result || !result.trim()) {
+        throw new Error("The translation stream finished with an empty or invalid response.");
+      }
+
       // ─────────────────────────────────────────────────────────────────
-      // 3. PERSISTENCE IN BACKGROUND
+      // 3. PERSISTENCE IN BACKGROUND (Only after successful validation)
       // ─────────────────────────────────────────────────────────────────
       await upsertPageAi(docId, pageNumber, {
         status: "done",
@@ -365,7 +339,7 @@ export async function executePageTranslation({
         return { success: false, error: "Aborted by user" };
       }
 
-      const err = e instanceof Error ? e.message : "Unknown error";
+      const err = e instanceof Error ? e.message : "Translation process failed.";
       await upsertPageAi(docId, pageNumber, { status: "error", error: err });
       dispatchDocEvent("doclens:page-status-changed", { docId, pageNumber, status: "error", error: err });
       return { success: false, error: err };

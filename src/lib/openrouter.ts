@@ -607,27 +607,62 @@ export class OpenRouterError extends Error {
   }
 }
 
+export function extractProviderErrorMessage(body: string | unknown): string {
+  if (!body) return "";
+  if (typeof body === "object" && body !== null) {
+    const obj = body as Record<string, any>;
+    if (typeof obj.error === "string") return obj.error.trim();
+    if (typeof obj.error?.message === "string") return obj.error.message.trim();
+    if (typeof obj.message === "string") return obj.message.trim();
+    if (typeof obj.description === "string") return obj.description.trim();
+  }
+  if (typeof body === "string") {
+    const trimmed = body.trim();
+    if (trimmed.startsWith("{")) {
+      try {
+        const parsed = JSON.parse(trimmed);
+        return extractProviderErrorMessage(parsed);
+      } catch {}
+    }
+    return trimmed;
+  }
+  return "";
+}
+
 export function friendlyOpenRouterError(
   status: number,
   body: string,
   isCustomKey: boolean,
 ): OpenRouterError {
+  const explicitMsg = extractProviderErrorMessage(body);
+
   const isDailyOrRateLimit =
     status === 429 ||
-    /rate limit|daily limit|free limit|free tier|quota|exceeded|too many requests/i.test(body);
+    /rate limit|daily limit|free limit|free tier|quota|exceeded|too many requests/i.test(
+      explicitMsg || body,
+    );
+
+  // If the provider returned an explicit error message (e.g. model unavailable, overloaded, not found)
+  // Surface the exact provider error message directly without replacing or masking it
+  if (explicitMsg && !isDailyOrRateLimit && status !== 401 && status !== 402) {
+    const kind: OpenRouterErrorKind = status >= 500 ? "server" : status === 403 ? "auth" : "unknown";
+    return new OpenRouterError(explicitMsg, status, kind);
+  }
 
   if (status === 401) {
     return new OpenRouterError(
-      isCustomKey
-        ? "Your OpenRouter API key was rejected (401). Please check the key in settings."
-        : "OpenRouter authentication failed (401). Please configure a valid API key in settings.",
+      explicitMsg ||
+        (isCustomKey
+          ? "Your OpenRouter API key was rejected (401). Please check the key in settings."
+          : "OpenRouter authentication failed (401). Please configure a valid API key in settings."),
       401,
       "auth",
     );
   }
   if (status === 403)
     return new OpenRouterError(
-      "OpenRouter rejected access to this model with the current key. Please select a different model in settings.",
+      explicitMsg ||
+        "OpenRouter rejected access to this model with the current key. Please select a different model in settings.",
       403,
       "auth",
     );
@@ -636,7 +671,8 @@ export function friendlyOpenRouterError(
       return new OpenRouterError(DAILY_LIMIT_HOOK_MESSAGE, 402, "daily_limit");
     }
     return new OpenRouterError(
-      "OpenRouter account is out of credits. Switch to a free model in settings or add credits.",
+      explicitMsg ||
+        "OpenRouter account is out of credits. Switch to a free model in settings or add credits.",
       402,
       "credits",
     );
@@ -646,14 +682,18 @@ export function friendlyOpenRouterError(
       return new OpenRouterError(DAILY_LIMIT_HOOK_MESSAGE, status || 429, "daily_limit");
     }
     return new OpenRouterError(
-      "You've reached the free daily limit (50 requests/day) for this OpenRouter key. Add credits on OpenRouter or switch models to continue reading!",
+      explicitMsg ||
+        "You've reached the free daily limit (50 requests/day) for this OpenRouter key. Add credits on OpenRouter or switch models to continue reading!",
       status || 429,
       "rate_limit",
     );
   }
+  if (explicitMsg) {
+    return new OpenRouterError(explicitMsg, status, status >= 500 ? "server" : "unknown");
+  }
   if (status >= 500)
     return new OpenRouterError(
-      "OpenRouter service is temporarily unavailable. Please retry shortly.",
+      `OpenRouter service error (${status}). Please retry shortly or select another model.`,
       status,
       "server",
     );
@@ -665,10 +705,8 @@ export function friendlyOpenRouterError(
   );
 }
 
-/** Default timeout for a streaming completion request (ms). */
-const STREAM_TIMEOUT_MS = 60_000;
-/** Max retries on transient network/server hiccups. */
-const MAX_RETRIES = 1;
+/** Default timeout for a streaming completion request (ms) - generous 5 minutes for slow streaming models. */
+const STREAM_TIMEOUT_MS = 300_000;
 
 export interface StreamOpts {
   key?: string;
@@ -704,7 +742,7 @@ function combinedSignal(
 
 /**
  * High-speed SSE stream parser for OpenAI/OpenRouter chat completion responses.
- * Fires `onDelta` synchronously as each text chunk arrives and extracts reasoning/content.
+ * Fires `onDelta` synchronously as each text chunk arrives and extracts content incrementally.
  */
 async function readSseStream(
   body: ReadableStream<Uint8Array>,
@@ -723,9 +761,11 @@ async function readSseStream(
   signal.addEventListener("abort", onAbort, { once: true });
 
   const processLine = (line: string) => {
-    if (!line || line.startsWith(":")) return;
-    if (line.startsWith("data:")) {
-      const payload = line.slice(5).trim();
+    const trimmed = line.trim();
+    if (!trimmed || trimmed.startsWith(":")) return;
+
+    if (trimmed.startsWith("data:")) {
+      const payload = trimmed.slice(5).trim();
       if (payload === "[DONE]") return;
       try {
         const parsed = JSON.parse(payload);
@@ -733,7 +773,11 @@ async function readSseStream(
           const errMsg =
             typeof parsed.error === "string"
               ? parsed.error
-              : parsed.error.message || "Model streaming error";
+              : typeof parsed.error?.message === "string"
+                ? parsed.error.message
+                : typeof parsed.error?.metadata?.raw === "string"
+                  ? parsed.error.metadata.raw
+                  : "Model provider error";
           const errCode = typeof parsed.error === "object" ? parsed.error.code : undefined;
           const statusNum = typeof errCode === "number" ? errCode : 500;
           throw friendlyOpenRouterError(statusNum, errMsg, isCustomKey);
@@ -742,10 +786,28 @@ async function readSseStream(
           parsed?.choices?.[0]?.delta?.content ??
           parsed?.choices?.[0]?.delta?.text ??
           parsed?.choices?.[0]?.text ??
+          parsed?.choices?.[0]?.message?.content ??
           "";
         if (typeof delta === "string" && delta.length > 0) {
           emittedTokens += delta.length;
           onDelta(delta);
+        }
+      } catch (err) {
+        if (err instanceof OpenRouterError) throw err;
+      }
+    } else if (trimmed.startsWith("{")) {
+      try {
+        const parsed = JSON.parse(trimmed);
+        if (parsed?.error) {
+          const errMsg =
+            typeof parsed.error === "string"
+              ? parsed.error
+              : typeof parsed.error?.message === "string"
+                ? parsed.error.message
+                : "Model provider error";
+          const errCode = typeof parsed.error === "object" ? parsed.error.code : undefined;
+          const statusNum = typeof errCode === "number" ? errCode : 500;
+          throw friendlyOpenRouterError(statusNum, errMsg, isCustomKey);
         }
       } catch (err) {
         if (err instanceof OpenRouterError) throw err;
@@ -755,12 +817,14 @@ async function readSseStream(
 
   try {
     while (true) {
+      if (signal.aborted) throw new DOMException("Aborted", "AbortError");
       const { value, done } = await reader.read();
       if (done) {
+        buffer += decoder.decode();
         if (buffer.trim()) {
           const remainingLines = buffer.split("\n");
           for (const l of remainingLines) {
-            processLine(l.trim());
+            processLine(l);
           }
         }
         break;
@@ -769,7 +833,7 @@ async function readSseStream(
 
       let lineEndIndex: number;
       while ((lineEndIndex = buffer.indexOf("\n")) !== -1) {
-        const line = buffer.slice(0, lineEndIndex).trim();
+        const line = buffer.slice(0, lineEndIndex);
         buffer = buffer.slice(lineEndIndex + 1);
         processLine(line);
       }
@@ -786,6 +850,7 @@ async function readSseStream(
 /**
  * Direct client-side streaming completion to OpenRouter API.
  * Bypasses all server middleware for minimal round-trip latency and instant UI streaming.
+ * Hard-stops immediately on error or abort with NO automatic retry loop.
  */
 export async function streamCompletion(opts: StreamOpts): Promise<void> {
   const { signal, cleanup } = combinedSignal(opts.signal, opts.timeoutMs ?? STREAM_TIMEOUT_MS);
@@ -800,62 +865,55 @@ export async function streamCompletion(opts: StreamOpts): Promise<void> {
   }
 
   try {
-    for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
-      if (signal.aborted) throw new DOMException("Aborted", "AbortError");
+    if (signal.aborted) throw new DOMException("Aborted", "AbortError");
 
-      let response: Response;
+    let response: Response;
+    try {
+      response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${resolvedKey}`,
+          "Content-Type": "application/json",
+          ...HEADERS_BASE,
+        },
+        body: JSON.stringify({ ...opts.payload, stream: true }),
+        signal,
+      });
+    } catch (fetchErr: any) {
+      if (signal.aborted) throw fetchErr;
+      throw new OpenRouterError(fetchErr?.message || "Network error", 0, "network");
+    }
+
+    if (!response.ok) {
+      const bodyText = await response.text();
+      const friendly = friendlyOpenRouterError(response.status, bodyText, isCustomKey);
+      if (friendly.kind === "auth") {
+        setKeyStatus("invalid");
+      }
+      throw friendly;
+    }
+
+    if (!response.body) {
+      throw new OpenRouterError("OpenRouter returned an empty stream.", 502, "server");
+    }
+
+    let totalChars = 0;
+    try {
+      totalChars = await readSseStream(response.body, opts.onDelta, signal, isCustomKey);
+    } finally {
       try {
-        response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
-          method: "POST",
-          headers: {
-            Authorization: `Bearer ${resolvedKey}`,
-            "Content-Type": "application/json",
-            ...HEADERS_BASE,
-          },
-          body: JSON.stringify({ ...opts.payload, stream: true }),
-          signal,
-        });
-      } catch (fetchErr: any) {
-        if (signal.aborted) throw fetchErr;
-        throw new OpenRouterError(fetchErr?.message || "Network error", 0, "network");
-      }
-
-      if (!response.ok) {
-        const bodyText = await response.text();
-        const friendly = friendlyOpenRouterError(response.status, bodyText, isCustomKey);
-        if (friendly.kind === "auth") {
-          setKeyStatus("invalid");
+        if (!response.body.locked) {
+          await response.body.cancel();
         }
-        if ((response.status === 429 || response.status === 503) && attempt < MAX_RETRIES) {
-          await new Promise((r) => setTimeout(r, 1000));
-          continue;
-        }
-        throw friendly;
-      }
+      } catch {}
+    }
 
-      if (!response.body) {
-        throw new OpenRouterError("OpenRouter returned an empty stream.", 502, "server");
-      }
-
-      let totalChars = 0;
-      try {
-        totalChars = await readSseStream(response.body, opts.onDelta, signal, isCustomKey);
-      } finally {
-        try {
-          if (!response.body.locked) {
-            await response.body.cancel();
-          }
-        } catch {}
-      }
-
-      if (totalChars === 0 && !signal.aborted) {
-        throw new OpenRouterError(
-          "The model returned an empty response. Please retry or choose a different model in settings.",
-          502,
-          "server",
-        );
-      }
-      return;
+    if (totalChars === 0 && !signal.aborted) {
+      throw new OpenRouterError(
+        "The model returned an empty response. Please choose a different model in settings.",
+        502,
+        "server",
+      );
     }
   } finally {
     cleanup();
@@ -1050,14 +1108,13 @@ export function buildPagePayload(i: BuildPagePayloadInput): Record<string, unkno
  * Progressively extracts the in-progress `translation` value from a streaming JSON response buffer.
  * Allows the UI to render clean translated sentences in real time without flashing raw JSON syntax.
  */
+/**
+ * Progressively extracts the in-progress `translation` (or equivalent content) value from a streaming JSON response buffer.
+ * Allows the UI to render clean translated sentences in real time without flashing raw JSON syntax.
+ */
 export function extractStreamingTranslation(rawBuffer: string): string {
   if (!rawBuffer) return "";
   const trimmed = rawBuffer.trim();
-
-  // If buffer doesn't look like JSON yet, return it as-is if it's plain text
-  if (!trimmed.startsWith("{") && !trimmed.startsWith("```")) {
-    return rawBuffer;
-  }
 
   // Strip optional leading markdown fence
   let content = trimmed;
@@ -1067,10 +1124,15 @@ export function extractStreamingTranslation(rawBuffer: string): string {
     content = content.slice(3);
   }
 
-  // Find "translation"\s*:\s*"
-  const match = /"translation"\s*:\s*"/i.exec(content);
+  // Find "translation"\s*:\s*" (or common alternatives like explanation, content, text)
+  const match = /"(?:translation|explanation|content|text|result|response)"\s*:\s*"/i.exec(content);
   if (!match) {
-    return "";
+    // If buffer looks like JSON structure or code fence, do not return raw JSON syntax
+    if (trimmed.startsWith("{") || trimmed.startsWith("```") || trimmed.startsWith("[")) {
+      return "";
+    }
+    // Return plain text as-is
+    return rawBuffer;
   }
 
   const startIndex = match.index + match[0].length;
@@ -1133,11 +1195,17 @@ export function parseStructuredTranslationResponse(rawText: string): {
       const translation =
         typeof parsed.translation === "string"
           ? parsed.translation
-          : typeof parsed.content === "string"
-            ? parsed.content
-            : typeof parsed.text === "string"
-              ? parsed.text
-              : "";
+          : typeof parsed.explanation === "string"
+            ? parsed.explanation
+            : typeof parsed.content === "string"
+              ? parsed.content
+              : typeof parsed.text === "string"
+                ? parsed.text
+                : typeof parsed.result === "string"
+                  ? parsed.result
+                  : typeof parsed.response === "string"
+                    ? parsed.response
+                    : "";
       const context_delta =
         typeof parsed.context_delta === "string"
           ? parsed.context_delta
@@ -1153,8 +1221,13 @@ export function parseStructuredTranslationResponse(rawText: string): {
     }
   } catch {
     // JSON parse failed, try regex extraction
-    const transMatch = /"translation"\s*:\s*"((?:[^"\\]|\\.)*)"/s.exec(jsonString);
-    const deltaMatch = /"context_delta"\s*:\s*"((?:[^"\\]|\\.)*)"/s.exec(jsonString);
+    const transMatch =
+      /"(?:translation|explanation|content|text|result|response)"\s*:\s*"((?:[^"\\]|\\.)*)"/s.exec(
+        jsonString,
+      );
+    const deltaMatch = /"(?:context_delta|contextDelta|context)"\s*:\s*"((?:[^"\\]|\\.)*)"/s.exec(
+      jsonString,
+    );
 
     if (transMatch) {
       const unescape = (s: string) => {

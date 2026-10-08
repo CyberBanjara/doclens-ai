@@ -143,7 +143,7 @@ export function usePageTranslation(
         if (bufferRef.current === lastUiRef.current) return;
         lastUiRef.current = bufferRef.current;
         const liveExtracted = extractStreamingTranslation(bufferRef.current);
-        const snapshot = cleanAiText(liveExtracted || bufferRef.current);
+        const snapshot = liveExtracted ? cleanAiText(liveExtracted) : "";
         setStreamBufs((b) => ({ ...b, [pageNumber]: snapshot }));
       };
 
@@ -180,6 +180,10 @@ export function usePageTranslation(
           return res.result;
         } else if (res.error) {
           const err = res.error;
+          const freshRec = await getPageData(docId, pageNumber);
+          if (freshRec?.pageAi) {
+            onPageAiChangeRef.current?.(pageNumber, summarize(freshRec.pageAi));
+          }
           if (res.error !== "Aborted by user") {
             const isDailyOrQuota =
               /daily_limit|rate_limit|quota|credits/i.test(err) ||
@@ -242,8 +246,13 @@ export function usePageTranslation(
           return next;
         });
       }
+      void getPageData(docId, pageNumber).then((rec) => {
+        if (rec?.pageAi && onPageAiChangeRef.current) {
+          onPageAiChangeRef.current(pageNumber, summarize(rec.pageAi));
+        }
+      });
     },
-    [docId, mountedRef],
+    [docId, mountedRef, onPageAiChangeRef],
   );
 
   return { runningPages, streamBufs, runPageOnce, cancelPage, selectionOverridesRef, isPageTranslating };
