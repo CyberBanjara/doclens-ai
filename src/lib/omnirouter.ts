@@ -1,5 +1,6 @@
 import { isNetworkError } from "./network";
 import type { ORModel } from "./openrouter";
+import { GLOBALS_CHANGE_EVT } from "./openrouter";
 
 declare const __OMNIROUTER_BASE_URL__: string | undefined;
 declare const __OMNIROUTER_API_KEY__: string | undefined;
@@ -99,11 +100,14 @@ export function getOmniSelectedModel(): string {
 
 export function setOmniSelectedModel(id: string) {
   if (typeof window === "undefined") return;
-  if (id) {
-    localStorage.setItem(OMNI_MODEL_LS, id.trim());
+  const trimmed = id ? id.trim() : "";
+  if (trimmed) {
+    localStorage.setItem(OMNI_MODEL_LS, trimmed);
   } else {
     localStorage.removeItem(OMNI_MODEL_LS);
   }
+  window.dispatchEvent(new CustomEvent(GLOBALS_CHANGE_EVT, { detail: { omniModelId: trimmed } }));
+  window.dispatchEvent(new CustomEvent(OMNI_STATUS_EVT, { detail: { modelId: trimmed } }));
 }
 
 export function getOmniDefaultModelSync(): string {
@@ -185,7 +189,7 @@ export function friendlyOmniRouterError(status: number, body: string): OmniRoute
 }
 
 /** Fetches available models from direct local OmniRouter or backend proxy API. */
-export async function fetchOmniRouterModels(): Promise<ORModel[]> {
+export async function fetchOmniRouterModels(signal?: AbortSignal): Promise<ORModel[]> {
   if (!isOmniRouterConfigured()) return [];
 
   const directBaseUrl = getOmniRouterBaseUrl();
@@ -199,7 +203,7 @@ export async function fetchOmniRouterModels(): Promise<ORModel[]> {
           Authorization: `Bearer ${directApiKey}`,
           "ngrok-skip-browser-warning": "true",
         },
-        signal: AbortSignal.timeout(10_000),
+        signal,
       });
       if (res.ok) {
         const json = (await res.json()) as { data?: unknown };
@@ -240,7 +244,7 @@ export async function fetchOmniRouterModels(): Promise<ORModel[]> {
   // 2. Backend proxy fallback
   try {
     const res = await fetch("/api/omni/models", {
-      signal: AbortSignal.timeout(10_000),
+      signal,
     });
     if (!res.ok) return [];
     const json = (await res.json()) as { data?: unknown };
@@ -273,7 +277,7 @@ export async function fetchOmniRouterModels(): Promise<ORModel[]> {
 }
 
 /** Validates connectivity to the configured OmniRouter endpoint. */
-export async function validateOmniRouterConnection(): Promise<{
+export async function validateOmniRouterConnection(signal?: AbortSignal): Promise<{
   ok: boolean;
   error?: string;
   modelCount?: number;
@@ -293,7 +297,7 @@ export async function validateOmniRouterConnection(): Promise<{
           Authorization: `Bearer ${directApiKey}`,
           "ngrok-skip-browser-warning": "true",
         },
-        signal: AbortSignal.timeout(8_000),
+        signal,
       });
       if (!res.ok) {
         const txt = await res.text();
@@ -316,7 +320,7 @@ export async function validateOmniRouterConnection(): Promise<{
   // 2. Backend proxy validation fallback
   try {
     const res = await fetch("/api/omni/validate", {
-      signal: AbortSignal.timeout(8_000),
+      signal,
     });
     const json = (await res.json()) as { ok?: boolean; error?: string; modelCount?: number };
     if (!res.ok || !json?.ok) {
@@ -334,8 +338,8 @@ export async function validateOmniRouterConnection(): Promise<{
   }
 }
 
-/** Default timeout for streaming completion request (ms). */
-const STREAM_TIMEOUT_MS = 60_000;
+/** Default timeout for streaming completion request (ms) - generous 5 minutes to wait for full local LLM response. */
+const STREAM_TIMEOUT_MS = 300_000;
 const MAX_RETRIES = 1;
 
 export interface OmniStreamOpts {
@@ -458,6 +462,10 @@ export async function streamOmniRouterCompletion(opts: OmniStreamOpts): Promise<
   const directBaseUrl = sanitizeBaseUrl(opts.baseUrl || getOmniRouterBaseUrl());
   const directApiKey = (opts.apiKey || getOmniRouterApiKey()).trim();
 
+  const rawModel = typeof opts.payload?.model === "string" ? opts.payload.model.trim() : "";
+  const modelToUse = rawModel || getOmniSelectedModel() || getOmniDefaultModelSync();
+  const requestPayload = { ...opts.payload, model: modelToUse, stream: true };
+
   const { signal, cleanup } = combinedSignal(opts.signal, opts.timeoutMs ?? STREAM_TIMEOUT_MS);
 
   try {
@@ -475,7 +483,7 @@ export async function streamOmniRouterCompletion(opts: OmniStreamOpts): Promise<
               "Content-Type": "application/json",
               "ngrok-skip-browser-warning": "true",
             },
-            body: JSON.stringify({ ...opts.payload, stream: true }),
+            body: JSON.stringify(requestPayload),
             signal,
           });
         } catch (fetchErr: unknown) {
@@ -537,7 +545,7 @@ export async function streamOmniRouterCompletion(opts: OmniStreamOpts): Promise<
           headers: {
             "Content-Type": "application/json",
           },
-          body: JSON.stringify(opts.payload),
+          body: JSON.stringify(requestPayload),
           signal,
         });
       } catch (fetchErr: unknown) {

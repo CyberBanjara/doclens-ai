@@ -224,7 +224,7 @@ function SettingsPage() {
         const m = await fetchOmniRouterModels();
         setOmniModels(m);
         const stored = getOmniSelectedModel();
-        if (stored && m.some((x) => x.id === stored)) {
+        if (stored) {
           setOmniSelected(stored);
         } else if (m.length > 0) {
           const def = getOmniDefaultModelSync();
@@ -256,7 +256,7 @@ function SettingsPage() {
         const m = res.models && res.models.length > 0 ? res.models : await fetchOllamaModels(ep);
         setOllamaModels(m);
         const stored = getOllamaSelectedModel();
-        if (stored && m.some((x) => x.id === stored)) {
+        if (stored) {
           setOllamaSelected(stored);
         } else if (m.length > 0) {
           const chosen = m[0].id;

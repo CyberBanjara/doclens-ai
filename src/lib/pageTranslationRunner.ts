@@ -13,6 +13,8 @@ import {
   getOllamaEndpoint,
   getOllamaSelectedModel,
   isOmniRouterConfigured,
+  getOmniSelectedModel,
+  getOmniDefaultModelSync,
   parseStructuredTranslationResponse,
   type Globals,
 } from "@/lib/openrouter";
@@ -205,7 +207,6 @@ export async function executePageTranslation({
       // 2. ONE-TIME PROVIDER AVAILABILITY CHECK AT TRANSLATION START
       // ─────────────────────────────────────────────────────────────────
       if (isOmni && !isOmniRouterConfigured()) {
-        setAiProvider("openrouter");
         isOmni = false;
         eff = { ...eff, provider: "openrouter" };
       }
@@ -225,7 +226,7 @@ export async function executePageTranslation({
         (isOllama
           ? currentGlobals.ollamaModelId || getOllamaSelectedModel() || ""
           : isOmni
-            ? currentGlobals.omniModelId || ""
+            ? currentGlobals.omniModelId || getOmniSelectedModel() || getOmniDefaultModelSync()
             : getSelectedModel() || getDefaultModelSync());
 
       const effectiveText = customTextOverride ?? pageRec.text;
@@ -282,10 +283,16 @@ export async function executePageTranslation({
           });
         } catch (omniErr) {
           if ((omniErr as Error).name === "AbortError" || internalAbort.signal.aborted) throw omniErr;
-          console.warn("OmniRouter failed, switching to OpenRouter:", omniErr);
-          setAiProvider("openrouter");
+          console.warn("OmniRouter failed:", omniErr);
+          
+          const openRouterKey = getKey();
+          if (!openRouterKey) {
+            // Do not mask OmniRouter failure behind OpenRouter missing key or daily limit
+            throw omniErr;
+          }
+
+          console.warn("Falling back to OpenRouter for this translation:", omniErr);
           const openRouterModel = getSelectedModel() || getDefaultModelSync();
-          setSelectedModel(openRouterModel);
           fullBuffer = "";
 
           const fallbackPayload =
@@ -302,10 +309,6 @@ export async function executePageTranslation({
                   previousContext,
                 });
 
-          const openRouterKey = getKey();
-          if (!openRouterKey) {
-            throw new OpenRouterError("No OpenRouter API key configured.", 401, "auth");
-          }
           await streamCompletion({
             key: openRouterKey,
             payload: fallbackPayload,

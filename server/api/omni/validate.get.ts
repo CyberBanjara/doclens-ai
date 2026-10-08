@@ -14,7 +14,6 @@ export default defineEventHandler(async () => {
   try {
     const res = await fetch(`${baseUrl}/models`, {
       headers: getOmniUpstreamHeaders(apiKey),
-      signal: AbortSignal.timeout(8_000),
     });
 
     if (!res.ok) {

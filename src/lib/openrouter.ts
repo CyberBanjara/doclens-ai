@@ -51,18 +51,21 @@ const GLOBAL_KEY_LS = "doclens.openrouter.globalKey";
 export type KeyStatus = "missing" | "valid" | "invalid" | "unknown";
 
 export function getAiProvider(): AiProvider {
-  if (typeof window === "undefined") return "openrouter";
+  if (typeof window === "undefined") {
+    return isOmniRouterConfigured() ? "omnirouter" : "openrouter";
+  }
   const saved = localStorage.getItem(PROVIDER_LS);
-  if (saved === "openrouter" || saved === "omnirouter" || saved === "ollama") {
+  if (saved === "omnirouter" || saved === "openrouter" || saved === "ollama") {
     return saved as AiProvider;
   }
-  return "openrouter";
+  return isOmniRouterConfigured() ? "omnirouter" : "openrouter";
 }
 
 export function setAiProvider(p: AiProvider) {
   if (typeof window === "undefined") return;
   localStorage.setItem(PROVIDER_LS, p);
   emitKeyChange();
+  window.dispatchEvent(new CustomEvent(GLOBALS_CHANGE_EVT, { detail: { provider: p } }));
 }
 
 function emitKeyChange() {
@@ -233,6 +236,18 @@ export async function getDefaultModel(): Promise<string> {
 }
 
 export async function getEffectiveSelectedModel(): Promise<string> {
+  const provider = getAiProvider();
+  if (provider === "omnirouter") {
+    return (
+      getOmniSelectedModel() ||
+      getOmniDefaultModelSync() ||
+      getSelectedModel() ||
+      getDefaultModelSync()
+    );
+  }
+  if (provider === "ollama") {
+    return getOllamaSelectedModel() || getSelectedModel() || getDefaultModelSync();
+  }
   return getSelectedModel() || getDefaultModelSync();
 }
 

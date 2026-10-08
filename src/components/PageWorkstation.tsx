@@ -12,6 +12,10 @@ import {
   getKey,
   getKeyStatus,
   getSelectedModel,
+  getDefaultModelSync,
+  getOmniSelectedModel,
+  getOmniDefaultModelSync,
+  getOllamaSelectedModel,
   MODE_LABELS,
   onKeyChange,
   openApiKeyModal,
@@ -64,11 +68,20 @@ export function PageWorkstation({
   const [omniModels, setOmniModels] = useState<ORModel[]>([]);
   const [ollamaModels, setOllamaModels] = useState<ORModel[]>([]);
 
+  const isOmniConfigured = isOmniRouterConfigured();
+  const [omniChecking, setOmniChecking] = useState(() => globals.provider === "omnirouter" && isOmniConfigured);
+  const [omniError, setOmniError] = useState<string | null>(null);
+
   const [explainSetupOpen, setExplainSetupOpen] = useState(false);
   const [pendingExplainAction, setPendingExplainAction] = useState<PendingExplainAction | null>(
     null,
   );
-  const [modelResolved, setModelResolved] = useState(() => !!getSelectedModel());
+  const [modelResolved, setModelResolved] = useState(() => {
+    const p = globals.provider;
+    if (p === "omnirouter") return !!(globals.omniModelId || getOmniSelectedModel());
+    if (p === "ollama") return !!(globals.ollamaModelId || getOllamaSelectedModel());
+    return !!(globals.modelId || getSelectedModel());
+  });
 
   const mountedRef = useRef(true);
 
@@ -99,11 +112,13 @@ export function PageWorkstation({
       });
     };
     window.addEventListener("focus", onFocus);
+    window.addEventListener("storage", onFocus);
     window.addEventListener("doclens:globals-changed", onFocus);
     window.addEventListener("doclens:output-language-changed", onFocus);
     window.addEventListener("doclens:workspace-reconciled", onFocus);
     return () => {
       window.removeEventListener("focus", onFocus);
+      window.removeEventListener("storage", onFocus);
       window.removeEventListener("doclens:globals-changed", onFocus);
       window.removeEventListener("doclens:output-language-changed", onFocus);
       window.removeEventListener("doclens:workspace-reconciled", onFocus);
@@ -119,38 +134,42 @@ export function PageWorkstation({
     );
   }, [explainSetupKey]);
 
+  // OmniRouter verification & model loading when Workspace opens
   useEffect(() => {
-    if (globalsRef.current.modelId) {
-      setModelResolved(true);
-      return;
-    }
-    void getEffectiveSelectedModel()
-      .then((modelId) => {
-        if (!mountedRef.current) return;
-        setModelResolved(true);
-        if (!modelId || getSelectedModel()) return;
-        setGlobals((current) => {
-          if (current.modelId) return current;
-          const next = { ...current, modelId };
-          globalsRef.current = next;
-          return next;
+    if (globals.provider === "omnirouter" && isOmniConfigured) {
+      setOmniChecking(true);
+      setOmniError(null);
+      fetchOmniRouterModels()
+        .then((m) => {
+          if (!mountedRef.current) return;
+          setOmniModels(m);
+          setOmniChecking(false);
+          setOmniError(null);
+          setModelResolved(true);
+        })
+        .catch((err) => {
+          if (!mountedRef.current) return;
+          console.warn("OmniRouter check returned error on workspace open:", err);
+          setOmniChecking(false);
+          setOmniError(err instanceof Error ? err.message : "OmniRouter connection failed");
+          setModelResolved(true);
+          // Load OpenRouter models as fallback
+          const k = getKey();
+          if (k) {
+            fetchModels(k).then(setModels).catch(() => {});
+          }
         });
-      })
-      .catch(() => {
-        if (mountedRef.current) setModelResolved(true);
-      });
-  }, []);
+    } else {
+      setOmniChecking(false);
+      setModelResolved(true);
+    }
+  }, [globals.provider, isOmniConfigured]);
 
   useEffect(() => {
     const k = getKey();
     if (k) {
       fetchModels(k)
         .then(setModels)
-        .catch(() => {});
-    }
-    if (globals.provider === "omnirouter" && isOmniRouterConfigured()) {
-      fetchOmniRouterModels()
-        .then(setOmniModels)
         .catch(() => {});
     }
     if (globals.provider === "ollama") {
@@ -303,11 +322,22 @@ export function PageWorkstation({
   const isOmniProvider = globals.provider === "omnirouter";
   const isLocalProvider = isOllamaProvider || isOmniProvider;
   const activeModelId = isOllamaProvider
-    ? globals.ollamaModelId || globals.modelId
+    ? globals.ollamaModelId || getOllamaSelectedModel() || globals.modelId
     : isOmniProvider
-      ? globals.omniModelId || globals.modelId
-      : globals.modelId;
+      ? globals.omniModelId || getOmniSelectedModel() || getOmniDefaultModelSync() || globals.modelId
+      : globals.modelId || getSelectedModel() || getDefaultModelSync();
   const providerReady = isLocalProvider || keyReady;
+
+  if (omniChecking && isOmniProvider) {
+    return (
+      <div className="flex h-full items-center justify-center px-6 text-center">
+        <div className="flex items-center gap-3 text-sm text-muted-foreground">
+          <span className="inline-block h-4 w-4 rounded-full border-2 border-primary border-t-transparent spin-slow" />
+          Checking OmniRouter connection...
+        </div>
+      </div>
+    );
+  }
 
   if (providerReady && !modelResolved && !activeModelId) {
     return (

@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 import {
   getKey,
+  getAiProvider,
   setAiProvider,
   OpenRouterError,
   openApiKeyModal,
@@ -106,12 +107,9 @@ export function usePageTranslation(
       }
 
       const currentGlobals = globalsRef.current || readGlobals();
-      const isOmni = (currentGlobals.provider ?? "openrouter") === "omnirouter";
-      const isOllama = (currentGlobals.provider ?? "openrouter") === "ollama";
-
-      if (isOmni && !isOmniRouterConfigured()) {
-        setAiProvider("openrouter");
-      }
+      const activeProvider = currentGlobals.provider || getAiProvider();
+      const isOmni = activeProvider === "omnirouter";
+      const isOllama = activeProvider === "ollama";
 
       const key = getKey();
       if (!isOmni && !isOllama && !key) {

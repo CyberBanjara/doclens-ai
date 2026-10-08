@@ -21,7 +21,8 @@ import { cleanAiText } from "./cleanAiText";
 export { cleanAiText };
 
 export function effective(globals: Globals, ov?: PageOverrides) {
-  const rawProvider = ov?.provider ?? globals.provider ?? "openrouter";
+  const defaultProvider = isOmniRouterConfigured() ? "omnirouter" : "openrouter";
+  const rawProvider = ov?.provider ?? globals.provider ?? defaultProvider;
   const provider: AiProvider =
     rawProvider === "ollama" ? "ollama" : rawProvider === "omnirouter" ? "omnirouter" : "openrouter";
 

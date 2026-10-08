@@ -1,5 +1,6 @@
 import { isNetworkError } from "./network";
 import type { ORModel } from "./openrouter";
+import { GLOBALS_CHANGE_EVT } from "./openrouter";
 
 export const DEFAULT_OLLAMA_ENDPOINT = "http://localhost:11434";
 const OLLAMA_ENDPOINT_LS = "doclens.ollama.endpoint";
@@ -32,6 +33,7 @@ export function setOllamaEndpoint(url: string): void {
   if (typeof window === "undefined") return;
   const sanitized = sanitizeOllamaEndpoint(url);
   localStorage.setItem(OLLAMA_ENDPOINT_LS, sanitized);
+  window.dispatchEvent(new CustomEvent(GLOBALS_CHANGE_EVT, { detail: { ollamaEndpoint: sanitized } }));
   window.dispatchEvent(new CustomEvent(OLLAMA_STATUS_EVT, { detail: { endpoint: sanitized } }));
 }
 
@@ -49,6 +51,7 @@ export function setOllamaSelectedModel(id: string): void {
   } else {
     localStorage.removeItem(OLLAMA_MODEL_LS);
   }
+  window.dispatchEvent(new CustomEvent(GLOBALS_CHANGE_EVT, { detail: { ollamaModelId: id } }));
   window.dispatchEvent(new CustomEvent(OLLAMA_STATUS_EVT, { detail: { modelId: id } }));
 }
 
