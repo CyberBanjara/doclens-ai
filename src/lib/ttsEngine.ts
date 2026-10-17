@@ -10,9 +10,16 @@ const TTS_ONBOARDED_LS = "doclens:tts-onboarded";
  */
 export const ONNX_SESSION_CACHE = new Map<string, any>();
 
+/** In-memory cache for raw ONNX model ArrayBuffers to avoid repeated 80MB disk reads */
+export const ONNX_MODEL_BUFFER_CACHE = new Map<string, ArrayBuffer>();
+
+export function clearOnnxModelBufferCache(): void {
+  ONNX_MODEL_BUFFER_CACHE.clear();
+}
+
 /**
- * Iterates over all cached ONNX sessions, releases them to reclaim WASM heap memory,
- * and clears the cache.
+ * Iterates over all cached ONNX sessions and raw model buffers, releases them to
+ * reclaim WASM heap and browser memory, and clears the caches.
  */
 export async function clearTtsSessionCache() {
   for (const session of ONNX_SESSION_CACHE.values()) {
@@ -25,10 +32,20 @@ export async function clearTtsSessionCache() {
     }
   }
   ONNX_SESSION_CACHE.clear();
+  clearOnnxModelBufferCache();
 }
 
 /** Mutex chain ensuring ONNX inference calls are strictly serialized */
 let inferenceChain: Promise<any> = Promise.resolve();
+
+/**
+ * Resets the inference chain mutex to an immediately resolved promise.
+ * Called when stopping, navigating pages, or switching voices to prevent new
+ * syntheses from waiting behind abandoned ghost tasks.
+ */
+export function resetInferenceChain(): void {
+  inferenceChain = Promise.resolve();
+}
 
 /**
  * A previously-cached voice model (OPFS/IndexedDB) can end up mismatched with its
@@ -39,16 +56,26 @@ let inferenceChain: Promise<any> = Promise.resolve();
  * with a fresh download.
  *
  * Runs all inferences through a serialized mutex chain to prevent concurrent WASM clashes.
+ * Supports cancellation checks to bail early on ghost/expired look-ahead tasks.
  */
 export function predictWithRecovery(
   tts: any,
   params: { text: string; voiceId: string | null },
   onProgress?: (progress: any) => void,
+  isCancelled?: () => boolean,
 ): Promise<Blob> {
   const task = async (): Promise<Blob> => {
+    if (isCancelled && isCancelled()) {
+      throw new DOMException("TTS inference cancelled", "AbortError");
+    }
+
     try {
       return await tts.predict(params, onProgress);
     } catch (err: any) {
+      if (isCancelled && isCancelled()) {
+        throw new DOMException("TTS inference cancelled", "AbortError");
+      }
+
       const message = String(err?.message || err || "");
       const looksLikeCorruptedModel = /Gather|out of data bounds/i.test(message);
       if (!looksLikeCorruptedModel) throw err;
@@ -59,6 +86,11 @@ export function predictWithRecovery(
       );
       await clearTtsSessionCache();
       if (params.voiceId) await deleteCachedVoice(params.voiceId);
+
+      if (isCancelled && isCancelled()) {
+        throw new DOMException("TTS inference cancelled", "AbortError");
+      }
+
       return await tts.predict(params, onProgress);
     }
   };

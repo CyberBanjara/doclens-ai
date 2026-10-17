@@ -87,6 +87,7 @@ export async function getCachedFile(filename: string): Promise<Blob | null> {
     const db = await getDB();
     const data = await db.get(STORE_NAME, filename);
     if (data instanceof Blob) {
+      (data as any).name = filename;
       return data;
     }
   } catch (err) {

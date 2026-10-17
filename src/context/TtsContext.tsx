@@ -26,6 +26,8 @@ import {
   predictWithRecovery,
   hasCompletedTtsVoiceSetup,
   markTtsVoiceSetupComplete,
+  resetInferenceChain,
+  ONNX_MODEL_BUFFER_CACHE,
 } from "@/lib/ttsEngine";
 
 export type TtsSource = "original" | "ai";
@@ -35,17 +37,28 @@ const TTS_VOICE_URI_LS = "doclens:tts-voice-uri";
 // Re-exported so existing `from "@/context/TtsContext"` imports keep working unchanged.
 export { clearTtsSessionCache, hasCompletedTtsVoiceSetup, markTtsVoiceSetupComplete };
 
-/** Stops and detaches the current <audio> element (if any) without revoking its object URL. */
+/**
+ * Stops playback, unloads the media player, and forces Chromium to release audio
+ * output device channels and Mojo IPC pipes without destroying the reusable element.
+ */
 function stopCurrentAudioElement(audioRef: React.RefObject<HTMLAudioElement | null>) {
   if (audioRef.current) {
     try {
       audioRef.current.onended = null;
       audioRef.current.onerror = null;
       audioRef.current.pause();
+      audioRef.current.removeAttribute("src");
+      audioRef.current.load();
     } catch (e) {}
-    audioRef.current.src = "";
-    audioRef.current = null;
   }
+}
+
+/** Reuses a single singleton HTMLAudioElement to prevent Chromium media player pool exhaustion */
+function getOrCreateAudioElement(audioRef: React.RefObject<HTMLAudioElement | null>): HTMLAudioElement {
+  if (!audioRef.current) {
+    audioRef.current = new Audio();
+  }
+  return audioRef.current;
 }
 
 export interface TtsVoice {
@@ -193,26 +206,87 @@ async function getNeuralTtsEngine(): Promise<{ mod: any; catalog: any[] }> {
       const ort: any = await import("onnxruntime-web");
       if (ort.env && ort.env.wasm) {
         ort.env.wasm.proxy = true;
-        ort.env.wasm.numThreads = 1;
+        let threadCount = 1;
+        try {
+          Object.defineProperty(ort.env.wasm, "numThreads", {
+            get: () => threadCount,
+            set: (_v: any) => {
+              threadCount = 1;
+            },
+            configurable: true,
+            enumerable: true,
+          });
+        } catch {
+          ort.env.wasm.numThreads = 1;
+        }
+      }
+
+      // Intercept Blob.prototype.arrayBuffer for .onnx model files so that subsequent
+      // sentence syntheses resolve the ~80MB model buffer in 0ms without repeated disk I/O
+      if (typeof Blob !== "undefined" && !(Blob.prototype as any)._doclensPatched) {
+        const origArrayBuffer = Blob.prototype.arrayBuffer;
+        (Blob.prototype as any)._doclensPatched = true;
+        Blob.prototype.arrayBuffer = async function (this: any) {
+          const name = this.name || (this as any)._modelName;
+          const isModelFile =
+            (name && typeof name === "string" && name.endsWith(".onnx")) ||
+            (typeof this.size === "number" && this.size > 10_000_000);
+
+          if (isModelFile) {
+            const key = name || `model-${this.size}`;
+            // If the session is already active in cache, return a tiny dummy buffer immediately!
+            // vits-web only passes it to InferenceSession.create which returns the cached session.
+            if (ONNX_SESSION_CACHE.has(key) || (name && ONNX_SESSION_CACHE.has(name))) {
+              const dummy = new ArrayBuffer(16);
+              (dummy as any)._modelName = key;
+              return dummy;
+            }
+
+            const buf = await origArrayBuffer.call(this);
+            (buf as any)._modelName = key;
+            return buf;
+          }
+          return origArrayBuffer.call(this);
+        };
       }
 
       if (!ort.InferenceSession.originalCreate) {
         ort.InferenceSession.originalCreate = ort.InferenceSession.create;
 
         ort.InferenceSession.create = async function (model: any, options?: any) {
-          const cacheKey =
-            model instanceof ArrayBuffer
-              ? `${model.byteLength}-${new Uint8Array(model.slice(0, 100)).join(",")}`
-              : String(model);
+          const modelName = model?._modelName;
+          if (modelName && ONNX_SESSION_CACHE.has(modelName)) {
+            return ONNX_SESSION_CACHE.get(modelName);
+          }
+
+          let cacheKey: string;
+          if (model instanceof ArrayBuffer) {
+            if (model.byteLength === 0 || (model as any).detached) {
+              cacheKey = modelName || "detached";
+            } else {
+              try {
+                cacheKey = `${model.byteLength}-${new Uint8Array(model.slice(0, 100)).join(",")}`;
+              } catch {
+                cacheKey = modelName || "fallback";
+              }
+            }
+          } else {
+            cacheKey = String(model);
+          }
 
           if (ONNX_SESSION_CACHE.has(cacheKey)) {
             return ONNX_SESSION_CACHE.get(cacheKey);
           }
 
           ort.env.wasm.proxy = true;
-          ort.env.wasm.numThreads = 1;
+          try {
+            ort.env.wasm.numThreads = 1;
+          } catch {}
 
           const session = await ort.InferenceSession.originalCreate(model, options);
+          if (modelName) {
+            ONNX_SESSION_CACHE.set(modelName, session);
+          }
           ONNX_SESSION_CACHE.set(cacheKey, session);
           return session;
         };
@@ -465,6 +539,9 @@ export function TtsProvider({ children }: { children: React.ReactNode }) {
     rateRef.current = newRate;
     setRateState(newRate);
     localStorage.setItem("doclens:tts-rate", newRate.toString());
+    if (audioRef.current) {
+      audioRef.current.playbackRate = newRate;
+    }
   };
 
   const setSelectedVoiceUri = useCallback((uri: string | null) => {
@@ -498,6 +575,9 @@ export function TtsProvider({ children }: { children: React.ReactNode }) {
   const cleanupAudio = useCallback(() => {
     // Increment session ID token to invalidate any in-flight promises/events from previous pages
     synthesisSessionIdRef.current++;
+
+    // Immediately reset serialized inference chain so new playback doesn't wait behind stale tasks
+    resetInferenceChain();
 
     stopCurrentAudioElement(audioRef);
     if (activeAudioUrlRef.current) {
@@ -576,10 +656,15 @@ export function TtsProvider({ children }: { children: React.ReactNode }) {
     const targetIndex = nextIdxToSynthesize;
     const textToSynthesize = sentenceList[targetIndex].trim();
 
-    const promise: Promise<Blob> = predictWithRecovery(ttsRef.current, {
-      text: textToSynthesize,
-      voiceId: activeVoiceId,
-    });
+    const promise: Promise<Blob> = predictWithRecovery(
+      ttsRef.current,
+      {
+        text: textToSynthesize,
+        voiceId: activeVoiceId,
+      },
+      undefined,
+      () => synthesisSessionIdRef.current !== currentSessionId || !isPlayingRef.current,
+    );
 
     const entry: PreSynthesizedEntry = {
       url: null,
@@ -602,6 +687,7 @@ export function TtsProvider({ children }: { children: React.ReactNode }) {
       })
       .catch((err: any) => {
         if (synthesisSessionIdRef.current !== currentSessionId) return;
+        if (err?.name === "AbortError") return;
 
         console.warn(`[TTS] Failed to pre-synthesize chunk ${targetIndex}:`, err);
         preSynthesizedMapRef.current.delete(targetIndex);
@@ -617,8 +703,14 @@ export function TtsProvider({ children }: { children: React.ReactNode }) {
       isTransitioningRef.current = false;
       const currentSessionId = synthesisSessionIdRef.current;
 
-      // Clear any previous active audio element before starting a new one.
-      stopCurrentAudioElement(audioRef);
+      // Pause previous audio without discarding the singleton HTMLAudioElement
+      if (audioRef.current) {
+        try {
+          audioRef.current.onended = null;
+          audioRef.current.onerror = null;
+          audioRef.current.pause();
+        } catch (e) {}
+      }
       if (activeAudioUrlRef.current) {
         try {
           URL.revokeObjectURL(activeAudioUrlRef.current);
@@ -633,6 +725,7 @@ export function TtsProvider({ children }: { children: React.ReactNode }) {
       loadingIndexRef.current = null;
 
       if (index < 0 || index >= sentenceList.length) {
+        stopCurrentAudioElement(audioRef);
         if (continuousPlay && activePageNumberRef.current !== null) {
           dispatchDocEvent("doclens:tts-next-page", {
             currentPage: activePageNumberRef.current,
@@ -690,10 +783,7 @@ export function TtsProvider({ children }: { children: React.ReactNode }) {
           if (synthesisSessionIdRef.current !== currentSessionId) return;
           isTransitioningRef.current = true;
 
-          if (activeAudioUrlRef.current === audioUrl) {
-            URL.revokeObjectURL(audioUrl);
-            activeAudioUrlRef.current = null;
-          }
+          const oldUrl = audioUrl;
 
           const currentSentences = sentencesRef.current;
           const nextIdx = index + 1;
@@ -708,6 +798,11 @@ export function TtsProvider({ children }: { children: React.ReactNode }) {
             if (isPausedRef.current) return;
             if (synthesisSessionIdRef.current !== currentSessionId) return;
             speakSentence(nextIdx, sentencesRef.current);
+            if (activeAudioUrlRef.current !== oldUrl) {
+              try {
+                URL.revokeObjectURL(oldUrl);
+              } catch (e) {}
+            }
           }, 0);
         };
 
@@ -725,10 +820,14 @@ export function TtsProvider({ children }: { children: React.ReactNode }) {
       };
 
       const playNeuralAudio = (audioUrl: string) => {
-        stopCurrentAudioElement(audioRef);
+        const audio = getOrCreateAudioElement(audioRef);
+        audio.onended = null;
+        audio.onerror = null;
+        try {
+          audio.pause();
+        } catch (e) {}
 
-        const audio = new Audio(audioUrl);
-        audioRef.current = audio;
+        audio.src = audioUrl;
         attachAudioHandlers(audio, audioUrl);
 
         if (!isPausedRef.current && isPlayingRef.current) {
@@ -742,8 +841,13 @@ export function TtsProvider({ children }: { children: React.ReactNode }) {
       };
 
       const initPausedAudio = (audioUrl: string) => {
-        const audio = new Audio(audioUrl);
-        audioRef.current = audio;
+        const audio = getOrCreateAudioElement(audioRef);
+        audio.onended = null;
+        audio.onerror = null;
+        try {
+          audio.pause();
+        } catch (e) {}
+        audio.src = audioUrl;
         attachAudioHandlers(audio, audioUrl);
       };
 
@@ -771,6 +875,9 @@ export function TtsProvider({ children }: { children: React.ReactNode }) {
 
           loadingIndexRef.current = index;
           setIsNeuralLoading(true);
+
+          // Keep pre-synthesize queue pipeline active
+          processPreSynthesizeQueue(index, sentenceList);
 
           promise
             .then((wavBlob: Blob) => {
@@ -800,6 +907,7 @@ export function TtsProvider({ children }: { children: React.ReactNode }) {
               )
                 return;
               setIsNeuralLoading(false);
+              if (err?.name === "AbortError") return;
               console.error("Neural synthesis error:", err);
               toast.error(getFriendlyErrorMessage(err, "Failed to generate neural speech"));
               setIsPlaying(false);
@@ -816,6 +924,10 @@ export function TtsProvider({ children }: { children: React.ReactNode }) {
           setIsNeuralLoading(true);
 
           let toastId: string | number | undefined;
+
+          // Immediately kick off look-ahead pre-synthesis in parallel so subsequent sentences
+          // are queued immediately, preventing lookahead pipeline starvation!
+          processPreSynthesizeQueue(index, sentenceList);
 
           predictWithRecovery(
             ttsRef.current,
@@ -834,6 +946,7 @@ export function TtsProvider({ children }: { children: React.ReactNode }) {
                 }
               }
             },
+            () => synthesisSessionIdRef.current !== currentSessionId || !isPlayingRef.current,
           )
             .then((wavBlob: Blob) => {
               if (toastId) toast.dismiss(toastId);
@@ -869,6 +982,7 @@ export function TtsProvider({ children }: { children: React.ReactNode }) {
               )
                 return;
               setIsNeuralLoading(false);
+              if (err?.name === "AbortError") return;
               console.error("Neural synthesis error:", err);
               toast.error(getFriendlyErrorMessage(err, "Failed to generate neural speech"));
               setIsPlaying(false);
@@ -1002,6 +1116,7 @@ export function TtsProvider({ children }: { children: React.ReactNode }) {
       window.speechSynthesis.cancel();
     }
     // Release ONNX sessions to immediately reclaim WASM memory when playback is stopped
+    resetInferenceChain();
     void clearTtsSessionCache();
     setIsPlaying(false);
     setIsPaused(false);
@@ -1075,6 +1190,7 @@ export function TtsProvider({ children }: { children: React.ReactNode }) {
         window.speechSynthesis.cancel();
       }
       // Release ONNX sessions to reclaim memory when the component is unmounted
+      resetInferenceChain();
       void clearTtsSessionCache();
     };
   }, [cleanupAudio]);
@@ -1089,43 +1205,20 @@ export function TtsProvider({ children }: { children: React.ReactNode }) {
       lastVoiceUriRef.current = selectedVoiceUri;
 
       // Release cached ONNX sessions when selected voice changes to prevent holding multiple voices in memory
+      resetInferenceChain();
       void clearTtsSessionCache();
 
       if (isPlayingRef.current && oldVoice && selectedVoiceUri) {
-        // Pause/Cancel the current playing engine
-        stopCurrentAudioElement(audioRef);
+        cleanupAudio();
         if (typeof window !== "undefined" && window.speechSynthesis) {
           window.speechSynthesis.cancel();
-        }
-
-        // Revoke any active URL
-        if (activeAudioUrlRef.current) {
-          try {
-            URL.revokeObjectURL(activeAudioUrlRef.current);
-          } catch (e) {}
-          activeAudioUrlRef.current = null;
-        }
-
-        // Revoke pre-synthesized queue because it was for the old voice!
-        preSynthesizedMapRef.current.forEach((entry) => {
-          if (entry.url) {
-            try {
-              URL.revokeObjectURL(entry.url);
-            } catch (e) {}
-          }
-        });
-        preSynthesizedMapRef.current.clear();
-
-        if (transitionTimeoutRef.current) {
-          clearTimeout(transitionTimeoutRef.current);
-          transitionTimeoutRef.current = null;
         }
 
         // Resume playback at the current sentence with the new voice
         speakSentence(currentSentenceIndexRef.current, sentencesRef.current);
       }
     }
-  }, [selectedVoiceUri, speakSentence]);
+  }, [selectedVoiceUri, speakSentence, cleanupAudio]);
 
   return (
     <TtsContext.Provider
