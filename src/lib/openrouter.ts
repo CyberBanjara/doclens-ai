@@ -587,14 +587,7 @@ export async function fetchModels(key?: string): Promise<ORModel[]> {
 }
 
 export type OpenRouterErrorKind =
-  | "auth"
-  | "credits"
-  | "rate_limit"
-  | "daily_limit"
-  | "quota"
-  | "server"
-  | "network"
-  | "unknown";
+  "auth" | "credits" | "rate_limit" | "daily_limit" | "quota" | "server" | "network" | "unknown";
 
 export class OpenRouterError extends Error {
   status: number;
@@ -645,7 +638,8 @@ export function friendlyOpenRouterError(
   // If the provider returned an explicit error message (e.g. model unavailable, overloaded, not found)
   // Surface the exact provider error message directly without replacing or masking it
   if (explicitMsg && !isDailyOrRateLimit && status !== 401 && status !== 402) {
-    const kind: OpenRouterErrorKind = status >= 500 ? "server" : status === 403 ? "auth" : "unknown";
+    const kind: OpenRouterErrorKind =
+      status >= 500 ? "server" : status === 403 ? "auth" : "unknown";
     return new OpenRouterError(explicitMsg, status, kind);
   }
 

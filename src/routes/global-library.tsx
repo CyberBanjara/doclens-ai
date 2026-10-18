@@ -464,7 +464,10 @@ function GlobalLibraryPage() {
       setLocalDocs(freshDocs);
       window.dispatchEvent(new CustomEvent("doclens:library-changed"));
 
-      toast.success(`Successfully imported "${file.key.split("/").pop() || file.key}" to your local library!`, { id: toastId });
+      toast.success(
+        `Successfully imported "${file.key.split("/").pop() || file.key}" to your local library!`,
+        { id: toastId },
+      );
 
       navigate({ to: "/doc/$id", params: { id: docRec.id } });
     } catch (e: any) {
@@ -548,7 +551,9 @@ function GlobalLibraryPage() {
       }
     } catch (e: any) {
       console.error(e);
-      toast.error(e?.message || `Failed to download ${subjectMeta.label} chapters.`, { id: toastId });
+      toast.error(e?.message || `Failed to download ${subjectMeta.label} chapters.`, {
+        id: toastId,
+      });
     } finally {
       setDownloadingSubject(null);
       setBatchProgress(null);
@@ -872,8 +877,9 @@ function GlobalLibraryPage() {
                         {activeCategoryMeta.label}
                       </h3>
                       <p className="text-[11px] text-muted-foreground">
-                        {filteredFiles.length} {filteredFiles.length === 1 ? "chapter" : "chapters"} available •{" "}
-                        {categoryDownloadedStats[activeCategory]?.downloaded || 0} of {filteredFiles.length} in Local Library
+                        {filteredFiles.length} {filteredFiles.length === 1 ? "chapter" : "chapters"}{" "}
+                        available • {categoryDownloadedStats[activeCategory]?.downloaded || 0} of{" "}
+                        {filteredFiles.length} in Local Library
                       </p>
                     </div>
                   </div>
@@ -886,7 +892,8 @@ function GlobalLibraryPage() {
                       className={`inline-flex items-center gap-1.5 rounded-xl px-3.5 py-1.5 text-xs font-bold transition-all shadow-sm cursor-pointer ${
                         downloadingSubject === activeCategory
                           ? "bg-primary/20 text-primary border border-primary/40"
-                          : (categoryDownloadedStats[activeCategory]?.downloaded || 0) >= filteredFiles.length
+                          : (categoryDownloadedStats[activeCategory]?.downloaded || 0) >=
+                              filteredFiles.length
                             ? "bg-emerald-500/15 border border-emerald-500/30 text-emerald-400 hover:bg-emerald-500/25"
                             : "bg-primary text-primary-foreground hover:opacity-95 active:scale-95 shadow-primary/20"
                       }`}
@@ -896,10 +903,12 @@ function GlobalLibraryPage() {
                         <>
                           <span className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-current border-t-transparent" />
                           <span>
-                            Downloading ({batchProgress?.current || 0}/{batchProgress?.total || filteredFiles.length})…
+                            Downloading ({batchProgress?.current || 0}/
+                            {batchProgress?.total || filteredFiles.length})…
                           </span>
                         </>
-                      ) : (categoryDownloadedStats[activeCategory]?.downloaded || 0) >= filteredFiles.length ? (
+                      ) : (categoryDownloadedStats[activeCategory]?.downloaded || 0) >=
+                        filteredFiles.length ? (
                         <>
                           <Check className="h-3.5 w-3.5 text-emerald-400 stroke-[2.5]" />
                           <span>All in Local Library</span>
@@ -990,7 +999,8 @@ function GlobalLibraryPage() {
                         className={`inline-flex items-center gap-1 rounded-xl px-2.5 py-1 text-[11px] font-bold transition-all shadow-xs cursor-pointer ${
                           downloadingSubject === activeCategory
                             ? "bg-primary/20 text-primary border border-primary/40"
-                            : (categoryDownloadedStats[activeCategory]?.downloaded || 0) >= filteredFiles.length
+                            : (categoryDownloadedStats[activeCategory]?.downloaded || 0) >=
+                                filteredFiles.length
                               ? "bg-emerald-500/15 border border-emerald-500/30 text-emerald-400"
                               : "bg-primary text-primary-foreground hover:opacity-95 active:scale-95 shadow-primary/20"
                         }`}
@@ -998,9 +1008,14 @@ function GlobalLibraryPage() {
                         {downloadingSubject === activeCategory ? (
                           <>
                             <span className="h-3 w-3 animate-spin rounded-full border-2 border-current border-t-transparent" />
-                            <span>{batchProgress ? `${batchProgress.current}/${batchProgress.total}` : "Downloading…"}</span>
+                            <span>
+                              {batchProgress
+                                ? `${batchProgress.current}/${batchProgress.total}`
+                                : "Downloading…"}
+                            </span>
                           </>
-                        ) : (categoryDownloadedStats[activeCategory]?.downloaded || 0) >= filteredFiles.length ? (
+                        ) : (categoryDownloadedStats[activeCategory]?.downloaded || 0) >=
+                          filteredFiles.length ? (
                           <>
                             <Check className="h-3 w-3 text-emerald-400 stroke-[2.5]" />
                             <span>In Library</span>

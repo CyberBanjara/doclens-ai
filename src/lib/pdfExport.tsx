@@ -1,14 +1,5 @@
 import React from "react";
-import {
-  Document,
-  Page,
-  Text,
-  View,
-  Image,
-  StyleSheet,
-  Font,
-  pdf,
-} from "@react-pdf/renderer";
+import { Document, Page, Text, View, Image, StyleSheet, Font, pdf } from "@react-pdf/renderer";
 import { toast } from "sonner";
 import { getAllPages, getDoc } from "@/lib/storage";
 import { getStoredLanguage, getOutputLanguage } from "@/lib/openrouter";
@@ -27,9 +18,7 @@ export function registerPdfFonts() {
   Font.registerHyphenationCallback((word) => [word]);
 
   const fontBase =
-    typeof window !== "undefined"
-      ? `${window.location.origin}/fonts`
-      : "./public/fonts";
+    typeof window !== "undefined" ? `${window.location.origin}/fonts` : "./public/fonts";
 
   // Mukta (Devanagari - Hindi, Marathi, Sanskrit + Latin)
   Font.register({
@@ -201,12 +190,7 @@ export function resolvePdfFont(language?: string): string {
   }
 
   // Arabic / Urdu
-  if (
-    l.includes("arabic") ||
-    l.includes("العربية") ||
-    l.includes("urdu") ||
-    l.includes("اردو")
-  ) {
+  if (l.includes("arabic") || l.includes("العربية") || l.includes("urdu") || l.includes("اردو")) {
     return "NotoSansArabic";
   }
 
@@ -284,10 +268,7 @@ function parseMarkdownBlocks(text: string): MarkdownBlock[] {
 /**
  * Renders bold markdown inline formatting (**bold**) inside text.
  */
-function renderInlineText(
-  content: string,
-  boldStyle?: any,
-) {
+function renderInlineText(content: string, boldStyle?: any) {
   if (!content.includes("**")) {
     return content;
   }

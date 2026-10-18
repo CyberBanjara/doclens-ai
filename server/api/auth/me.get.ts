@@ -1,5 +1,6 @@
 import { defineEventHandler } from "h3";
 import { getSessionUserFromEvent } from "../../lib/auth-server";
+import { getUserTranslationCounter } from "../../lib/supabase-server";
 import type { ClientUser } from "../../lib/auth-types";
 
 export default defineEventHandler(async (event) => {
@@ -8,6 +9,8 @@ export default defineEventHandler(async (event) => {
     if (!session) {
       return { user: null };
     }
+
+    const totalTranslatedPages = await getUserTranslationCounter(session.uid);
 
     const clientUser: ClientUser = {
       uid: session.uid,
@@ -18,6 +21,7 @@ export default defineEventHandler(async (event) => {
       nativeLanguage: session.nativeLanguage,
       style: session.style,
       educationLevel: session.educationLevel,
+      totalTranslatedPages,
     };
 
     return { user: clientUser };

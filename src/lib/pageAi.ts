@@ -24,7 +24,11 @@ export function effective(globals: Globals, ov?: PageOverrides) {
   const defaultProvider = isOmniRouterConfigured() ? "omnirouter" : "openrouter";
   const rawProvider = ov?.provider ?? globals.provider ?? defaultProvider;
   const provider: AiProvider =
-    rawProvider === "ollama" ? "ollama" : rawProvider === "omnirouter" ? "omnirouter" : "openrouter";
+    rawProvider === "ollama"
+      ? "ollama"
+      : rawProvider === "omnirouter"
+        ? "omnirouter"
+        : "openrouter";
 
   const mode = ov?.mode ?? globals.mode;
   let rawStyle = ov?.style ?? globals.style;
@@ -42,7 +46,8 @@ export function effective(globals: Globals, ov?: PageOverrides) {
   let defaultModelForProvider = globals.modelId || getSelectedModel() || getDefaultModelSync();
   if (provider === "ollama") {
     defaultModelForProvider =
-      globals.ollamaModelId || (typeof window !== "undefined" ? localStorage.getItem("doclens.ollama.model") || "" : "");
+      globals.ollamaModelId ||
+      (typeof window !== "undefined" ? localStorage.getItem("doclens.ollama.model") || "" : "");
   } else if (provider === "omnirouter") {
     defaultModelForProvider =
       globals.omniModelId || getOmniSelectedModel() || getOmniDefaultModelSync();

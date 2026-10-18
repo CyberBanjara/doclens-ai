@@ -73,4 +73,3 @@ export function warmFirebaseAuth(): void {
 }
 
 export { firebaseConfig };
-

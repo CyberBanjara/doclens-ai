@@ -26,6 +26,10 @@ export interface DocEventMap {
     result?: string;
     error?: string;
   };
+  /** Authenticated user's total translated pages counter updated. */
+  "doclens:translation-counter-updated": {
+    totalTranslatedPages: number;
+  };
 }
 
 export function dispatchDocEvent<K extends keyof DocEventMap>(

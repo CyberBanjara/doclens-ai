@@ -126,7 +126,7 @@ var TesseractCore = (() => {
       }
     }
     var Ba = (a) => {
-        for (; 0 < a.length; ) a.shift()(e);
+        for (; 0 < a.length;) a.shift()(e);
       },
       Ca = [],
       Da = [],
@@ -212,9 +212,9 @@ var TesseractCore = (() => {
     var Ka = "undefined" != typeof TextDecoder ? new TextDecoder() : void 0,
       v = (a, b = 0) => {
         var c = b;
-        for (var d = c + void 0; a[c] && !(c >= d); ) ++c;
+        for (var d = c + void 0; a[c] && !(c >= d);) ++c;
         if (16 < c - b && a.buffer && Ka) return Ka.decode(a.subarray(b, c));
-        for (d = ""; b < c; ) {
+        for (d = ""; b < c;) {
           var f = a[b++];
           if (f & 128) {
             var h = a[b++] & 63;
@@ -753,7 +753,7 @@ var TesseractCore = (() => {
       var b = Ab(a.parent.id, a.name);
       if (x.Of[b] === a) x.Of[b] = a.Zf;
       else
-        for (b = x.Of[b]; b; ) {
+        for (b = x.Of[b]; b;) {
           if (b.Zf === a) {
             b.Zf = a.Zf;
             break;
@@ -820,7 +820,7 @@ var TesseractCore = (() => {
       throw new x.Af(32);
     }
     function Bb(a) {
-      for (var b; ; ) {
+      for (var b; ;) {
         if (x.pg(a))
           return ((a = a.Gf.Dg), b ? ("/" !== a[a.length - 1] ? `${a}/${b}` : a + b) : a);
         b = b ? `${a.name}/${b}` : a.name;
@@ -901,7 +901,7 @@ var TesseractCore = (() => {
     }
     function Kb(a) {
       var b = [];
-      for (a = [a]; a.length; ) {
+      for (a = [a]; a.length;) {
         var c = a.pop();
         b.push(c);
         a.push(...c.bg);
@@ -940,7 +940,7 @@ var TesseractCore = (() => {
     }
     function Pb(a, b) {
       a = "string" == typeof a ? a : Bb(a);
-      for (b = b.split("/").reverse(); b.length; ) {
+      for (b = b.split("/").reverse(); b.length;) {
         var c = b.pop();
         if (c) {
           var d = Ta(a + "/" + c);
@@ -1245,7 +1245,7 @@ var TesseractCore = (() => {
         var b = a.Mf,
           c = Kb(b);
         Object.keys(x.Of).forEach((d) => {
-          for (d = x.Of[d]; d; ) {
+          for (d = x.Of[d]; d;) {
             var f = d.Zf;
             c.includes(d.Gf) && ob(d);
             d = f;
@@ -1783,7 +1783,7 @@ var TesseractCore = (() => {
     e.wasmBinary && (la = e.wasmBinary);
     e.thisProgram && (da = e.thisProgram);
     if (e.preInit)
-      for ("function" == typeof e.preInit && (e.preInit = [e.preInit]); 0 < e.preInit.length; )
+      for ("function" == typeof e.preInit && (e.preInit = [e.preInit]); 0 < e.preInit.length;)
         e.preInit.shift()();
     e.addRunDependency = ub;
     e.removeRunDependency = tb;
@@ -2129,7 +2129,7 @@ var TesseractCore = (() => {
               case 0:
                 var f = Ra();
                 if (0 > f) break;
-                for (; x.streams[f]; ) f++;
+                for (; x.streams[f];) f++;
                 return Ib(d, f).fd;
               case 1:
               case 2:
@@ -2402,7 +2402,7 @@ var TesseractCore = (() => {
         },
         o: (a, b, c) => {
           Yb.length = 0;
-          for (var d; (d = l[b++]); ) {
+          for (var d; (d = l[b++]);) {
             var f = 105 != d;
             f &= 112 != d;
             c += f && c % 8 ? 4 : 0;
@@ -2675,7 +2675,7 @@ var TesseractCore = (() => {
           na?.(e);
           e.onRuntimeInitialized?.();
           if (e.postRun)
-            for ("function" == typeof e.postRun && (e.postRun = [e.postRun]); e.postRun.length; ) {
+            for ("function" == typeof e.postRun && (e.postRun = [e.postRun]); e.postRun.length;) {
               var b = e.postRun.shift();
               Ca.push(b);
             }
@@ -2685,7 +2685,7 @@ var TesseractCore = (() => {
       if (0 < rb) sb = $h;
       else {
         if (e.preRun)
-          for ("function" == typeof e.preRun && (e.preRun = [e.preRun]); e.preRun.length; ) Ea();
+          for ("function" == typeof e.preRun && (e.preRun = [e.preRun]); e.preRun.length;) Ea();
         Ba(Da);
         0 < rb
           ? (sb = $h)

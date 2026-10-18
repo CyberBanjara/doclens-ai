@@ -87,7 +87,11 @@ export default defineEventHandler(async (event) => {
     // 4. Update Secure, HttpOnly session cookie
     setSessionCookieOnEvent(event, newSessionJwt);
 
-    // 5. Return updated ClientUser payload
+    // 5. Fetch translation counter from Supabase
+    const { getUserTranslationCounter } = await import("../../lib/supabase-server");
+    const totalTranslatedPages = await getUserTranslationCounter(session.uid);
+
+    // 6. Return updated ClientUser payload
     const clientUser: ClientUser = {
       uid: updatedSessionUser.uid,
       name: updatedSessionUser.name,
@@ -97,6 +101,7 @@ export default defineEventHandler(async (event) => {
       nativeLanguage: updatedSessionUser.nativeLanguage,
       style: updatedSessionUser.style,
       educationLevel: updatedSessionUser.educationLevel,
+      totalTranslatedPages,
     };
 
     return { success: true, user: clientUser };

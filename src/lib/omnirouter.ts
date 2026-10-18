@@ -179,7 +179,17 @@ export function friendlyOmniRouterError(status: number, body: string): OmniRoute
   }
 
   if (explicitMsg) {
-    return new OmniRouterError(explicitMsg, status, status >= 500 ? "server" : status === 401 || status === 403 ? "auth" : status === 429 ? "rate_limit" : "unknown");
+    return new OmniRouterError(
+      explicitMsg,
+      status,
+      status >= 500
+        ? "server"
+        : status === 401 || status === 403
+          ? "auth"
+          : status === 429
+            ? "rate_limit"
+            : "unknown",
+    );
   }
 
   if (status === 401 || status === 403) {
@@ -516,9 +526,7 @@ export async function streamOmniRouterCompletion(opts: OmniStreamOpts): Promise<
       } catch (fetchErr: unknown) {
         if (signal.aborted) throw fetchErr;
         throw new OmniRouterError(
-          fetchErr instanceof Error
-            ? fetchErr.message
-            : "Failed to connect to OmniRouter endpoint",
+          fetchErr instanceof Error ? fetchErr.message : "Failed to connect to OmniRouter endpoint",
           0,
           "network",
         );

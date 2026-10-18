@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   Dialog,
   DialogContent,
@@ -71,6 +71,21 @@ export function FullBookTranslationModal({
     return Math.min(100, Math.round((state.completedCount / state.totalTargetPages) * 100));
   }, [state.completedCount, state.totalTargetPages]);
 
+  const isComplete =
+    state.totalTargetPages > 0 &&
+    state.completedCount + state.failedPages.length >= state.totalTargetPages;
+
+  // When active translation completes, automatically close the modal until user opens it again
+  const prevTranslatingRef = useRef(state.isTranslating);
+  useEffect(() => {
+    if (prevTranslatingRef.current && !state.isTranslating) {
+      if (open && state.totalTargetPages > 0) {
+        onOpenChange(false);
+      }
+    }
+    prevTranslatingRef.current = state.isTranslating;
+  }, [state.isTranslating, state.totalTargetPages, open, onOpenChange]);
+
   const formatEta = (seconds: number | null) => {
     if (seconds === null || seconds <= 0) return "Calculating…";
     if (seconds < 60) return `~${seconds}s remaining`;
@@ -100,32 +115,42 @@ export function FullBookTranslationModal({
               <span className="relative flex h-2 w-2">
                 <span
                   className={`absolute inline-flex h-full w-full rounded-full opacity-75 ${
-                    state.isPaused
-                      ? "bg-amber-400"
-                      : state.cooldownRemaining
-                        ? "animate-ping bg-amber-500"
-                        : "animate-ping bg-primary"
+                    isComplete
+                      ? "bg-emerald-500"
+                      : state.isPaused
+                        ? "bg-amber-400"
+                        : state.cooldownRemaining
+                          ? "animate-ping bg-amber-500"
+                          : "animate-ping bg-primary"
                   }`}
                 />
                 <span
                   className={`relative inline-flex h-2 w-2 rounded-full ${
-                    state.isPaused
-                      ? "bg-amber-500"
-                      : state.cooldownRemaining
+                    isComplete
+                      ? "bg-emerald-500"
+                      : state.isPaused
                         ? "bg-amber-500"
-                        : "bg-primary"
+                        : state.cooldownRemaining
+                          ? "bg-amber-500"
+                          : "bg-primary"
                   }`}
                 />
               </span>
               <span className="font-medium text-foreground">
-                {state.isPaused
-                  ? "Paused"
-                  : state.cooldownRemaining
-                    ? `Cooldown (${state.cooldownRemaining}s)`
-                    : `Translating page ${state.currentPage ?? "—"} of ${pageCount}`}
+                {isComplete
+                  ? "Translation complete!"
+                  : state.isPaused
+                    ? "Paused"
+                    : state.cooldownRemaining
+                      ? `Cooldown (${state.cooldownRemaining}s)`
+                      : `Translating page ${state.currentPage ?? "—"} of ${pageCount}`}
               </span>
             </div>
-            <span className="font-mono text-xs font-semibold text-primary tabular-nums">
+            <span
+              className={`font-mono text-xs font-semibold tabular-nums ${
+                isComplete ? "text-emerald-500" : "text-primary"
+              }`}
+            >
               {state.completedCount} / {state.totalTargetPages} ({progressPercent}%)
             </span>
           </div>
@@ -133,7 +158,9 @@ export function FullBookTranslationModal({
           {/* Progress Bar */}
           <div className="h-2 w-full overflow-hidden rounded-full bg-surface-2">
             <div
-              className="h-full bg-primary transition-all duration-300 rounded-full"
+              className={`h-full transition-all duration-300 rounded-full ${
+                isComplete ? "bg-emerald-500" : "bg-primary"
+              }`}
               style={{ width: `${progressPercent}%` }}
             />
           </div>
@@ -142,7 +169,7 @@ export function FullBookTranslationModal({
             <span>
               Language: <b className="text-foreground font-medium">{targetLanguage}</b>
             </span>
-            <span>{formatEta(state.estimatedSecondsRemaining)}</span>
+            <span>{isComplete ? "Completed" : formatEta(state.estimatedSecondsRemaining)}</span>
           </div>
 
           {/* Streaming snippet */}

@@ -335,4 +335,74 @@ create policy "Allow public read access on book_languages" on book_languages
 create policy "Allow service_role full access on book_languages" on book_languages
     for all to service_role using (true) with check (true);
 
+-- ============================================================================
+-- USER TRANSLATION HISTORY COUNTER SYSTEM
+-- ============================================================================
+-- Maintains a single atomic counter per authenticated user: total_translated_pages.
+-- Avoids unnecessary database records by maintaining a single row per user
+-- with page_keys for deduplicating retries and duplicate requests.
 
+create table if not exists user_translation_counters (
+    user_id text primary key,
+    total_translated_pages integer not null default 0,
+    page_keys text[] not null default '{}',
+    created_at timestamptz not null default now(),
+    updated_at timestamptz not null default now()
+);
+
+-- Performance index for fast user lookup
+create index if not exists idx_user_translation_counters_user on user_translation_counters (user_id);
+
+-- Enable Row Level Security (RLS)
+alter table user_translation_counters enable row level security;
+
+-- Read policy: Authenticated users can read their counter; public read enabled for authorized queries
+create policy "Allow users to read their own translation counter" on user_translation_counters
+    for select
+    to authenticated, anon, service_role
+    using (true);
+
+-- Full administrative and write control for backend serverless functions using service_role key
+create policy "Allow service_role full access on user_translation_counters" on user_translation_counters
+    for all
+    to service_role
+    using (true)
+    with check (true);
+
+-- Atomic increment procedure ensuring deduplication of duplicate requests & retries
+create or replace function increment_user_translation_counter(
+    p_user_id text,
+    p_page_key text
+)
+returns integer
+language plpgsql
+security definer
+as $$
+declare
+    v_count integer;
+begin
+    -- 1. Ensure user row exists
+    insert into user_translation_counters (user_id, total_translated_pages, page_keys, created_at, updated_at)
+    values (p_user_id, 0, '{}', now(), now())
+    on conflict (user_id) do nothing;
+
+    -- 2. Atomically increment only if p_page_key has not been counted yet
+    update user_translation_counters
+    set 
+        total_translated_pages = total_translated_pages + 1,
+        page_keys = array_append(page_keys, p_page_key),
+        updated_at = now()
+    where user_id = p_user_id
+      and not (p_page_key = any(page_keys))
+    returning total_translated_pages into v_count;
+
+    -- 3. If key was already present (duplicate/retry), return existing counter without incrementing
+    if v_count is null then
+        select total_translated_pages into v_count
+        from user_translation_counters
+        where user_id = p_user_id;
+    end if;
+
+    return coalesce(v_count, 0);
+end;
+$$;

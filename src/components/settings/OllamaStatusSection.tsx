@@ -1,5 +1,14 @@
 import { useState, useEffect } from "react";
-import { Bot, RefreshCw, Cpu, Check, CheckCircle2, Globe, AlertCircle, ShieldCheck } from "lucide-react";
+import {
+  Bot,
+  RefreshCw,
+  Cpu,
+  Check,
+  CheckCircle2,
+  Globe,
+  AlertCircle,
+  ShieldCheck,
+} from "lucide-react";
 import {
   DEFAULT_OLLAMA_ENDPOINT,
   getOllamaEndpoint,
@@ -135,7 +144,10 @@ export function OllamaStatusSection({
           </button>
         </div>
         <p className="text-[10px] text-muted-foreground">
-          Default: <span className="font-mono text-foreground/80">{DEFAULT_OLLAMA_ENDPOINT}</span>. Enter your local IP (e.g. <span className="font-mono">http://localhost:11434</span> or <span className="font-mono">http://192.168.1.50:11434</span>) and click <strong>Set &amp; Test</strong>.
+          Default: <span className="font-mono text-foreground/80">{DEFAULT_OLLAMA_ENDPOINT}</span>.
+          Enter your local IP (e.g. <span className="font-mono">http://localhost:11434</span> or{" "}
+          <span className="font-mono">http://192.168.1.50:11434</span>) and click{" "}
+          <strong>Set &amp; Test</strong>.
         </p>
       </div>
 
@@ -143,11 +155,15 @@ export function OllamaStatusSection({
       <div className="flex items-start gap-2.5 rounded-xl border border-primary/20 bg-primary/5 p-3 text-xs text-foreground/90 leading-relaxed">
         <ShieldCheck className="h-4 w-4 text-primary shrink-0 mt-0.5" />
         <div className="space-y-1">
-          <p className="font-medium text-foreground">
-            Browser Permission Notice
-          </p>
+          <p className="font-medium text-foreground">Browser Permission Notice</p>
           <p className="text-[11px] text-muted-foreground">
-            When saving your local IP or testing the connection, your browser may prompt: <em>&ldquo;www.anuwad.com is asking you to Access other apps and services on this device&rdquo;</em>. Click <strong>Allow</strong> to let Anuwad communicate directly with your local Ollama instance.
+            When saving your local IP or testing the connection, your browser may prompt:{" "}
+            <em>
+              &ldquo;www.anuwad.com is asking you to Access other apps and services on this
+              device&rdquo;
+            </em>
+            . Click <strong>Allow</strong> to let Anuwad communicate directly with your local Ollama
+            instance.
           </p>
         </div>
       </div>
@@ -188,7 +204,8 @@ export function OllamaStatusSection({
         <p className="text-xs text-muted-foreground leading-relaxed">
           {status === "connected"
             ? `${modelCount} Ollama model${modelCount === 1 ? "" : "s"} found and ready.`
-            : error || "Make sure Ollama is running and click 'Allow' if your browser prompts for local network access."}
+            : error ||
+              "Make sure Ollama is running and click 'Allow' if your browser prompts for local network access."}
         </p>
       </div>
 
@@ -246,7 +263,9 @@ export function OllamaStatusSection({
         {models.length === 0 && status === "connected" && (
           <div className="flex items-center gap-1.5 text-[11px] text-amber-500">
             <AlertCircle className="h-3.5 w-3.5 shrink-0" />
-            <span>No models found on Ollama yet. Pull one via terminal (e.g. `ollama pull llama3.2`).</span>
+            <span>
+              No models found on Ollama yet. Pull one via terminal (e.g. `ollama pull llama3.2`).
+            </span>
           </div>
         )}
       </div>

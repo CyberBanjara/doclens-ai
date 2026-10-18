@@ -50,8 +50,7 @@ interface Props {
 }
 
 type PendingExplainAction =
-  | { type: "page"; pageNumber: number }
-  | { type: "page-ensure"; pageNumber: number };
+  { type: "page"; pageNumber: number } | { type: "page-ensure"; pageNumber: number };
 
 export function PageWorkstation({
   docId,
@@ -69,7 +68,9 @@ export function PageWorkstation({
   const [ollamaModels, setOllamaModels] = useState<ORModel[]>([]);
 
   const isOmniConfigured = isOmniRouterConfigured();
-  const [omniChecking, setOmniChecking] = useState(() => globals.provider === "omnirouter" && isOmniConfigured);
+  const [omniChecking, setOmniChecking] = useState(
+    () => globals.provider === "omnirouter" && isOmniConfigured,
+  );
   const [omniError, setOmniError] = useState<string | null>(null);
 
   const [explainSetupOpen, setExplainSetupOpen] = useState(false);
@@ -156,7 +157,9 @@ export function PageWorkstation({
           // Load OpenRouter models as fallback
           const k = getKey();
           if (k) {
-            fetchModels(k).then(setModels).catch(() => {});
+            fetchModels(k)
+              .then(setModels)
+              .catch(() => {});
           }
         });
     } else {
@@ -311,7 +314,10 @@ export function PageWorkstation({
   const activeModelId = isOllamaProvider
     ? globals.ollamaModelId || getOllamaSelectedModel() || globals.modelId
     : isOmniProvider
-      ? globals.omniModelId || getOmniSelectedModel() || getOmniDefaultModelSync() || globals.modelId
+      ? globals.omniModelId ||
+        getOmniSelectedModel() ||
+        getOmniDefaultModelSync() ||
+        globals.modelId
       : globals.modelId || getSelectedModel() || getDefaultModelSync();
   const providerReady = isLocalProvider || keyReady;
 

@@ -20,6 +20,7 @@ export interface ClientUser {
   nativeLanguage?: string;
   style?: string;
   educationLevel?: string;
+  totalTranslatedPages?: number;
 }
 
 export interface UserProfileRecord {

@@ -33,7 +33,9 @@ export function setOllamaEndpoint(url: string): void {
   if (typeof window === "undefined") return;
   const sanitized = sanitizeOllamaEndpoint(url);
   localStorage.setItem(OLLAMA_ENDPOINT_LS, sanitized);
-  window.dispatchEvent(new CustomEvent(GLOBALS_CHANGE_EVT, { detail: { ollamaEndpoint: sanitized } }));
+  window.dispatchEvent(
+    new CustomEvent(GLOBALS_CHANGE_EVT, { detail: { ollamaEndpoint: sanitized } }),
+  );
   window.dispatchEvent(new CustomEvent(OLLAMA_STATUS_EVT, { detail: { endpoint: sanitized } }));
 }
 
@@ -180,7 +182,10 @@ export async function fetchOllamaModels(endpoint?: string): Promise<ORModel[]> {
       const json = (await res.json()) as { data?: unknown[] };
       const rawList = Array.isArray(json?.data) ? json.data : [];
       return rawList.map((item) => {
-        const m = (typeof item === "object" && item !== null ? item : {}) as Record<string, unknown>;
+        const m = (typeof item === "object" && item !== null ? item : {}) as Record<
+          string,
+          unknown
+        >;
         const id = String(m.id || "");
         return {
           id,
@@ -383,8 +388,7 @@ export async function streamOllamaCompletion(opts: OllamaStreamOpts): Promise<vo
   // Format Ollama request payload
   const model = String(opts.payload.model || "");
   const messages = Array.isArray(opts.payload.messages) ? opts.payload.messages : [];
-  const temperature =
-    typeof opts.payload.temperature === "number" ? opts.payload.temperature : 0.3;
+  const temperature = typeof opts.payload.temperature === "number" ? opts.payload.temperature : 0.3;
 
   const ollamaNativeBody = JSON.stringify({
     model,
@@ -454,12 +458,7 @@ export async function streamOllamaCompletion(opts: OllamaStreamOpts): Promise<vo
 
     let totalChars = 0;
     try {
-      totalChars = await readOllamaStream(
-        response.body,
-        opts.onDelta,
-        signal,
-        targetEndpoint,
-      );
+      totalChars = await readOllamaStream(response.body, opts.onDelta, signal, targetEndpoint);
     } finally {
       try {
         if (!response.body.locked) {

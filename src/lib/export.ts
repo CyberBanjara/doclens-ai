@@ -98,7 +98,11 @@ export async function exportAsJson(docId: string) {
         : null,
   }));
   downloadBlob(
-    JSON.stringify({ documentId: docId, exportedAt: new Date().toISOString(), pages: data }, null, 2),
+    JSON.stringify(
+      { documentId: docId, exportedAt: new Date().toISOString(), pages: data },
+      null,
+      2,
+    ),
     `${baseTitle}-export.json`,
     "application/json;charset=utf-8",
   );

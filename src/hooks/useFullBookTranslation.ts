@@ -30,10 +30,12 @@ export function useFullBookTranslation({
   docId,
   pageCount,
   onPageAiChange,
+  onComplete,
 }: {
   docId: string;
   pageCount: number;
   onPageAiChange?: (pageNumber: number, entry: PageAiSummaryEntry | null) => void;
+  onComplete?: () => void;
 }) {
   const [isTranslating, setIsTranslating] = useState(false);
   const [isPaused, setIsPaused] = useState(false);
@@ -56,6 +58,12 @@ export function useFullBookTranslation({
   const autoFollowRef = useRef(true);
   const toastIdRef = useRef<string | number | null>(null);
   autoFollowRef.current = autoFollow;
+
+  const onPageAiChangeRef = useRef(onPageAiChange);
+  onPageAiChangeRef.current = onPageAiChange;
+
+  const onCompleteRef = useRef(onComplete);
+  onCompleteRef.current = onComplete;
 
   // On unmount: stop queueing NEXT pages, dismiss active toast, but let the CURRENT actively running page finish and save in background!
   useEffect(() => {
@@ -136,6 +144,7 @@ export function useFullBookTranslation({
         toast.info(
           `No untranslated pages found in the selected range (Pages ${startPage}–${endPage}).`,
         );
+        onCompleteRef.current?.();
         return;
       }
 
@@ -226,8 +235,8 @@ export function useFullBookTranslation({
 
             // Update workstation summary
             const updatedRec = await getPageData(docId, pNum);
-            if (updatedRec?.pageAi && onPageAiChange) {
-              onPageAiChange(pNum, summarize(updatedRec.pageAi));
+            if (updatedRec?.pageAi && onPageAiChangeRef.current) {
+              onPageAiChangeRef.current(pNum, summarize(updatedRec.pageAi));
             }
 
             // Estimate remaining time
@@ -288,6 +297,12 @@ export function useFullBookTranslation({
       }
 
       const wasCancelled = !isTranslatingRef.current;
+
+      if (!wasCancelled && isMountedRef.current && done > 0) {
+        // Brief 600ms grace period so 100% progress / completion state is visible before closing
+        await new Promise((res) => setTimeout(res, 600));
+      }
+
       isTranslatingRef.current = false;
       isPausedRef.current = false;
 
@@ -331,8 +346,12 @@ export function useFullBookTranslation({
           );
         }
       }
+
+      if (!wasCancelled) {
+        onCompleteRef.current?.();
+      }
     },
-    [docId, pageCount, onPageAiChange],
+    [docId, pageCount],
   );
 
   return {
@@ -355,4 +374,3 @@ export function useFullBookTranslation({
     setAutoFollow,
   };
 }
-

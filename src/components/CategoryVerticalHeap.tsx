@@ -247,4 +247,3 @@ export function CategoryVerticalHeap({
     </aside>
   );
 }
-

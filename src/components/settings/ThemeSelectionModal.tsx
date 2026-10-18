@@ -194,9 +194,7 @@ export function ThemeSelectionModal({
                   <div>
                     <span
                       className={`text-sm font-semibold ${
-                        currentThemeId === "system"
-                          ? "text-primary font-bold"
-                          : "text-foreground"
+                        currentThemeId === "system" ? "text-primary font-bold" : "text-foreground"
                       }`}
                     >
                       System Default

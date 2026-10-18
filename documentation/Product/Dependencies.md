@@ -36,20 +36,20 @@
 
 ## Routing & App Framework
 
-| Package                  | Purpose                                                   |
-| ------------------------ | --------------------------------------------------------- |
-| `@tanstack/react-router` | File-based routing, URL-synced state                      |
-| `@tanstack/react-start`  | Server functions (`createServerFn`), SSR app shell        |
-| `react`, `react-dom`     | UI framework (v19)                                        |
-| `nitro`                  | Server runtime powering the deployed server functions     |
+| Package                  | Purpose                                               |
+| ------------------------ | ----------------------------------------------------- |
+| `@tanstack/react-router` | File-based routing, URL-synced state                  |
+| `@tanstack/react-start`  | Server functions (`createServerFn`), SSR app shell    |
+| `react`, `react-dom`     | UI framework (v19)                                    |
+| `nitro`                  | Server runtime powering the deployed server functions |
 
 ## PDF Generation & Payments / Auth Tokens
 
-| Package               | Purpose                                                        |
-| --------------------- | -------------------------------------------------------------- |
-| `@react-pdf/renderer` | Client-side export to formatted PDF documents                  |
-| `razorpay`            | Razorpay payment order and signature verification              |
-| `jose`                | Lightweight JWT signing and cryptographic token verification   |
+| Package               | Purpose                                                      |
+| --------------------- | ------------------------------------------------------------ |
+| `@react-pdf/renderer` | Client-side export to formatted PDF documents                |
+| `razorpay`            | Razorpay payment order and signature verification            |
+| `jose`                | Lightweight JWT signing and cryptographic token verification |
 
 ## UI & Styling
 

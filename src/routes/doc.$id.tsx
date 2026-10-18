@@ -157,6 +157,9 @@ function DocPage() {
     docId: id,
     pageCount,
     onPageAiChange: handlePageAiChange,
+    onComplete: useCallback(() => {
+      setFullBookModalOpen(false);
+    }, []),
   });
 
   const goToLastTranslatedPage = useCallback(() => {
@@ -334,12 +337,7 @@ function DocPage() {
         // Step 3: Run background sync from Supabase for the active native language
         void (async () => {
           try {
-            const updated = await syncFromSupabase(
-              id,
-              currentRec.fileName,
-              activeLang,
-              false,
-            );
+            const updated = await syncFromSupabase(id, currentRec.fileName, activeLang, false);
             if (updated && !cancelled) {
               const updatedRec = await getDoc(id);
               if (updatedRec) {

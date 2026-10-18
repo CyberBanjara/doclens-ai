@@ -1,7 +1,6 @@
 import { cleanAiText } from "./cleanAiText";
 
-const SENTENCE_DELIMITER_REGEX =
-  /([.!?|।॥]+(?:\s+|\n+|$)|[\u3002\uff01\uff1f]+|\n\n+)/;
+const SENTENCE_DELIMITER_REGEX = /([.!?|।॥]+(?:\s+|\n+|$)|[\u3002\uff01\uff1f]+|\n\n+)/;
 
 const NON_SENTENCE_ENDING_ABBREV =
   /\b(?:[A-Za-z]|Adm|Assn|Ave|Blvd|Bldg|Brig|Capt|Cmdr|Col|Comdr|Corp|Cpl|Ct|Dept|Dr|Drs|Fig|Figs|Fr|Ft|Gen|Gov|Hon|Inc|Jr|Lieut|Ln|Lt|Ltd|Maj|Messrs|Mmes|Mr|Mrs|Ms|Mt|Mx|No|Nos|Pl|Pres|Prof|Rd|Rep|Reps|Rev|Sen|Sens|Sgt|Sr|St|Ste|Univ|Jan|Feb|Mar|Apr|Aug|Sep|Sept|Oct|Nov|Dec|dept|ed|eds|est|fig|figs|misc|pp|ref|refs|vol|vols|vs)\.$/i;

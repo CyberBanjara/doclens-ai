@@ -255,5 +255,12 @@ export function usePageTranslation(
     [docId, mountedRef, onPageAiChangeRef],
   );
 
-  return { runningPages, streamBufs, runPageOnce, cancelPage, selectionOverridesRef, isPageTranslating };
+  return {
+    runningPages,
+    streamBufs,
+    runPageOnce,
+    cancelPage,
+    selectionOverridesRef,
+    isPageTranslating,
+  };
 }

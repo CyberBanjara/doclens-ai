@@ -18,11 +18,19 @@ import {
   parseStructuredTranslationResponse,
   type Globals,
 } from "@/lib/openrouter";
-import { getDoc, getPageData, upsertPageAi, type PageAi } from "@/lib/storage";
+import {
+  getDoc,
+  getPageData,
+  upsertPageAi,
+  recordLocalTranslation,
+  syncLocalTranslationCounter,
+  type PageAi,
+} from "@/lib/storage";
 import { cleanAiText, effective, hashFor, dispatchPageReady } from "@/lib/pageAi";
 import { fetchSupabaseLanguagePage, saveSupabaseLanguagePage } from "@/lib/supabase";
 import { getPreviousContext, mergeContextDelta } from "@/lib/contextStore";
 import { dispatchDocEvent } from "@/lib/docEvents";
+import { apiIncrementTranslationCounter } from "@/lib/auth-client";
 
 export interface PageTranslationOptions {
   docId: string;
@@ -161,8 +169,23 @@ export async function executePageTranslation({
       const state: PageAi = pageRec.pageAi ?? { pageNumber, status: "idle" };
       let eff = effective(currentGlobals, state.overrides);
       let isOmni = eff.provider === "omnirouter";
-      let isOllama = eff.provider === "ollama";
+      const isOllama = eff.provider === "ollama";
       const hash = hashFor(eff);
+
+      // ─────────────────────────────────────────────────────────────────
+      // 0. LOCAL STORAGE CACHE REUSE CHECK
+      // ─────────────────────────────────────────────────────────────────
+      // Reopening or loading an already translated page must never increase the counter
+      if (
+        !forceRegenerate &&
+        !customTextOverride &&
+        state.status === "done" &&
+        state.result &&
+        state.settingsHash === hash
+      ) {
+        dispatchPageReady(docId, pageNumber, state.result);
+        return { success: true, result: state.result, fromCache: true };
+      }
 
       // ─────────────────────────────────────────────────────────────────
       // 1. SUPABASE MULTI-TABLE REUSE CHECK
@@ -326,8 +349,43 @@ export async function executePageTranslation({
         });
       }
 
+      // 4. ATOMIC TRANSLATION HISTORY COUNTER INCREMENT
+      // Step A: Record in local IndexedDB for offline cache
+      try {
+        await recordLocalTranslation({
+          docId,
+          pageNumber,
+          language: eff.language,
+        });
+      } catch (localErr) {
+        console.warn("Local translation counter increment note:", localErr);
+      }
+
+      // Step B: Atomically increment directly in Supabase for the authenticated user
+      // Increments only on successful completion. Deduplicates retries and duplicate requests.
+      try {
+        const supRes = await apiIncrementTranslationCounter({
+          docId,
+          pageNumber,
+          language: eff.language,
+        });
+        if (supRes && typeof supRes.total_translated_pages === "number") {
+          void syncLocalTranslationCounter(supRes.total_translated_pages);
+          dispatchDocEvent("doclens:translation-counter-updated", {
+            totalTranslatedPages: supRes.total_translated_pages,
+          });
+        }
+      } catch (counterErr) {
+        console.warn("Supabase translation counter increment note:", counterErr);
+      }
+
       dispatchPageReady(docId, pageNumber, result);
-      dispatchDocEvent("doclens:page-status-changed", { docId, pageNumber, status: "done", result });
+      dispatchDocEvent("doclens:page-status-changed", {
+        docId,
+        pageNumber,
+        status: "done",
+        result,
+      });
 
       return { success: true, result, contextDelta };
     } catch (e) {
@@ -341,7 +399,12 @@ export async function executePageTranslation({
 
       const err = e instanceof Error ? e.message : "Translation process failed.";
       await upsertPageAi(docId, pageNumber, { status: "error", error: err });
-      dispatchDocEvent("doclens:page-status-changed", { docId, pageNumber, status: "error", error: err });
+      dispatchDocEvent("doclens:page-status-changed", {
+        docId,
+        pageNumber,
+        status: "error",
+        error: err,
+      });
       return { success: false, error: err };
     } finally {
       inFlightMap.delete(taskKey);

@@ -47,7 +47,11 @@ export default defineEventHandler(async (event) => {
     // 4. Store session in Secure, HttpOnly cookie
     setSessionCookieOnEvent(event, sessionJwt);
 
-    // 5. Return filtered user data for UI
+    // 5. Fetch translation counter from Supabase
+    const { getUserTranslationCounter } = await import("../../lib/supabase-server");
+    const totalTranslatedPages = await getUserTranslationCounter(sessionUser.uid);
+
+    // 6. Return filtered user data for UI
     const clientUser: ClientUser = {
       uid: sessionUser.uid,
       name: sessionUser.name,
@@ -57,6 +61,7 @@ export default defineEventHandler(async (event) => {
       nativeLanguage: sessionUser.nativeLanguage,
       style: sessionUser.style,
       educationLevel: sessionUser.educationLevel,
+      totalTranslatedPages,
     };
 
     return { user: clientUser };

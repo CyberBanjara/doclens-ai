@@ -54,7 +54,9 @@ function stopCurrentAudioElement(audioRef: React.RefObject<HTMLAudioElement | nu
 }
 
 /** Reuses a single singleton HTMLAudioElement to prevent Chromium media player pool exhaustion */
-function getOrCreateAudioElement(audioRef: React.RefObject<HTMLAudioElement | null>): HTMLAudioElement {
+function getOrCreateAudioElement(
+  audioRef: React.RefObject<HTMLAudioElement | null>,
+): HTMLAudioElement {
   if (!audioRef.current) {
     audioRef.current = new Audio();
   }

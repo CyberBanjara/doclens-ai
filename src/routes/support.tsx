@@ -284,7 +284,9 @@ function SupportPage() {
                 Fuel Free, Open &amp; Private Knowledge.
               </h1>
               <p className="text-sm text-muted-foreground leading-relaxed">
-                Anuwad runs without corporate paywalls, tracking, or selling data. Your direct support sponsors AI translation inference and neural voice synthesis for students and readers worldwide.
+                Anuwad runs without corporate paywalls, tracking, or selling data. Your direct
+                support sponsors AI translation inference and neural voice synthesis for students
+                and readers worldwide.
               </p>
             </div>
 
@@ -315,7 +317,9 @@ function SupportPage() {
               {/* Progress towards 2026 infra goal */}
               <div className="space-y-1.5 pt-1">
                 <div className="flex justify-between items-center text-[11px]">
-                  <span className="font-medium text-muted-foreground">Compute Infrastructure Goal</span>
+                  <span className="font-medium text-muted-foreground">
+                    Compute Infrastructure Goal
+                  </span>
                   <span className="font-mono font-bold text-rose-400">{progressPercent}%</span>
                 </div>
                 <div className="h-2 w-full rounded-full bg-surface-2 border border-border/80 overflow-hidden relative">
@@ -331,15 +335,21 @@ function SupportPage() {
             <div className="grid grid-cols-3 gap-2 text-center">
               <div className="rounded-xl border border-border/60 bg-surface/40 p-2.5">
                 <ShieldCheck className="h-4 w-4 text-emerald-400 mx-auto mb-1" />
-                <span className="text-[10px] font-semibold text-foreground/80 block">Zero-Knowledge</span>
+                <span className="text-[10px] font-semibold text-foreground/80 block">
+                  Zero-Knowledge
+                </span>
               </div>
               <div className="rounded-xl border border-border/60 bg-surface/40 p-2.5">
                 <Globe2 className="h-4 w-4 text-primary mx-auto mb-1" />
-                <span className="text-[10px] font-semibold text-foreground/80 block">90+ Languages</span>
+                <span className="text-[10px] font-semibold text-foreground/80 block">
+                  90+ Languages
+                </span>
               </div>
               <div className="rounded-xl border border-border/60 bg-surface/40 p-2.5">
                 <Zap className="h-4 w-4 text-amber-400 mx-auto mb-1" />
-                <span className="text-[10px] font-semibold text-foreground/80 block">Open Source</span>
+                <span className="text-[10px] font-semibold text-foreground/80 block">
+                  Open Source
+                </span>
               </div>
             </div>
           </div>
@@ -391,7 +401,9 @@ function SupportPage() {
                             </span>
                           )}
                           <span className="text-lg mb-1">{tier.icon}</span>
-                          <span className={`text-base font-bold font-mono ${isSelected ? "text-rose-400" : "text-foreground"}`}>
+                          <span
+                            className={`text-base font-bold font-mono ${isSelected ? "text-rose-400" : "text-foreground"}`}
+                          >
                             ₹{tier.amount}
                           </span>
                           <span className="text-[10px] font-semibold tracking-tight truncate w-full mt-0.5 opacity-80">
@@ -550,7 +562,8 @@ function SupportPage() {
               </div>
               <h3 className="text-sm font-bold text-foreground">AI Compute Tokens</h3>
               <p className="text-xs text-muted-foreground leading-relaxed">
-                Subsidizes high-throughput model inference for free translation across 90+ languages for students.
+                Subsidizes high-throughput model inference for free translation across 90+ languages
+                for students.
               </p>
             </div>
 
@@ -560,7 +573,8 @@ function SupportPage() {
               </div>
               <h3 className="text-sm font-bold text-foreground">Neural Voice Packs</h3>
               <p className="text-xs text-muted-foreground leading-relaxed">
-                Hosting and fine-tuning on-device natural voice packages so users can listen offline to translated books.
+                Hosting and fine-tuning on-device natural voice packages so users can listen offline
+                to translated books.
               </p>
             </div>
 
@@ -570,7 +584,8 @@ function SupportPage() {
               </div>
               <h3 className="text-sm font-bold text-foreground">OCR &amp; Layout Engine</h3>
               <p className="text-xs text-muted-foreground leading-relaxed">
-                Continuous improvement to client-side OCR and complex multi-column PDF reconstruction.
+                Continuous improvement to client-side OCR and complex multi-column PDF
+                reconstruction.
               </p>
             </div>
 
@@ -580,7 +595,8 @@ function SupportPage() {
               </div>
               <h3 className="text-sm font-bold text-foreground">Global Public Archives</h3>
               <p className="text-xs text-muted-foreground leading-relaxed">
-                Preserving and distributing public-domain philosophy, science, and literature freely to all.
+                Preserving and distributing public-domain philosophy, science, and literature freely
+                to all.
               </p>
             </div>
           </div>
@@ -650,7 +666,8 @@ function SupportPage() {
                 Be the First Believer on the Wall
               </h3>
               <p className="text-xs text-muted-foreground max-w-sm mx-auto">
-                No contributions yet in this active session. Pick an amount above to become the foundational patron of Anuwad!
+                No contributions yet in this active session. Pick an amount above to become the
+                foundational patron of Anuwad!
               </p>
             </div>
           ) : (
@@ -700,7 +717,9 @@ function SupportPage() {
                       {supporter.message && (
                         <div className="rounded-xl bg-surface-2/50 border border-border/50 p-2.5 text-xs text-foreground/90 italic leading-relaxed flex items-start gap-2">
                           <MessageSquare className="h-3 w-3 text-muted-foreground shrink-0 mt-0.5 not-italic" />
-                          <p className="line-clamp-3 font-normal text-[11px]">"{supporter.message}"</p>
+                          <p className="line-clamp-3 font-normal text-[11px]">
+                            "{supporter.message}"
+                          </p>
                         </div>
                       )}
                     </div>
@@ -729,30 +748,40 @@ function SupportPage() {
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5 text-xs">
             <div className="rounded-2xl border border-border bg-surface/40 p-4 space-y-1.5">
-              <h4 className="font-bold text-foreground text-xs sm:text-sm">Can I pay internationally or with UPI?</h4>
+              <h4 className="font-bold text-foreground text-xs sm:text-sm">
+                Can I pay internationally or with UPI?
+              </h4>
               <p className="text-muted-foreground leading-relaxed text-xs">
-                Yes! Razorpay supports all UPI apps (GPay, PhonePe, Paytm), Indian NetBanking, and international credit/debit cards (Visa, Mastercard, Amex).
+                Yes! Razorpay supports all UPI apps (GPay, PhonePe, Paytm), Indian NetBanking, and
+                international credit/debit cards (Visa, Mastercard, Amex).
               </p>
             </div>
 
             <div className="rounded-2xl border border-border bg-surface/40 p-4 space-y-1.5">
-              <h4 className="font-bold text-foreground text-xs sm:text-sm">How is my privacy protected?</h4>
+              <h4 className="font-bold text-foreground text-xs sm:text-sm">
+                How is my privacy protected?
+              </h4>
               <p className="text-muted-foreground leading-relaxed text-xs">
-                If you choose "Remain Anonymous", your name, email, and Google profile are completely excluded from public wall feeds.
+                If you choose "Remain Anonymous", your name, email, and Google profile are
+                completely excluded from public wall feeds.
               </p>
             </div>
 
             <div className="rounded-2xl border border-border bg-surface/40 p-4 space-y-1.5">
-              <h4 className="font-bold text-foreground text-xs sm:text-sm">Is Anuwad open source?</h4>
+              <h4 className="font-bold text-foreground text-xs sm:text-sm">
+                Is Anuwad open source?
+              </h4>
               <p className="text-muted-foreground leading-relaxed text-xs">
-                Yes, our frontend codebase and client engines are open on GitHub. Knowledge access tools should remain inspectable and accessible by everyone.
+                Yes, our frontend codebase and client engines are open on GitHub. Knowledge access
+                tools should remain inspectable and accessible by everyone.
               </p>
             </div>
 
             <div className="rounded-2xl border border-border bg-surface/40 p-4 space-y-1.5">
               <h4 className="font-bold text-foreground text-xs sm:text-sm">How else can I help?</h4>
               <p className="text-muted-foreground leading-relaxed text-xs">
-                Share Anuwad with fellow students, contribute on GitHub, translate public-domain books for the Global Library, or give us product feedback!
+                Share Anuwad with fellow students, contribute on GitHub, translate public-domain
+                books for the Global Library, or give us product feedback!
               </p>
             </div>
           </div>
@@ -778,7 +807,8 @@ function SupportPage() {
             </Link>
           </div>
           <p className="text-[11px]">
-            © {new Date().getFullYear()} Anuwad.com — Independent, Mission-Driven AI Document Reading.
+            © {new Date().getFullYear()} Anuwad.com — Independent, Mission-Driven AI Document
+            Reading.
           </p>
         </footer>
       </main>

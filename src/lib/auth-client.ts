@@ -17,6 +17,7 @@ export interface ClientUser {
   nativeLanguage?: string;
   style?: string;
   educationLevel?: string;
+  totalTranslatedPages?: number;
 }
 
 export interface AdminUserProfile {
@@ -28,6 +29,7 @@ export interface AdminUserProfile {
   nativeLanguage?: string;
   style?: string;
   educationLevel?: string;
+  totalTranslatedPages?: number;
   createdAt?: string;
   updatedAt?: string;
   lastLoginAt?: string;
@@ -414,4 +416,72 @@ export async function apiUpdateUserProfile(updates: {
 
   const data = await res.json();
   return data.user as ClientUser;
+}
+
+/**
+ * Fetch the current authenticated user's total translated pages counter.
+ */
+export async function apiGetTranslationCounter(): Promise<number> {
+  const token = await getFreshAuthToken();
+  const headers: Record<string, string> = {};
+  if (token) {
+    headers["Authorization"] = `Bearer ${token}`;
+    headers["x-firebase-token"] = token;
+  }
+
+  try {
+    const res = await fetch("/api/translations/counter", {
+      method: "GET",
+      headers,
+      credentials: "include",
+    });
+
+    if (!res.ok) return 0;
+    const data = await res.json();
+    return typeof data?.total_translated_pages === "number" ? data.total_translated_pages : 0;
+  } catch (err) {
+    console.warn("apiGetTranslationCounter notice:", err);
+    return 0;
+  }
+}
+
+/**
+ * Increment the authenticated user's total translated pages counter after a page translation completes.
+ * Deduplicates retries and duplicate requests on the server using canonical page identification.
+ */
+export async function apiIncrementTranslationCounter(params: {
+  docId: string;
+  pageNumber: number;
+  language?: string;
+  pageKey?: string;
+}): Promise<{ total_translated_pages: number; already_counted: boolean } | null> {
+  const token = await getFreshAuthToken();
+  const headers: Record<string, string> = { "Content-Type": "application/json" };
+  if (token) {
+    headers["Authorization"] = `Bearer ${token}`;
+    headers["x-firebase-token"] = token;
+  }
+
+  try {
+    const res = await fetch("/api/translations/increment", {
+      method: "POST",
+      headers,
+      credentials: "include",
+      body: JSON.stringify(params),
+    });
+
+    if (!res.ok) {
+      if (res.status === 401) {
+        // Guest user - translations are allowed without an authenticated account
+        return null;
+      }
+      console.warn("Serverless /api/translations/increment status:", res.status);
+      return null;
+    }
+
+    return await res.json();
+  } catch (err) {
+    console.warn("apiIncrementTranslationCounter notice:", err);
+    return null;
+  }
 }

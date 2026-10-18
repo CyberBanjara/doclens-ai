@@ -4,6 +4,7 @@ import {
   type ClientUser,
   type UserRole,
   apiFetchCurrentUser,
+  apiGetTranslationCounter,
   apiLoginWithGoogle,
   apiLogout,
   apiUpdateUserProfile,
@@ -18,6 +19,7 @@ import {
   type ProcessingStyle,
 } from "@/lib/openrouter";
 import { saveEducationLevel, type EducationLevel } from "@/lib/classification";
+import { listenDocEvent } from "@/lib/docEvents";
 
 interface AuthContextType {
   user: ClientUser | null;
@@ -29,6 +31,7 @@ interface AuthContextType {
   signInWithGoogle: () => Promise<void>;
   signOut: () => Promise<void>;
   refreshUser: () => Promise<void>;
+  refreshTranslationCount: () => Promise<number>;
   updateProfile: (updates: {
     nativeLanguage?: string;
     style?: string;
@@ -60,16 +63,42 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   };
 
   // Initialize session on mount by checking HttpOnly cookie via /api/auth/me
+  // Translation count is loaded directly from Supabase, defaulting to 0 if not set.
   const refreshUser = useCallback(async () => {
     try {
       const currentUser = await apiFetchCurrentUser();
-      setUser(currentUser);
-      syncUserToLocalStorage(currentUser);
+      if (currentUser) {
+        setUser(currentUser);
+        syncUserToLocalStorage(currentUser);
+      } else {
+        setUser(null);
+      }
     } catch {
       setUser(null);
     } finally {
       setLoading(false);
     }
+  }, []);
+
+  // Fetch the latest authoritative translation counter directly from Supabase on demand
+  const refreshTranslationCount = useCallback(async (): Promise<number> => {
+    try {
+      const count = await apiGetTranslationCounter();
+      setUser((prev) => (prev ? { ...prev, totalTranslatedPages: count } : null));
+      return count;
+    } catch {
+      return user?.totalTranslatedPages ?? 0;
+    }
+  }, [user?.totalTranslatedPages]);
+
+  // Listen for real-time translation counter updates across the application
+  useEffect(() => {
+    const unlistenCounter = listenDocEvent("doclens:translation-counter-updated", (d) => {
+      setUser((prev) => (prev ? { ...prev, totalTranslatedPages: d.totalTranslatedPages } : null));
+    });
+    return () => {
+      unlistenCounter();
+    };
   }, []);
 
   useEffect(() => {
@@ -105,9 +134,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     photoURL?: string;
   }): Promise<ClientUser> => {
     const updated = await apiUpdateUserProfile(updates);
-    setUser(updated);
-    syncUserToLocalStorage(updated);
-    return updated;
+    const retainedUser = {
+      ...updated,
+      totalTranslatedPages: user?.totalTranslatedPages ?? updated.totalTranslatedPages ?? 0,
+    };
+    setUser(retainedUser);
+    syncUserToLocalStorage(retainedUser);
+    return retainedUser;
   };
 
   const signInWithGoogle = async () => {
@@ -173,6 +206,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         signInWithGoogle,
         signOut,
         refreshUser,
+        refreshTranslationCount,
         updateProfile,
       }}
     >

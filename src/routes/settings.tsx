@@ -430,7 +430,9 @@ function SettingsPage() {
         {/* Page Header with Themes Trigger */}
         <header className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
           <div>
-            <h3 className="text-2xl sm:text-3xl font-bold tracking-tight text-foreground">General Settings</h3>
+            <h3 className="text-2xl sm:text-3xl font-bold tracking-tight text-foreground">
+              General Settings
+            </h3>
             <p className="mt-1 text-xs sm:text-sm text-muted-foreground">
               Manage your preferences, translation models, cache, and workspace themes.
             </p>

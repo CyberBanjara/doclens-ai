@@ -31,11 +31,11 @@ flowchart LR
 
 ## Key Endpoints
 
-| Endpoint | Method | Purpose |
-| :--- | :--- | :--- |
-| `/api/tags` | `GET` | Lists all installed models and their parameter sizes |
-| `/api/chat` | `POST` | Executes streaming multi-turn prompt completions |
-| `/api/generate` | `POST` | Fallback single-prompt completion endpoint |
+| Endpoint        | Method | Purpose                                              |
+| :-------------- | :----- | :--------------------------------------------------- |
+| `/api/tags`     | `GET`  | Lists all installed models and their parameter sizes |
+| `/api/chat`     | `POST` | Executes streaming multi-turn prompt completions     |
+| `/api/generate` | `POST` | Fallback single-prompt completion endpoint           |
 
 ---
 

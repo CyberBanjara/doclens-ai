@@ -56,8 +56,12 @@ export function ExportMenu({ docId }: { docId: string }) {
               <FileDown className="h-4 w-4 text-primary" />
             )}
             <div>
-              <div className="font-semibold">{isExportingPdf ? "Generating PDF…" : "Export as PDF"}</div>
-              <div className="text-[10px] text-muted-foreground">Formatted with Anuwad branding</div>
+              <div className="font-semibold">
+                {isExportingPdf ? "Generating PDF…" : "Export as PDF"}
+              </div>
+              <div className="text-[10px] text-muted-foreground">
+                Formatted with Anuwad branding
+              </div>
             </div>
           </button>
 

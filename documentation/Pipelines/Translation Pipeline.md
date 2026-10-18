@@ -30,24 +30,29 @@ flowchart TD
 ## Detailed Steps
 
 ### 1. Detached Background Execution
+
 - Translation execution is managed by a singleton module ([`src/lib/pageTranslationRunner.ts`](file:///home/sanskar/Desktop/doclens-ai/src/lib/pageTranslationRunner.ts)) that runs independently of React component lifecycles.
 - When users navigate across pages or switch tabs ("Original Text" vs "AI Assistant"), in-flight translations continue seamlessly in the background without being aborted.
 
 ### 2. Multi-Provider Resolution
+
 - Supports three AI providers:
   1. **OpenRouter:** Cloud inference via live Server-Sent Events (SSE).
   2. **OmniRouter:** Local inference via local OpenAI-compatible endpoints.
   3. **Ollama:** Direct local inference via native [[Ollama API]] (`/api/chat`).
 
 ### 3. Payload Construction & Cache Check
+
 - `buildPagePayload()` (`src/lib/openrouter.ts`) constructs mode instructions (`translate` or `explain`), style profiles, target languages, and temperature settings.
 - Computes `computeSettingsHash()` against stored IndexedDB data; reuses cached results when settings are identical.
 
 ### 4. Post-Processing & Event Dispatch
+
 - Incoming stream chunks pass through `cleanAiText()` to strip markdown formatting and code blocks for smooth TTS compatibility.
 - Once completed, writes result to `pageData` in [[IndexedDB Storage]] and emits `doclens:page-ready` and `doclens:page-status-changed` events across the UI.
 
 ### 5. Non-Destructive Union Sync
+
 - Syncing with Supabase utilizes a union merge strategy in [`src/lib/sync.ts`](file:///home/sanskar/Desktop/doclens-ai/src/lib/sync.ts) that merges remote pages with local records without overwriting local custom translations.
 
 ---

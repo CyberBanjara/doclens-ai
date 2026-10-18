@@ -176,7 +176,10 @@ export async function syncFromSupabase(
     // 3. Automatic Background Push to Supabase for local pages missing in Supabase
     if (localPagesToPush.length > 0 && isGlobalSyncEnabled()) {
       void syncToSupabase(docId, bookId, language).catch((err) => {
-        console.warn("Background auto-sync of local translations to Supabase note:", err?.message || err);
+        console.warn(
+          "Background auto-sync of local translations to Supabase note:",
+          err?.message || err,
+        );
       });
     }
 
