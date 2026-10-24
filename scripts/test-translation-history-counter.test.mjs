@@ -177,28 +177,42 @@ test("Translation History Counter System", async (t) => {
   );
 
   // ─────────────────────────────────────────────────────────────────
-  // 5. User Profile UI Displays Counter
+  // 5. Dedicated /user Page & Profile Dropdown Navigation
   // ─────────────────────────────────────────────────────────────────
   await t.test(
-    "ProfileDropdown.tsx must render user.totalTranslatedPages in user profile card",
+    "Dedicated /user page and ProfileDropdown.tsx must provide direct /user navigation and render translated pages counter",
     () => {
-      const profilePath = path.join(rootDir, "src/components/ProfileDropdown.tsx");
-      const profileContent = fs.readFileSync(profilePath, "utf-8");
+      const userRoutePath = path.join(rootDir, "src/routes/user.tsx");
+      assert.ok(fs.existsSync(userRoutePath), "src/routes/user.tsx must exist");
+      const userRouteContent = fs.readFileSync(userRoutePath, "utf-8");
 
       assert.match(
-        profileContent,
+        userRouteContent,
         /user\.totalTranslatedPages\s*\?\?\s*0/,
-        "ProfileDropdown must render user.totalTranslatedPages with fallback 0",
+        "User page must render user.totalTranslatedPages with fallback 0",
       );
       assert.match(
-        profileContent,
-        /Translated Pages/i,
-        "ProfileDropdown must have Translated Pages label",
+        userRouteContent,
+        /Total Translated/i,
+        "User page must have Total Translated Pages metric",
       );
       assert.match(
-        profileContent,
+        userRouteContent,
         /user-profile-translated-pages-count/,
-        "ProfileDropdown must have testable element ID for translated pages count",
+        "User page must have testable element ID for translated pages count",
+      );
+
+      const profilePath = path.join(rootDir, "src/components/ProfileDropdown.tsx");
+      const profileContent = fs.readFileSync(profilePath, "utf-8");
+      assert.match(
+        profileContent,
+        /to="\/user"/,
+        "ProfileDropdown must link directly to /user instead of modal",
+      );
+      assert.match(
+        profileContent,
+        /User Profile/,
+        "ProfileDropdown must have User Profile link",
       );
     },
   );
@@ -207,7 +221,7 @@ test("Translation History Counter System", async (t) => {
   // 6. Security & Session Association
   // ─────────────────────────────────────────────────────────────────
   await t.test(
-    "Server endpoints must authenticate session and forbid accessing/modifying other users' counters",
+    "Server endpoints must authenticate session and forbid accessing/modifying other users' counters or activity",
     () => {
       const counterGetContent = fs.readFileSync(
         path.join(rootDir, "server/api/translations/counter.get.ts"),
@@ -217,8 +231,12 @@ test("Translation History Counter System", async (t) => {
         path.join(rootDir, "server/api/translations/increment.post.ts"),
         "utf-8",
       );
+      const activityGetContent = fs.readFileSync(
+        path.join(rootDir, "server/api/translations/activity.get.ts"),
+        "utf-8",
+      );
 
-      // Both endpoints require session
+      // All endpoints require session
       assert.match(
         counterGetContent,
         /getSessionUserFromEvent\(event\)/,
@@ -237,16 +255,144 @@ test("Translation History Counter System", async (t) => {
       );
       assert.match(
         incrementPostContent,
-        /incrementUserTranslationCounter\(session\.uid,\s*pageKey\)/,
+        /userId:\s*session\.uid/,
         "increment.post must strictly use session.uid, never allowing users to increment other users' counters",
+      );
+
+      assert.match(
+        activityGetContent,
+        /getSessionUserFromEvent\(event\)/,
+        "activity.get must authenticate session",
+      );
+      assert.match(
+        activityGetContent,
+        /getUserTranslationActivity\(session\.uid/,
+        "activity.get must strictly use session.uid, guaranteeing user isolation",
       );
     },
   );
 
   // ─────────────────────────────────────────────────────────────────
-  // 7. Dual-Layer Local Storage Invariants
+  // 7. Granular User Translation Activities & Book Title Mapping
   // ─────────────────────────────────────────────────────────────────
-  await t.test("Local translation counter module must exist and runner must update local first", () => {
+  await t.test(
+    "supabase_schema.sql and supabase-server.ts must support user_translation_activities with book title mapping",
+    () => {
+      const schemaContent = fs.readFileSync(path.join(rootDir, "supabase_schema.sql"), "utf-8");
+      const supabaseServerContent = fs.readFileSync(
+        path.join(rootDir, "server/lib/supabase-server.ts"),
+        "utf-8",
+      );
+
+      // Schema definitions
+      assert.match(
+        schemaContent,
+        /create table if not exists user_translation_activities/i,
+        "Schema must define user_translation_activities table",
+      );
+      assert.match(
+        schemaContent,
+        /book_title\s+text\s+not\s+null/i,
+        "user_translation_activities must store book_title",
+      );
+      assert.match(
+        schemaContent,
+        /constraint\s+user_translation_activities_user_page_key_unique\s+unique\s*\(\s*user_id,\s*page_key\s*\)/i,
+        "user_translation_activities must enforce unique (user_id, page_key) for deduplication",
+      );
+      assert.match(
+        schemaContent,
+        /alter table user_translation_activities enable row level security/i,
+        "RLS must be enabled on user_translation_activities",
+      );
+      assert.match(
+        schemaContent,
+        /auth\.uid\(\)::text\s*=\s*user_id/,
+        "RLS policy must restrict reads strictly to authenticated user",
+      );
+
+      // Server functions
+      assert.match(
+        supabaseServerContent,
+        /export async function recordUserTranslationActivity/,
+        "supabase-server must export recordUserTranslationActivity",
+      );
+      assert.match(
+        supabaseServerContent,
+        /export async function getUserTranslationActivity/,
+        "supabase-server must export getUserTranslationActivity",
+      );
+    },
+  );
+
+  // ─────────────────────────────────────────────────────────────────
+  // 8. GitHub-Style Activity Heatmap UI Component Integration
+  // ─────────────────────────────────────────────────────────────────
+  // ─────────────────────────────────────────────────────────────────
+  // 8. GitHub-Style Activity Heatmap UI Component Integration
+  // ─────────────────────────────────────────────────────────────────
+  await t.test(
+    "ActivityHeatmap.tsx must exist and be embedded on the dedicated /user page route",
+    () => {
+      const heatmapPath = path.join(rootDir, "src/components/ActivityHeatmap.tsx");
+      assert.ok(fs.existsSync(heatmapPath), "ActivityHeatmap.tsx must exist");
+
+      const heatmapContent = fs.readFileSync(heatmapPath, "utf-8");
+      assert.match(
+        heatmapContent,
+        /Translation Activity/i,
+        "Heatmap must display Translation Activity section",
+      );
+      assert.match(
+        heatmapContent,
+        /apiGetTranslationActivity/,
+        "Heatmap must fetch data via apiGetTranslationActivity",
+      );
+      assert.match(
+        heatmapContent,
+        /Translated Books/i,
+        "Heatmap hover tooltip must display Translated Books breakdown",
+      );
+
+      const userRouteContent = fs.readFileSync(
+        path.join(rootDir, "src/routes/user.tsx"),
+        "utf-8",
+      );
+      assert.match(
+        userRouteContent,
+        /<ActivityHeatmap\s+userId=\{user\.uid\}/,
+        "Dedicated /user page must embed ActivityHeatmap passing user.uid",
+      );
+    },
+  );
+
+  // ─────────────────────────────────────────────────────────────────
+  // 9. Zero-Lag Translation Lifecycle Invariant
+  // ─────────────────────────────────────────────────────────────────
+  await t.test(
+    "pageTranslationRunner.ts must dispatch page ready before background tracking completes",
+    () => {
+      const runnerContent = fs.readFileSync(
+        path.join(rootDir, "src/lib/pageTranslationRunner.ts"),
+        "utf-8",
+      );
+
+      const readyIdx = runnerContent.indexOf("dispatchPageReady(docId, pageNumber, result);");
+      const trackingIdx = runnerContent.indexOf("apiIncrementTranslationCounter({");
+
+      assert.ok(readyIdx !== -1, "dispatchPageReady must exist");
+      assert.ok(trackingIdx !== -1, "apiIncrementTranslationCounter must exist");
+      assert.ok(
+        readyIdx < trackingIdx,
+        "dispatchPageReady MUST be called before asynchronous background tracking to ensure ZERO lag for the user",
+      );
+    },
+  );
+
+  // ─────────────────────────────────────────────────────────────────
+  // 10. Dual-Layer Local Storage Invariants & Dedicated /api/user Endpoint
+  // ─────────────────────────────────────────────────────────────────
+  await t.test("Local translation counter module must exist and /api/user endpoint must exist", () => {
     const counterPath = path.join(rootDir, "src/lib/storage/translationCounter.ts");
     assert.ok(fs.existsSync(counterPath), "translationCounter.ts must exist");
 
@@ -265,6 +411,13 @@ test("Translation History Counter System", async (t) => {
     const profileContent = fs.readFileSync(path.join(rootDir, "src/components/ProfileDropdown.tsx"), "utf-8");
     assert.match(profileContent, /User Profile/, "Dropdown must have User Profile option");
     assert.match(profileContent, /Sign Out/, "Dropdown must have Sign Out option");
-    assert.match(profileContent, /Dialog open=\{isProfileModalOpen\}/, "Profile modal must be triggered by dialog state");
+    assert.match(profileContent, /to="\/user"/, "Dropdown must link directly to /user page");
+
+    const userApiPath = path.join(rootDir, "server/api/user.get.ts");
+    assert.ok(fs.existsSync(userApiPath), "server/api/user.get.ts endpoint must exist");
+    const userApiContent = fs.readFileSync(userApiPath, "utf-8");
+    assert.match(userApiContent, /getUserTranslationActivity/, "/api/user must fetch user translation activity");
+    assert.match(userApiContent, /getUserTranslationCounter/, "/api/user must fetch user translation counter");
   });
 });
+

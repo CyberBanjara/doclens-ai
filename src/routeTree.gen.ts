@@ -19,6 +19,7 @@ import { Route as SettingsRouteImport } from './routes/settings'
 import { Route as SupportRouteImport } from './routes/support'
 import { Route as TermsRouteImport } from './routes/terms'
 import { Route as TermsOfServiceRouteImport } from './routes/terms-of-service'
+import { Route as UserRouteImport } from './routes/user'
 import { Route as DocIdRouteImport } from './routes/doc.$id'
 import { Route as SettingsAppearanceRouteImport } from './routes/settings_.appearance'
 
@@ -72,6 +73,11 @@ const TermsOfServiceRoute = TermsOfServiceRouteImport.update({
   path: '/terms-of-service',
   getParentRoute: () => rootRouteImport,
 } as any)
+const UserRoute = UserRouteImport.update({
+  id: '/user',
+  path: '/user',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const DocIdRoute = DocIdRouteImport.update({
   id: '/doc/$id',
   path: '/doc/$id',
@@ -94,6 +100,7 @@ export interface FileRoutesByFullPath {
   '/support': typeof SupportRoute
   '/terms': typeof TermsRoute
   '/terms-of-service': typeof TermsOfServiceRoute
+  '/user': typeof UserRoute
   '/doc/$id': typeof DocIdRoute
   '/settings/appearance': typeof SettingsAppearanceRoute
 }
@@ -108,6 +115,7 @@ export interface FileRoutesByTo {
   '/support': typeof SupportRoute
   '/terms': typeof TermsRoute
   '/terms-of-service': typeof TermsOfServiceRoute
+  '/user': typeof UserRoute
   '/doc/$id': typeof DocIdRoute
   '/settings/appearance': typeof SettingsAppearanceRoute
 }
@@ -123,6 +131,7 @@ export interface FileRoutesById {
   '/support': typeof SupportRoute
   '/terms': typeof TermsRoute
   '/terms-of-service': typeof TermsOfServiceRoute
+  '/user': typeof UserRoute
   '/doc/$id': typeof DocIdRoute
   '/settings_/appearance': typeof SettingsAppearanceRoute
 }
@@ -139,6 +148,7 @@ export interface FileRouteTypes {
     | '/support'
     | '/terms'
     | '/terms-of-service'
+    | '/user'
     | '/doc/$id'
     | '/settings/appearance'
   fileRoutesByTo: FileRoutesByTo
@@ -153,6 +163,7 @@ export interface FileRouteTypes {
     | '/support'
     | '/terms'
     | '/terms-of-service'
+    | '/user'
     | '/doc/$id'
     | '/settings/appearance'
   id:
@@ -167,6 +178,7 @@ export interface FileRouteTypes {
     | '/support'
     | '/terms'
     | '/terms-of-service'
+    | '/user'
     | '/doc/$id'
     | '/settings_/appearance'
   fileRoutesById: FileRoutesById
@@ -182,6 +194,7 @@ export interface RootRouteChildren {
   SupportRoute: typeof SupportRoute
   TermsRoute: typeof TermsRoute
   TermsOfServiceRoute: typeof TermsOfServiceRoute
+  UserRoute: typeof UserRoute
   DocIdRoute: typeof DocIdRoute
   SettingsAppearanceRoute: typeof SettingsAppearanceRoute
 }
@@ -258,6 +271,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof TermsOfServiceRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/user': {
+      id: '/user'
+      path: '/user'
+      fullPath: '/user'
+      preLoaderRoute: typeof UserRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/doc/$id': {
       id: '/doc/$id'
       path: '/doc/$id'
@@ -286,6 +306,7 @@ const rootRouteChildren: RootRouteChildren = {
   SupportRoute: SupportRoute,
   TermsRoute: TermsRoute,
   TermsOfServiceRoute: TermsOfServiceRoute,
+  UserRoute: UserRoute,
   DocIdRoute: DocIdRoute,
   SettingsAppearanceRoute: SettingsAppearanceRoute,
 }

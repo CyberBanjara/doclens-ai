@@ -341,6 +341,16 @@ export async function executePageTranslation({
         await mergeContextDelta(docId, pageNumber, contextDelta, true);
       }
 
+      // IMMEDIATELY notify UI and mark page ready so user translation performance has ZERO lag
+      dispatchPageReady(docId, pageNumber, result);
+      dispatchDocEvent("doclens:page-status-changed", {
+        docId,
+        pageNumber,
+        status: "done",
+        result,
+      });
+
+      // Background Supabase shared cache save (if standard translation)
       if (isDefaultTranslation && bookId) {
         void saveSupabaseLanguagePage({
           data: { language: eff.language, bookId, pageNumber, content: result, docId },
@@ -349,43 +359,46 @@ export async function executePageTranslation({
         });
       }
 
-      // 4. ATOMIC TRANSLATION HISTORY COUNTER INCREMENT
-      // Step A: Record in local IndexedDB for offline cache
-      try {
-        await recordLocalTranslation({
-          docId,
-          pageNumber,
-          language: eff.language,
-        });
-      } catch (localErr) {
-        console.warn("Local translation counter increment note:", localErr);
-      }
+      // ─────────────────────────────────────────────────────────────────
+      // 4. ATOMIC TRANSLATION ACTIVITY & PRICING TRACKING RECORD
+      // ─────────────────────────────────────────────────────────────────
+      // Resolve human-readable book title mapped to translation activity
+      const rawTitle = docRec?.fileName || "Untitled Document";
+      const bookTitle = rawTitle.replace(/\.pdf$/i, "").trim() || "Untitled Document";
 
-      // Step B: Atomically increment directly in Supabase for the authenticated user
-      // Increments only on successful completion. Deduplicates retries and duplicate requests.
-      try {
-        const supRes = await apiIncrementTranslationCounter({
-          docId,
-          pageNumber,
-          language: eff.language,
-        });
-        if (supRes && typeof supRes.total_translated_pages === "number") {
-          void syncLocalTranslationCounter(supRes.total_translated_pages);
-          dispatchDocEvent("doclens:translation-counter-updated", {
-            totalTranslatedPages: supRes.total_translated_pages,
+      // Execute atomic tracking asynchronously in background without blocking translation return
+      void (async () => {
+        // Step A: Record in local IndexedDB for offline cache
+        try {
+          await recordLocalTranslation({
+            docId,
+            pageNumber,
+            language: eff.language,
           });
+        } catch (localErr) {
+          console.warn("Local translation counter increment note:", localErr);
         }
-      } catch (counterErr) {
-        console.warn("Supabase translation counter increment note:", counterErr);
-      }
 
-      dispatchPageReady(docId, pageNumber, result);
-      dispatchDocEvent("doclens:page-status-changed", {
-        docId,
-        pageNumber,
-        status: "done",
-        result,
-      });
+        // Step B: Atomically record activity in Supabase with book title mapping
+        // Increments only on successful completion. Deduplicates retries and duplicate requests.
+        try {
+          const supRes = await apiIncrementTranslationCounter({
+            docId,
+            bookId,
+            bookTitle,
+            pageNumber,
+            language: eff.language,
+          });
+          if (supRes && typeof supRes.total_translated_pages === "number") {
+            void syncLocalTranslationCounter(supRes.total_translated_pages);
+            dispatchDocEvent("doclens:translation-counter-updated", {
+              totalTranslatedPages: supRes.total_translated_pages,
+            });
+          }
+        } catch (counterErr) {
+          console.warn("Supabase translation activity recording note:", counterErr);
+        }
+      })();
 
       return { success: true, result, contextDelta };
     } catch (e) {

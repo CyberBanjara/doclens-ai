@@ -336,11 +336,49 @@ create policy "Allow service_role full access on book_languages" on book_languag
     for all to service_role using (true) with check (true);
 
 -- ============================================================================
+-- USER TRANSLATION DETAILED ACTIVITY & BILLING HISTORY SYSTEM
+-- ============================================================================
+-- Records granular user-specific translation history mapped to book titles,
+-- page numbers, and timestamps to drive pricing models and activity heatmaps.
+-- Deduplication is enforced by unique (user_id, page_key) to prevent double-counting.
+
+create table if not exists user_translation_activities (
+    id bigint generated always as identity primary key,
+    user_id text not null,
+    book_id text not null,
+    book_title text not null default 'Untitled Document',
+    doc_id text,
+    page_number integer not null,
+    language text not null default 'default',
+    page_key text not null,
+    translated_at timestamptz not null default now(),
+    translated_date date not null default (now() at time zone 'utc')::date,
+    constraint user_translation_activities_user_page_key_unique unique (user_id, page_key)
+);
+
+create index if not exists idx_user_translation_activities_user on user_translation_activities (user_id);
+create index if not exists idx_user_translation_activities_user_date on user_translation_activities (user_id, translated_date desc);
+create index if not exists idx_user_translation_activities_user_book on user_translation_activities (user_id, book_id);
+
+alter table user_translation_activities enable row level security;
+
+-- Strict User Access: Each user can ONLY access their own activity data
+create policy "Allow users to read their own translation activities" on user_translation_activities
+    for select
+    to authenticated
+    using (auth.uid()::text = user_id);
+
+create policy "Allow service_role full access on user_translation_activities" on user_translation_activities
+    for all
+    to service_role
+    using (true)
+    with check (true);
+
+-- ============================================================================
 -- USER TRANSLATION HISTORY COUNTER SYSTEM
 -- ============================================================================
--- Maintains a single atomic counter per authenticated user: total_translated_pages.
--- Avoids unnecessary database records by maintaining a single row per user
--- with page_keys for deduplicating retries and duplicate requests.
+-- Maintains an atomic total counter per authenticated user: total_translated_pages.
+-- Works in tandem with user_translation_activities for fast O(1) total reads.
 
 create table if not exists user_translation_counters (
     user_id text primary key,
@@ -356,11 +394,11 @@ create index if not exists idx_user_translation_counters_user on user_translatio
 -- Enable Row Level Security (RLS)
 alter table user_translation_counters enable row level security;
 
--- Read policy: Authenticated users can read their counter; public read enabled for authorized queries
+-- Strict Read policy: Authenticated users can ONLY read their own counter
 create policy "Allow users to read their own translation counter" on user_translation_counters
     for select
-    to authenticated, anon, service_role
-    using (true);
+    to authenticated
+    using (auth.uid()::text = user_id);
 
 -- Full administrative and write control for backend serverless functions using service_role key
 create policy "Allow service_role full access on user_translation_counters" on user_translation_counters
@@ -369,7 +407,89 @@ create policy "Allow service_role full access on user_translation_counters" on u
     using (true)
     with check (true);
 
--- Atomic increment procedure ensuring deduplication of duplicate requests & retries
+-- Atomic recording procedure: inserts detailed activity and increments total counter
+create or replace function record_page_translation_activity(
+    p_user_id text,
+    p_book_id text,
+    p_book_title text,
+    p_doc_id text,
+    p_page_number integer,
+    p_language text,
+    p_page_key text
+)
+returns jsonb
+language plpgsql
+security definer
+as $$
+declare
+    v_inserted_id bigint;
+    v_total integer;
+    v_already_counted boolean := false;
+begin
+    -- 1. Try inserting granular activity record (deduplicated by user_id and page_key)
+    insert into user_translation_activities (
+        user_id,
+        book_id,
+        book_title,
+        doc_id,
+        page_number,
+        language,
+        page_key,
+        translated_at,
+        translated_date
+    )
+    values (
+        p_user_id,
+        p_book_id,
+        coalesce(nullif(trim(p_book_title), ''), 'Untitled Document'),
+        p_doc_id,
+        p_page_number,
+        coalesce(nullif(trim(p_language), ''), 'default'),
+        p_page_key,
+        now(),
+        (now() at time zone 'utc')::date
+    )
+    on conflict (user_id, page_key) do nothing
+    returning id into v_inserted_id;
+
+    -- If v_inserted_id is null, this page was already translated and counted
+    if v_inserted_id is null then
+        v_already_counted := true;
+    end if;
+
+    -- 2. Ensure user counter row exists
+    insert into user_translation_counters (user_id, total_translated_pages, page_keys, created_at, updated_at)
+    values (p_user_id, 0, '{}', now(), now())
+    on conflict (user_id) do nothing;
+
+    -- 3. If freshly inserted, increment total counter atomically
+    if not v_already_counted then
+        update user_translation_counters
+        set
+            total_translated_pages = total_translated_pages + 1,
+            page_keys = array_append(page_keys, p_page_key),
+            updated_at = now()
+        where user_id = p_user_id
+          and not (p_page_key = any(page_keys))
+        returning total_translated_pages into v_total;
+    end if;
+
+    -- 4. Get current counter if not updated in step 3
+    if v_total is null then
+        select total_translated_pages into v_total
+        from user_translation_counters
+        where user_id = p_user_id;
+    end if;
+
+    return jsonb_build_object(
+        'total_translated_pages', coalesce(v_total, 0),
+        'already_counted', v_already_counted,
+        'activity_id', v_inserted_id
+    );
+end;
+$$;
+
+-- Backward-compatible procedure alias
 create or replace function increment_user_translation_counter(
     p_user_id text,
     p_page_key text

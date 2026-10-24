@@ -8,6 +8,10 @@ interface EducationLevelModalProps {
   currentLevel: EducationLevel;
   onSelectLevel: (level: EducationLevel) => void;
   isFirstTime?: boolean;
+  title?: string;
+  description?: string;
+  footerNote?: string;
+  confirmButtonText?: string;
 }
 
 export function EducationLevelModal({
@@ -16,6 +20,10 @@ export function EducationLevelModal({
   currentLevel,
   onSelectLevel,
   isFirstTime = false,
+  title,
+  description,
+  footerNote,
+  confirmButtonText,
 }: EducationLevelModalProps) {
   const [selected, setSelected] = useState<EducationLevel>(currentLevel);
 
@@ -61,11 +69,11 @@ export function EducationLevelModal({
               id="education-level-title"
               className="text-lg sm:text-xl font-extrabold tracking-tight text-foreground"
             >
-              {isFirstTime ? "Select Your Class or Goal" : "Change Class or Goal"}
+              {title || (isFirstTime ? "Select Your Class or Goal" : "Change Class or Goal")}
             </h2>
             <p className="text-xs text-muted-foreground leading-relaxed">
-              Personalize your library with relevant curriculum books, NCERTs, and reading
-              materials.
+              {description ||
+                "Personalize your library with relevant curriculum books, NCERTs, and reading materials."}
             </p>
           </div>
         </div>
@@ -135,7 +143,7 @@ export function EducationLevelModal({
         <div className="pt-2 border-t border-border/40 flex flex-col sm:flex-row items-center justify-between gap-3 text-center sm:text-left">
           <div className="flex items-center gap-1.5 text-[11px] text-muted-foreground">
             <BookOpen className="h-3.5 w-3.5 text-primary/80 shrink-0" />
-            <span>You can switch your level anytime from the top bar.</span>
+            <span>{footerNote || "You can switch your level anytime from the top bar."}</span>
           </div>
 
           <button
@@ -143,7 +151,7 @@ export function EducationLevelModal({
             onClick={() => handleConfirm()}
             className="w-full sm:w-auto px-5 py-2.5 rounded-xl bg-primary text-xs font-bold text-primary-foreground shadow-md shadow-primary/20 hover:opacity-95 active:scale-95 transition-all cursor-pointer shrink-0"
           >
-            Continue to Library
+            {confirmButtonText || "Continue to Library"}
           </button>
         </div>
       </div>

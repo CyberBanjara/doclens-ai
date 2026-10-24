@@ -3,52 +3,16 @@ import { Link } from "@tanstack/react-router";
 import {
   User,
   LogOut,
-  ShieldAlert,
   Loader2,
   ChevronDown,
-  Heart,
-  BookOpen,
-  Languages,
-  GraduationCap,
-  Sparkles,
-  RefreshCw,
 } from "lucide-react";
 import { useAuth } from "@/context/AuthContext";
 import { UserAvatar } from "@/components/UserAvatar";
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogDescription,
-} from "@/components/ui/dialog";
 
 export function ProfileDropdown() {
-  const { user, loading, isAdmin, signInWithGoogle, signOut, refreshTranslationCount } = useAuth();
+  const { user, loading, signInWithGoogle, signOut } = useAuth();
   const [isOpen, setIsOpen] = useState(false);
-  const [isProfileModalOpen, setIsProfileModalOpen] = useState(false);
-  const [isRefreshingCount, setIsRefreshingCount] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
-
-  // Automatically fetch fresh translation counter directly from Supabase when profile modal opens
-  useEffect(() => {
-    if (isProfileModalOpen && user) {
-      setIsRefreshingCount(true);
-      refreshTranslationCount().finally(() => {
-        setIsRefreshingCount(false);
-      });
-    }
-  }, [isProfileModalOpen, user?.uid, refreshTranslationCount]);
-
-  const handleManualRefresh = async () => {
-    if (isRefreshingCount) return;
-    setIsRefreshingCount(true);
-    try {
-      await refreshTranslationCount();
-    } finally {
-      setIsRefreshingCount(false);
-    }
-  };
 
   // Close dropdown on outside click
   useEffect(() => {
@@ -149,19 +113,17 @@ export function ProfileDropdown() {
           <ChevronDown className="h-3 w-3 text-muted-foreground transition-transform group-hover:text-foreground" />
         </button>
 
-        {/* Dropdown Menu: Shows ONLY 2 options as requested */}
+        {/* Dropdown Menu: Links directly to dedicated /user page instead of popup */}
         {isOpen && (
           <div className="absolute right-0 mt-2 w-48 origin-top-right rounded-xl border border-border/80 bg-popover/95 p-1.5 shadow-2xl backdrop-blur-xl ring-1 ring-black/10 z-50 animate-in fade-in zoom-in-95 duration-100">
-            <button
-              onClick={() => {
-                setIsOpen(false);
-                setIsProfileModalOpen(true);
-              }}
+            <Link
+              to="/user"
+              onClick={() => setIsOpen(false)}
               className="flex w-full items-center gap-2.5 rounded-lg px-3 py-2 text-xs font-medium text-foreground transition-colors hover:bg-primary/10 hover:text-primary group"
             >
               <User className="h-4 w-4 text-primary transition-transform group-hover:scale-110" />
               <span>User Profile</span>
-            </button>
+            </Link>
 
             <button
               onClick={() => {
@@ -176,161 +138,7 @@ export function ProfileDropdown() {
           </div>
         )}
       </div>
-
-      {/* User Profile Pop-up Modal */}
-      <Dialog open={isProfileModalOpen} onOpenChange={setIsProfileModalOpen}>
-        <DialogContent className="max-w-md border-border/80 bg-card/95 p-6 shadow-2xl backdrop-blur-2xl sm:rounded-2xl">
-          <DialogHeader className="text-left space-y-1">
-            <DialogTitle className="text-xl font-bold tracking-tight text-foreground flex items-center gap-2">
-              <User className="h-5 w-5 text-primary" />
-              User Profile
-            </DialogTitle>
-            <DialogDescription className="text-xs text-muted-foreground">
-              Your personal details, learning preferences, and translation statistics.
-            </DialogDescription>
-          </DialogHeader>
-
-          {/* User Identity Card */}
-          <div className="mt-3 flex items-center gap-3.5 rounded-xl border border-border/60 bg-surface/50 p-3.5">
-            <UserAvatar
-              photoURL={user.photoURL}
-              name={user.name}
-              email={user.email}
-              className="h-14 w-14 rounded-full object-cover ring-2 ring-primary/30 shadow-md"
-              fallbackClassName="flex h-14 w-14 items-center justify-center rounded-full bg-primary/20 text-lg font-bold text-primary ring-2 ring-primary/30"
-            />
-            <div className="min-w-0 flex-1">
-              <div className="flex items-center gap-2">
-                <p className="truncate text-base font-semibold text-foreground">{user.name}</p>
-                <span
-                  className={`inline-flex items-center rounded-md border px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider ${currentRoleStyle.bg}`}
-                >
-                  {user.role}
-                </span>
-              </div>
-              <p className="truncate text-xs text-muted-foreground mt-0.5">{user.email}</p>
-            </div>
-          </div>
-
-          {/* Translated Pages Counter Banner */}
-          <div className="mt-3 rounded-xl border border-emerald-500/30 bg-gradient-to-br from-emerald-500/10 via-emerald-500/5 to-teal-500/10 p-4 shadow-sm">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2.5">
-                <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-emerald-500/20 text-emerald-400">
-                  <BookOpen className="h-5 w-5" />
-                </div>
-                <div>
-                  <span className="text-xs font-semibold text-foreground block">Translated Pages</span>
-                  <span className="text-[11px] text-muted-foreground block">
-                    Total pages translated with AI
-                  </span>
-                </div>
-              </div>
-
-              <div className="flex items-center gap-2">
-                <span
-                  id="user-profile-translated-pages-count"
-                  className="inline-flex items-center gap-1 rounded-lg border border-emerald-500/40 bg-emerald-500/20 px-3 py-1 text-base font-black text-emerald-400 tabular-nums shadow-sm"
-                >
-                  <BookOpen className="h-3.5 w-3.5" />
-                  {user.totalTranslatedPages ?? 0}
-                </span>
-                <button
-                  onClick={handleManualRefresh}
-                  disabled={isRefreshingCount}
-                  title="Refresh count directly from Supabase"
-                  className="rounded-lg border border-emerald-500/30 bg-emerald-500/10 p-1.5 text-emerald-400 hover:bg-emerald-500/20 hover:text-emerald-300 transition-colors disabled:opacity-50"
-                  aria-label="Refresh translation counter from Supabase"
-                >
-                  <RefreshCw
-                    className={`h-3.5 w-3.5 ${isRefreshingCount ? "animate-spin text-emerald-300" : ""}`}
-                  />
-                </button>
-              </div>
-            </div>
-          </div>
-
-          {/* Preferences Details */}
-          <div className="mt-3 grid grid-cols-2 gap-2.5">
-            <div className="rounded-xl border border-border/60 bg-surface/50 p-3">
-              <div className="flex items-center gap-1.5 text-muted-foreground mb-1">
-                <Languages className="h-3.5 w-3.5 text-primary" />
-                <span className="text-[10px] font-semibold uppercase tracking-wider">
-                  Mother Tongue
-                </span>
-              </div>
-              <p className="text-xs font-semibold text-foreground truncate">
-                {user.nativeLanguage || "English (Default)"}
-              </p>
-            </div>
-
-            <div className="rounded-xl border border-border/60 bg-surface/50 p-3">
-              <div className="flex items-center gap-1.5 text-muted-foreground mb-1">
-                <GraduationCap className="h-3.5 w-3.5 text-purple-400" />
-                <span className="text-[10px] font-semibold uppercase tracking-wider">
-                  Standard
-                </span>
-              </div>
-              <p className="text-xs font-semibold text-foreground truncate">
-                {user.educationLevel ? user.educationLevel.replace("-", " ").toUpperCase() : "Not specified"}
-              </p>
-            </div>
-          </div>
-
-          {user.style && (
-            <div className="mt-2.5 rounded-xl border border-border/60 bg-surface/50 p-3 flex items-center justify-between">
-              <div className="flex items-center gap-1.5 text-muted-foreground">
-                <Sparkles className="h-3.5 w-3.5 text-amber-400" />
-                <span className="text-[10px] font-semibold uppercase tracking-wider">
-                  Preferred Style
-                </span>
-              </div>
-              <span className="text-xs font-semibold text-foreground capitalize">
-                {user.style}
-              </span>
-            </div>
-          )}
-
-          {/* Helpful Navigation Links */}
-          <div className="mt-4 flex flex-col gap-1.5 pt-2 border-t border-border/60">
-            {isAdmin && (
-              <Link
-                to="/admin"
-                onClick={() => setIsProfileModalOpen(false)}
-                className="flex items-center justify-between rounded-lg px-3 py-2 text-xs font-medium text-foreground transition-colors hover:bg-primary/10 hover:text-primary"
-              >
-                <div className="flex items-center gap-2">
-                  <ShieldAlert className="h-4 w-4 text-primary" />
-                  <span>Admin Dashboard</span>
-                </div>
-                <span className="text-[10px] text-muted-foreground">Manage users & permissions</span>
-              </Link>
-            )}
-
-            <Link
-              to="/support"
-              onClick={() => setIsProfileModalOpen(false)}
-              className="flex items-center justify-between rounded-lg px-3 py-2 text-xs font-medium text-foreground transition-colors hover:bg-rose-500/10 hover:text-rose-400"
-            >
-              <div className="flex items-center gap-2">
-                <Heart className="h-4 w-4 text-rose-500 fill-rose-500/20" />
-                <span>Support Our Project</span>
-              </div>
-              <span className="text-[10px] text-muted-foreground">Contribute & help grow</span>
-            </Link>
-          </div>
-
-          {/* Modal Footer */}
-          <div className="mt-4 flex justify-end">
-            <button
-              onClick={() => setIsProfileModalOpen(false)}
-              className="rounded-lg border border-border bg-secondary/80 px-4 py-1.5 text-xs font-medium text-foreground transition-colors hover:bg-secondary active:scale-95"
-            >
-              Close
-            </button>
-          </div>
-        </DialogContent>
-      </Dialog>
     </>
   );
 }
+

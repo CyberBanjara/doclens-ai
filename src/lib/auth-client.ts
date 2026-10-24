@@ -418,6 +418,24 @@ export async function apiUpdateUserProfile(updates: {
   return data.user as ClientUser;
 }
 
+export interface UserActivityHeatmapItem {
+  date: string;
+  count: number;
+  books: Record<string, number>;
+}
+
+export interface UserActivityData {
+  total_pages: number;
+  active_days: number;
+  daily_activity: Record<string, UserActivityHeatmapItem>;
+  recent_activities?: Array<{
+    bookTitle: string;
+    pageNumber: number;
+    language: string;
+    translatedAt: string;
+  }>;
+}
+
 /**
  * Fetch the current authenticated user's total translated pages counter.
  */
@@ -446,11 +464,14 @@ export async function apiGetTranslationCounter(): Promise<number> {
 }
 
 /**
- * Increment the authenticated user's total translated pages counter after a page translation completes.
+ * Increment the authenticated user's total translated pages counter after a page translation completes,
+ * recording granular translation history mapped to book titles in Supabase.
  * Deduplicates retries and duplicate requests on the server using canonical page identification.
  */
 export async function apiIncrementTranslationCounter(params: {
   docId: string;
+  bookId?: string;
+  bookTitle?: string;
   pageNumber: number;
   language?: string;
   pageKey?: string;
@@ -485,3 +506,39 @@ export async function apiIncrementTranslationCounter(params: {
     return null;
   }
 }
+
+/**
+ * Fetch the authenticated user's granular activity heatmap data from Supabase.
+ * Strictly scopes to session user's activity.
+ */
+export async function apiGetTranslationActivity(
+  days = 365,
+): Promise<UserActivityData | null> {
+  const token = await getFreshAuthToken();
+  const headers: Record<string, string> = {};
+  if (token) {
+    headers["Authorization"] = `Bearer ${token}`;
+    headers["x-firebase-token"] = token;
+  }
+
+  try {
+    const res = await fetch(`/api/translations/activity?days=${days}`, {
+      method: "GET",
+      headers,
+      credentials: "include",
+    });
+
+    if (!res.ok) {
+      if (res.status === 401) return null;
+      console.warn("Serverless /api/translations/activity status:", res.status);
+      return null;
+    }
+
+    const data = await res.json();
+    return data as UserActivityData;
+  } catch (err) {
+    console.warn("apiGetTranslationActivity notice:", err);
+    return null;
+  }
+}
+
