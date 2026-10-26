@@ -21,6 +21,7 @@ import {
   isPageTranslating,
 } from "@/lib/pageTranslationRunner";
 import { listenDocEvent } from "@/lib/docEvents";
+import { getFreshAuthToken } from "@/lib/auth-client";
 
 const STREAM_FLUSH_MS = 60;
 
@@ -88,6 +89,12 @@ export function usePageTranslation(
 
   const runPage = useCallback(
     async (pageNumber: number): Promise<string | undefined> => {
+      const authToken = await getFreshAuthToken();
+      if (!authToken) {
+        toast.error("Please sign in with Google to translate pages.");
+        return undefined;
+      }
+
       const docRec = await getDoc(docId);
       const pageRec = await getPageData(docId, pageNumber);
 

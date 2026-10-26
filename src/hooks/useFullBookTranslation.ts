@@ -3,6 +3,7 @@ import { toast } from "sonner";
 import { executePageTranslation, cancelPageTranslation } from "@/lib/pageTranslationRunner";
 import { getPageData, type PageAiSummaryEntry } from "@/lib/storage";
 import { summarize } from "@/lib/pageAi";
+import { getFreshAuthToken } from "@/lib/auth-client";
 
 export interface FullBookTranslationState {
   isTranslating: boolean;
@@ -119,6 +120,12 @@ export function useFullBookTranslation({
   const start = useCallback(
     async (options?: StartFullBookOptions) => {
       if (isTranslatingRef.current || pageCount <= 0) return;
+
+      const authToken = await getFreshAuthToken();
+      if (!authToken) {
+        toast.error("Please sign in with Google to translate documents.");
+        return;
+      }
 
       const overwriteExisting = options?.overwriteExisting ?? false;
       const rawStart = options?.startPage ?? 1;

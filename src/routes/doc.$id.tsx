@@ -107,7 +107,7 @@ function DocPage() {
   const { page: urlPage } = Route.useSearch();
   const navigate = useNavigate();
   const isMobile = useIsMobile();
-  const { user, loading: authLoading, updateProfile, isAdmin, isPrivileged } = useAuth();
+  const { user, loading: authLoading, signInWithGoogle, updateProfile, isAdmin, isPrivileged } = useAuth();
   const canManageCloud = isAdmin || isPrivileged;
   const [readerOpen, setReaderOpen] = useState(false);
   const [pageJumpOpen, setPageJumpOpen] = useState(false);
@@ -830,7 +830,14 @@ function DocPage() {
             )}
             {pageCount > 0 && isAdmin && (
               <button
-                onClick={() => setFullBookModalOpen(true)}
+                onClick={() => {
+                  if (!user) {
+                    toast.info("Please sign in with Google to translate documents.");
+                    void signInWithGoogle();
+                    return;
+                  }
+                  setFullBookModalOpen(true);
+                }}
                 className={`flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-xs font-semibold transition-all shadow-xs cursor-pointer ${
                   fullBookState.isTranslating && !fullBookState.isPaused
                     ? "bg-amber-500/15 text-amber-500 hover:bg-amber-500/25 border border-amber-500/30 animate-pulse"
@@ -920,7 +927,14 @@ function DocPage() {
               onAnalyze={handleAnalyze}
               onUploadToR2={handleUploadToR2}
               onSyncToSupabase={handleSyncToSupabase}
-              onFullBookTranslation={() => setFullBookModalOpen(true)}
+              onFullBookTranslation={() => {
+                if (!user) {
+                  toast.info("Please sign in with Google to translate documents.");
+                  void signInWithGoogle();
+                  return;
+                }
+                setFullBookModalOpen(true);
+              }}
             />
           </div>
         ) : (

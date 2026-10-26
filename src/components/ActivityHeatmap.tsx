@@ -13,6 +13,8 @@ import {
   ChevronRight,
 } from "lucide-react";
 import { apiGetTranslationActivity, type UserActivityData, type UserActivityHeatmapItem } from "@/lib/auth-client";
+import { getCachedTranslationActivity, getCachedTranslationActivitySync } from "@/lib/storage";
+import { listenDocEvent } from "@/lib/docEvents";
 
 interface ActivityHeatmapProps {
   userId: string;
@@ -45,26 +47,47 @@ export function ActivityHeatmap({ userId, refreshTrigger }: ActivityHeatmapProps
   const containerRef = useRef<HTMLDivElement>(null);
   const svgRef = useRef<SVGSVGElement>(null);
 
-  const loadActivity = useCallback(async (isSilent = false) => {
-    if (!isSilent) setLoading(true);
+  const loadActivity = useCallback(async (forceRefresh = false) => {
+    // If not force-refreshing, check synchronous cache first for zero-flash render
+    const syncCached = getCachedTranslationActivitySync(userId);
+    if (syncCached && !forceRefresh) {
+      setActivityData(syncCached);
+      setLoading(false);
+      return;
+    }
+
+    if (!forceRefresh) setLoading(true);
     else setIsRefreshing(true);
 
     try {
-      const data = await apiGetTranslationActivity(365);
+      const data = await getCachedTranslationActivity(userId, { forceRefresh });
       if (data) {
         setActivityData(data);
       }
+    } catch {
+      // Direct fallback to apiGetTranslationActivity
+      const fallback = await apiGetTranslationActivity(365);
+      if (fallback) setActivityData(fallback);
     } finally {
       setLoading(false);
       setIsRefreshing(false);
     }
-  }, []);
+  }, [userId]);
 
   useEffect(() => {
     if (userId) {
       void loadActivity(false);
     }
   }, [userId, loadActivity]);
+
+  // Listen for real-time translation activity updates
+  useEffect(() => {
+    return listenDocEvent("doclens:translation-activity-updated", (d) => {
+      if (d.userId === userId && d.data) {
+        setActivityData(d.data);
+      }
+    });
+  }, [userId]);
 
   // Re-fetch when parent triggers refresh
   useEffect(() => {

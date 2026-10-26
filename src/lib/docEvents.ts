@@ -30,6 +30,11 @@ export interface DocEventMap {
   "doclens:translation-counter-updated": {
     totalTranslatedPages: number;
   };
+  /** Authenticated user's translation activity data updated in cache. */
+  "doclens:translation-activity-updated": {
+    userId: string;
+    data: any;
+  };
 }
 
 export function dispatchDocEvent<K extends keyof DocEventMap>(

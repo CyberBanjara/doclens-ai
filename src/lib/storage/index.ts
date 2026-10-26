@@ -5,3 +5,4 @@ export * from "./pages";
 export * from "./thumbnails";
 export * from "./clearAllStorage";
 export * from "./translationCounter";
+export * from "./translationActivity";

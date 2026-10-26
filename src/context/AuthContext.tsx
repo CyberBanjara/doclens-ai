@@ -70,6 +70,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       if (currentUser) {
         setUser(currentUser);
         syncUserToLocalStorage(currentUser);
+        try {
+          const { getCachedTranslationActivity } = await import(
+            "@/lib/storage/translationActivity"
+          );
+          void getCachedTranslationActivity(currentUser.uid);
+        } catch {}
       } else {
         setUser(null);
       }
@@ -112,6 +118,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           setUser(redirectUser);
           syncUserToLocalStorage(redirectUser);
           setLoading(false);
+          try {
+            const { fetchAndCacheUserTranslationActivity } = await import(
+              "@/lib/storage/translationActivity"
+            );
+            void fetchAndCacheUserTranslationActivity(redirectUser.uid);
+          } catch (err) {
+            console.warn("Translation activity sync on redirect note:", err);
+          }
           toast.success(`Welcome back, ${redirectUser.name || "User"}!`, {
             description: `Signed in as ${redirectUser.email} (${redirectUser.role})`,
           });
@@ -153,6 +167,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         const { clearCachedR2Files } = await import("@/lib/r2-cache");
         await clearCachedR2Files();
       } catch {}
+      try {
+        const { fetchAndCacheUserTranslationActivity } = await import(
+          "@/lib/storage/translationActivity"
+        );
+        void fetchAndCacheUserTranslationActivity(authenticatedUser.uid);
+      } catch (err) {
+        console.warn("Translation activity sync on login note:", err);
+      }
       toast.success(`Welcome, ${authenticatedUser.name || "User"}!`, {
         description: `Signed in as ${authenticatedUser.email} (${authenticatedUser.role})`,
       });
@@ -175,11 +197,18 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const signOut = async () => {
     try {
+      const currentUid = user?.uid;
       await apiLogout();
       setUser(null);
       try {
         const { clearCachedR2Files } = await import("@/lib/r2-cache");
         await clearCachedR2Files();
+      } catch {}
+      try {
+        const { clearCachedTranslationActivity } = await import(
+          "@/lib/storage/translationActivity"
+        );
+        await clearCachedTranslationActivity(currentUid);
       } catch {}
       toast.success("Signed out successfully");
     } catch (err: any) {

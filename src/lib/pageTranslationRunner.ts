@@ -23,6 +23,7 @@ import {
   getPageData,
   upsertPageAi,
   recordLocalTranslation,
+  recordLocalTranslationActivity,
   syncLocalTranslationCounter,
   type PageAi,
 } from "@/lib/storage";
@@ -30,7 +31,8 @@ import { cleanAiText, effective, hashFor, dispatchPageReady } from "@/lib/pageAi
 import { fetchSupabaseLanguagePage, saveSupabaseLanguagePage } from "@/lib/supabase";
 import { getPreviousContext, mergeContextDelta } from "@/lib/contextStore";
 import { dispatchDocEvent } from "@/lib/docEvents";
-import { apiIncrementTranslationCounter } from "@/lib/auth-client";
+import { apiIncrementTranslationCounter, getFreshAuthToken } from "@/lib/auth-client";
+import { getFirebaseAuth } from "@/lib/firebase";
 
 export interface PageTranslationOptions {
   docId: string;
@@ -235,6 +237,23 @@ export async function executePageTranslation({
       }
 
       const key = getKey();
+      // Translation strictly requires login (just like Global Library)
+      const authToken = await getFreshAuthToken();
+      if (!authToken) {
+        const errorMsg = "Authentication required. Please sign in to translate.";
+        await upsertPageAi(docId, pageNumber, {
+          status: "error",
+          error: errorMsg,
+        });
+        dispatchDocEvent("doclens:page-status-changed", {
+          docId,
+          pageNumber,
+          status: "error",
+          error: errorMsg,
+        });
+        return { success: false, error: errorMsg };
+      }
+
       if (!isOmni && !isOllama && !key) {
         const errorMsg = "No OpenRouter API key configured.";
         await upsertPageAi(docId, pageNumber, {
@@ -379,7 +398,22 @@ export async function executePageTranslation({
           console.warn("Local translation counter increment note:", localErr);
         }
 
-        // Step B: Atomically record activity in Supabase with book title mapping
+        // Step B: Atomically record activity locally in IndexedDB cache
+        try {
+          const uid = getFirebaseAuth().currentUser?.uid;
+          if (uid) {
+            await recordLocalTranslationActivity({
+              userId: uid,
+              bookTitle,
+              pageNumber,
+              language: eff.language,
+            });
+          }
+        } catch (actErr) {
+          console.warn("Local translation activity cache update note:", actErr);
+        }
+
+        // Step C: Atomically record activity in Supabase with book title mapping
         // Increments only on successful completion. Deduplicates retries and duplicate requests.
         try {
           const supRes = await apiIncrementTranslationCounter({

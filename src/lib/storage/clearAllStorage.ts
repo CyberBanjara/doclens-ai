@@ -259,6 +259,11 @@ export async function clearSelectedStorage(options: StorageClearOptions): Promis
  * - Service Workers
  */
 export async function clearAllStorage(): Promise<void> {
+  try {
+    const { clearCachedTranslationActivity } = await import("./translationActivity");
+    await clearCachedTranslationActivity();
+  } catch {}
+
   await Promise.allSettled([
     clearAllIndexedDB(),
     clearAllOpfs(),
