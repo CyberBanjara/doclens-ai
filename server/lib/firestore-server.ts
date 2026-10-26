@@ -150,29 +150,24 @@ export async function syncUserInFirestore(
   }
 
   if (existing) {
-    try {
-      const updateData = {
-        name: googleUser.name,
-        photoURL: googleUser.photoURL,
-        lastLoginAt: nowIso,
-        updatedAt: nowIso,
-      };
-      const mask =
-        "updateMask.fieldPaths=name&updateMask.fieldPaths=photoURL&updateMask.fieldPaths=lastLoginAt&updateMask.fieldPaths=updatedAt";
-      const url = `${config.baseUrl}/users/${encodeURIComponent(googleUser.uid)}?${mask}&key=${config.apiKey}`;
+    const updateData = {
+      name: googleUser.name,
+      photoURL: googleUser.photoURL,
+      lastLoginAt: nowIso,
+      updatedAt: nowIso,
+    };
+    const mask =
+      "updateMask.fieldPaths=name&updateMask.fieldPaths=photoURL&updateMask.fieldPaths=lastLoginAt&updateMask.fieldPaths=updatedAt";
+    const url = `${config.baseUrl}/users/${encodeURIComponent(googleUser.uid)}?${mask}&key=${config.apiKey}`;
 
-      const res = await fetch(url, {
-        method: "PATCH",
-        headers,
-        body: JSON.stringify({ fields: encodeFirestoreFields(updateData) }),
-      });
-
-      if (!res.ok) {
-        console.warn("Firestore update user warning:", await res.text());
-      }
-    } catch (err) {
+    // Asynchronous non-blocking update of login audit metadata
+    fetch(url, {
+      method: "PATCH",
+      headers,
+      body: JSON.stringify({ fields: encodeFirestoreFields(updateData) }),
+    }).catch((err) => {
       console.warn("Firestore update user error:", err);
-    }
+    });
 
     return {
       uid: googleUser.uid,

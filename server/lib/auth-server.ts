@@ -4,7 +4,7 @@ import type { H3Event } from "h3";
 import type { SessionUser, UserRole } from "./auth-types";
 
 export const COOKIE_NAME = "session_token";
-export const SESSION_EXPIRY_SECONDS = 4 * 60 * 60; // 4 hours
+export const SESSION_EXPIRY_SECONDS = 10 * 24 * 60 * 60; // 10 days of inactivity (864,000 seconds)
 export const VALID_ROLES: readonly UserRole[] = [
   "admin",
   "editor",
@@ -31,9 +31,13 @@ export function getSecretKey(): Uint8Array {
 }
 
 /**
- * Sign a short-lived, cryptographically signed JWT session for the authenticated user.
+ * Sign a rolling, cryptographically signed JWT session for the authenticated user.
+ * Expiry is set to 10 days of inactivity from current activity time.
  */
-export async function createSessionJwt(user: SessionUser): Promise<string> {
+export async function createSessionJwt(
+  user: SessionUser,
+  customExpirySeconds: number = SESSION_EXPIRY_SECONDS,
+): Promise<string> {
   if (!user || !user.uid || !user.email) {
     throw new Error("Cannot create session JWT: missing required user fields (uid, email)");
   }
@@ -56,7 +60,7 @@ export async function createSessionJwt(user: SessionUser): Promise<string> {
     .setProtectedHeader({ alg: "HS256", typ: "JWT" })
     .setSubject(user.uid)
     .setIssuedAt()
-    .setExpirationTime(`${SESSION_EXPIRY_SECONDS}s`)
+    .setExpirationTime(`${customExpirySeconds}s`)
     .sign(secretKey);
 }
 
@@ -183,6 +187,19 @@ export function setSessionCookieOnEvent(event: H3Event, token: string): void {
     sameSite: "lax",
     secure: isProd,
   });
+}
+
+/**
+ * Automatically renew the session token and HttpOnly cookie for active authenticated activity,
+ * rolling the 10-day inactivity timer forward without disrupting the user.
+ */
+export async function renewSessionCookieOnEvent(
+  event: H3Event,
+  user: SessionUser,
+): Promise<string> {
+  const token = await createSessionJwt(user);
+  setSessionCookieOnEvent(event, token);
+  return token;
 }
 
 /**

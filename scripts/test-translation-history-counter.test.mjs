@@ -354,6 +354,37 @@ test("Translation History Counter System", async (t) => {
         "Heatmap hover tooltip must display Translated Books breakdown",
       );
 
+      assert.match(
+        heatmapContent,
+        /selectedDateStr/,
+        "Heatmap must track selectedDateStr state, hidden by default (null initial state)",
+      );
+      assert.match(
+        heatmapContent,
+        /handleCellClick/,
+        "Heatmap must handle cell click to select a specific date on the heatmap like GitHub",
+      );
+      assert.match(
+        heatmapContent,
+        /Book Title/,
+        "Heatmap must render structured list with Book Title column",
+      );
+      assert.match(
+        heatmapContent,
+        /Page/,
+        "Heatmap must render structured list with Page column",
+      );
+      assert.match(
+        heatmapContent,
+        /Timestamp/,
+        "Heatmap must render structured list with Timestamp column",
+      );
+      assert.doesNotMatch(
+        heatmapContent,
+        /Recent Translation Feed/,
+        "Heatmap must not show the unconditional box-style Recent Translation Feed",
+      );
+
       const userRouteContent = fs.readFileSync(
         path.join(rootDir, "src/routes/user.tsx"),
         "utf-8",

@@ -1,6 +1,6 @@
 import { initializeApp, getApp, getApps, type FirebaseApp } from "firebase/app";
 import { getFirestore, type Firestore } from "firebase/firestore";
-import { getAuth, type Auth } from "firebase/auth";
+import { getAuth, setPersistence, browserLocalPersistence, type Auth } from "firebase/auth";
 
 // ---------------------------------------------------------------------------
 // Firebase configuration — injected at BUILD TIME via Vite `define`
@@ -40,10 +40,19 @@ export function getFirebaseApp(): FirebaseApp {
   return appInstance;
 }
 
-// Eager / cached initialization of Firebase Auth instance
+// Eager / cached initialization of Firebase Auth instance with persistent storage
 export function getFirebaseAuth(): Auth {
   if (!authInstance) {
     authInstance = getAuth(getFirebaseApp());
+    if (typeof window !== "undefined") {
+      try {
+        setPersistence(authInstance, browserLocalPersistence).catch((err) => {
+          console.warn("Could not set browserLocalPersistence on Firebase Auth:", err);
+        });
+      } catch (err) {
+        console.warn("setPersistence call warning:", err);
+      }
+    }
   }
   return authInstance;
 }

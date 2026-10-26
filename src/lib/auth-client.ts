@@ -76,7 +76,8 @@ export async function checkRedirectResult(): Promise<ClientUser | null> {
     const auth = getFirebaseAuth();
     const result = await getRedirectResult(auth);
     if (result && result.user) {
-      const idToken = await result.user.getIdToken(true);
+      // Avoid redundant network round-trip: token is already fresh upon redirect return
+      const idToken = await result.user.getIdToken(false);
       setStoredAuthToken(idToken);
 
       const fallbackUser: ClientUser = {
@@ -181,7 +182,8 @@ export async function promptGoogleUser(): Promise<{ idToken: string; user: Clien
     throw err;
   }
 
-  const idToken = await result.user.getIdToken(true);
+  // Avoid redundant network call: token was minted during signInWithPopup
+  const idToken = await result.user.getIdToken(false);
   setStoredAuthToken(idToken);
 
   const fallbackUser: ClientUser = {
@@ -240,12 +242,21 @@ export async function apiLoginWithGoogle(): Promise<ClientUser> {
 }
 
 /**
- * Fetch current user session from HttpOnly cookie.
+ * Fetch current user session from HttpOnly cookie and silently verify/restore from Firebase if needed.
+ * Automatically renews the rolling 10-day inactivity session cookie on the server.
  */
-export async function apiFetchCurrentUser(): Promise<ClientUser | null> {
+export async function apiFetchCurrentUser(providedToken?: string): Promise<ClientUser | null> {
   try {
+    const token = providedToken || (await getFreshAuthToken());
+    const headers: Record<string, string> = {};
+    if (token) {
+      headers["Authorization"] = `Bearer ${token}`;
+      headers["x-firebase-token"] = token;
+    }
+
     const res = await fetch("/api/auth/me", {
       method: "GET",
+      headers,
       credentials: "include",
     });
 
@@ -256,6 +267,14 @@ export async function apiFetchCurrentUser(): Promise<ClientUser | null> {
     console.error("Failed to check auth session:", err);
     return null;
   }
+}
+
+/**
+ * Background renewal: Silently verify current authentication state, refresh roles/permissions,
+ * and roll the 10-day inactivity expiration window.
+ */
+export async function apiRenewSession(providedToken?: string): Promise<ClientUser | null> {
+  return await apiFetchCurrentUser(providedToken);
 }
 
 /**
@@ -418,10 +437,18 @@ export async function apiUpdateUserProfile(updates: {
   return data.user as ClientUser;
 }
 
+export interface UserActivityDetail {
+  bookTitle: string;
+  pageNumber: number;
+  language: string;
+  translatedAt: string;
+}
+
 export interface UserActivityHeatmapItem {
   date: string;
   count: number;
   books: Record<string, number>;
+  details?: UserActivityDetail[];
 }
 
 export interface UserActivityData {

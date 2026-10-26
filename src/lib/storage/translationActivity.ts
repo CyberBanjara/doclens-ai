@@ -3,10 +3,11 @@ import {
   apiGetTranslationActivity,
   type UserActivityData,
   type UserActivityHeatmapItem,
+  type UserActivityDetail,
 } from "@/lib/auth-client";
 import { dispatchDocEvent } from "@/lib/docEvents";
 
-export type { UserActivityData, UserActivityHeatmapItem };
+export type { UserActivityData, UserActivityHeatmapItem, UserActivityDetail };
 
 export interface CachedTranslationActivityRecord {
   userId: string;
@@ -142,6 +143,14 @@ export async function recordLocalTranslationActivity(params: {
     const todayStr = new Date().toISOString().split("T")[0];
     const cleanTitle = (bookTitle && bookTitle.trim()) || "Untitled Document";
 
+    const nowIso = new Date().toISOString();
+    const newDetail: UserActivityDetail = {
+      bookTitle: cleanTitle,
+      pageNumber,
+      language: language || "default",
+      translatedAt: nowIso,
+    };
+
     if (!currentData) {
       currentData = {
         total_pages: 1,
@@ -151,16 +160,10 @@ export async function recordLocalTranslationActivity(params: {
             date: todayStr,
             count: 1,
             books: { [cleanTitle]: 1 },
+            details: [newDetail],
           },
         },
-        recent_activities: [
-          {
-            bookTitle: cleanTitle,
-            pageNumber,
-            language: language || "default",
-            translatedAt: new Date().toISOString(),
-          },
-        ],
+        recent_activities: [newDetail],
       };
     } else {
       const daily = { ...(currentData.daily_activity || {}) };
@@ -171,6 +174,7 @@ export async function recordLocalTranslationActivity(params: {
           date: todayStr,
           count: 1,
           books: { [cleanTitle]: 1 },
+          details: [newDetail],
         };
         activeDays += 1;
       } else {
@@ -180,16 +184,12 @@ export async function recordLocalTranslationActivity(params: {
           ...(item.books || {}),
           [cleanTitle]: ((item.books && item.books[cleanTitle]) || 0) + 1,
         };
+        item.details = [newDetail, ...(item.details || [])];
         daily[todayStr] = item;
       }
 
       const recent = [
-        {
-          bookTitle: cleanTitle,
-          pageNumber,
-          language: language || "default",
-          translatedAt: new Date().toISOString(),
-        },
+        newDetail,
         ...(currentData.recent_activities || []),
       ].slice(0, 10);
 

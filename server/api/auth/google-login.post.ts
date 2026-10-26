@@ -27,10 +27,15 @@ export default defineEventHandler(async (event) => {
       });
     }
 
-    // 2. Synchronize user in Firestore and retrieve their role
-    const userProfile = await syncUserInFirestore(verified, idToken);
+    // 2. Synchronize user in Firestore and fetch translation counter in parallel
+    const [userProfile, totalTranslatedPages] = await Promise.all([
+      syncUserInFirestore(verified, idToken),
+      import("../../lib/supabase-server")
+        .then((m) => m.getUserTranslationCounter(verified.uid))
+        .catch(() => 0),
+    ]);
 
-    // 3. Create short-lived session payload
+    // 3. Create rolling session payload with 10-day inactivity expiry
     const sessionUser = {
       uid: userProfile.uid,
       email: userProfile.email,
@@ -44,14 +49,10 @@ export default defineEventHandler(async (event) => {
 
     const sessionJwt = await createSessionJwt(sessionUser);
 
-    // 4. Store session in Secure, HttpOnly cookie
+    // 4. Store session in Secure, HttpOnly cookie with 10-day expiry
     setSessionCookieOnEvent(event, sessionJwt);
 
-    // 5. Fetch translation counter from Supabase
-    const { getUserTranslationCounter } = await import("../../lib/supabase-server");
-    const totalTranslatedPages = await getUserTranslationCounter(sessionUser.uid);
-
-    // 6. Return filtered user data for UI
+    // 5. Return filtered user data for UI
     const clientUser: ClientUser = {
       uid: sessionUser.uid,
       name: sessionUser.name,

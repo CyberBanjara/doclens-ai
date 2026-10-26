@@ -71,10 +71,18 @@ export interface DailyBookTranslationSummary {
   [bookTitle: string]: number;
 }
 
+export interface DailyActivityDetail {
+  bookTitle: string;
+  pageNumber: number;
+  language: string;
+  translatedAt: string;
+}
+
 export interface DailyActivityItem {
   date: string; // YYYY-MM-DD
   count: number;
   books: DailyBookTranslationSummary;
+  details?: DailyActivityDetail[];
 }
 
 export interface UserActivitySummary {
@@ -402,12 +410,22 @@ export async function getUserTranslationActivity(
             date: d,
             count: 0,
             books: {},
+            details: [],
           };
         }
 
         dailyActivity[d].count += 1;
         const title = (row.book_title && row.book_title.trim()) || "Untitled Document";
         dailyActivity[d].books[title] = (dailyActivity[d].books[title] || 0) + 1;
+        if (!dailyActivity[d].details) {
+          dailyActivity[d].details = [];
+        }
+        dailyActivity[d].details.unshift({
+          bookTitle: title,
+          pageNumber: row.page_number,
+          language: row.language || "Native",
+          translatedAt: row.translated_at,
+        });
       }
 
       // Collect last 10 activities

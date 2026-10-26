@@ -8,11 +8,17 @@ import {
   RefreshCw,
   Info,
   Sparkles,
-  Layers,
   Clock,
-  ChevronRight,
+  X,
+  FileText,
+  Languages,
 } from "lucide-react";
-import { apiGetTranslationActivity, type UserActivityData, type UserActivityHeatmapItem } from "@/lib/auth-client";
+import {
+  apiGetTranslationActivity,
+  type UserActivityData,
+  type UserActivityHeatmapItem,
+  type UserActivityDetail,
+} from "@/lib/auth-client";
 import { getCachedTranslationActivity, getCachedTranslationActivitySync } from "@/lib/storage";
 import { listenDocEvent } from "@/lib/docEvents";
 
@@ -28,16 +34,32 @@ interface DayData {
   dayOfWeek: number; // 0 = Sun, 6 = Sat
   count: number;
   books: Record<string, number>;
+  details?: UserActivityDetail[];
   level: 0 | 1 | 2 | 3 | 4;
   isFuture: boolean;
 }
 
 const MONTH_NAMES = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
 
+function formatActivityTime(timestamp?: string): string {
+  if (!timestamp) return "—";
+  try {
+    const d = new Date(timestamp);
+    if (isNaN(d.getTime())) return "—";
+    return d.toLocaleTimeString([], {
+      hour: "2-digit",
+      minute: "2-digit",
+    });
+  } catch {
+    return "—";
+  }
+}
+
 export function ActivityHeatmap({ userId, refreshTrigger }: ActivityHeatmapProps) {
   const [activityData, setActivityData] = useState<UserActivityData | null>(null);
   const [loading, setLoading] = useState(true);
   const [isRefreshing, setIsRefreshing] = useState(false);
+  const [selectedDateStr, setSelectedDateStr] = useState<string | null>(null);
   const [hoveredDay, setHoveredDay] = useState<{
     day: DayData;
     x: number;
@@ -164,6 +186,7 @@ export function ActivityHeatmap({ userId, refreshTrigger }: ActivityHeatmapProps
         dayOfWeek,
         count,
         books,
+        details: item?.details || [],
         level,
         isFuture,
       });
@@ -244,6 +267,52 @@ export function ActivityHeatmap({ userId, refreshTrigger }: ActivityHeatmapProps
   const handleCellMouseLeave = () => {
     setHoveredDay(null);
   };
+
+  const handleCellClick = (day: DayData) => {
+    if (day.isFuture) return;
+    setSelectedDateStr((prev) => (prev === day.dateStr ? null : day.dateStr));
+  };
+
+  const selectedDay = useMemo(() => {
+    if (!selectedDateStr) return null;
+    for (const week of weeks) {
+      for (const day of week) {
+        if (day.dateStr === selectedDateStr) return day;
+      }
+    }
+    return null;
+  }, [weeks, selectedDateStr]);
+
+  const selectedDayItems = useMemo(() => {
+    if (!selectedDay || selectedDay.count === 0) return [];
+
+    // 1. Direct details from day activity
+    if (selectedDay.details && selectedDay.details.length > 0) {
+      return selectedDay.details;
+    }
+
+    // 2. Filter from recent_activities matching this date
+    const matchedRecent = (activityData?.recent_activities || []).filter((item) =>
+      Boolean(item.translatedAt && item.translatedAt.startsWith(selectedDay.dateStr)),
+    );
+    if (matchedRecent.length > 0) {
+      return matchedRecent;
+    }
+
+    // 3. Resilient fallback: synthesize from books breakdown
+    const synthesized: UserActivityDetail[] = [];
+    for (const [title, pages] of Object.entries(selectedDay.books)) {
+      for (let p = 1; p <= pages; p++) {
+        synthesized.push({
+          bookTitle: title,
+          pageNumber: p,
+          language: "Native",
+          translatedAt: `${selectedDay.dateStr}T12:00:00.000Z`,
+        });
+      }
+    }
+    return synthesized;
+  }, [selectedDay, activityData]);
 
   // SVG Dimension Constants
   const X_OFFSET = 34; // Left margin for day-of-week labels
@@ -474,6 +543,7 @@ export function ActivityHeatmap({ userId, refreshTrigger }: ActivityHeatmapProps
                       {week.map((day) => {
                         const cellY = Y_OFFSET + day.dayOfWeek * ROW_HEIGHT;
                         const cellClass = getCellClasses(day.level, day.isFuture);
+                        const isSelected = selectedDateStr === day.dateStr;
                         return (
                           <rect
                             key={day.dateStr}
@@ -483,13 +553,21 @@ export function ActivityHeatmap({ userId, refreshTrigger }: ActivityHeatmapProps
                             height={CELL_SIZE}
                             rx={CELL_RADIUS}
                             ry={CELL_RADIUS}
-                            strokeWidth={1}
-                            className={cellClass}
+                            strokeWidth={isSelected ? 2 : 1}
+                            className={`${cellClass} ${
+                              isSelected
+                                ? "stroke-white dark:stroke-emerald-300 ring-2 ring-emerald-400 drop-shadow-[0_0_8px_rgba(52,211,153,0.9)]"
+                                : ""
+                            }`}
                             onMouseEnter={(e) => handleCellMouseEnter(e, day)}
                             onMouseLeave={handleCellMouseLeave}
-                            onClick={(e) => handleCellMouseEnter(e, day)}
+                            onClick={() => handleCellClick(day)}
                             data-date={day.dateStr}
                             data-count={day.count}
+                            data-selected={isSelected}
+                            role="button"
+                            tabIndex={day.isFuture ? -1 : 0}
+                            aria-label={`${day.count} pages translated on ${day.dateStr}${isSelected ? " (selected)" : ""}`}
                           />
                         );
                       })}
@@ -503,7 +581,7 @@ export function ActivityHeatmap({ userId, refreshTrigger }: ActivityHeatmapProps
             <div className="mt-3 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between pt-3 border-t border-border/40 text-[11px] text-muted-foreground">
               <span className="flex items-center gap-1.5 text-xs text-muted-foreground/90">
                 <Info className="h-3.5 w-3.5 text-emerald-400" />
-                Hover over any date square to inspect book-by-book translation breakdown.
+                Click any date square to view translation details below, or hover to inspect.
               </span>
 
               <div className="flex items-center gap-2 self-end sm:self-auto">
@@ -599,48 +677,140 @@ export function ActivityHeatmap({ userId, refreshTrigger }: ActivityHeatmapProps
         </div>
       )}
 
-      {/* 5. Recent Translations Feed */}
-      {activityData?.recent_activities && activityData.recent_activities.length > 0 && (
-        <div className="mt-6 pt-5 border-t border-border/60">
-          <div className="flex items-center justify-between mb-3">
-            <h4 className="text-xs font-bold uppercase tracking-wider text-muted-foreground flex items-center gap-1.5">
-              <Clock className="h-3.5 w-3.5 text-emerald-400" />
-              Recent Translation Feed
-            </h4>
-            <span className="text-[11px] text-muted-foreground">
-              Last {Math.min(activityData.recent_activities.length, 5)} translated pages
-            </span>
-          </div>
-
-          <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
-            {activityData.recent_activities.slice(0, 6).map((item, idx) => (
-              <div
-                key={`${item.bookTitle}-${item.pageNumber}-${idx}`}
-                className="flex items-center justify-between gap-3 rounded-xl border border-border/60 bg-surface/40 p-2.5 text-xs transition-colors hover:bg-surface/70"
-              >
-                <div className="flex items-center gap-2 min-w-0">
-                  <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-emerald-500/10 text-emerald-400 shrink-0">
-                    <BookOpen className="h-3.5 w-3.5" />
-                  </div>
-                  <div className="min-w-0">
-                    <span className="truncate font-semibold text-foreground block" title={item.bookTitle}>
-                      {item.bookTitle}
-                    </span>
-                    <span className="text-[10px] text-muted-foreground block">
-                      Page {item.pageNumber} • {item.language}
-                    </span>
-                  </div>
-                </div>
-
-                <span className="shrink-0 text-[10px] font-mono text-muted-foreground/80">
-                  {new Date(item.translatedAt).toLocaleTimeString([], {
-                    hour: "2-digit",
-                    minute: "2-digit",
-                  })}
-                </span>
+      {/* 5. Date-Selected Translation Activity Details (GitHub-Style, Hidden by default) */}
+      {selectedDay && (
+        <div
+          id="heatmap-selected-date-details"
+          className="mt-6 pt-5 border-t border-border/60 animate-in fade-in slide-in-from-top-2 duration-200"
+        >
+          {/* Header Bar: Selected Date, Count Pill & Dismiss/Close button */}
+          <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between pb-3">
+            <div className="flex items-center gap-2.5">
+              <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-emerald-500/15 text-emerald-400 ring-1 ring-emerald-500/30">
+                <Calendar className="h-4 w-4" />
               </div>
-            ))}
+              <div>
+                <div className="flex items-center gap-2 flex-wrap">
+                  <h4 className="text-sm font-bold text-foreground">
+                    Activity on{" "}
+                    {selectedDay.date.toLocaleDateString("en-US", {
+                      weekday: "short",
+                      month: "short",
+                      day: "numeric",
+                      year: "numeric",
+                    })}
+                  </h4>
+                  <span
+                    className={`inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-bold ${
+                      selectedDay.count > 0
+                        ? "bg-emerald-500/15 text-emerald-400 border border-emerald-500/30"
+                        : "bg-muted text-muted-foreground"
+                    }`}
+                  >
+                    {selectedDay.count} {selectedDay.count === 1 ? "page" : "pages"} translated
+                  </span>
+                </div>
+                <p className="text-xs text-muted-foreground mt-0.5">
+                  {selectedDay.count > 0
+                    ? "Detailed breakdown of translations completed on this date"
+                    : "No translations recorded on this date"}
+                </p>
+              </div>
+            </div>
+
+            <button
+              onClick={() => setSelectedDateStr(null)}
+              className="inline-flex items-center gap-1.5 self-start sm:self-auto rounded-lg border border-border/70 bg-surface/60 px-2.5 py-1 text-xs font-semibold text-muted-foreground hover:bg-surface hover:text-foreground hover:border-emerald-500/40 transition-all shadow-sm active:scale-95"
+              title="Close translation details"
+            >
+              <X className="h-3.5 w-3.5" />
+              <span>Close</span>
+            </button>
           </div>
+
+          {/* Structured List View */}
+          {selectedDay.count > 0 ? (
+            <div className="mt-3 overflow-hidden rounded-xl border border-border/70 bg-surface/30 shadow-sm backdrop-blur-sm">
+              {/* Header Row */}
+              <div className="grid grid-cols-12 gap-3 px-4 py-2.5 text-[11px] font-bold uppercase tracking-wider text-muted-foreground bg-surface/70 border-b border-border/60">
+                <div className="col-span-6 sm:col-span-5 flex items-center gap-1.5">
+                  <BookOpen className="h-3.5 w-3.5 text-emerald-400" />
+                  <span>Book Title</span>
+                </div>
+                <div className="col-span-3 sm:col-span-2 text-center sm:text-left flex items-center gap-1.5">
+                  <FileText className="h-3.5 w-3.5 text-cyan-400" />
+                  <span>Page</span>
+                </div>
+                <div className="hidden sm:col-span-2 sm:flex items-center gap-1.5">
+                  <Languages className="h-3.5 w-3.5 text-purple-400" />
+                  <span>Language</span>
+                </div>
+                <div className="col-span-3 sm:col-span-3 text-right flex items-center justify-end gap-1.5">
+                  <Clock className="h-3.5 w-3.5 text-amber-400" />
+                  <span>Timestamp</span>
+                </div>
+              </div>
+
+              {/* Structured List Rows */}
+              <div className="divide-y divide-border/40">
+                {selectedDayItems.map((item, idx) => (
+                  <div
+                    key={`${item.bookTitle}-${item.pageNumber}-${idx}`}
+                    className="grid grid-cols-12 items-center gap-3 px-4 py-2.5 text-xs transition-colors hover:bg-surface/60"
+                  >
+                    {/* Book Title */}
+                    <div className="col-span-6 sm:col-span-5 flex items-center gap-2.5 min-w-0">
+                      <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-emerald-500/10 text-emerald-400 ring-1 ring-emerald-500/20">
+                        <BookOpen className="h-3.5 w-3.5" />
+                      </div>
+                      <div className="min-w-0">
+                        <span className="truncate font-semibold text-foreground block text-xs" title={item.bookTitle}>
+                          {item.bookTitle}
+                        </span>
+                        <span className="text-[10px] text-muted-foreground sm:hidden block truncate">
+                          {item.language || "Native"}
+                        </span>
+                      </div>
+                    </div>
+
+                    {/* Page Number */}
+                    <div className="col-span-3 sm:col-span-2 flex justify-center sm:justify-start">
+                      <span className="inline-flex items-center rounded-md border border-cyan-500/30 bg-cyan-500/10 px-2 py-0.5 text-[11px] font-bold text-cyan-400 font-mono">
+                        Page {item.pageNumber}
+                      </span>
+                    </div>
+
+                    {/* Target Language */}
+                    <div className="hidden sm:col-span-2 sm:flex items-center">
+                      <span className="inline-flex items-center rounded-md border border-purple-500/30 bg-purple-500/10 px-2 py-0.5 text-[11px] font-medium text-purple-300 capitalize">
+                        {item.language || "Native"}
+                      </span>
+                    </div>
+
+                    {/* Timestamp */}
+                    <div className="col-span-3 sm:col-span-3 text-right flex items-center justify-end gap-1.5">
+                      <span className="font-mono text-[11px] text-muted-foreground font-medium">
+                        {formatActivityTime(item.translatedAt)}
+                      </span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          ) : (
+            /* Clean Empty State */
+            <div className="mt-3 flex flex-col items-center justify-center rounded-xl border border-dashed border-border/70 bg-surface/20 p-8 text-center">
+              <div className="flex h-10 w-10 items-center justify-center rounded-full bg-muted/60 text-muted-foreground mb-2">
+                <Calendar className="h-5 w-5 opacity-60" />
+              </div>
+              <p className="text-xs font-semibold text-foreground">
+                No translation activity on this date
+              </p>
+              <p className="text-[11px] text-muted-foreground mt-0.5 max-w-sm">
+                Click on any colored square in the activity matrix above to inspect translation logs for that day.
+              </p>
+            </div>
+          )}
         </div>
       )}
     </div>

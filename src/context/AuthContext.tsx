@@ -9,8 +9,9 @@ import {
   apiLogout,
   apiUpdateUserProfile,
   checkRedirectResult,
+  setStoredAuthToken,
 } from "@/lib/auth-client";
-import { warmFirebaseAuth } from "@/lib/firebase";
+import { warmFirebaseAuth, getFirebaseAuth } from "@/lib/firebase";
 import {
   setOutputLanguage,
   setStyle,
@@ -111,10 +112,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     // Eagerly pre-warm Firebase Auth SDK so popup trigger is instantaneous
     warmFirebaseAuth();
 
+    let isMounted = true;
+
     const initAuth = async () => {
       try {
         const redirectUser = await checkRedirectResult();
         if (redirectUser) {
+          if (!isMounted) return;
           setUser(redirectUser);
           syncUserToLocalStorage(redirectUser);
           setLoading(false);
@@ -134,10 +138,60 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       } catch (err) {
         console.warn("Redirect auth check:", err);
       }
-      await refreshUser();
+      if (isMounted) {
+        await refreshUser();
+      }
     };
 
-    initAuth();
+    void initAuth();
+
+    // Listen to Firebase Auth state for silent session restoration across browser restarts & reloads
+    let unsubscribeAuth: (() => void) | null = null;
+    try {
+      const auth = getFirebaseAuth();
+      unsubscribeAuth = auth.onAuthStateChanged(async (fbUser) => {
+        if (!isMounted) return;
+        if (fbUser) {
+          try {
+            const tok = await fbUser.getIdToken(false);
+            setStoredAuthToken(tok);
+          } catch {}
+          // Silently verify & refresh role and session
+          await refreshUser();
+        }
+      });
+    } catch (err) {
+      console.warn("Firebase onAuthStateChanged notice:", err);
+    }
+
+    // Background renewal interval: Automatically renew session in background every 15 minutes
+    // and whenever user refocuses the app/tab, keeping the rolling 10-day inactivity timer refreshed.
+    const renewalInterval = setInterval(() => {
+      if (typeof document !== "undefined" && document.visibilityState === "visible") {
+        void refreshUser();
+      }
+    }, 15 * 60 * 1000);
+
+    const onVisibilityOrFocus = () => {
+      if (typeof document !== "undefined" && document.visibilityState === "visible") {
+        void refreshUser();
+      }
+    };
+
+    if (typeof window !== "undefined") {
+      window.addEventListener("focus", onVisibilityOrFocus);
+      document.addEventListener("visibilitychange", onVisibilityOrFocus);
+    }
+
+    return () => {
+      isMounted = false;
+      if (unsubscribeAuth) unsubscribeAuth();
+      clearInterval(renewalInterval);
+      if (typeof window !== "undefined") {
+        window.removeEventListener("focus", onVisibilityOrFocus);
+        document.removeEventListener("visibilitychange", onVisibilityOrFocus);
+      }
+    };
   }, [refreshUser]);
 
   const updateProfile = async (updates: {
