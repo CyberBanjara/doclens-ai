@@ -8,10 +8,7 @@ import {
   Languages,
   GraduationCap,
   Sparkles,
-  RefreshCw,
   Heart,
-  Settings,
-  CheckCircle2,
   Lock,
   ArrowLeft,
   ChevronRight,
@@ -31,6 +28,13 @@ import {
   saveEducationLevel,
 } from "@/lib/classification";
 import { EducationLevelModal } from "@/components/EducationLevelModal";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+} from "@/components/ui/dialog";
 import { toast } from "sonner";
 
 export const Route = createFileRoute("/user")({
@@ -46,32 +50,12 @@ export const Route = createFileRoute("/user")({
   }),
 });
 
-const ROLE_STYLES: Record<string, { bg: string; text: string; border: string }> = {
-  admin: {
-    bg: "bg-red-500/15 text-red-400 border-red-500/30",
-    text: "text-red-400",
-    border: "border-red-500/30",
-  },
-  editor: {
-    bg: "bg-purple-500/15 text-purple-400 border-purple-500/30",
-    text: "text-purple-400",
-    border: "border-purple-500/30",
-  },
-  moderator: {
-    bg: "bg-amber-500/15 text-amber-400 border-amber-500/30",
-    text: "text-amber-400",
-    border: "border-amber-500/30",
-  },
-  viewer: {
-    bg: "bg-blue-500/15 text-blue-400 border-blue-500/30",
-    text: "text-blue-400",
-    border: "border-blue-500/30",
-  },
-  user: {
-    bg: "bg-emerald-500/15 text-emerald-400 border-emerald-500/30",
-    text: "text-emerald-400",
-    border: "border-emerald-500/30",
-  },
+const ROLE_STYLES: Record<string, string> = {
+  admin: "bg-rose-500/10 text-rose-400 border-rose-500/20",
+  editor: "bg-purple-500/10 text-purple-400 border-purple-500/20",
+  moderator: "bg-amber-500/10 text-amber-400 border-amber-500/20",
+  viewer: "bg-muted text-muted-foreground border-border/60",
+  user: "bg-muted/60 text-muted-foreground border-border/60",
 };
 
 const LANGUAGE_OPTIONS = [
@@ -92,21 +76,23 @@ const LANGUAGE_OPTIONS = [
 
 function UserProfileRoute() {
   const { user, loading, isAdmin, signInWithGoogle, signOut, refreshTranslationCount, updateProfile } = useAuth();
-  const [isRefreshing, setIsRefreshing] = useState(false);
   const [refreshTrigger, setRefreshTrigger] = useState(0);
   const [hasCopiedUid, setHasCopiedUid] = useState(false);
 
-  // Preference edit states
+  // Preference edit states & modal visibility
   const [nativeLanguage, setNativeLanguage] = useState("");
   const [educationLevel, setEducationLevel] = useState<EducationLevel>(
     () => (user?.educationLevel as EducationLevel) || getSavedEducationLevel() || "class-10",
   );
   const [selectedStyle, setSelectedStyle] = useState("");
-  const [educationModalOpen, setEducationModalOpen] = useState(false);
-  const [isSavingPrefs, setIsSavingPrefs] = useState(false);
   const [hasInitializedPrefs, setHasInitializedPrefs] = useState(false);
 
-  // Initialize preference form once user loads
+  // Modal open states
+  const [langModalOpen, setLangModalOpen] = useState(false);
+  const [educationModalOpen, setEducationModalOpen] = useState(false);
+  const [styleModalOpen, setStyleModalOpen] = useState(false);
+
+  // Initialize preference states once user loads
   useEffect(() => {
     if (user && !hasInitializedPrefs) {
       setNativeLanguage(user.nativeLanguage || "Hindi (हिंदी)");
@@ -135,18 +121,6 @@ function UserProfileRoute() {
     [educationLevel],
   );
 
-  const handleManualRefresh = async () => {
-    if (isRefreshing) return;
-    setIsRefreshing(true);
-    setRefreshTrigger((prev) => prev + 1);
-    try {
-      await refreshTranslationCount();
-      toast.success("Translation activity and counters synchronized with Supabase.");
-    } finally {
-      setIsRefreshing(false);
-    }
-  };
-
   const handleCopyUid = () => {
     if (!user?.uid) return;
     void navigator.clipboard.writeText(user.uid);
@@ -155,23 +129,32 @@ function UserProfileRoute() {
     setTimeout(() => setHasCopiedUid(false), 2000);
   };
 
-  const handleSavePreferences = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!user || isSavingPrefs) return;
-    setIsSavingPrefs(true);
-    try {
-      saveEducationLevel(educationLevel);
-      await updateProfile({
-        nativeLanguage,
-        educationLevel,
-        style: selectedStyle,
-      });
-      toast.success("Learning preferences updated successfully!");
-    } catch (err) {
-      console.error("Failed to update user profile:", err);
-      toast.error("Failed to save preferences. Please try again.");
-    } finally {
-      setIsSavingPrefs(false);
+  // Instant save handlers - no save button required
+  const handleSelectLanguage = async (lang: string) => {
+    setNativeLanguage(lang);
+    setLangModalOpen(false);
+    if (user) {
+      try {
+        await updateProfile({ nativeLanguage: lang });
+        toast.success(`Mother tongue updated to ${lang}`);
+      } catch (err) {
+        console.error("Failed to update mother tongue:", err);
+        toast.error("Failed to save language preference.");
+      }
+    }
+  };
+
+  const handleSelectStyle = async (styleId: string) => {
+    setSelectedStyle(styleId);
+    setStyleModalOpen(false);
+    if (user) {
+      try {
+        await updateProfile({ style: styleId });
+        toast.success(`Translation style updated to ${styleId}`);
+      } catch (err) {
+        console.error("Failed to update translation style:", err);
+        toast.error("Failed to save translation style.");
+      }
     }
   };
 
@@ -217,21 +200,21 @@ function UserProfileRoute() {
 
         {/* Anonymous State */}
         {!loading && !user && (
-          <div className="rounded-2xl border border-border/80 bg-gradient-to-b from-card via-surface/80 to-card p-8 sm:p-12 text-center shadow-2xl backdrop-blur-xl">
-            <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-2xl bg-primary/10 text-primary ring-1 ring-primary/20 shadow-md">
-              <Lock className="h-8 w-8" />
+          <div className="rounded-xl border border-border/60 bg-card p-8 sm:p-10 text-center shadow-xs">
+            <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-xl bg-surface-2 text-foreground mb-4">
+              <Lock className="h-6 w-6 text-muted-foreground" />
             </div>
-            <h2 className="mt-4 text-xl font-extrabold text-foreground tracking-tight sm:text-2xl">
+            <h2 className="text-lg font-bold text-foreground">
               Sign In to View Your Profile
             </h2>
-            <p className="mx-auto mt-2 max-w-md text-xs sm:text-sm text-muted-foreground">
-              Sign in with your Google account to track your translated pages, view your personal activity heatmap, and save your learning preferences.
+            <p className="mx-auto mt-1 max-w-sm text-xs text-muted-foreground">
+              Sign in to track translated pages, view your translation activity, and save learning preferences.
             </p>
 
-            <div className="mt-6 flex flex-col sm:flex-row items-center justify-center gap-3">
+            <div className="mt-6 flex flex-col sm:flex-row items-center justify-center gap-2.5">
               <button
                 onClick={() => void signInWithGoogle()}
-                className="inline-flex items-center gap-2.5 rounded-xl bg-primary px-6 py-2.5 text-xs sm:text-sm font-semibold text-primary-foreground shadow-lg transition-all hover:bg-primary/90 active:scale-95"
+                className="inline-flex items-center gap-2 rounded-lg bg-primary px-5 py-2 text-xs font-medium text-primary-foreground transition-colors hover:bg-primary/90"
               >
                 <svg className="h-4 w-4" viewBox="0 0 24 24">
                   <path
@@ -255,7 +238,7 @@ function UserProfileRoute() {
               </button>
               <Link
                 to="/library"
-                className="inline-flex items-center justify-center rounded-xl border border-border bg-secondary/60 px-5 py-2.5 text-xs font-semibold text-foreground transition-all hover:bg-secondary"
+                className="inline-flex items-center justify-center rounded-lg border border-border bg-secondary/50 px-4 py-2 text-xs font-medium text-foreground hover:bg-secondary transition-colors"
               >
                 Back to Library
               </Link>
@@ -267,36 +250,37 @@ function UserProfileRoute() {
         {!loading && user && (
           <div className="space-y-6">
             {/* User Identity Banner Card */}
-            <div className="relative overflow-hidden rounded-2xl border border-border/80 bg-gradient-to-br from-card via-surface/90 to-background p-6 shadow-xl backdrop-blur-xl">
-              <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-6">
+            <div className="rounded-xl border border-border/60 bg-card p-5 sm:p-6 shadow-xs">
+              <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-5">
                 <div className="flex items-center gap-4">
                   <UserAvatar
                     photoURL={user.photoURL}
                     name={user.name}
                     email={user.email}
-                    className="h-16 w-16 sm:h-20 sm:w-20 rounded-2xl object-cover ring-2 ring-primary/40 shadow-lg"
-                    fallbackClassName="flex h-16 w-16 sm:h-20 sm:w-20 items-center justify-center rounded-2xl bg-primary/20 text-2xl font-bold text-primary ring-2 ring-primary/40"
+                    className="h-14 w-14 sm:h-16 sm:w-16 rounded-xl object-cover border border-border/80 shadow-xs"
+                    fallbackClassName="flex h-14 w-14 sm:h-16 sm:w-16 items-center justify-center rounded-xl bg-surface-2 text-xl font-bold text-foreground border border-border/80"
                   />
                   <div>
-                    <div className="flex flex-wrap items-center gap-2.5">
-                      <h2 className="text-xl sm:text-2xl font-extrabold text-foreground tracking-tight">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <h2 className="text-lg sm:text-xl font-bold text-foreground tracking-tight">
                         {user.name}
                       </h2>
                       <span
-                        className={`inline-flex items-center rounded-lg border px-2.5 py-0.5 text-[11px] font-bold uppercase tracking-wider ${currentRoleStyle.bg}`}
+                        className={`inline-flex items-center rounded-md border px-2 py-0.5 text-[10px] font-medium uppercase tracking-wider ${currentRoleStyle}`}
                       >
                         {user.role}
                       </span>
                     </div>
-                    <p className="mt-1 text-xs text-muted-foreground">{user.email}</p>
-                    <div className="mt-1 flex items-center gap-2">
-                      <span className="text-[10px] text-muted-foreground/80 font-mono bg-surface-2/60 px-2 py-0.5 rounded-md border border-border/40">
+                    <p className="mt-0.5 text-xs text-muted-foreground">{user.email}</p>
+                    <div className="mt-1 flex items-center gap-1.5">
+                      <span className="text-[10px] text-muted-foreground font-mono bg-surface-2/60 px-1.5 py-0.5 rounded border border-border/40">
                         UID: {user.uid}
                       </span>
                       <button
                         onClick={handleCopyUid}
-                        className="text-muted-foreground hover:text-foreground transition-colors p-1"
+                        className="text-muted-foreground hover:text-foreground transition-colors p-0.5"
                         title="Copy UID"
+                        aria-label="Copy User ID"
                       >
                         {hasCopiedUid ? (
                           <Check className="h-3 w-3 text-emerald-400" />
@@ -308,200 +292,162 @@ function UserProfileRoute() {
                   </div>
                 </div>
 
-                <div className="flex flex-wrap items-center gap-2.5 self-start sm:self-auto">
+                <div className="flex items-center gap-2 self-start sm:self-auto">
                   <Link
                     to="/library"
-                    className="inline-flex items-center gap-1.5 rounded-xl border border-border/80 bg-secondary/70 px-3.5 py-2 text-xs font-semibold text-foreground hover:bg-secondary transition-colors"
+                    className="inline-flex items-center gap-1.5 rounded-lg border border-border/80 bg-secondary/50 px-3 py-1.5 text-xs font-medium text-foreground hover:bg-secondary transition-colors"
                   >
-                    <BookOpen className="h-4 w-4 text-primary" />
+                    <BookOpen className="h-3.5 w-3.5 text-muted-foreground" />
                     <span>Library</span>
                   </Link>
 
                   <button
                     onClick={() => void signOut()}
-                    className="inline-flex items-center gap-1.5 rounded-xl border border-destructive/30 bg-destructive/10 px-3.5 py-2 text-xs font-semibold text-destructive hover:bg-destructive/20 hover:border-destructive/50 transition-colors"
+                    className="inline-flex items-center gap-1.5 rounded-lg border border-border/60 bg-transparent px-3 py-1.5 text-xs font-medium text-muted-foreground hover:text-destructive hover:bg-destructive/10 hover:border-destructive/30 transition-colors"
                   >
-                    <LogOut className="h-4 w-4" />
+                    <LogOut className="h-3.5 w-3.5" />
                     <span>Sign Out</span>
                   </button>
                 </div>
               </div>
 
-              {/* Preferences Summary Chips */}
-              <div className="mt-5 flex flex-wrap gap-2 pt-4 border-t border-border/50 text-[11px]">
-                <div className="inline-flex items-center gap-1.5 rounded-lg border border-border/60 bg-surface/60 px-2.5 py-1 text-muted-foreground">
-                  <Languages className="h-3.5 w-3.5 text-primary" />
+              {/* Preferences Summary Interactive Chips (Click to open auto-saving modal) */}
+              <div className="mt-4 flex flex-wrap gap-2 pt-3 border-t border-border/40 text-xs">
+                <button
+                  type="button"
+                  onClick={() => setLangModalOpen(true)}
+                  className="group inline-flex items-center gap-1.5 rounded-md border border-border/60 bg-surface/50 hover:bg-surface-2 hover:border-primary/50 px-2.5 py-1 text-muted-foreground hover:text-foreground transition-all cursor-pointer shadow-2xs"
+                  title="Click to change Mother Tongue"
+                >
+                  <Languages className="h-3.5 w-3.5 text-primary/80 group-hover:text-primary transition-colors" />
                   <span>Mother Tongue:</span>
-                  <strong className="text-foreground">{user.nativeLanguage || "Hindi (हिंदी)"}</strong>
-                </div>
+                  <span className="text-foreground font-medium">
+                    {user.nativeLanguage || nativeLanguage || "Hindi (हिंदी)"}
+                  </span>
+                </button>
 
-                <div className="inline-flex items-center gap-1.5 rounded-lg border border-border/60 bg-surface/60 px-2.5 py-1 text-muted-foreground">
-                  <span className="text-sm">{currentLevelMeta.icon}</span>
-                  <span>Academic Level:</span>
-                  <strong className="text-foreground">
-                    {currentLevelMeta.label}
-                  </strong>
-                </div>
+                <button
+                  type="button"
+                  onClick={() => setEducationModalOpen(true)}
+                  className="group inline-flex items-center gap-1.5 rounded-md border border-border/60 bg-surface/50 hover:bg-surface-2 hover:border-primary/50 px-2.5 py-1 text-muted-foreground hover:text-foreground transition-all cursor-pointer shadow-2xs"
+                  title="Click to change Academic Standard"
+                >
+                  <span className="text-sm shrink-0">{currentLevelMeta.icon}</span>
+                  <span>Standard:</span>
+                  <span className="text-foreground font-medium">{currentLevelMeta.label}</span>
+                </button>
 
-                <div className="inline-flex items-center gap-1.5 rounded-lg border border-border/60 bg-surface/60 px-2.5 py-1 text-muted-foreground">
-                  <Sparkles className="h-3.5 w-3.5 text-emerald-400" />
-                  <span>Translation Style:</span>
-                  <strong className="text-foreground">{user.style || "Native"}</strong>
-                </div>
+                <button
+                  type="button"
+                  onClick={() => setStyleModalOpen(true)}
+                  className="group inline-flex items-center gap-1.5 rounded-md border border-border/60 bg-surface/50 hover:bg-surface-2 hover:border-primary/50 px-2.5 py-1 text-muted-foreground hover:text-foreground transition-all cursor-pointer shadow-2xs"
+                  title="Click to change Translation Style"
+                >
+                  <Sparkles className="h-3.5 w-3.5 text-amber-400 group-hover:scale-110 transition-transform" />
+                  <span>Style:</span>
+                  <span className="text-foreground font-medium">
+                    {user.style || selectedStyle || "Native"}
+                  </span>
+                </button>
               </div>
             </div>
 
             {/* Translation Activity Heatmap Component */}
             <ActivityHeatmap userId={user.uid} refreshTrigger={refreshTrigger} />
 
-            {/* Learning Preferences Edit Form */}
-            <div className="rounded-2xl border border-border/80 bg-gradient-to-b from-card via-surface/80 to-card p-6 shadow-xl backdrop-blur-xl">
-              <div className="flex items-center justify-between pb-4 border-b border-border/50">
-                <div className="flex items-center gap-2.5">
-                  <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-primary/10 text-primary ring-1 ring-primary/20">
-                    <Settings className="h-5 w-5" />
-                  </div>
-                  <div>
-                    <h3 className="text-sm sm:text-base font-extrabold text-foreground">
-                      Learning & Translation Preferences
-                    </h3>
-                    <p className="text-xs text-muted-foreground">
-                      Personalize your target language, standard, and explanation style.
-                    </p>
-                  </div>
-                </div>
-              </div>
-
-              <form onSubmit={handleSavePreferences} className="mt-5 space-y-4">
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-                  {/* Mother Tongue Select */}
-                  <div>
-                    <label className="text-xs font-bold text-foreground block mb-1.5">
-                      Mother Tongue
-                    </label>
-                    <select
-                      value={nativeLanguage}
-                      onChange={(e) => setNativeLanguage(e.target.value)}
-                      className="w-full rounded-xl border border-border/80 bg-surface px-3 py-2 text-xs font-medium text-foreground focus:outline-none focus:ring-2 focus:ring-primary/40"
-                    >
-                      {LANGUAGE_OPTIONS.map((lang) => (
-                        <option key={lang} value={lang}>
-                          {lang}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-
-                  {/* Standard / Education Level Trigger & Modal Trigger */}
-                  <div>
-                    <div className="flex items-center justify-between mb-1.5">
-                      <label className="text-xs font-bold text-foreground block">
-                        Academic Standard
-                      </label>
-                    </div>
-
-                    <button
-                      type="button"
-                      onClick={() => setEducationModalOpen(true)}
-                      className="w-full flex items-center justify-between gap-2.5 rounded-xl border border-border/80 bg-surface px-3 py-2 text-xs font-medium text-foreground hover:border-primary/50 hover:bg-surface-2 transition-all cursor-pointer text-left group shadow-xs"
-                      title="Click to change Class or Academic Goal"
-                    >
-                      <div className="flex items-center gap-2.5 min-w-0">
-                        <span className="text-lg shrink-0">{currentLevelMeta.icon}</span>
-                        <div className="min-w-0 flex-1">
-                          <span className="font-bold text-foreground block truncate">
-                            {currentLevelMeta.label}
-                          </span>
-                          <span className="text-[10px] text-muted-foreground block truncate">
-                            {currentLevelMeta.description}
-                          </span>
-                        </div>
-                      </div>
-                      <ChevronRight className="h-4 w-4 text-muted-foreground shrink-0 group-hover:text-primary group-hover:translate-x-0.5 transition-transform" />
-                    </button>
-                  </div>
-
-                  {/* Preferred Translation Style */}
-                  <div>
-                    <label className="text-xs font-bold text-foreground block mb-1.5">
-                      Preferred Translation Style
-                    </label>
-                    <select
-                      value={selectedStyle}
-                      onChange={(e) => setSelectedStyle(e.target.value)}
-                      className="w-full rounded-xl border border-border/80 bg-surface px-3 py-2 text-xs font-medium text-foreground focus:outline-none focus:ring-2 focus:ring-primary/40"
-                    >
-                      {TRANSLATION_STYLES.map((st) => (
-                        <option key={st.id} value={st.id}>
-                          {st.label}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-                </div>
-
-                <div className="flex justify-end pt-3">
-                  <button
-                    type="submit"
-                    disabled={isSavingPrefs}
-                    className="inline-flex items-center gap-2 rounded-xl bg-primary px-5 py-2.5 text-xs font-semibold text-primary-foreground shadow-md transition-all hover:bg-primary/90 active:scale-95 disabled:opacity-50"
-                  >
-                    {isSavingPrefs ? (
-                      <RefreshCw className="h-4 w-4 animate-spin" />
-                    ) : (
-                      <CheckCircle2 className="h-4 w-4" />
-                    )}
-                    <span>{isSavingPrefs ? "Saving..." : "Save Preferences"}</span>
-                  </button>
-                </div>
-              </form>
-            </div>
-
-            {/* Quick Links & Account Details */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            {/* Quick Links */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               {isAdmin && (
                 <Link
                   to="/admin"
-                  className="flex items-center justify-between rounded-2xl border border-primary/30 bg-primary/5 p-4 shadow-sm hover:bg-primary/10 transition-colors group"
+                  className="flex items-center justify-between rounded-xl border border-border/60 bg-surface/30 p-3.5 hover:bg-surface/60 transition-colors group"
                 >
-                  <div className="flex items-center gap-3">
-                    <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-primary/15 text-primary">
-                      <ShieldAlert className="h-5 w-5" />
+                  <div className="flex items-center gap-2.5">
+                    <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-surface-2 text-foreground">
+                      <ShieldAlert className="h-4 w-4 text-muted-foreground" />
                     </div>
                     <div>
-                      <span className="text-xs font-bold text-foreground block">Admin Dashboard</span>
+                      <span className="text-xs font-semibold text-foreground block">Admin Dashboard</span>
                       <span className="text-[11px] text-muted-foreground block">
-                        Manage users, verification, and ads
+                        Manage users and platform
                       </span>
                     </div>
                   </div>
-                  <ChevronRight className="h-4 w-4 text-muted-foreground group-hover:text-primary transition-transform group-hover:translate-x-1" />
+                  <ChevronRight className="h-4 w-4 text-muted-foreground group-hover:text-foreground transition-transform group-hover:translate-x-0.5" />
                 </Link>
               )}
 
               <Link
                 to="/support"
-                className="flex items-center justify-between rounded-2xl border border-rose-500/30 bg-rose-500/5 p-4 shadow-sm hover:bg-rose-500/10 transition-colors group"
+                className="flex items-center justify-between rounded-xl border border-border/60 bg-surface/30 p-3.5 hover:bg-surface/60 transition-colors group"
               >
-                <div className="flex items-center gap-3">
-                  <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-rose-500/15 text-rose-400">
-                    <Heart className="h-5 w-5 fill-rose-500/20" />
+                <div className="flex items-center gap-2.5">
+                  <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-surface-2 text-foreground">
+                    <Heart className="h-4 w-4 text-muted-foreground" />
                   </div>
                   <div>
-                    <span className="text-xs font-bold text-foreground block">Support Anuwad</span>
+                    <span className="text-xs font-semibold text-foreground block">Support Anuwad</span>
                     <span className="text-[11px] text-muted-foreground block">
-                      Contribute to free open education
+                      Contribute to open education
                     </span>
                   </div>
                 </div>
-                <ChevronRight className="h-4 w-4 text-muted-foreground group-hover:text-rose-400 transition-transform group-hover:translate-x-1" />
+                <ChevronRight className="h-4 w-4 text-muted-foreground group-hover:text-foreground transition-transform group-hover:translate-x-0.5" />
               </Link>
             </div>
           </div>
         )}
       </div>
 
-      {/* Shared Education Level Modal (OOP Component Triggered from Global Library & Profile) */}
+      {/* Mother Tongue Selection Dialog (Auto-saves on click) */}
+      <Dialog open={langModalOpen} onOpenChange={setLangModalOpen}>
+        <DialogContent className="max-w-md p-6 bg-card border-border/80 sm:rounded-2xl">
+          <DialogHeader className="text-left space-y-1">
+            <div className="flex items-center gap-2.5">
+              <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-primary/10 text-primary border border-primary/20">
+                <Languages className="h-5 w-5" />
+              </div>
+              <div>
+                <DialogTitle className="text-base font-bold text-foreground">
+                  Select Mother Tongue
+                </DialogTitle>
+                <DialogDescription className="text-xs text-muted-foreground">
+                  Click any language to immediately set your preferred tongue.
+                </DialogDescription>
+              </div>
+            </div>
+          </DialogHeader>
+
+          <div className="mt-3 max-h-[60vh] overflow-y-auto pr-1">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+              {LANGUAGE_OPTIONS.map((lang) => {
+                const isSelected = (user?.nativeLanguage || nativeLanguage) === lang;
+                return (
+                  <button
+                    key={lang}
+                    type="button"
+                    onClick={() => void handleSelectLanguage(lang)}
+                    className={`flex items-center justify-between gap-2 rounded-xl p-3 text-left text-xs font-medium transition-all cursor-pointer border ${
+                      isSelected
+                        ? "border-primary bg-primary/10 text-primary font-semibold ring-1 ring-primary/40 shadow-xs"
+                        : "border-border/60 bg-surface/40 text-foreground hover:border-primary/40 hover:bg-surface-2"
+                    }`}
+                  >
+                    <span className="truncate">{lang}</span>
+                    {isSelected && (
+                      <div className="flex h-4 w-4 shrink-0 items-center justify-center rounded-full bg-primary text-primary-foreground">
+                        <Check className="h-2.5 w-2.5 stroke-[3]" />
+                      </div>
+                    )}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Shared Education Level Modal (Auto-saves on click, no confirm button) */}
       <EducationLevelModal
         open={educationModalOpen}
         onOpenChange={setEducationModalOpen}
@@ -516,9 +462,62 @@ function UserProfileRoute() {
           }
           toast.success(`Academic Standard set to ${getEducationLevelMeta(level).label}`);
         }}
-        confirmButtonText="Save Academic Standard"
-        footerNote="Your library curriculum and learning materials adapt to this standard."
+        showConfirmButton={false}
+        footerNote="Click any class card to switch instantly."
       />
+
+      {/* Translation Style Selection Dialog (Auto-saves on click) */}
+      <Dialog open={styleModalOpen} onOpenChange={setStyleModalOpen}>
+        <DialogContent className="max-w-md p-6 bg-card border-border/80 sm:rounded-2xl">
+          <DialogHeader className="text-left space-y-1">
+            <div className="flex items-center gap-2.5">
+              <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-amber-500/10 text-amber-400 border border-amber-500/20">
+                <Sparkles className="h-5 w-5" />
+              </div>
+              <div>
+                <DialogTitle className="text-base font-bold text-foreground">
+                  Select Translation Style
+                </DialogTitle>
+                <DialogDescription className="text-xs text-muted-foreground">
+                  Click any style to immediately change how translated text is formatted.
+                </DialogDescription>
+              </div>
+            </div>
+          </DialogHeader>
+
+          <div className="mt-3 space-y-2.5">
+            {TRANSLATION_STYLES.map((style) => {
+              const isSelected = (user?.style || selectedStyle) === style.id;
+              return (
+                <button
+                  key={style.id}
+                  type="button"
+                  onClick={() => void handleSelectStyle(style.id)}
+                  className={`w-full flex flex-col items-start gap-1.5 rounded-xl p-3.5 text-left text-xs transition-all cursor-pointer border ${
+                    isSelected
+                      ? "border-primary bg-primary/10 ring-1 ring-primary/40 shadow-xs text-foreground"
+                      : "border-border/60 bg-surface/40 text-muted-foreground hover:border-primary/40 hover:bg-surface-2 hover:text-foreground"
+                  }`}
+                >
+                  <div className="flex items-center justify-between w-full">
+                    <span className={`text-sm font-bold ${isSelected ? "text-primary" : "text-foreground"}`}>
+                      {style.label}
+                    </span>
+                    {isSelected && (
+                      <div className="flex h-4 w-4 shrink-0 items-center justify-center rounded-full bg-primary text-primary-foreground">
+                        <Check className="h-2.5 w-2.5 stroke-[3]" />
+                      </div>
+                    )}
+                  </div>
+                  <p className="text-[11px] leading-relaxed text-muted-foreground">
+                    {style.instruction}
+                  </p>
+                </button>
+              );
+            })}
+          </div>
+        </DialogContent>
+      </Dialog>
     </SidebarLayout>
   );
 }

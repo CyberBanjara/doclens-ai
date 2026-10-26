@@ -12,6 +12,7 @@ interface EducationLevelModalProps {
   description?: string;
   footerNote?: string;
   confirmButtonText?: string;
+  showConfirmButton?: boolean;
 }
 
 export function EducationLevelModal({
@@ -24,6 +25,7 @@ export function EducationLevelModal({
   description,
   footerNote,
   confirmButtonText,
+  showConfirmButton = true,
 }: EducationLevelModalProps) {
   const [selected, setSelected] = useState<EducationLevel>(currentLevel);
 
@@ -146,13 +148,15 @@ export function EducationLevelModal({
             <span>{footerNote || "You can switch your level anytime from the top bar."}</span>
           </div>
 
-          <button
-            type="button"
-            onClick={() => handleConfirm()}
-            className="w-full sm:w-auto px-5 py-2.5 rounded-xl bg-primary text-xs font-bold text-primary-foreground shadow-md shadow-primary/20 hover:opacity-95 active:scale-95 transition-all cursor-pointer shrink-0"
-          >
-            {confirmButtonText || "Continue to Library"}
-          </button>
+          {showConfirmButton && (
+            <button
+              type="button"
+              onClick={() => handleConfirm()}
+              className="w-full sm:w-auto px-5 py-2.5 rounded-xl bg-primary text-xs font-bold text-primary-foreground shadow-md shadow-primary/20 hover:opacity-95 active:scale-95 transition-all cursor-pointer shrink-0"
+            >
+              {confirmButtonText || "Continue to Library"}
+            </button>
+          )}
         </div>
       </div>
     </div>
