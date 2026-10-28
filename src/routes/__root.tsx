@@ -281,8 +281,8 @@ function RootShell({ children }: { children: React.ReactNode }) {
           }}
         />
         {/* Pre-rendered static semantic block for Google OAuth Verification & Crawlers */}
-        <header className="sr-only" aria-hidden="false">
-          <h1>Anuwad — AI Document Reader &amp; Translator</h1>
+        <div className="sr-only" aria-hidden="false">
+          <div className="text-xl font-bold">Anuwad — AI Document Reader &amp; Translator</div>
           <p>
             Anuwad is a free, privacy-first document platform. Render PDFs locally in your browser,
             translate pages into over 90 languages using state-of-the-art AI, and convert text into
@@ -293,7 +293,7 @@ function RootShell({ children }: { children: React.ReactNode }) {
             <a href="/privacy">Privacy Policy</a>
             <a href="/terms">Terms of Service</a>
           </nav>
-        </header>
+        </div>
 
         {children}
         <Scripts />
@@ -359,7 +359,7 @@ function RootComponent() {
     initTheme();
     warmR2FilesCache();
 
-    // Hide and remove preloader once React application is fully mounted, keeping it for at least 2 seconds
+    // Hide and remove preloader once React application is fully mounted
     const preloader = document.getElementById("preloader");
     if (!preloader) return;
 
@@ -372,7 +372,7 @@ function RootComponent() {
       removeTimer = setTimeout(() => {
         preloader.remove();
       }, 400); // Matches the 0.4s transition duration
-    }, 2000); // 2 seconds minimum visibility
+    }, 100); // Fast fade once mounted to optimize LCP and Core Web Vitals
 
     return () => {
       clearTimeout(fadeTimer);

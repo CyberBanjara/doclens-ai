@@ -1,38 +1,82 @@
-# Allow indexing of all pages for search engines and AI crawlers
+# Allow indexing of public pages for search engines and AI crawlers
 User-agent: *
 Allow: /
+Disallow: /doc/
+Disallow: /admin
+Disallow: /user
+Disallow: /api/
 
-# Google
+# Google Search
 User-agent: Googlebot
 Allow: /
+Disallow: /doc/
+Disallow: /admin
+Disallow: /user
+Disallow: /api/
 
 # Bing / Microsoft Copilot
 User-agent: Bingbot
 Allow: /
+Disallow: /doc/
+Disallow: /admin
+Disallow: /user
+Disallow: /api/
 
-User-agent: msnbot
-Allow: /
-
-# OpenAI
+# OpenAI / ChatGPT
 User-agent: GPTBot
 Allow: /
+Disallow: /doc/
+Disallow: /admin
+Disallow: /user
+Disallow: /api/
 
 User-agent: ChatGPT-User
 Allow: /
 
-# Perplexity
+# Perplexity AI
 User-agent: PerplexityBot
 Allow: /
+Disallow: /doc/
+Disallow: /admin
+Disallow: /user
+Disallow: /api/
 
 # Anthropic / Claude
 User-agent: ClaudeBot
 Allow: /
+Disallow: /doc/
+Disallow: /admin
+Disallow: /user
+Disallow: /api/
 
 User-agent: anthropic-ai
 Allow: /
+Disallow: /doc/
+Disallow: /admin
+Disallow: /user
+Disallow: /api/
 
-# Brave (used by Claude AI search)
+# Apple Search / Applebot
+User-agent: Applebot
+Allow: /
+Disallow: /doc/
+Disallow: /admin
+Disallow: /user
+Disallow: /api/
+
+# Brave Search (powers Claude & private web queries)
 User-agent: BraveBot
+Allow: /
+Disallow: /doc/
+Disallow: /admin
+Disallow: /user
+Disallow: /api/
+
+# Social Media Preview Crawlers
+User-agent: Twitterbot
+Allow: /
+
+User-agent: facebookexternalhit
 Allow: /
 
 Sitemap: https://www.anuwad.com/sitemap.xml
