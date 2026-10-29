@@ -1,5 +1,5 @@
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
-import { useCallback, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 import {
   ArrowRight,
@@ -9,11 +9,13 @@ import {
   Cpu,
   FileText,
   FolderOpen,
+  Gauge,
   Globe,
   GraduationCap,
   Headphones,
   Languages,
   Layers,
+  Loader2,
   Lock,
   Pause,
   Play,
@@ -24,7 +26,11 @@ import {
   Volume2,
 } from "lucide-react";
 import { SidebarLayout } from "@/components/SidebarLayout";
+import { HighlightableText } from "@/components/HighlightableText";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { createDoc, StorageError } from "@/lib/storage";
+import { useTts } from "@/context/TtsContext";
+import { filterVoicesByLanguage } from "@/lib/voiceLanguageMap";
 
 export const Route = createFileRoute("/")({
   component: HomePage,
@@ -291,14 +297,78 @@ const FAQS = [
   },
 ];
 
+const ORIGINAL_ENGLISH_SAMPLE =
+  "We see a variety of objects in the world around us. However, we are unable to see anything in a dark room. On lighting up the room, things become visible. What makes things visible? During the day, the sunlight helps us to see objects. An object reflects light that falls on it. This reflected light, when received by our eyes, enables us to see things.";
+
 function HomePage() {
   const navigate = useNavigate();
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [selectedLang, setSelectedLang] = useState<string>("hi");
   const [readingStyle, setReadingStyle] = useState<"natural" | "simplified">("natural");
-  const [isPlayingAudio, setIsPlayingAudio] = useState(false);
   const [openFaqIndex, setOpenFaqIndex] = useState<number | null>(0);
   const [isDragging, setIsDragging] = useState(false);
+
+  const {
+    isPlaying,
+    isPaused,
+    play,
+    pause,
+    resume,
+    stop,
+    isNeuralLoading,
+    availableVoices,
+    selectedVoiceUri,
+    setSelectedVoiceUri,
+    setOutputLanguage,
+    activePageNumber,
+    sentences,
+    currentSentenceIndex,
+    currentTextSource,
+    rate,
+    setRate,
+    refreshVoices,
+  } = useTts();
+
+  const isDemoRunning = (isPlaying || isPaused) && activePageNumber === 0;
+  const isDemoPlaying = isPlaying && !isPaused && activePageNumber === 0;
+  const isDemoLoading = isNeuralLoading && activePageNumber === 0;
+  const isOriginalActive = isDemoRunning && currentTextSource === "original";
+  const activeLanguageLabel = isOriginalActive ? "English" : (SAMPLE_LANGUAGES[selectedLang]?.nativeName || "Hindi");
+  const activeSentenceText =
+    isDemoRunning && sentences[currentSentenceIndex] ? sentences[currentSentenceIndex] : null;
+
+  // Keep outputLanguage in sync with selectedLang
+  useEffect(() => {
+    setOutputLanguage(selectedLang);
+  }, [selectedLang, setOutputLanguage]);
+
+  // Find best voice for the currently selected sample language (prioritizing cached Piper neural voices)
+  const currentDemoVoice = useMemo(() => {
+    const langVoices = filterVoicesByLanguage(availableVoices, selectedLang);
+    if (langVoices.length === 0) return null;
+
+    // 1. If currently selected voice is downloaded and matches this language, keep it
+    if (selectedVoiceUri) {
+      const match = langVoices.find((v) => v.voiceURI === selectedVoiceUri);
+      if (match && (match.isDownloaded || !match.isNeural)) {
+        return match;
+      }
+    }
+
+    // 2. Prioritize downloaded neural voice (e.g. cached Piper voice)
+    const downloadedNeural = langVoices.find((v) => v.isNeural && v.isDownloaded);
+    if (downloadedNeural) return downloadedNeural;
+
+    // 3. Fallback to any neural voice for this language
+    const anyNeural = langVoices.find((v) => v.isNeural);
+    if (anyNeural) return anyNeural;
+
+    // 4. Fallback to first available voice for this language
+    return langVoices[0] || null;
+  }, [availableVoices, selectedLang, selectedVoiceUri]);
+
+  const isOfflineReady = Boolean(currentDemoVoice?.isDownloaded);
+  const isNeuralVoice = Boolean(currentDemoVoice?.isNeural);
 
   const handleProcessFile = useCallback(
     async (file: File) => {
@@ -352,6 +422,77 @@ function HomePage() {
   };
 
   const currentSample = SAMPLE_LANGUAGES[selectedLang] || SAMPLE_LANGUAGES.hi;
+
+  const handleSelectLang = (key: string) => {
+    if (selectedLang === key) return;
+    stop();
+    setSelectedLang(key);
+    setOutputLanguage(key);
+
+    // Pre-select best voice for this language so UI badges and player are ready
+    const langVoices = filterVoicesByLanguage(availableVoices, key);
+    const bestVoice =
+      langVoices.find((v) => v.isNeural && v.isDownloaded) ||
+      langVoices.find((v) => v.isNeural) ||
+      langVoices[0];
+    if (bestVoice) {
+      setSelectedVoiceUri(bestVoice.voiceURI);
+    }
+  };
+
+  const handleSelectStyle = (style: "natural" | "simplified") => {
+    if (readingStyle === style) return;
+    if (isPlaying || isPaused) {
+      stop();
+    }
+    setReadingStyle(style);
+  };
+
+  const handleToggleDemoPlay = async () => {
+    if (isDemoRunning) {
+      if (isPaused) {
+        resume();
+      } else {
+        pause();
+      }
+      return;
+    }
+
+    // Stop any stale speech before launching new language
+    stop();
+
+    let voiceToUse = currentDemoVoice;
+    if (!voiceToUse) {
+      const refreshed = await refreshVoices(true);
+      const langVoices = filterVoicesByLanguage(refreshed, selectedLang);
+      voiceToUse =
+        langVoices.find((v) => v.isNeural && v.isDownloaded) ||
+        langVoices.find((v) => v.isNeural) ||
+        langVoices[0] ||
+        null;
+    }
+
+    if (voiceToUse) {
+      setSelectedVoiceUri(voiceToUse.voiceURI);
+    }
+    setOutputLanguage(selectedLang);
+
+    const textToPlay =
+      readingStyle === "natural"
+        ? currentSample.translatedExcerpt
+        : currentSample.simplifiedExcerpt;
+
+    play(textToPlay, "ai", 0, 0);
+  };
+
+  // Clean up demo audio on unmount
+  useEffect(() => {
+    return () => {
+      if (activePageNumber === 0) {
+        stop();
+      }
+    };
+  }, []);
 
   return (
     <SidebarLayout
@@ -667,7 +808,7 @@ function HomePage() {
                   {Object.entries(SAMPLE_LANGUAGES).map(([key, item]) => (
                     <button
                       key={key}
-                      onClick={() => setSelectedLang(key)}
+                      onClick={() => handleSelectLang(key)}
                       className={`px-2.5 py-1 rounded-lg text-xs font-semibold transition-all ${
                         selectedLang === key
                           ? "bg-primary text-primary-foreground shadow-xs"
@@ -684,7 +825,7 @@ function HomePage() {
                 <span className="text-xs font-semibold text-muted-foreground">Style:</span>
                 <div className="inline-flex rounded-lg border border-border bg-surface p-0.5">
                   <button
-                    onClick={() => setReadingStyle("natural")}
+                    onClick={() => handleSelectStyle("natural")}
                     className={`px-2.5 py-0.5 text-xs font-medium rounded-md transition-all ${
                       readingStyle === "natural"
                         ? "bg-primary/10 text-primary font-semibold"
@@ -694,7 +835,7 @@ function HomePage() {
                     Natural
                   </button>
                   <button
-                    onClick={() => setReadingStyle("simplified")}
+                    onClick={() => handleSelectStyle("simplified")}
                     className={`px-2.5 py-0.5 text-xs font-medium rounded-md transition-all ${
                       readingStyle === "simplified"
                         ? "bg-primary/10 text-primary font-semibold"
@@ -727,15 +868,15 @@ function HomePage() {
                   <h4 className="font-bold text-lg font-sans text-foreground">
                     Chapter 10: Light – Reflection and Refraction
                   </h4>
-                  <p className="bg-surface/60 p-4 rounded-xl border border-border/60">
-                    We see a variety of objects in the world around us. However, we are unable to
-                    see anything in a dark room. On lighting up the room, things become visible. What
-                    makes things visible? During the day, the sunlight helps us to see objects. An
-                    object reflects light that falls on it. This reflected light, when received by
-                    our eyes, enables us to see things.
-                  </p>
+                  <div className="bg-surface/60 p-4 rounded-xl border border-border/60 text-sm sm:text-base leading-relaxed">
+                    <HighlightableText
+                      text={ORIGINAL_ENGLISH_SAMPLE}
+                      source="original"
+                      pageNumber={0}
+                    />
+                  </div>
                   <p className="text-xs text-muted-foreground font-sans italic">
-                    Original text layer verified via PDF.js layout inspector.
+                    Original text layer verified via PDF.js layout inspector. Click any sentence to listen.
                   </p>
                 </div>
               </div>
@@ -758,11 +899,17 @@ function HomePage() {
                   <h4 className="font-bold text-lg text-foreground font-display">
                     {currentSample.translatedTitle}
                   </h4>
-                  <p className="bg-primary/5 p-4 rounded-xl border border-primary/20 text-foreground font-medium">
-                    {readingStyle === "natural"
-                      ? currentSample.translatedExcerpt
-                      : currentSample.simplifiedExcerpt}
-                  </p>
+                  <div className="bg-primary/5 p-4 rounded-xl border border-primary/20 text-foreground font-medium text-sm sm:text-base leading-relaxed">
+                    <HighlightableText
+                      text={
+                        readingStyle === "natural"
+                          ? currentSample.translatedExcerpt
+                          : currentSample.simplifiedExcerpt
+                      }
+                      source="ai"
+                      pageNumber={0}
+                    />
+                  </div>
                   <div className="text-xs text-muted-foreground flex items-center gap-1.5 pt-1">
                     <span className="font-semibold text-foreground">Terminology Note:</span>
                     <span>{currentSample.translationNotes}</span>
@@ -776,16 +923,20 @@ function HomePage() {
               <div className="flex items-center gap-3">
                 <button
                   type="button"
-                  onClick={() => {
-                    setIsPlayingAudio(!isPlayingAudio);
-                    if (!isPlayingAudio) {
-                      toast.info(`Simulating Piper Neural voice playback in ${currentSample.name}`);
-                    }
-                  }}
-                  className="flex h-10 w-10 items-center justify-center rounded-full bg-primary text-primary-foreground shadow-md hover:bg-primary/90 transition-all active:scale-95"
-                  aria-label={isPlayingAudio ? "Pause demo audio" : "Play demo audio"}
+                  onClick={() => void handleToggleDemoPlay()}
+                  className="flex h-10 w-10 items-center justify-center rounded-full bg-primary text-primary-foreground shadow-md hover:bg-primary/90 transition-all active:scale-95 disabled:opacity-75 cursor-pointer"
+                  aria-label={
+                    isDemoLoading
+                      ? "Loading neural voice"
+                      : isDemoPlaying
+                        ? "Pause demo audio"
+                        : "Play demo audio"
+                  }
+                  disabled={isDemoLoading}
                 >
-                  {isPlayingAudio ? (
+                  {isDemoLoading ? (
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                  ) : isDemoPlaying ? (
                     <Pause className="h-4 w-4" />
                   ) : (
                     <Play className="h-4 w-4 ml-0.5" />
@@ -794,13 +945,22 @@ function HomePage() {
 
                 <div>
                   <div className="flex items-center gap-2">
-                    <Volume2 className="h-4 w-4 text-primary" />
+                    <Volume2 className={`h-4 w-4 text-primary ${isDemoPlaying ? "animate-pulse" : ""}`} />
                     <span className="text-xs font-bold text-foreground">
-                      Piper Neural Audio · {currentSample.nativeName} Speech
+                      {isNeuralVoice ? "Piper Neural Audio" : "Speech Synthesis"} · {activeLanguageLabel} Speech
                     </span>
+                    {isDemoRunning && sentences.length > 0 && (
+                      <span className="text-[10px] font-mono text-muted-foreground bg-surface px-1.5 py-0.5 rounded border border-border">
+                        {currentSentenceIndex + 1}/{sentences.length}
+                      </span>
+                    )}
                   </div>
-                  <span className="text-[11px] text-muted-foreground">
-                    WebAssembly ONNX synthesis · Natural human rhythm ({currentSample.audioDuration})
+                  <span className="text-[11px] text-muted-foreground block truncate max-w-[280px] sm:max-w-md">
+                    {isDemoLoading
+                      ? "Synthesizing neural audio in WebAssembly..."
+                      : isDemoRunning && activeSentenceText
+                        ? `"${activeSentenceText}"`
+                        : `WebAssembly ONNX synthesis · Natural human rhythm (${currentSample.audioDuration})`}
                   </span>
                 </div>
               </div>
@@ -811,20 +971,107 @@ function HomePage() {
                   <span
                     key={idx}
                     className={`w-1 rounded-full bg-primary transition-all duration-300 ${
-                      isPlayingAudio ? "animate-pulse" : "opacity-30"
+                      isDemoPlaying ? "animate-pulse" : "opacity-30"
                     }`}
                     style={{
-                      height: isPlayingAudio ? `${height}%` : "30%",
+                      height: isDemoPlaying ? `${height}%` : "30%",
                       animationDelay: `${idx * 100}ms`,
                     }}
                   />
                 ))}
               </div>
 
-              <div className="hidden sm:flex items-center gap-2">
-                <span className="text-xs font-mono font-medium text-muted-foreground">Speed: 1.0x</span>
-                <span className="text-xs text-muted-foreground">•</span>
-                <span className="text-xs font-mono font-medium text-emerald-500">Offline-Ready</span>
+              <div className="flex items-center gap-2.5">
+                {/* Interactive Speed Control Button just like in Workspace */}
+                <Popover>
+                  <PopoverTrigger asChild>
+                    <button
+                      type="button"
+                      className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg border border-border bg-surface/80 hover:bg-surface-2 transition-all text-xs font-mono font-medium text-foreground hover:border-primary/50 shadow-xs active:scale-95 cursor-pointer"
+                      title="Adjust playback speed"
+                    >
+                      <Gauge className="h-3.5 w-3.5 text-primary" />
+                      <span>Speed: <strong className="text-primary font-bold">{rate.toFixed(1)}x</strong></span>
+                      <ChevronDown className="h-3 w-3 text-muted-foreground ml-0.5" />
+                    </button>
+                  </PopoverTrigger>
+                  <PopoverContent
+                    align="end"
+                    sideOffset={8}
+                    className="w-64 p-3.5 border border-border bg-popover text-popover-foreground shadow-2xl rounded-2xl flex flex-col gap-3"
+                  >
+                    <div className="flex items-center justify-between">
+                      <span className="text-xs font-bold uppercase tracking-wider text-muted-foreground flex items-center gap-1.5">
+                        <Gauge className="h-3.5 w-3.5 text-primary" />
+                        Reading Speed
+                      </span>
+                      <span className="font-mono text-xs font-bold text-primary bg-primary/10 border border-primary/20 px-2 py-0.5 rounded-md">
+                        {rate.toFixed(1)}x
+                      </span>
+                    </div>
+
+                    {/* Speed Slider */}
+                    <div className="space-y-1.5">
+                      <input
+                        type="range"
+                        min={0.5}
+                        max={2.0}
+                        step={0.1}
+                        value={rate}
+                        onChange={(e) => setRate(parseFloat(e.target.value))}
+                        className="w-full accent-primary h-2 bg-surface-2 rounded-lg cursor-pointer"
+                        aria-label="Reading Speed Slider"
+                      />
+                      <div className="flex justify-between text-[10px] font-mono text-muted-foreground">
+                        <span>0.5x</span>
+                        <span>1.0x</span>
+                        <span>2.0x</span>
+                      </div>
+                    </div>
+
+                    {/* Quick Speed Presets */}
+                    <div className="space-y-1 pt-2 border-t border-border/60">
+                      <span className="text-[10px] font-semibold text-muted-foreground block">
+                        Quick Presets
+                      </span>
+                      <div className="grid grid-cols-4 gap-1.5">
+                        {[0.75, 1.0, 1.25, 1.5].map((preset) => (
+                          <button
+                            key={preset}
+                            type="button"
+                            onClick={() => setRate(preset)}
+                            className={`py-1 rounded-lg text-xs font-mono font-medium transition-colors cursor-pointer ${
+                              Math.abs(rate - preset) < 0.05
+                                ? "bg-primary text-primary-foreground font-bold shadow-xs"
+                                : "bg-surface-2/70 text-muted-foreground hover:bg-surface-2 hover:text-foreground"
+                            }`}
+                          >
+                            {preset}x
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  </PopoverContent>
+                </Popover>
+
+                <span className="text-xs text-muted-foreground hidden sm:inline">•</span>
+
+                <div className="hidden sm:flex items-center">
+                  {isOfflineReady ? (
+                    <span className="text-xs font-mono font-medium text-emerald-500 flex items-center gap-1">
+                      <CheckCircle2 className="h-3 w-3" />
+                      Offline-Ready
+                    </span>
+                  ) : isNeuralVoice ? (
+                    <span className="text-xs font-mono font-medium text-primary">
+                      Neural Stream
+                    </span>
+                  ) : (
+                    <span className="text-xs font-mono font-medium text-muted-foreground">
+                      Native Voice
+                    </span>
+                  )}
+                </div>
               </div>
             </div>
           </div>

@@ -82,6 +82,7 @@ import {
   getLanguageSlug,
   getLanguageInfoFromSlug,
   SUPPORTED_TRANSLATION_SLUGS,
+  isSupportedTranslationLanguage,
   normalizeBookCandidates,
 } from "./languageTableMap";
 
@@ -206,6 +207,9 @@ export const fetchSupabaseLanguagePage = createServerFn({ method: "POST" })
     if (!isGlobalSyncEnabled()) {
       return { found: false };
     }
+    if (!isSupportedTranslationLanguage(data.language)) {
+      return { found: false };
+    }
     try {
       const supabase = await getSupabaseClient({ writeAccess: false });
       if (!supabase) {
@@ -223,7 +227,11 @@ export const fetchSupabaseLanguagePage = createServerFn({ method: "POST" })
         .limit(1);
 
       if (error) {
-        if (!error.message?.includes("relation") && !error.message?.includes("does not exist")) {
+        if (
+          !error.message?.includes("relation") &&
+          !error.message?.includes("does not exist") &&
+          !error.message?.includes("schema cache")
+        ) {
           console.warn(`Supabase ${tableName} lookup warning:`, error.message);
         }
         return { found: false, error: error.message };
@@ -253,6 +261,9 @@ export const fetchSupabaseLanguageBook = createServerFn({ method: "POST" })
     if (!isGlobalSyncEnabled()) {
       return { found: false, pages: [] };
     }
+    if (!isSupportedTranslationLanguage(data.language)) {
+      return { found: false, pages: [] };
+    }
     try {
       const supabase = await getSupabaseClient({ writeAccess: false });
       if (!supabase) {
@@ -269,7 +280,11 @@ export const fetchSupabaseLanguageBook = createServerFn({ method: "POST" })
         .order("page_number", { ascending: true });
 
       if (error) {
-        if (!error.message?.includes("relation") && !error.message?.includes("does not exist")) {
+        if (
+          !error.message?.includes("relation") &&
+          !error.message?.includes("does not exist") &&
+          !error.message?.includes("schema cache")
+        ) {
           console.warn(`Supabase ${tableName} book lookup warning:`, error.message);
         }
         return { found: false, pages: [], error: error.message };
@@ -320,6 +335,12 @@ export const saveSupabaseLanguagePage = createServerFn({ method: "POST" })
     if (!data.language || !data.bookId || !data.pageNumber || !data.content?.trim()) {
       return { success: false, error: "Missing required parameters to save translated page." };
     }
+    if (!isSupportedTranslationLanguage(data.language)) {
+      return {
+        success: false,
+        error: `Supabase sync table does not exist for language "${data.language}".`,
+      };
+    }
 
     // 1. Layer 1: Verify user identity & role privilege (admin, moderator, editor) before mutating Supabase
     await assertRoleSession(["admin", "moderator", "editor"]);
@@ -348,7 +369,13 @@ export const saveSupabaseLanguagePage = createServerFn({ method: "POST" })
       );
 
       if (error) {
-        console.warn(`Supabase ${tableName} upsert warning:`, error.message || error);
+        if (
+          !error.message?.includes("relation") &&
+          !error.message?.includes("does not exist") &&
+          !error.message?.includes("schema cache")
+        ) {
+          console.warn(`Supabase ${tableName} upsert warning:`, error.message || error);
+        }
         return { success: false, error: error.message };
       }
 
@@ -409,6 +436,12 @@ export const batchSaveSupabaseLanguagePages = createServerFn({ method: "POST" })
     if (!data.pages || data.pages.length === 0) {
       return { success: true, count: 0, pages: [] };
     }
+    if (!isSupportedTranslationLanguage(data.language)) {
+      return {
+        success: false,
+        error: `Supabase sync table does not exist for language "${data.language}".`,
+      };
+    }
 
     // 1. Layer 1: Verify user identity & role privilege (admin, moderator, editor) before mutating Supabase
     await assertRoleSession(["admin", "moderator", "editor"]);
@@ -443,7 +476,13 @@ export const batchSaveSupabaseLanguagePages = createServerFn({ method: "POST" })
         .upsert(rows, { onConflict: "book_id,page_number" });
 
       if (error) {
-        console.warn(`Supabase ${tableName} batch upsert warning:`, error.message || error);
+        if (
+          !error.message?.includes("relation") &&
+          !error.message?.includes("does not exist") &&
+          !error.message?.includes("schema cache")
+        ) {
+          console.warn(`Supabase ${tableName} batch upsert warning:`, error.message || error);
+        }
         return { success: false, error: error.message };
       }
 

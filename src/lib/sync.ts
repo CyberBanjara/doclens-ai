@@ -13,6 +13,7 @@ import {
 import { isGlobalSyncEnabled } from "./env";
 import { getOutputLanguage } from "./openrouter";
 import { clearDocContext } from "./contextStore";
+import { isSupportedTranslationLanguage } from "./languageTableMap";
 
 export const getSyncConfig = createServerFn({ method: "GET" }).handler(async () => {
   "use server";
@@ -72,7 +73,7 @@ export async function syncFromSupabase(
   const language = targetLanguage || getOutputLanguage() || docRec?.selectedLanguage || "हिंदी";
   const bookId = docRec?.bookId || fileName || docId;
 
-  if (!isGlobalSyncEnabled()) {
+  if (!isGlobalSyncEnabled() || !isSupportedTranslationLanguage(language)) {
     return false;
   }
 
@@ -203,6 +204,9 @@ export async function reconcileDocumentLanguage(
   const docRec = await getDoc(docId);
   if (!docRec) return false;
   await updateDoc(docId, { selectedLanguage: targetLanguage });
+  if (!isSupportedTranslationLanguage(targetLanguage)) {
+    return false;
+  }
   return await syncFromSupabase(docId, docRec.fileName, targetLanguage, false);
 }
 
@@ -286,6 +290,10 @@ export async function syncToSupabase(
 
     for (const [lang, langPages] of pagesByLanguage.entries()) {
       if (langPages.length > 0) {
+        if (!isSupportedTranslationLanguage(lang)) {
+          // Language does not have a dedicated table in Supabase. Keep safely local in IndexedDB.
+          continue;
+        }
         const res = await batchSaveSupabaseLanguagePages({
           data: {
             language: lang,

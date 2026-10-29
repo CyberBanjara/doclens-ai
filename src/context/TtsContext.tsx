@@ -610,11 +610,29 @@ export function TtsProvider({ children }: { children: React.ReactNode }) {
     if (!isPlayingRef.current) return;
     const currentSessionId = synthesisSessionIdRef.current;
     const targetVoiceUri = selectedVoiceUriRef.current || localStorage.getItem(TTS_VOICE_URI_LS);
+    const targetLang =
+      currentTextSourceRef.current === "original"
+        ? "en"
+        : outputLanguageRef.current;
+
     let voice = availableVoicesRef.current.find((v) => v.voiceURI === targetVoiceUri);
+    if (voice && targetLang) {
+      const matching = filterVoicesByLanguage(
+        availableVoicesRef.current,
+        targetLang,
+      );
+      const currentUri = voice.voiceURI;
+      if (!matching.some((v) => v.voiceURI === currentUri) && matching.length > 0) {
+        voice =
+          matching.find((v) => v.isNeural && v.isDownloaded) ||
+          matching.find((v) => v.isNeural) ||
+          matching[0];
+      }
+    }
     if (!voice) {
       const matching = filterVoicesByLanguage(
         availableVoicesRef.current,
-        outputLanguageRef.current,
+        targetLang || "en",
       );
       voice =
         matching.find((v) => v.isNeural && v.isDownloaded) ||
@@ -728,7 +746,7 @@ export function TtsProvider({ children }: { children: React.ReactNode }) {
 
       if (index < 0 || index >= sentenceList.length) {
         stopCurrentAudioElement(audioRef);
-        if (continuousPlay && activePageNumberRef.current !== null) {
+        if (continuousPlay && activePageNumberRef.current !== null && activePageNumberRef.current > 0) {
           dispatchDocEvent("doclens:tts-next-page", {
             currentPage: activePageNumberRef.current,
             source: currentTextSourceRef.current,
@@ -737,6 +755,7 @@ export function TtsProvider({ children }: { children: React.ReactNode }) {
           setIsPlaying(false);
           setIsPaused(false);
           setCurrentSentenceIndex(0);
+          setActivePageNumber(null);
         }
         return;
       }
@@ -757,10 +776,34 @@ export function TtsProvider({ children }: { children: React.ReactNode }) {
       const targetVoiceUri = selectedVoiceUriRef.current || localStorage.getItem(TTS_VOICE_URI_LS);
       let voice = availableVoicesRef.current.find((v) => v.voiceURI === targetVoiceUri);
 
+      const targetLang =
+        currentTextSourceRef.current === "original"
+          ? "en"
+          : outputLanguageRef.current;
+
+      // If a voice was found but targetLang is set, verify the voice matches the language
+      if (voice && targetLang) {
+        const langVoices = filterVoicesByLanguage(
+          availableVoicesRef.current,
+          targetLang,
+        );
+        const currentUri = voice.voiceURI;
+        const matchesLang = langVoices.some((v) => v.voiceURI === currentUri);
+        if (!matchesLang && langVoices.length > 0) {
+          voice =
+            langVoices.find((v) => v.isNeural && v.isDownloaded) ||
+            langVoices.find((v) => v.isNeural) ||
+            langVoices[0];
+          if (voice) {
+            setSelectedVoiceUri(voice.voiceURI);
+          }
+        }
+      }
+
       if (!voice) {
         const langVoices = filterVoicesByLanguage(
           availableVoicesRef.current,
-          outputLanguageRef.current,
+          targetLang || "en",
         );
         voice =
           langVoices.find((v) => v.isNeural && v.isDownloaded) ||
@@ -855,8 +898,16 @@ export function TtsProvider({ children }: { children: React.ReactNode }) {
 
       if (isNeural) {
         if (!ttsRef.current) {
-          console.error("VITS TTS Engine not loaded yet.");
-          setIsPlaying(false);
+          setIsNeuralLoading(true);
+          void ensureNeuralEngine().then((engine) => {
+            setIsNeuralLoading(false);
+            if (!engine) {
+              console.error("VITS TTS Engine failed to load.");
+              setIsPlaying(false);
+              return;
+            }
+            speakSentence(index, sentenceList);
+          });
           return;
         }
 
@@ -1061,7 +1112,18 @@ export function TtsProvider({ children }: { children: React.ReactNode }) {
       setIsPaused(false);
 
       const targetVoiceUri = selectedVoiceUriRef.current || localStorage.getItem(TTS_VOICE_URI_LS);
-      const isTargetNeural = isNeuralVoiceUri(targetVoiceUri);
+      const targetLang = source === "original" ? "en" : outputLanguageRef.current;
+      const langVoices = filterVoicesByLanguage(
+        availableVoicesRef.current,
+        targetLang || "en",
+      );
+      const matchingVoice = langVoices.find((v) => v.voiceURI === targetVoiceUri);
+      const effectiveVoice =
+        matchingVoice ||
+        langVoices.find((v) => v.isNeural && v.isDownloaded) ||
+        langVoices.find((v) => v.isNeural) ||
+        langVoices[0];
+      const isTargetNeural = effectiveVoice ? Boolean(effectiveVoice.isNeural) : isNeuralVoiceUri(targetVoiceUri);
 
       // If neural engine is needed or not loaded yet, ensure it is initialized then play
       if (isTargetNeural && !ttsRef.current) {

@@ -225,6 +225,19 @@ export const SUPPORTED_TRANSLATION_SLUGS = [
   "mandarin",
 ] as const;
 
+export type SupportedTranslationSlug = (typeof SUPPORTED_TRANSLATION_SLUGS)[number];
+
+/**
+ * Checks whether a language has a dedicated physical translation table in Supabase.
+ */
+export function isSupportedTranslationLanguage(language: string | unknown): boolean {
+  if (!language || typeof language !== "string" || !language.trim()) {
+    return false;
+  }
+  const slug = getLanguageSlug(language);
+  return (SUPPORTED_TRANSLATION_SLUGS as readonly string[]).includes(slug);
+}
+
 /**
  * Resolves a language identifier (in any script or name) to a sanitized
  * Supabase table name in the format `translations_<slug>`.
