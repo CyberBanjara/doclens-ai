@@ -11,6 +11,7 @@ import { useAiTabAutoPlay } from "@/hooks/useAiTabAutoPlay";
 import { MobileReaderSheet } from "@/components/MobileReaderSheet";
 import { ExportMenu } from "@/components/ExportMenu";
 import { ExtractedPageRow } from "@/components/ExtractedPageRow";
+import { readGlobals } from "@/lib/openrouter";
 
 interface Props {
   docId: string;
@@ -45,9 +46,34 @@ export function RightPanel({
   const [tab, setTab] = useState<Tab>("ai");
   const [activePageData, setActivePageData] = useState<PageDataRecord | null>(null);
 
-  const { isPlaying, activePageNumber, currentTextSource, continuousPlay, play, stop } = useTts();
+  const {
+    isPlaying,
+    isPaused,
+    isNeuralLoading,
+    activePageNumber,
+    currentTextSource,
+    continuousPlay,
+    play,
+    stop,
+  } = useTts();
 
   const [voiceDialogOpen, setVoiceDialogOpen] = useState(false);
+  const [globals, setGlobals] = useState(() => readGlobals());
+
+  useEffect(() => {
+    const handleGlobalsChange = () => setGlobals(readGlobals());
+    window.addEventListener("focus", handleGlobalsChange);
+    window.addEventListener("storage", handleGlobalsChange);
+    window.addEventListener("doclens:globals-changed", handleGlobalsChange);
+    window.addEventListener("doclens:output-language-changed", handleGlobalsChange);
+    return () => {
+      window.removeEventListener("focus", handleGlobalsChange);
+      window.removeEventListener("storage", handleGlobalsChange);
+      window.removeEventListener("doclens:globals-changed", handleGlobalsChange);
+      window.removeEventListener("doclens:output-language-changed", handleGlobalsChange);
+    };
+  }, []);
+
   const voiceReadyCallbackRef = useRef<(() => void) | null>(null);
   const requestVoiceOnboarding = (onReady: () => void) => {
     voiceReadyCallbackRef.current = onReady;
@@ -73,15 +99,13 @@ export function RightPanel({
   // Handle continuous play page transition event
   useEffect(() => {
     return listenDocEvent("doclens:tts-next-page", (d) => {
-      if (d.currentPage === activePage) {
-        if (activePage < pageCount) {
-          setActivePage(activePage + 1);
-        } else {
-          stop();
-        }
+      if (d.currentPage < pageCount) {
+        setActivePage(d.currentPage + 1);
+      } else {
+        stop();
       }
     });
-  }, [activePage, pageCount, setActivePage, stop]);
+  }, [pageCount, setActivePage, stop]);
 
   // Seamless continuous play auto-read across pages for both AI Assistant and Original Text
   useAiTabAutoPlay({
@@ -92,6 +116,9 @@ export function RightPanel({
     pageCount,
     analyzing,
     isPlaying,
+    isPaused,
+    isNeuralLoading,
+    aiSummary,
     continuousPlay,
     activePageNumber,
     currentTextSource,
@@ -128,11 +155,25 @@ export function RightPanel({
     </div>
   );
 
-  const player = pageCount > 0 && activePageData && (
+  const activeMode = activePageData?.pageAi?.overrides?.mode || globals.mode;
+  const activeStyle = activePageData?.pageAi?.overrides?.style || globals.style;
+
+  const aiBadgeLabel = activePageData?.pageAi?.isCustom
+    ? "Custom AI"
+    : activeMode === "explain"
+      ? activeStyle && activeStyle !== "Standard"
+        ? `Explain · ${activeStyle}`
+        : "AI Explain"
+      : activeStyle && activeStyle !== "Native"
+        ? `Translate · ${activeStyle}`
+        : "AI Translate";
+
+  const player = pageCount > 0 && (activePageData || isPlaying) && (
     <TtsPlayer
       text={textToRead}
       source={source}
       pageNumber={activePage}
+      aiBadgeLabel={aiBadgeLabel}
       onNeedsVoiceOnboarding={requestVoiceOnboarding}
     />
   );

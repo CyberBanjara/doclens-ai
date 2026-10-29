@@ -22,11 +22,18 @@ interface TtsPlayerProps {
   text: string | undefined | null;
   source: TtsSource;
   pageNumber: number;
+  aiBadgeLabel?: string;
   /** Requests the shared voice-onboarding dialog; `onReady` fires once a voice is selected/downloaded. */
   onNeedsVoiceOnboarding: (onReady: () => void) => void;
 }
 
-export function TtsPlayer({ text, source, pageNumber, onNeedsVoiceOnboarding }: TtsPlayerProps) {
+export function TtsPlayer({
+  text,
+  source,
+  pageNumber,
+  aiBadgeLabel,
+  onNeedsVoiceOnboarding,
+}: TtsPlayerProps) {
   const {
     isPlaying,
     isPaused,
@@ -84,11 +91,12 @@ export function TtsPlayer({ text, source, pageNumber, onNeedsVoiceOnboarding }: 
 
   const languageLabel = useMemo(() => getLanguageEnglishName(outputLanguage), [outputLanguage]);
 
-  if (!text) {
+  if (!text && !isTransitioningToThisPage) {
     return null;
   }
 
   const handlePlayToggle = () => {
+    if (!text) return;
     if (isCurrentActive) {
       if (isPaused) {
         resume();
@@ -152,7 +160,7 @@ export function TtsPlayer({ text, source, pageNumber, onNeedsVoiceOnboarding }: 
                     : `Read Page ${pageNumber}`}
               </span>
               <span className="text-[10px] text-muted-foreground uppercase tracking-wider bg-surface-2 px-1.5 py-0.5 rounded">
-                {source === "ai" ? "AI Summary" : "Original Text"}
+                {source === "ai" ? aiBadgeLabel || "AI Content" : "Original Text"}
               </span>
             </h4>
             {isCurrentActive && activeSentenceText && (
