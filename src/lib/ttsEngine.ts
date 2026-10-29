@@ -20,31 +20,36 @@ export function clearOnnxModelBufferCache(): void {
 /**
  * Iterates over all cached ONNX sessions and raw model buffers, releases them to
  * reclaim WASM heap and browser memory, and clears the caches.
+ * Chained behind inferenceChain so an active inference is never abruptly released mid-run.
  */
-export async function clearTtsSessionCache() {
-  for (const session of ONNX_SESSION_CACHE.values()) {
-    try {
-      if (session && typeof session.release === "function") {
-        await session.release();
+export async function clearTtsSessionCache(): Promise<void> {
+  const cleanup = async () => {
+    for (const session of ONNX_SESSION_CACHE.values()) {
+      try {
+        if (session && typeof session.release === "function") {
+          await session.release();
+        }
+      } catch (e) {
+        console.warn("[TTS] Failed to release ONNX InferenceSession:", e);
       }
-    } catch (e) {
-      console.warn("[TTS] Failed to release ONNX InferenceSession:", e);
     }
-  }
-  ONNX_SESSION_CACHE.clear();
-  clearOnnxModelBufferCache();
+    ONNX_SESSION_CACHE.clear();
+    clearOnnxModelBufferCache();
+  };
+
+  inferenceChain = inferenceChain.then(cleanup, cleanup);
+  return inferenceChain;
 }
 
 /** Mutex chain ensuring ONNX inference calls are strictly serialized */
 let inferenceChain: Promise<any> = Promise.resolve();
 
 /**
- * Resets the inference chain mutex to an immediately resolved promise.
- * Called when stopping, navigating pages, or switching voices to prevent new
- * syntheses from waiting behind abandoned ghost tasks.
+ * Ensures the inference chain mutex is unblocked from prior rejections
+ * without breaking serialization so new syntheses never run concurrently in WASM.
  */
 export function resetInferenceChain(): void {
-  inferenceChain = Promise.resolve();
+  inferenceChain = inferenceChain.catch(() => {});
 }
 
 /**

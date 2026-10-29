@@ -317,9 +317,6 @@ function HomePage() {
     stop,
     isNeuralLoading,
     availableVoices,
-    selectedVoiceUri,
-    setSelectedVoiceUri,
-    setOutputLanguage,
     activePageNumber,
     sentences,
     currentSentenceIndex,
@@ -333,39 +330,28 @@ function HomePage() {
   const isDemoPlaying = isPlaying && !isPaused && activePageNumber === 0;
   const isDemoLoading = isNeuralLoading && activePageNumber === 0;
   const isOriginalActive = isDemoRunning && currentTextSource === "original";
-  const activeLanguageLabel = isOriginalActive ? "English" : (SAMPLE_LANGUAGES[selectedLang]?.nativeName || "Hindi");
+  const activeLanguageLabel = isOriginalActive
+    ? "English"
+    : SAMPLE_LANGUAGES[selectedLang]?.nativeName || "Hindi";
   const activeSentenceText =
     isDemoRunning && sentences[currentSentenceIndex] ? sentences[currentSentenceIndex] : null;
-
-  // Keep outputLanguage in sync with selectedLang
-  useEffect(() => {
-    setOutputLanguage(selectedLang);
-  }, [selectedLang, setOutputLanguage]);
 
   // Find best voice for the currently selected sample language (prioritizing cached Piper neural voices)
   const currentDemoVoice = useMemo(() => {
     const langVoices = filterVoicesByLanguage(availableVoices, selectedLang);
     if (langVoices.length === 0) return null;
 
-    // 1. If currently selected voice is downloaded and matches this language, keep it
-    if (selectedVoiceUri) {
-      const match = langVoices.find((v) => v.voiceURI === selectedVoiceUri);
-      if (match && (match.isDownloaded || !match.isNeural)) {
-        return match;
-      }
-    }
-
-    // 2. Prioritize downloaded neural voice (e.g. cached Piper voice)
+    // 1. Prioritize downloaded neural voice (e.g. cached Piper voice)
     const downloadedNeural = langVoices.find((v) => v.isNeural && v.isDownloaded);
     if (downloadedNeural) return downloadedNeural;
 
-    // 3. Fallback to any neural voice for this language
+    // 2. Fallback to any neural voice for this language
     const anyNeural = langVoices.find((v) => v.isNeural);
     if (anyNeural) return anyNeural;
 
-    // 4. Fallback to first available voice for this language
+    // 3. Fallback to first available voice for this language
     return langVoices[0] || null;
-  }, [availableVoices, selectedLang, selectedVoiceUri]);
+  }, [availableVoices, selectedLang]);
 
   const isOfflineReady = Boolean(currentDemoVoice?.isDownloaded);
   const isNeuralVoice = Boolean(currentDemoVoice?.isNeural);
@@ -425,19 +411,10 @@ function HomePage() {
 
   const handleSelectLang = (key: string) => {
     if (selectedLang === key) return;
-    stop();
-    setSelectedLang(key);
-    setOutputLanguage(key);
-
-    // Pre-select best voice for this language so UI badges and player are ready
-    const langVoices = filterVoicesByLanguage(availableVoices, key);
-    const bestVoice =
-      langVoices.find((v) => v.isNeural && v.isDownloaded) ||
-      langVoices.find((v) => v.isNeural) ||
-      langVoices[0];
-    if (bestVoice) {
-      setSelectedVoiceUri(bestVoice.voiceURI);
+    if (isDemoRunning) {
+      stop();
     }
+    setSelectedLang(key);
   };
 
   const handleSelectStyle = (style: "natural" | "simplified") => {
@@ -472,27 +449,23 @@ function HomePage() {
         null;
     }
 
-    if (voiceToUse) {
-      setSelectedVoiceUri(voiceToUse.voiceURI);
-    }
-    setOutputLanguage(selectedLang);
-
     const textToPlay =
       readingStyle === "natural"
         ? currentSample.translatedExcerpt
         : currentSample.simplifiedExcerpt;
 
-    play(textToPlay, "ai", 0, 0);
+    play(textToPlay, "ai", 0, 0, {
+      voiceUri: voiceToUse?.voiceURI,
+      language: selectedLang,
+    });
   };
 
   // Clean up demo audio on unmount
   useEffect(() => {
     return () => {
-      if (activePageNumber === 0) {
-        stop();
-      }
+      stop();
     };
-  }, []);
+  }, [stop]);
 
   return (
     <SidebarLayout
@@ -530,7 +503,10 @@ function HomePage() {
         {/* ══════════════════════════════════════════════════════════════
             HERO SECTION: Value Proposition & Direct Document Upload
            ══════════════════════════════════════════════════════════════ */}
-        <section aria-label="Hero Introduction" className="space-y-10 text-center max-w-4xl mx-auto pt-2 sm:pt-6">
+        <section
+          aria-label="Hero Introduction"
+          className="space-y-10 text-center max-w-4xl mx-auto pt-2 sm:pt-6"
+        >
           {/* Subtle Badge */}
           <div className="inline-flex items-center gap-2 rounded-full border border-primary/25 bg-primary/10 px-4 py-1.5 text-xs font-semibold text-primary shadow-xs">
             <Sparkles className="h-3.5 w-3.5" />
@@ -545,7 +521,8 @@ function HomePage() {
             <p className="text-base sm:text-lg text-muted-foreground font-normal leading-relaxed max-w-2xl mx-auto">
               Anuwad is a privacy-first document workspace that opens books, curriculum textbooks,
               and academic research to everyone. Translate complex PDFs side-by-side, extract text
-              with local OCR, and listen with neural voices — without files ever leaving your device.
+              with local OCR, and listen with neural voices — without files ever leaving your
+              device.
             </p>
           </div>
 
@@ -570,8 +547,8 @@ function HomePage() {
                   Drop a PDF to start reading immediately
                 </h2>
                 <p className="text-xs sm:text-sm text-muted-foreground max-w-md mx-auto">
-                  Drag and drop any PDF here, or select a document from your device. Files stay
-                  100% private in local browser storage.
+                  Drag and drop any PDF here, or select a document from your device. Files stay 100%
+                  private in local browser storage.
                 </p>
               </div>
 
@@ -663,10 +640,10 @@ function HomePage() {
               </div>
               <h3 className="text-lg font-bold text-foreground">The Static PDF Trap</h3>
               <p className="text-xs sm:text-sm text-muted-foreground leading-relaxed">
-                PDFs were invented as digital print replicas, not interactive reading surfaces.
-                They fail responsive mobile layouts, resist screen readers, and image-based scans
-                are impossible to copy or search. Traditional readers leave the user stranded with
-                rigid pages.
+                PDFs were invented as digital print replicas, not interactive reading surfaces. They
+                fail responsive mobile layouts, resist screen readers, and image-based scans are
+                impossible to copy or search. Traditional readers leave the user stranded with rigid
+                pages.
               </p>
             </div>
 
@@ -718,8 +695,8 @@ function HomePage() {
                   In-Browser Canvas &amp; Client-Side OCR
                 </h3>
                 <p className="text-xs sm:text-sm text-muted-foreground leading-relaxed">
-                  The document is rendered locally on HTML5 Canvas using PDF.js. Anuwad inspects
-                  the text layer in real time. If the page is a photocopy, damaged, or scanned, our
+                  The document is rendered locally on HTML5 Canvas using PDF.js. Anuwad inspects the
+                  text layer in real time. If the page is a photocopy, damaged, or scanned, our
                   client-side Tesseract.js WebAssembly engine automatically extracts clean text.
                 </p>
               </div>
@@ -876,7 +853,8 @@ function HomePage() {
                     />
                   </div>
                   <p className="text-xs text-muted-foreground font-sans italic">
-                    Original text layer verified via PDF.js layout inspector. Click any sentence to listen.
+                    Original text layer verified via PDF.js layout inspector. Click any sentence to
+                    listen.
                   </p>
                 </div>
               </div>
@@ -945,9 +923,12 @@ function HomePage() {
 
                 <div>
                   <div className="flex items-center gap-2">
-                    <Volume2 className={`h-4 w-4 text-primary ${isDemoPlaying ? "animate-pulse" : ""}`} />
+                    <Volume2
+                      className={`h-4 w-4 text-primary ${isDemoPlaying ? "animate-pulse" : ""}`}
+                    />
                     <span className="text-xs font-bold text-foreground">
-                      {isNeuralVoice ? "Piper Neural Audio" : "Speech Synthesis"} · {activeLanguageLabel} Speech
+                      {isNeuralVoice ? "Piper Neural Audio" : "Speech Synthesis"} ·{" "}
+                      {activeLanguageLabel} Speech
                     </span>
                     {isDemoRunning && sentences.length > 0 && (
                       <span className="text-[10px] font-mono text-muted-foreground bg-surface px-1.5 py-0.5 rounded border border-border">
@@ -991,7 +972,10 @@ function HomePage() {
                       title="Adjust playback speed"
                     >
                       <Gauge className="h-3.5 w-3.5 text-primary" />
-                      <span>Speed: <strong className="text-primary font-bold">{rate.toFixed(1)}x</strong></span>
+                      <span>
+                        Speed:{" "}
+                        <strong className="text-primary font-bold">{rate.toFixed(1)}x</strong>
+                      </span>
                       <ChevronDown className="h-3 w-3 text-muted-foreground ml-0.5" />
                     </button>
                   </PopoverTrigger>
@@ -1132,8 +1116,8 @@ function HomePage() {
               <h3 className="text-base font-bold text-foreground">Client-Side OCR Engine</h3>
               <p className="text-xs sm:text-sm text-muted-foreground leading-relaxed">
                 Photocopied textbooks and scanned archival papers are handled seamlessly with
-                embedded Tesseract.js WebAssembly OCR, extracting clean digital text without third-party
-                APIs.
+                embedded Tesseract.js WebAssembly OCR, extracting clean digital text without
+                third-party APIs.
               </p>
             </div>
 
@@ -1169,9 +1153,9 @@ function HomePage() {
               </div>
               <h3 className="text-base font-bold text-foreground">Pre-Indexed NCERT Library</h3>
               <p className="text-xs sm:text-sm text-muted-foreground leading-relaxed">
-                Direct access to the official Indian national curriculum across Classes 1 through 12,
-                enabling millions of students to study STEM and humanities directly in their mother
-                tongue.
+                Direct access to the official Indian national curriculum across Classes 1 through
+                12, enabling millions of students to study STEM and humanities directly in their
+                mother tongue.
               </p>
             </div>
           </div>
@@ -1300,8 +1284,8 @@ function HomePage() {
                   </h3>
                   <p className="text-xs sm:text-sm text-muted-foreground leading-relaxed">
                     Explore curated, official NCERT curriculum textbooks across Science,
-                    Mathematics, History, Civics, Geography, and Economics. Read chapters instantly in
-                    vernacular languages.
+                    Mathematics, History, Civics, Geography, and Economics. Read chapters instantly
+                    in vernacular languages.
                   </p>
                 </div>
               </div>
@@ -1479,10 +1463,7 @@ function HomePage() {
                   </Link>
                 </li>
                 <li>
-                  <Link
-                    to="/settings/appearance"
-                    className="hover:text-primary transition-colors"
-                  >
+                  <Link to="/settings/appearance" className="hover:text-primary transition-colors">
                     Theme &amp; Appearance
                   </Link>
                 </li>

@@ -81,6 +81,11 @@ export function isNeuralVoiceUri(uri: string | null | undefined): boolean {
   return false;
 }
 
+export interface PlayOptions {
+  voiceUri?: string;
+  language?: string;
+}
+
 interface TtsContextType {
   isPlaying: boolean;
   isPaused: boolean;
@@ -97,7 +102,13 @@ interface TtsContextType {
   isNeuralLoading: boolean;
   isLoadingVoices: boolean;
   outputLanguage: string;
-  play: (text: string, source: TtsSource, pageNumber: number, startIndex?: number) => void;
+  play: (
+    text: string,
+    source: TtsSource,
+    pageNumber: number,
+    startIndex?: number,
+    options?: PlayOptions,
+  ) => void;
   pause: () => void;
   resume: () => void;
   stop: () => void;
@@ -246,6 +257,7 @@ async function getNeuralTtsEngine(): Promise<{ mod: any; catalog: any[] }> {
 
             const buf = await origArrayBuffer.call(this);
             (buf as any)._modelName = key;
+            ONNX_MODEL_BUFFER_CACHE.set(key, buf);
             return buf;
           }
           return origArrayBuffer.call(this);
@@ -261,19 +273,29 @@ async function getNeuralTtsEngine(): Promise<{ mod: any; catalog: any[] }> {
             return ONNX_SESSION_CACHE.get(modelName);
           }
 
+          let actualModel = model;
+          if (
+            model instanceof ArrayBuffer &&
+            model.byteLength === 16 &&
+            modelName &&
+            ONNX_MODEL_BUFFER_CACHE.has(modelName)
+          ) {
+            actualModel = ONNX_MODEL_BUFFER_CACHE.get(modelName);
+          }
+
           let cacheKey: string;
-          if (model instanceof ArrayBuffer) {
-            if (model.byteLength === 0 || (model as any).detached) {
+          if (actualModel instanceof ArrayBuffer) {
+            if (actualModel.byteLength === 0 || (actualModel as any).detached) {
               cacheKey = modelName || "detached";
             } else {
               try {
-                cacheKey = `${model.byteLength}-${new Uint8Array(model.slice(0, 100)).join(",")}`;
+                cacheKey = `${actualModel.byteLength}-${new Uint8Array(actualModel.slice(0, 100)).join(",")}`;
               } catch {
                 cacheKey = modelName || "fallback";
               }
             }
           } else {
-            cacheKey = String(model);
+            cacheKey = String(actualModel);
           }
 
           if (ONNX_SESSION_CACHE.has(cacheKey)) {
@@ -285,7 +307,7 @@ async function getNeuralTtsEngine(): Promise<{ mod: any; catalog: any[] }> {
             ort.env.wasm.numThreads = 1;
           } catch {}
 
-          const session = await ort.InferenceSession.originalCreate(model, options);
+          const session = await ort.InferenceSession.originalCreate(actualModel, options);
           if (modelName) {
             ONNX_SESSION_CACHE.set(modelName, session);
           }
@@ -406,6 +428,8 @@ export function TtsProvider({ children }: { children: React.ReactNode }) {
   const synthesisSessionIdRef = useRef<number>(0);
   const loadingIndexRef = useRef<number | null>(null);
   const preSynthesizedMapRef = useRef<Map<number, PreSynthesizedEntry>>(new Map());
+  const sessionVoiceUriRef = useRef<string | null>(null);
+  const sessionLanguageRef = useRef<string | null>(null);
 
   // Internal voice list updater
   const refreshVoicesInternal = useCallback(async (catalog: any[] = []): Promise<TtsVoice[]> => {
@@ -581,6 +605,9 @@ export function TtsProvider({ children }: { children: React.ReactNode }) {
     // Immediately reset serialized inference chain so new playback doesn't wait behind stale tasks
     resetInferenceChain();
 
+    sessionVoiceUriRef.current = null;
+    sessionLanguageRef.current = null;
+
     stopCurrentAudioElement(audioRef);
     if (activeAudioUrlRef.current) {
       try {
@@ -609,18 +636,17 @@ export function TtsProvider({ children }: { children: React.ReactNode }) {
   const processPreSynthesizeQueue = useCallback((currentIndex: number, sentenceList: string[]) => {
     if (!isPlayingRef.current) return;
     const currentSessionId = synthesisSessionIdRef.current;
-    const targetVoiceUri = selectedVoiceUriRef.current || localStorage.getItem(TTS_VOICE_URI_LS);
+    const targetVoiceUri =
+      sessionVoiceUriRef.current ||
+      selectedVoiceUriRef.current ||
+      localStorage.getItem(TTS_VOICE_URI_LS);
     const targetLang =
-      currentTextSourceRef.current === "original"
-        ? "en"
-        : outputLanguageRef.current;
+      sessionLanguageRef.current ||
+      (currentTextSourceRef.current === "original" ? "en" : outputLanguageRef.current);
 
     let voice = availableVoicesRef.current.find((v) => v.voiceURI === targetVoiceUri);
     if (voice && targetLang) {
-      const matching = filterVoicesByLanguage(
-        availableVoicesRef.current,
-        targetLang,
-      );
+      const matching = filterVoicesByLanguage(availableVoicesRef.current, targetLang);
       const currentUri = voice.voiceURI;
       if (!matching.some((v) => v.voiceURI === currentUri) && matching.length > 0) {
         voice =
@@ -630,10 +656,7 @@ export function TtsProvider({ children }: { children: React.ReactNode }) {
       }
     }
     if (!voice) {
-      const matching = filterVoicesByLanguage(
-        availableVoicesRef.current,
-        targetLang || "en",
-      );
+      const matching = filterVoicesByLanguage(availableVoicesRef.current, targetLang || "en");
       voice =
         matching.find((v) => v.isNeural && v.isDownloaded) ||
         matching.find((v) => v.isNeural) ||
@@ -746,7 +769,11 @@ export function TtsProvider({ children }: { children: React.ReactNode }) {
 
       if (index < 0 || index >= sentenceList.length) {
         stopCurrentAudioElement(audioRef);
-        if (continuousPlay && activePageNumberRef.current !== null && activePageNumberRef.current > 0) {
+        if (
+          continuousPlay &&
+          activePageNumberRef.current !== null &&
+          activePageNumberRef.current > 0
+        ) {
           dispatchDocEvent("doclens:tts-next-page", {
             currentPage: activePageNumberRef.current,
             source: currentTextSourceRef.current,
@@ -773,20 +800,19 @@ export function TtsProvider({ children }: { children: React.ReactNode }) {
       }
 
       // Determine active voice to use
-      const targetVoiceUri = selectedVoiceUriRef.current || localStorage.getItem(TTS_VOICE_URI_LS);
+      const targetVoiceUri =
+        sessionVoiceUriRef.current ||
+        selectedVoiceUriRef.current ||
+        localStorage.getItem(TTS_VOICE_URI_LS);
       let voice = availableVoicesRef.current.find((v) => v.voiceURI === targetVoiceUri);
 
       const targetLang =
-        currentTextSourceRef.current === "original"
-          ? "en"
-          : outputLanguageRef.current;
+        sessionLanguageRef.current ||
+        (currentTextSourceRef.current === "original" ? "en" : outputLanguageRef.current);
 
       // If a voice was found but targetLang is set, verify the voice matches the language
       if (voice && targetLang) {
-        const langVoices = filterVoicesByLanguage(
-          availableVoicesRef.current,
-          targetLang,
-        );
+        const langVoices = filterVoicesByLanguage(availableVoicesRef.current, targetLang);
         const currentUri = voice.voiceURI;
         const matchesLang = langVoices.some((v) => v.voiceURI === currentUri);
         if (!matchesLang && langVoices.length > 0) {
@@ -794,25 +820,16 @@ export function TtsProvider({ children }: { children: React.ReactNode }) {
             langVoices.find((v) => v.isNeural && v.isDownloaded) ||
             langVoices.find((v) => v.isNeural) ||
             langVoices[0];
-          if (voice) {
-            setSelectedVoiceUri(voice.voiceURI);
-          }
         }
       }
 
       if (!voice) {
-        const langVoices = filterVoicesByLanguage(
-          availableVoicesRef.current,
-          targetLang || "en",
-        );
+        const langVoices = filterVoicesByLanguage(availableVoicesRef.current, targetLang || "en");
         voice =
           langVoices.find((v) => v.isNeural && v.isDownloaded) ||
           langVoices.find((v) => v.isNeural) ||
           langVoices[0] ||
           availableVoicesRef.current[0];
-        if (voice && !targetVoiceUri) {
-          setSelectedVoiceUri(voice.voiceURI);
-        }
       }
 
       const isNeural = Boolean(
@@ -878,8 +895,13 @@ export function TtsProvider({ children }: { children: React.ReactNode }) {
         if (!isPausedRef.current && isPlayingRef.current) {
           const p = audio.play();
           if (p !== undefined) {
-            p.catch((e) => {
+            p.catch((e: any) => {
               console.error("Audio play failed:", e);
+              if (e?.name === "NotAllowedError") {
+                toast.error("Audio playback was blocked by browser. Click Play to listen.");
+                setIsPlaying(false);
+                setIsPaused(false);
+              }
             });
           }
         }
@@ -1094,13 +1116,22 @@ export function TtsProvider({ children }: { children: React.ReactNode }) {
 
   // Public play control
   const play = useCallback(
-    (text: string, source: TtsSource, pageNumber: number, startIndex: number = 0) => {
+    (
+      text: string,
+      source: TtsSource,
+      pageNumber: number,
+      startIndex: number = 0,
+      options?: PlayOptions,
+    ) => {
       if (typeof window !== "undefined" && window.speechSynthesis) {
         try {
           window.speechSynthesis.cancel();
         } catch {}
       }
       cleanupAudio();
+
+      sessionVoiceUriRef.current = options?.voiceUri || null;
+      sessionLanguageRef.current = options?.language || null;
 
       const list = splitSentences(text);
       if (list.length === 0) return;
@@ -1111,19 +1142,20 @@ export function TtsProvider({ children }: { children: React.ReactNode }) {
       setIsPlaying(true);
       setIsPaused(false);
 
-      const targetVoiceUri = selectedVoiceUriRef.current || localStorage.getItem(TTS_VOICE_URI_LS);
-      const targetLang = source === "original" ? "en" : outputLanguageRef.current;
-      const langVoices = filterVoicesByLanguage(
-        availableVoicesRef.current,
-        targetLang || "en",
-      );
+      const targetVoiceUri =
+        options?.voiceUri || selectedVoiceUriRef.current || localStorage.getItem(TTS_VOICE_URI_LS);
+      const targetLang =
+        options?.language || (source === "original" ? "en" : outputLanguageRef.current);
+      const langVoices = filterVoicesByLanguage(availableVoicesRef.current, targetLang || "en");
       const matchingVoice = langVoices.find((v) => v.voiceURI === targetVoiceUri);
       const effectiveVoice =
         matchingVoice ||
         langVoices.find((v) => v.isNeural && v.isDownloaded) ||
         langVoices.find((v) => v.isNeural) ||
         langVoices[0];
-      const isTargetNeural = effectiveVoice ? Boolean(effectiveVoice.isNeural) : isNeuralVoiceUri(targetVoiceUri);
+      const isTargetNeural = effectiveVoice
+        ? Boolean(effectiveVoice.isNeural)
+        : isNeuralVoiceUri(targetVoiceUri);
 
       // If neural engine is needed or not loaded yet, ensure it is initialized then play
       if (isTargetNeural && !ttsRef.current) {
@@ -1179,9 +1211,6 @@ export function TtsProvider({ children }: { children: React.ReactNode }) {
     if (typeof window !== "undefined" && window.speechSynthesis) {
       window.speechSynthesis.cancel();
     }
-    // Release ONNX sessions to immediately reclaim WASM memory when playback is stopped
-    resetInferenceChain();
-    void clearTtsSessionCache();
     setIsPlaying(false);
     setIsPaused(false);
     setSentences([]);
@@ -1254,7 +1283,6 @@ export function TtsProvider({ children }: { children: React.ReactNode }) {
         window.speechSynthesis.cancel();
       }
       // Release ONNX sessions to reclaim memory when the component is unmounted
-      resetInferenceChain();
       void clearTtsSessionCache();
     };
   }, [cleanupAudio]);
@@ -1267,10 +1295,6 @@ export function TtsProvider({ children }: { children: React.ReactNode }) {
     if (selectedVoiceUri !== lastVoiceUriRef.current) {
       const oldVoice = lastVoiceUriRef.current;
       lastVoiceUriRef.current = selectedVoiceUri;
-
-      // Release cached ONNX sessions when selected voice changes to prevent holding multiple voices in memory
-      resetInferenceChain();
-      void clearTtsSessionCache();
 
       if (isPlayingRef.current && oldVoice && selectedVoiceUri) {
         cleanupAudio();

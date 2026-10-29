@@ -74,7 +74,11 @@ export function useAiTabAutoPlay({
   // 1. Page transition auto-advance playback handler for already translated pages
   useEffect(() => {
     const isPendingTransition =
-      isPlaying && continuousPlay && activePageNumber !== null && activePageNumber !== activePage;
+      isPlaying &&
+      continuousPlay &&
+      activePageNumber !== null &&
+      activePageNumber > 0 &&
+      activePageNumber !== activePage;
 
     if (!isPendingTransition) return;
 

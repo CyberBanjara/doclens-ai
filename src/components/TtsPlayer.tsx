@@ -57,7 +57,11 @@ export function TtsPlayer({ text, source, pageNumber, onNeedsVoiceOnboarding }: 
     isPlaying && currentTextSource === source && activePageNumber === pageNumber;
 
   const isTransitioningToThisPage =
-    isPlaying && continuousPlay && activePageNumber !== null && activePageNumber !== pageNumber;
+    isPlaying &&
+    continuousPlay &&
+    activePageNumber !== null &&
+    activePageNumber > 0 &&
+    activePageNumber !== pageNumber;
 
   const progressPercent = useMemo(() => {
     if (!isCurrentActive || sentences.length === 0) return 0;
