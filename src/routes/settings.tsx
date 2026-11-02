@@ -2,43 +2,34 @@ import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useEffect, useMemo, useState } from "react";
 import { SidebarLayout } from "@/components/SidebarLayout";
 import {
-  fetchModels,
   getKeyStatus,
   readEffectiveGlobals,
   readGlobals,
   setMode as saveMode,
   setOutputLanguage,
   setSelectedModel,
+  getSelectedModel,
   setStyle as saveStyle,
   setTemperature,
   validateKey,
-  EXPLANATION_STYLES,
-  TRANSLATION_STYLES,
   getCustomKey,
   setCustomKey,
   getAiProvider,
   setAiProvider,
   isOmniRouterConfigured,
-  fetchOmniRouterModels,
   validateOmniRouterConnection,
-  getOmniSelectedModel,
-  setOmniSelectedModel,
-  getOmniDefaultModelSync,
-  fetchOllamaModels,
-  validateOllamaConnection,
-  getOllamaEndpoint,
-  setOllamaEndpoint,
-  getOllamaSelectedModel,
-  setOllamaSelectedModel,
   getOutputLanguage,
   getStyle,
-  type ExplanationStyle,
-  type TranslationStyle,
   type ProcessingStyle,
   type GlobalMode,
-  type ORModel,
   type AiProvider,
 } from "@/lib/openrouter";
+import {
+  getOmniRouterBaseUrl,
+  setOmniRouterBaseUrl,
+  getOmniSelectedModel,
+  setOmniSelectedModel,
+} from "@/lib/omnirouter";
 import { createDoc, StorageError } from "@/lib/storage";
 import { toast } from "sonner";
 import { clearAllVoiceCache, isOpfsSupported } from "@/lib/voiceCache";
@@ -51,8 +42,7 @@ import { OutputLanguageSection } from "@/components/settings/OutputLanguageSecti
 import { VoiceCacheManagerSection } from "@/components/settings/VoiceCacheManagerSection";
 import { ApiKeySection } from "@/components/settings/ApiKeySection";
 import { OmniRouterStatusSection } from "@/components/settings/OmniRouterStatusSection";
-import { OllamaStatusSection } from "@/components/settings/OllamaStatusSection";
-import { ModelSelectionSection } from "@/components/settings/ModelSelectionSection";
+import { ProviderModelSelectorModal } from "@/components/settings/ProviderModelSelectorModal";
 import { StorageManagerSection } from "@/components/settings/StorageManagerSection";
 import { ThemeSelectionModal } from "@/components/settings/ThemeSelectionModal";
 import { getTheme, LIGHT_THEMES, DARK_THEMES } from "@/lib/theme";
@@ -66,12 +56,12 @@ export const Route = createFileRoute("/settings")({
       {
         name: "description",
         content:
-          "Configure Anuwad's AI translation model, output language, explanation style, and API key — all stored locally in your browser.",
+          "Configure Anuwad's AI translation preferences, output language, voice cache, and optional custom endpoints.",
       },
       { property: "og:title", content: "Anuwad — General Settings" },
       {
         property: "og:description",
-        content: "Configure Anuwad's AI translation model, output language, and API key.",
+        content: "Configure Anuwad's AI translation preferences, output language, and optional custom endpoints.",
       },
       { property: "og:url", content: "https://www.anuwad.com/settings" },
       { property: "og:type", content: "website" },
@@ -80,65 +70,33 @@ export const Route = createFileRoute("/settings")({
   }),
 });
 
-type FilterTab = "free" | "popular" | "all";
-
-const POPULAR_RX =
-  /gpt-4o|gpt-4\.1|gpt-5|o1|o3|claude-3|claude-3\.5|claude-sonnet|claude-opus|claude-haiku|gemini-1\.5|gemini-2|llama-3|llama-4|deepseek|mistral-large|grok|qwen/i;
-
-/** Filter to text-input → text-output models only. */
-function isTextToText(m: ORModel): boolean {
-  const arch = (m as any).architecture;
-  if (arch && Array.isArray(arch.input_modalities) && Array.isArray(arch.output_modalities)) {
-    const inputs: string[] = arch.input_modalities;
-    const outputs: string[] = arch.output_modalities;
-    const inOk = inputs.includes("text") && !inputs.some((m) => m !== "text" && m !== "file");
-    const outOk = outputs.length === 1 && outputs[0] === "text";
-    return inOk && outOk;
-  }
-  // Fallback: exclude obvious non-text models by id pattern
-  const id = (m.id ?? "").toLowerCase();
-  if (/(image|vision|tts|audio|whisper|dall-e|sora|video|embed|moderation|rerank)/.test(id))
-    return false;
-  return true;
-}
-
 function SettingsPage() {
   const navigate = useNavigate();
 
-  const isOmniConfigured = useMemo(() => isOmniRouterConfigured(), []);
-  const [provider, setProvider] = useState<AiProvider>("openrouter");
+  // Provider & key states
+  const [provider, setProvider] = useState<AiProvider>(() => getAiProvider());
   const [keyStatus, setKeyStatus] = useState<
     "unknown" | "missing" | "valid" | "invalid" | "checking"
   >("unknown");
   const [customKey, setCustomKeyInput] = useState("");
-  const [models, setModels] = useState<ORModel[]>([]);
-  const [loadingModels, setLoadingModels] = useState(false);
-  const [modelError, setModelError] = useState("");
-  const [selected, setSelected] = useState("");
 
   // OmniRouter state
-  const [omniModels, setOmniModels] = useState<ORModel[]>([]);
+  const [omniEndpoint, setOmniEndpoint] = useState(() => getOmniRouterBaseUrl() || "");
   const [loadingOmni, setLoadingOmni] = useState(false);
   const [omniStatus, setOmniStatus] = useState<"connected" | "disconnected" | "checking">(
     "checking",
   );
   const [omniError, setOmniError] = useState("");
-  const [omniSelected, setOmniSelected] = useState("");
 
-  // Ollama state
-  const [ollamaEndpoint, setOllamaEndpointState] = useState(() => getOllamaEndpoint());
-  const [ollamaModels, setOllamaModels] = useState<ORModel[]>([]);
-  const [loadingOllama, setLoadingOllama] = useState(false);
-  const [ollamaStatus, setOllamaStatus] = useState<"connected" | "disconnected" | "checking">(
-    "checking",
-  );
-  const [ollamaError, setOllamaError] = useState("");
-  const [ollamaSelected, setOllamaSelected] = useState("");
+  // Model selection states
+  const [selectedOpenRouterModel, setSelectedOpenRouterModel] = useState(() => getSelectedModel() || "");
+  const [selectedOmniModel, setSelectedOmniModel] = useState(() => getOmniSelectedModel() || "");
+  const [isModelSelectorOpen, setIsModelSelectorOpen] = useState(false);
+  const [activeSelectorProvider, setActiveSelectorProvider] = useState<"openrouter" | "omnirouter">("openrouter");
 
+  // General defaults
   const [language, setLanguage] = useState(() => getOutputLanguage() || "");
   const [customLang, setCustomLang] = useState("");
-  const [search, setSearch] = useState("");
-  const [tab, setTab] = useState<FilterTab>("free");
   const [mode, setModeState] = useState<GlobalMode>("explain");
   const [style, setStyleState] = useState<ProcessingStyle>(
     () => (getStyle() as ProcessingStyle) || ("" as any),
@@ -154,13 +112,13 @@ function SettingsPage() {
     const found = [...LIGHT_THEMES, ...DARK_THEMES].find((t) => t.id === currentTheme);
     return found ? found.label : currentTheme.charAt(0).toUpperCase() + currentTheme.slice(1);
   }, [currentTheme]);
+
   const {
     allNeuralVoices,
     setOutputLanguage: setTtsLanguage,
     downloadVoice: downloadTtsVoice,
     deleteVoice: deleteTtsVoice,
     refreshVoices: refreshTtsVoices,
-    availableVoices,
   } = useTts();
 
   // Neural voices filtered by selected language for the Voice Manager
@@ -212,26 +170,20 @@ function SettingsPage() {
     }
   };
 
-  const loadOmniModels = async () => {
-    if (!isOmniRouterConfigured()) return;
+  const loadOmniModels = async (targetBaseUrl?: string) => {
+    const ep = targetBaseUrl !== undefined ? targetBaseUrl : (omniEndpoint || getOmniRouterBaseUrl());
+    if (!ep) {
+      setOmniStatus("disconnected");
+      setOmniError("");
+      return;
+    }
     setLoadingOmni(true);
     setOmniError("");
     setOmniStatus("checking");
     try {
-      const res = await validateOmniRouterConnection();
+      const res = await validateOmniRouterConnection(ep);
       if (res.ok) {
         setOmniStatus("connected");
-        const m = await fetchOmniRouterModels();
-        setOmniModels(m);
-        const stored = getOmniSelectedModel();
-        if (stored) {
-          setOmniSelected(stored);
-        } else if (m.length > 0) {
-          const def = getOmniDefaultModelSync();
-          const chosen = def && m.some((x) => x.id === def) ? def : m[0].id;
-          setOmniSelected(chosen);
-          setOmniSelectedModel(chosen);
-        }
       } else {
         setOmniStatus("disconnected");
         setOmniError(res.error || "Could not connect to OmniRouter.");
@@ -244,101 +196,96 @@ function SettingsPage() {
     }
   };
 
-  const loadOllamaModels = async (targetEndpoint?: string) => {
-    const ep = targetEndpoint || ollamaEndpoint || getOllamaEndpoint();
-    setLoadingOllama(true);
-    setOllamaError("");
-    setOllamaStatus("checking");
-    try {
-      const res = await validateOllamaConnection(ep);
-      if (res.ok) {
-        setOllamaStatus("connected");
-        const m = res.models && res.models.length > 0 ? res.models : await fetchOllamaModels(ep);
-        setOllamaModels(m);
-        const stored = getOllamaSelectedModel();
-        if (stored) {
-          setOllamaSelected(stored);
-        } else if (m.length > 0) {
-          const chosen = m[0].id;
-          setOllamaSelected(chosen);
-          setOllamaSelectedModel(chosen);
-        }
-      } else {
-        setOllamaStatus("disconnected");
-        setOllamaError(res.error || "Could not connect to Ollama.");
-      }
-    } catch (e) {
-      setOllamaStatus("disconnected");
-      setOllamaError(getFriendlyErrorMessage(e, "Connection test failed"));
-    } finally {
-      setLoadingOllama(false);
-    }
-  };
-
-  useEffect(() => {
-    const globals = readGlobals();
-    setProvider(globals.provider ?? "openrouter");
-    setSelected(globals.modelId);
-    setOmniSelected(globals.omniModelId || getOmniSelectedModel() || getOmniDefaultModelSync());
-    setOllamaEndpointState(globals.ollamaEndpoint || getOllamaEndpoint());
-    setOllamaSelected(globals.ollamaModelId || getOllamaSelectedModel());
-    void readEffectiveGlobals().then((eff) => {
-      if (!globals.modelId) setSelected(eff.modelId);
-    });
-    setLanguage(globals.language);
-    setModeState(globals.mode);
-    setStyleState(globals.style as ProcessingStyle);
-    setTemp(globals.temperature);
-    const savedKey = getCustomKey();
-    setCustomKeyInput(savedKey);
-    void loadModels();
-    void handleValidate(savedKey);
-    if (globals.provider === "omnirouter" && isOmniConfigured) {
-      void loadOmniModels();
-    }
-    if (globals.provider === "ollama") {
-      void loadOllamaModels(globals.ollamaEndpoint || getOllamaEndpoint());
-    }
-    void refreshTtsVoices(true);
-  }, [refreshTtsVoices, isOmniConfigured]);
-
-  const loadModels = async () => {
-    setLoadingModels(true);
-    setModelError("");
-    try {
-      const m = await fetchModels();
-      setModels(m);
-    } catch (e) {
-      setModelError(getFriendlyErrorMessage(e, "Failed to load models"));
-    } finally {
-      setLoadingModels(false);
-    }
-  };
-
   const handleValidate = async (keyToValidate?: string) => {
-    setKeyStatus("checking");
     const targetKey = keyToValidate !== undefined ? keyToValidate : customKey;
+    if (!targetKey.trim()) {
+      setKeyStatus("missing");
+      return;
+    }
+    setKeyStatus("checking");
     setCustomKey(targetKey);
     const ok = await validateKey(targetKey);
     if (ok) {
       setKeyStatus("valid");
-      void loadModels();
     } else {
       const nextStatus = getKeyStatus();
       setKeyStatus(nextStatus === "invalid" ? "invalid" : "missing");
     }
   };
 
-  const handleSelectModel = (id: string) => {
-    if (provider === "ollama") {
-      setOllamaSelected(id);
-      setOllamaSelectedModel(id);
-    } else if (provider === "omnirouter") {
-      setOmniSelected(id);
-      setOmniSelectedModel(id);
+  useEffect(() => {
+    const globals = readGlobals();
+    setProvider(globals.provider ?? getAiProvider());
+    setLanguage(globals.language);
+    setModeState(globals.mode);
+    setStyleState(globals.style as ProcessingStyle);
+    setTemp(globals.temperature);
+    setSelectedOpenRouterModel(globals.modelId || getSelectedModel() || "");
+    setSelectedOmniModel(globals.omniModelId || getOmniSelectedModel() || "");
+
+    const savedKey = getCustomKey();
+    setCustomKeyInput(savedKey);
+    if (savedKey) {
+      void handleValidate(savedKey);
     } else {
-      setSelected(id);
-      setSelectedModel(id);
+      setKeyStatus("missing");
+    }
+
+    const savedOmni = getOmniRouterBaseUrl();
+    setOmniEndpoint(savedOmni || "");
+    if (savedOmni) {
+      void loadOmniModels(savedOmni);
+    } else {
+      setOmniStatus("disconnected");
+    }
+
+    void refreshTtsVoices(true);
+
+    const handleGlobalsChange = (e: Event) => {
+      const customEvt = e as CustomEvent<{ provider?: AiProvider }>;
+      if (customEvt.detail?.provider) {
+        setProvider(customEvt.detail.provider);
+      } else {
+        setProvider(getAiProvider());
+      }
+    };
+    window.addEventListener("doclens:globals-changed", handleGlobalsChange);
+    return () => {
+      window.removeEventListener("doclens:globals-changed", handleGlobalsChange);
+    };
+  }, [refreshTtsVoices]);
+
+  const handleToggleOpenRouter = () => {
+    const isConfigured = Boolean(customKey.trim() && keyStatus === "valid");
+    if (!isConfigured) {
+      toast.error("Please enter and verify a valid OpenRouter API key first.");
+      return;
+    }
+    if (provider === "openrouter") {
+      setProvider("managed");
+      setAiProvider("managed");
+      toast.info("OpenRouter turned OFF. Reverted to Managed AI (Default).");
+    } else {
+      setProvider("openrouter");
+      setAiProvider("openrouter");
+      toast.success("Personal OpenRouter turned ON.");
+    }
+  };
+
+  const handleToggleOmniRouter = () => {
+    const isConfigured = Boolean(omniEndpoint.trim() && omniStatus === "connected");
+    if (!isConfigured) {
+      toast.error("Please enter and connect to a working OmniRouter endpoint first.");
+      return;
+    }
+    if (provider === "omnirouter") {
+      setProvider("managed");
+      setAiProvider("managed");
+      toast.info("OmniRouter turned OFF. Reverted to Managed AI (Default).");
+    } else {
+      setProvider("omnirouter");
+      setAiProvider("omnirouter");
+      toast.success("OmniRouter turned ON.");
     }
   };
 
@@ -375,40 +322,6 @@ function SettingsPage() {
     }
   };
 
-  const activeModelList =
-    provider === "ollama" ? ollamaModels : provider === "omnirouter" ? omniModels : models;
-
-  const filtered = useMemo(() => {
-    const q = search.trim().toLowerCase();
-    // 1) text→text only across all tabs
-    let list = activeModelList.filter(isTextToText);
-    if (q)
-      list = list.filter(
-        (m) => m.id.toLowerCase().includes(q) || m.name?.toLowerCase().includes(q),
-      );
-    if (tab === "free") {
-      list = list.filter(
-        (m) =>
-          parseFloat(m.pricing?.prompt ?? "0") === 0 &&
-          parseFloat(m.pricing?.completion ?? "0") === 0,
-      );
-    } else if (tab === "popular") {
-      list = list.filter((m) => POPULAR_RX.test(m.id));
-    }
-    return list.slice(0, 200);
-  }, [activeModelList, search, tab]);
-
-  const openRouterStatus: "connected" | "disconnected" | "checking" =
-    keyStatus === "valid" || (keyStatus !== "invalid" && models.length > 0)
-      ? "connected"
-      : keyStatus === "checking" || loadingModels
-        ? "checking"
-        : keyStatus === "invalid"
-          ? "disconnected"
-          : models.length > 0
-            ? "connected"
-            : "disconnected";
-
   return (
     <SidebarLayout
       pageTitle="Anuwad"
@@ -434,11 +347,12 @@ function SettingsPage() {
               General Settings
             </h3>
             <p className="mt-1 text-xs sm:text-sm text-muted-foreground">
-              Manage your preferences, translation models, cache, and workspace themes.
+              Manage your translation preferences, languages, voice cache, and optional custom endpoints.
             </p>
           </div>
           <button
             type="button"
+            id="open-theme-selection-modal"
             onClick={() => setThemeModalOpen(true)}
             className="flex items-center gap-2.5 self-start sm:self-auto rounded-xl border border-border bg-surface-2/70 px-4 py-2.5 text-sm font-semibold text-foreground transition-all duration-200 hover:bg-surface-2 hover:border-border-strong hover:shadow-md active:scale-95 cursor-pointer shadow-xs"
           >
@@ -452,19 +366,6 @@ function SettingsPage() {
 
         {/* Row 1: AI Pipeline Defaults (full width) at the top */}
         <AiPipelineDefaultsSection
-          provider={provider}
-          onProviderChange={(p) => {
-            setProvider(p);
-            setAiProvider(p);
-            if (p === "ollama") {
-              void loadOllamaModels();
-            } else if (p === "omnirouter") {
-              void loadOmniModels();
-            }
-          }}
-          openRouterStatus={openRouterStatus}
-          omniStatus={omniStatus}
-          ollamaStatus={ollamaStatus}
           mode={mode}
           onModeChange={(v) => {
             setModeState(v);
@@ -508,89 +409,92 @@ function SettingsPage() {
           />
         </div>
 
-        {/* Row 3: Provider Gateway/API Key Management + Model Selection (50/50 Split) */}
-        <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
-          {provider === "ollama" ? (
-            <OllamaStatusSection
-              status={ollamaStatus}
-              modelCount={ollamaModels.length}
-              error={ollamaError}
-              onRefresh={(ep) => loadOllamaModels(ep)}
-              selectedModel={ollamaSelected}
-              onSelectModel={handleSelectModel}
-              models={ollamaModels}
-              endpoint={ollamaEndpoint}
-              onEndpointChange={(ep) => {
-                setOllamaEndpointState(ep);
-              }}
-            />
-          ) : provider === "omnirouter" ? (
-            <OmniRouterStatusSection
-              status={omniStatus}
-              modelCount={omniModels.length}
-              error={omniError}
-              onRefresh={loadOmniModels}
-              selectedModel={omniSelected}
-              onSelectModel={handleSelectModel}
-              models={omniModels}
-            />
-          ) : (
+        {/* Row 3: Optional Custom AI Providers (Side by Side) */}
+        <div className="space-y-3.5">
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
+            <div>
+              <h3 className="text-base font-bold tracking-tight text-foreground">
+                Optional AI Providers
+              </h3>
+              <p className="text-xs text-muted-foreground mt-0.5">
+                Managed AI is active by default. You can optionally connect your own personal OpenRouter key or OmniRouter endpoint below.
+              </p>
+            </div>
+            <div className="flex items-center gap-2">
+              <span className="text-xs text-muted-foreground">Active Engine:</span>
+              <span
+                id="active-ai-provider-badge"
+                className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-xs font-semibold ${
+                  provider === "openrouter"
+                    ? "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20"
+                    : provider === "omnirouter"
+                      ? "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20"
+                      : "bg-primary/10 text-primary border border-primary/20"
+                }`}
+              >
+                <span className="h-1.5 w-1.5 rounded-full bg-current" />
+                {provider === "openrouter"
+                  ? "OpenRouter (Personal)"
+                  : provider === "omnirouter"
+                    ? "OmniRouter (Custom)"
+                    : "Managed AI (Default)"}
+              </span>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
             <ApiKeySection
               customKey={customKey}
               onCustomKeyChange={setCustomKeyInput}
               keyStatus={keyStatus}
               onValidate={() => handleValidate()}
+              isActive={provider === "openrouter"}
+              onToggle={handleToggleOpenRouter}
+              selectedModel={selectedOpenRouterModel}
+              onOpenModelSelector={() => {
+                setActiveSelectorProvider("openrouter");
+                setIsModelSelectorOpen(true);
+              }}
             />
-          )}
 
-          <ModelSelectionSection
-            search={search}
-            onSearchChange={setSearch}
-            keyStatus={
-              provider === "ollama"
-                ? ollamaStatus === "connected"
-                  ? "valid"
-                  : ollamaStatus === "checking"
-                    ? "checking"
-                    : "invalid"
-                : provider === "omnirouter"
-                  ? omniStatus === "connected"
-                    ? "valid"
-                    : omniStatus === "checking"
-                      ? "checking"
-                      : "invalid"
-                  : keyStatus
-            }
-            tab={tab}
-            onTabChange={setTab}
-            loadingModels={
-              provider === "ollama"
-                ? loadingOllama
-                : provider === "omnirouter"
-                  ? loadingOmni
-                  : loadingModels
-            }
-            modelError={
-              provider === "ollama"
-                ? ollamaError
-                : provider === "omnirouter"
-                  ? omniError
-                  : modelError
-            }
-            filtered={filtered}
-            selected={
-              provider === "ollama"
-                ? ollamaSelected
-                : provider === "omnirouter"
-                  ? omniSelected
-                  : selected
-            }
-            onSelectModel={handleSelectModel}
-          />
+            <OmniRouterStatusSection
+              status={omniStatus}
+              error={omniError}
+              onRefresh={(baseUrl) => loadOmniModels(baseUrl)}
+              endpoint={omniEndpoint}
+              onEndpointChange={(ep) => setOmniEndpoint(ep)}
+              isActive={provider === "omnirouter"}
+              onToggle={handleToggleOmniRouter}
+              selectedModel={selectedOmniModel}
+              onOpenModelSelector={() => {
+                setActiveSelectorProvider("omnirouter");
+                setIsModelSelectorOpen(true);
+              }}
+            />
+          </div>
         </div>
 
         {/* Row 4: Storage Management & Reset */}
         <StorageManagerSection />
+
+        {/* Provider Model Selector Modal */}
+        <ProviderModelSelectorModal
+          open={isModelSelectorOpen}
+          onOpenChange={setIsModelSelectorOpen}
+          provider={activeSelectorProvider}
+          selectedModelId={activeSelectorProvider === "omnirouter" ? selectedOmniModel : selectedOpenRouterModel}
+          endpoint={omniEndpoint}
+          apiKey={activeSelectorProvider === "openrouter" ? customKey : undefined}
+          onSelectModel={(modelId) => {
+            if (activeSelectorProvider === "omnirouter") {
+              setSelectedOmniModel(modelId);
+              setOmniSelectedModel(modelId);
+            } else {
+              setSelectedOpenRouterModel(modelId);
+              setSelectedModel(modelId);
+            }
+          }}
+        />
 
         {/* Themes Selection Pop-up Modal */}
         <ThemeSelectionModal

@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 import {
   getKey,
+  getCustomKey,
   getAiProvider,
   setAiProvider,
   OpenRouterError,
@@ -10,6 +11,7 @@ import {
   isOmniRouterConfigured,
   OmniRouterError,
   extractStreamingTranslation,
+  extractProviderErrorMessage,
   type Globals,
 } from "@/lib/openrouter";
 import { getDoc, getPageData, upsertPageAi, type PageAiSummaryEntry } from "@/lib/storage";
@@ -115,22 +117,22 @@ export function usePageTranslation(
 
       const currentGlobals = globalsRef.current || readGlobals();
       const activeProvider = currentGlobals.provider || getAiProvider();
-      const isOmni = activeProvider === "omnirouter";
-      const isOllama = activeProvider === "ollama";
 
-      const key = getKey();
-      if (!isOmni && !isOllama && !key) {
-        ensureKeyReady();
-        await upsertPageAi(docId, pageNumber, {
-          status: "error",
-          error: "No OpenRouter API key configured.",
-        });
-        onPageAiChangeRef.current?.(pageNumber, {
-          status: "error",
-          hasResult: false,
-          isCustom: false,
-        });
-        return undefined;
+      if (activeProvider === "openrouter") {
+        const customKey = getCustomKey();
+        if (!customKey) {
+          ensureKeyReady();
+          await upsertPageAi(docId, pageNumber, {
+            status: "error",
+            error: "No Personal OpenRouter API key configured.",
+          });
+          onPageAiChangeRef.current?.(pageNumber, {
+            status: "error",
+            hasResult: false,
+            isCustom: false,
+          });
+          return undefined;
+        }
       }
 
       const selOverride = selectionOverridesRef.current.get(pageNumber);
@@ -186,31 +188,42 @@ export function usePageTranslation(
           }
           return res.result;
         } else if (res.error) {
-          const err = res.error;
+          const rawErr = res.error;
+          const cleanErr = extractProviderErrorMessage(rawErr) || rawErr;
           const freshRec = await getPageData(docId, pageNumber);
           if (freshRec?.pageAi) {
             onPageAiChangeRef.current?.(pageNumber, summarize(freshRec.pageAi));
           }
           if (res.error !== "Aborted by user") {
-            const isDailyOrQuota =
-              /daily_limit|rate_limit|quota|credits/i.test(err) ||
-              /50 free pages|daily limit|rate limit|quota/i.test(err);
-            if (isDailyOrQuota) {
-              toast.error(err, {
+            const isTrueDailyLimit =
+              /50 free pages|reached the free daily limit/i.test(cleanErr);
+
+            if (isTrueDailyLimit) {
+              toast.error(cleanErr, {
                 duration: 8000,
-                action: { label: "Get Free Key", onClick: () => openApiKeyModal(err, true) },
+                action: { label: "Get Free Key", onClick: () => openApiKeyModal(cleanErr, true) },
               });
-              openApiKeyModal(err, true);
+            } else if (/busy upstream|rate-limited|rate_limit|try again/i.test(cleanErr)) {
+              toast.error(cleanErr, {
+                duration: 6000,
+                action: {
+                  label: "Retry",
+                  onClick: () => {
+                    void runPage(pageNumber);
+                  },
+                },
+              });
             } else {
-              toast.error(err);
+              toast.error(cleanErr);
             }
           }
         }
         return undefined;
       } catch (err) {
-        const errorMsg = err instanceof Error ? err.message : "Translation failed";
+        const rawMsg = err instanceof Error ? err.message : "Translation failed";
+        const cleanMsg = extractProviderErrorMessage(rawMsg) || rawMsg;
         console.error("usePageTranslation error:", err);
-        toast.error(errorMsg);
+        toast.error(cleanMsg);
         return undefined;
       } finally {
         if (mountedRef.current) {

@@ -8,6 +8,7 @@ import {
 import {
   TRANSLATION_STYLES,
   EXPLANATION_STYLES,
+  CURATED_MODELS,
   type Globals,
   isOmniRouterConfigured,
   getOmniSelectedModel,
@@ -21,14 +22,16 @@ import { cleanAiText } from "./cleanAiText";
 export { cleanAiText };
 
 export function effective(globals: Globals, ov?: PageOverrides) {
-  const defaultProvider = isOmniRouterConfigured() ? "omnirouter" : "openrouter";
+  const defaultProvider: AiProvider = "managed";
   const rawProvider = ov?.provider ?? globals.provider ?? defaultProvider;
   const provider: AiProvider =
     rawProvider === "ollama"
       ? "ollama"
       : rawProvider === "omnirouter"
         ? "omnirouter"
-        : "openrouter";
+        : rawProvider === "openrouter"
+          ? "openrouter"
+          : "managed";
 
   const mode = ov?.mode ?? globals.mode;
   let rawStyle = ov?.style ?? globals.style;
@@ -43,16 +46,22 @@ export function effective(globals: Globals, ov?: PageOverrides) {
     }
   }
 
-  let defaultModelForProvider = globals.modelId || getSelectedModel() || getDefaultModelSync();
+  let defaultModelForProvider = globals.modelId || getSelectedModel() || CURATED_MODELS[0]?.id || "liquid/lfm-2.5-2.6b:free";
   if (provider === "ollama") {
     defaultModelForProvider =
       globals.ollamaModelId ||
       (typeof window !== "undefined" ? localStorage.getItem("doclens.ollama.model") || "" : "");
   } else if (provider === "omnirouter") {
     defaultModelForProvider =
-      globals.omniModelId || getOmniSelectedModel() || getOmniDefaultModelSync();
-  } else {
+      globals.omniModelId || getOmniSelectedModel() || getOmniDefaultModelSync() || "auto/best-coding";
+  } else if (provider === "openrouter") {
     defaultModelForProvider = globals.modelId || getSelectedModel() || getDefaultModelSync();
+  } else {
+    const sel = globals.modelId || getSelectedModel();
+    defaultModelForProvider =
+      sel && CURATED_MODELS.some((m) => m.id === sel)
+        ? sel
+        : CURATED_MODELS[0]?.id || "liquid/lfm-2.5-2.6b:free";
   }
 
   return {

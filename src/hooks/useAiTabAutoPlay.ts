@@ -3,7 +3,7 @@ import { listenDocEvent } from "@/lib/docEvents";
 import { hasCompletedTtsVoiceSetup, type TtsSource } from "@/context/TtsContext";
 import { getPageData, type PageAiSummaryEntry, type PageDataRecord } from "@/lib/storage";
 import { executePageTranslation, isPageTranslating } from "@/lib/pageTranslationRunner";
-import { getKey, isOmniRouterConfigured, readGlobals } from "@/lib/openrouter";
+import { getAiProvider, getKey, isOmniRouterConfigured, readGlobals } from "@/lib/openrouter";
 import { effective, hashFor } from "@/lib/pageAi";
 import { getFirebaseAuth } from "@/lib/firebase";
 
@@ -178,7 +178,9 @@ export function useAiTabAutoPlay({
         // Check authentication & provider configuration
         const user = getFirebaseAuth().currentUser;
         if (!user) return;
-        if (!getKey() && !isOmniRouterConfigured()) return;
+        const provider = currentGlobals.provider || getAiProvider();
+        if (provider === "openrouter" && !getKey()) return;
+        if (provider === "omnirouter" && !isOmniRouterConfigured()) return;
 
         lookaheadScheduledPageRef.current = nextPage;
 

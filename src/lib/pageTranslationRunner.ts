@@ -4,10 +4,12 @@ import {
   getSelectedModel,
   setSelectedModel,
   getKey,
+  getCustomKey,
   setAiProvider,
   OpenRouterError,
   readGlobals,
   streamCompletion,
+  streamPersonalOpenRouterCompletion,
   streamOmniRouterCompletion,
   streamOllamaCompletion,
   getOllamaEndpoint,
@@ -16,6 +18,7 @@ import {
   getOmniSelectedModel,
   getOmniDefaultModelSync,
   parseStructuredTranslationResponse,
+  CURATED_MODELS,
   type Globals,
 } from "@/lib/openrouter";
 import {
@@ -231,13 +234,7 @@ export async function executePageTranslation({
       // ─────────────────────────────────────────────────────────────────
       // 2. ONE-TIME PROVIDER AVAILABILITY CHECK AT TRANSLATION START
       // ─────────────────────────────────────────────────────────────────
-      if (isOmni && !isOmniRouterConfigured()) {
-        isOmni = false;
-        eff = { ...eff, provider: "openrouter" };
-      }
-
-      const key = getKey();
-      // Translation strictly requires login (just like Global Library)
+      // Translation strictly requires login across ALL modes (just like Global Library)
       const authToken = await getFreshAuthToken();
       if (!authToken) {
         const errorMsg = "Authentication required. Please sign in to translate.";
@@ -254,22 +251,33 @@ export async function executePageTranslation({
         return { success: false, error: errorMsg };
       }
 
-      if (!isOmni && !isOllama && !key && !authToken) {
-        const errorMsg = "No OpenRouter API key configured.";
-        await upsertPageAi(docId, pageNumber, {
-          status: "error",
-          error: errorMsg,
-        });
-        return { success: false, error: errorMsg };
+      // Check provider configuration without automatic fallback
+      if (eff.provider === "omnirouter") {
+        if (!isOmniRouterConfigured()) {
+          const errorMsg = "OmniRouter endpoint is not configured. Please set your OmniRouter endpoint in Settings.";
+          await upsertPageAi(docId, pageNumber, { status: "error", error: errorMsg });
+          dispatchDocEvent("doclens:page-status-changed", { docId, pageNumber, status: "error", error: errorMsg });
+          return { success: false, error: errorMsg };
+        }
+      } else if (eff.provider === "openrouter") {
+        const customKey = getCustomKey();
+        if (!customKey) {
+          const errorMsg = "Personal OpenRouter API key is not configured. Please add your API key in Settings.";
+          await upsertPageAi(docId, pageNumber, { status: "error", error: errorMsg });
+          dispatchDocEvent("doclens:page-status-changed", { docId, pageNumber, status: "error", error: errorMsg });
+          return { success: false, error: errorMsg };
+        }
       }
 
       const modelId =
         eff.modelId ||
-        (isOllama
-          ? currentGlobals.ollamaModelId || getOllamaSelectedModel() || ""
-          : isOmni
-            ? currentGlobals.omniModelId || getOmniSelectedModel() || getOmniDefaultModelSync()
-            : getSelectedModel() || getDefaultModelSync());
+        (eff.provider === "ollama"
+          ? currentGlobals.ollamaModelId || getOllamaSelectedModel() || "llama3"
+          : eff.provider === "omnirouter"
+            ? currentGlobals.omniModelId || getOmniSelectedModel() || getOmniDefaultModelSync() || "auto/best-coding"
+            : eff.provider === "openrouter"
+              ? getSelectedModel() || getDefaultModelSync()
+              : getSelectedModel() || CURATED_MODELS[0]?.id || "liquid/lfm-2.5-2.6b:free");
 
       const effectiveText = customTextOverride ?? pageRec.text;
       const previousContext = await getPreviousContext(docId, pageNumber, eff);
@@ -310,24 +318,32 @@ export async function executePageTranslation({
         });
       };
 
-      if (isOllama) {
+      if (eff.provider === "ollama") {
         await streamOllamaCompletion({
           endpoint: currentGlobals.ollamaEndpoint || getOllamaEndpoint(),
           payload,
           signal: internalAbort.signal,
           onDelta: onChunk,
         });
-      } else if (isOmni) {
+      } else if (eff.provider === "omnirouter") {
         await streamOmniRouterCompletion({
           payload,
           signal: internalAbort.signal,
           onDelta: onChunk,
         });
+      } else if (eff.provider === "openrouter") {
+        // Personal OpenRouter: direct frontend request, never consumes Anuvaad quota
+        await streamPersonalOpenRouterCompletion({
+          key: getCustomKey(),
+          payload,
+          signal: internalAbort.signal,
+          onDelta: onChunk,
+        });
       } else {
+        // Managed AI (default): routes through Vercel serverless billing layer
         const rawTitle = docRec?.fileName || "Untitled Document";
         const bookTitle = rawTitle.replace(/\.pdf$/i, "").trim() || "Untitled Document";
         await streamCompletion({
-          key: key || "",
           payload,
           signal: internalAbort.signal,
           onDelta: onChunk,

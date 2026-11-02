@@ -50,7 +50,7 @@ export function ApiKeyModal() {
       const daily =
         detail?.isDailyLimit ??
         (r
-          ? /50 free pages|daily limit|daily free limit|rate limit|too many requests|free tier/i.test(
+          ? /50 free pages|daily limit reached|reached the free daily limit/i.test(
               r,
             )
           : false);

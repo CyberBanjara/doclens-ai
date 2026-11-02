@@ -20,6 +20,7 @@ import {
 } from "lucide-react";
 import { apiGetBillingProfile, apiSubscribePlan, type BillingProfileResponse } from "@/lib/auth-client";
 import { createRazorpayOrder } from "@/lib/support";
+import { extractProviderErrorMessage } from "@/lib/openrouter";
 import { toast } from "sonner";
 
 declare const window: any;
@@ -158,7 +159,7 @@ export function BillingModal() {
             <Zap className="h-4 w-4 shrink-0 text-amber-400 mt-0.5" />
             <div>
               <p className="font-medium">Quota Notice</p>
-              <p className="opacity-90">{quotaNotice}</p>
+              <p className="opacity-90">{extractProviderErrorMessage(quotaNotice) || quotaNotice}</p>
             </div>
           </div>
         )}

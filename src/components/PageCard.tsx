@@ -7,6 +7,8 @@ import {
   MODE_LABELS,
   openApiKeyModal,
   isOmniRouterConfigured,
+  CURATED_MODELS,
+  extractProviderErrorMessage,
   type GlobalMode,
   type Globals,
   type ORModel,
@@ -386,7 +388,7 @@ function PageCard({
       {/* ─── Error banner if request failed ─── */}
       {state.error &&
         !isRunning &&
-        (/50 free pages|daily limit|rate limit|quota/i.test(state.error) ? (
+        (/50 free pages|reached the free daily limit/i.test(state.error) ? (
           <div className="mb-4 rounded-xl border border-primary/30 bg-gradient-to-br from-primary/10 via-primary/5 to-transparent p-4 text-xs">
             <div className="flex items-start gap-3">
               <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-primary/20 text-primary">
@@ -425,10 +427,12 @@ function PageCard({
           </div>
         ) : (
           <div className="mb-4 rounded-lg border border-destructive/30 bg-destructive/10 p-3 text-xs text-destructive flex items-center justify-between">
-            <span>{state.error}</span>
+            <span className="flex-1 mr-2 leading-relaxed">
+              {extractProviderErrorMessage(state.error) || state.error}
+            </span>
             <button
               onClick={onRun}
-              className="ml-3 font-semibold underline hover:opacity-80 text-[11px] cursor-pointer"
+              className="ml-3 font-semibold underline hover:opacity-80 text-[11px] cursor-pointer shrink-0"
             >
               Retry
             </button>
@@ -534,13 +538,16 @@ function OverrideControls({
   }, [eff.language]);
 
   const activeModelList = useMemo(() => {
+    if (eff.provider === "managed") {
+      return CURATED_MODELS;
+    }
     if (eff.provider === "ollama") {
       return ollamaModels && ollamaModels.length > 0 ? ollamaModels : models;
     }
     if (eff.provider === "omnirouter") {
       return omniModels && omniModels.length > 0 ? omniModels : models;
     }
-    return models;
+    return models && models.length > 0 ? models : CURATED_MODELS;
   }, [eff.provider, ollamaModels, omniModels, models]);
 
   const modelOptions = useMemo(() => {
@@ -564,8 +571,9 @@ function OverrideControls({
             onSetOverride({ provider: nextProvider, modelId: undefined });
           }}
           options={[
-            ["openrouter", "OpenRouter (Default)"],
-            ["omnirouter", "OmniRouter (Local)"],
+            ["managed", "Managed AI (Default)"],
+            ["openrouter", "Personal OpenRouter"],
+            ["omnirouter", "OmniRouter"],
             ["ollama", "Ollama (Local)"],
           ]}
         />

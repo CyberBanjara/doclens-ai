@@ -11,7 +11,9 @@ import {
   getEffectiveSelectedModel,
   hasCompletedAiPreferenceSetup,
   getKey,
+  getCustomKey,
   getKeyStatus,
+  CURATED_MODELS,
   getSelectedModel,
   getDefaultModelSync,
   getOmniSelectedModel,
@@ -155,13 +157,6 @@ export function PageWorkstation({
           setOmniChecking(false);
           setOmniError(err instanceof Error ? err.message : "OmniRouter connection failed");
           setModelResolved(true);
-          // Load OpenRouter models as fallback
-          const k = getKey();
-          if (k) {
-            fetchModels(k)
-              .then(setModels)
-              .catch(() => {});
-          }
         });
     } else {
       setOmniChecking(false);
@@ -319,18 +314,28 @@ export function PageWorkstation({
 
   /* ---------- Empty / setup states ---------- */
 
+  const isManagedProvider = !globals.provider || globals.provider === "managed";
+  const isPersonalOpenRouter = globals.provider === "openrouter";
   const isOllamaProvider = globals.provider === "ollama";
   const isOmniProvider = globals.provider === "omnirouter";
   const isLocalProvider = isOllamaProvider || isOmniProvider;
-  const activeModelId = isOllamaProvider
-    ? globals.ollamaModelId || getOllamaSelectedModel() || globals.modelId
-    : isOmniProvider
-      ? globals.omniModelId ||
-        getOmniSelectedModel() ||
-        getOmniDefaultModelSync() ||
-        globals.modelId
-      : globals.modelId || getSelectedModel() || getDefaultModelSync();
-  const providerReady = isLocalProvider || keyReady;
+  const activeModelId = isManagedProvider
+    ? globals.modelId || CURATED_MODELS[0]?.id || "liquid/lfm-2.5-2.6b:free"
+    : isOllamaProvider
+      ? globals.ollamaModelId || getOllamaSelectedModel() || globals.modelId
+      : isOmniProvider
+        ? globals.omniModelId ||
+          getOmniSelectedModel() ||
+          getOmniDefaultModelSync() ||
+          "auto/best-coding"
+        : globals.modelId || getSelectedModel() || getDefaultModelSync();
+  const providerReady = isManagedProvider
+    ? true
+    : isPersonalOpenRouter
+      ? !!getCustomKey() && keyStatus !== "invalid"
+      : isLocalProvider
+        ? isOmniProvider ? isOmniConfigured : true
+        : keyReady;
 
   if (authLoading) {
     return (
@@ -403,6 +408,25 @@ export function PageWorkstation({
     );
   }
 
+  if (isOmniProvider && omniError) {
+    return (
+      <div className="flex h-full items-center justify-center px-6 text-center">
+        <div className="max-w-xs space-y-2">
+          <div className="text-sm font-semibold text-destructive">OmniRouter Offline</div>
+          <p className="text-xs text-muted-foreground leading-relaxed">{omniError}</p>
+          <div className="pt-2">
+            <Link
+              to="/settings"
+              className="inline-flex rounded-lg border border-border px-4 py-2 text-xs font-medium text-foreground hover:bg-surface-2 transition-colors"
+            >
+              Check OmniRouter Settings
+            </Link>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   if (providerReady && !modelResolved && !activeModelId) {
     return (
       <div className="flex h-full items-center justify-center px-6 text-center">
@@ -415,33 +439,39 @@ export function PageWorkstation({
   }
 
   if (!providerReady || !activeModelId) {
-    const noKey = !hasKey;
     const invalid = keyStatus === "invalid";
-    const missing = keyStatus === "missing";
     return (
       <div className="flex h-full items-center justify-center px-6 text-center">
         <div className="max-w-xs">
           <div
             className={`text-sm font-medium ${invalid ? "text-destructive" : "text-foreground"}`}
           >
-            {invalid ? "API Key Invalid" : missing || noKey ? "API Key Required" : "Setup Required"}
+            {isPersonalOpenRouter
+              ? invalid
+                ? "OpenRouter API Key Invalid"
+                : "Personal API Key Required"
+              : isOmniProvider
+                ? "OmniRouter Configuration Required"
+                : "Setup Required"}
           </div>
           <p className="mt-2 text-sm text-muted-foreground">
-            {invalid
-              ? "The server OpenRouter key is invalid or expired."
-              : missing || noKey
-                ? "Configure OPENROUTER_API_KEY to enable AI translations."
+            {isPersonalOpenRouter
+              ? invalid
+                ? "Your personal OpenRouter API key is invalid or expired."
+                : "Add your personal OpenRouter API key in Settings to translate."
+              : isOmniProvider
+                ? "Configure your OmniRouter endpoint in Settings."
                 : "Select a model in Settings to get started."}
           </p>
           <div className="mt-4 flex items-center justify-center gap-2">
-            {providerReady ? null : (
+            {isPersonalOpenRouter ? (
               <button
                 onClick={() => openApiKeyModal()}
                 className="rounded-lg bg-primary px-4 py-2 text-xs font-semibold text-primary-foreground transition-opacity hover:opacity-90"
               >
-                Check API Key
+                Add API Key
               </button>
-            )}
+            ) : null}
             <Link
               to="/settings"
               className="rounded-lg border border-border px-4 py-2 text-xs font-medium text-muted-foreground transition-colors hover:text-foreground"

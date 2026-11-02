@@ -100,8 +100,8 @@ export default defineEventHandler(async (event) => {
 
     // 5. Route request to OpenRouter API with SSE streaming enabled
     let orResponse: Response;
-    try {
-      orResponse = await fetch("https://openrouter.ai/api/v1/chat/completions", {
+    const fetchUpstream = async () => {
+      return await fetch("https://openrouter.ai/api/v1/chat/completions", {
         method: "POST",
         headers: {
           Authorization: `Bearer ${serverApiKey}`,
@@ -111,6 +111,28 @@ export default defineEventHandler(async (event) => {
         },
         body: JSON.stringify({ ...body.payload, stream: true }),
       });
+    };
+
+    try {
+      orResponse = await fetchUpstream();
+
+      // If temporary upstream rate-limit with retry-after <= 3 seconds, retry once automatically
+      if (orResponse.status === 429) {
+        let retrySeconds = 1;
+        try {
+          const firstErrText = await orResponse.clone().text();
+          const parsed = JSON.parse(firstErrText);
+          const ra = parsed?.error?.metadata?.retry_after_seconds;
+          if (typeof ra === "number" && ra > 0 && ra <= 3) {
+            retrySeconds = ra;
+          }
+        } catch {}
+
+        if (retrySeconds <= 3) {
+          await new Promise((resolve) => setTimeout(resolve, Math.max(1000, retrySeconds * 1000)));
+          orResponse = await fetchUpstream();
+        }
+      }
     } catch (fetchErr: any) {
       if (reservationId) {
         await refundQuota(reservationId, session.uid, "fetch_failed");
@@ -131,12 +153,35 @@ export default defineEventHandler(async (event) => {
       if (reservationId) {
         await refundQuota(reservationId, session.uid, `upstream_error_${orResponse.status}`);
       }
+
+      let cleanError = `OpenRouter returned status ${orResponse.status}`;
+      try {
+        const parsed = JSON.parse(errText);
+        const raw = parsed?.error?.metadata?.raw;
+        const msg = parsed?.error?.message;
+        if (typeof raw === "string" && raw.trim()) {
+          cleanError = raw.trim();
+        } else if (typeof msg === "string" && msg.trim() && msg !== "Provider returned error") {
+          cleanError = msg.trim();
+        }
+      } catch {
+        if (errText) cleanError = errText;
+      }
+
+      // If it's a provider rate limit (e.g. shared pool or free model rate limit exceeded)
+      if (orResponse.status === 429) {
+        cleanError = cleanError.replace(/https?:\/\/\S+/g, "").trim();
+        if (/upstream|temporarily rate-limited|shared_pool|rate_limit_exceeded/i.test(cleanError)) {
+          cleanError = "The AI model is temporarily busy upstream. Please wait a moment and try again, or switch models in Settings.";
+        }
+      }
+
       throw createError({
         statusCode: orResponse.status,
         statusMessage: "Upstream Error",
         data: {
-          error: errText || `OpenRouter returned status ${orResponse.status}`,
-          code: "UPSTREAM_ERROR",
+          error: cleanError,
+          code: orResponse.status === 429 ? "UPSTREAM_RATE_LIMITED" : "UPSTREAM_ERROR",
         },
       });
     }

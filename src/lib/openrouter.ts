@@ -52,13 +52,19 @@ export type KeyStatus = "missing" | "valid" | "invalid" | "unknown";
 
 export function getAiProvider(): AiProvider {
   if (typeof window === "undefined") {
-    return isOmniRouterConfigured() ? "omnirouter" : "openrouter";
+    return "managed";
   }
   const saved = localStorage.getItem(PROVIDER_LS);
-  if (saved === "omnirouter" || saved === "openrouter" || saved === "ollama") {
+  if (saved === "managed") {
+    return "managed";
+  }
+  if (saved === "openrouter") {
+    return getCustomKey() ? "openrouter" : "managed";
+  }
+  if (saved === "omnirouter" || saved === "ollama") {
     return saved as AiProvider;
   }
-  return isOmniRouterConfigured() ? "omnirouter" : "openrouter";
+  return "managed";
 }
 
 export function setAiProvider(p: AiProvider) {
@@ -182,7 +188,7 @@ export function openApiKeyModal(
     const isDaily =
       isDailyLimit ||
       (reasonOrDetail
-        ? /50 free pages|daily limit|daily free limit|rate limit|too many requests|free tier/i.test(
+        ? /50 free pages|daily limit reached|reached the free daily limit/i.test(
             reasonOrDetail,
           )
         : false);
@@ -237,16 +243,20 @@ export async function getDefaultModel(): Promise<string> {
 
 export async function getEffectiveSelectedModel(): Promise<string> {
   const provider = getAiProvider();
+  if (provider === "managed") {
+    const sel = getSelectedModel();
+    if (sel && CURATED_MODELS.some((m) => m.id === sel)) return sel;
+    return CURATED_MODELS[0]?.id || "liquid/lfm-2.5-2.6b:free";
+  }
   if (provider === "omnirouter") {
     return (
       getOmniSelectedModel() ||
       getOmniDefaultModelSync() ||
-      getSelectedModel() ||
-      getDefaultModelSync()
+      "auto/best-coding"
     );
   }
   if (provider === "ollama") {
-    return getOllamaSelectedModel() || getSelectedModel() || getDefaultModelSync();
+    return getOllamaSelectedModel() || "llama3";
   }
   return getSelectedModel() || getDefaultModelSync();
 }
@@ -604,10 +614,43 @@ export function extractProviderErrorMessage(body: string | unknown): string {
   if (!body) return "";
   if (typeof body === "object" && body !== null) {
     const obj = body as Record<string, any>;
-    if (typeof obj.error === "string") return obj.error.trim();
-    if (typeof obj.error?.message === "string") return obj.error.message.trim();
-    if (typeof obj.message === "string") return obj.message.trim();
-    if (typeof obj.description === "string") return obj.description.trim();
+    // 1. Nested Nitro / server error data
+    if (obj.data && typeof obj.data === "object") {
+      const nested = extractProviderErrorMessage(obj.data);
+      if (nested) return nested;
+    }
+    if (typeof obj.data?.error === "string" && obj.data.error.trim()) {
+      const nested = extractProviderErrorMessage(obj.data.error);
+      if (nested) return nested;
+    }
+    // 2. OpenRouter metadata raw upstream error
+    if (typeof obj.error?.metadata?.raw === "string" && obj.error.metadata.raw.trim()) {
+      return obj.error.metadata.raw.trim();
+    }
+    if (typeof obj.metadata?.raw === "string" && obj.metadata.raw.trim()) {
+      return obj.metadata.raw.trim();
+    }
+    // 3. OpenRouter message (skip generic wrapper message)
+    if (
+      typeof obj.error?.message === "string" &&
+      obj.error.message.trim() &&
+      obj.error.message.trim() !== "Provider returned error"
+    ) {
+      return obj.error.message.trim();
+    }
+    if (typeof obj.error === "string" && obj.error.trim()) {
+      return extractProviderErrorMessage(obj.error);
+    }
+    if (
+      typeof obj.message === "string" &&
+      obj.message.trim() &&
+      obj.message.trim() !== "Provider returned error"
+    ) {
+      return obj.message.trim();
+    }
+    if (typeof obj.description === "string" && obj.description.trim()) {
+      return obj.description.trim();
+    }
   }
   if (typeof body === "string") {
     const trimmed = body.trim();
@@ -628,21 +671,23 @@ export function friendlyOpenRouterError(
   isCustomKey: boolean,
 ): OpenRouterError {
   const explicitMsg = extractProviderErrorMessage(body);
+  const bodyString = typeof body === "string" ? body : JSON.stringify(body || "");
 
-  const isDailyOrRateLimit =
-    status === 429 ||
-    /rate limit|daily limit|free limit|free tier|quota|exceeded|too many requests/i.test(
-      explicitMsg || body,
+  // 1. Upstream temporary model rate-limits (Liquid, Mistral, etc. shared pools)
+  const isUpstreamModelRateLimit =
+    /model_rate_limit|temporarily rate-limited|shared_pool|upstream_provider|UPSTREAM_RATE_LIMITED|temporarily busy upstream/i.test(
+      explicitMsg + " " + bodyString,
     );
 
-  // If the provider returned an explicit error message (e.g. model unavailable, overloaded, not found)
-  // Surface the exact provider error message directly without replacing or masking it
-  if (explicitMsg && !isDailyOrRateLimit && status !== 401 && status !== 402) {
-    const kind: OpenRouterErrorKind =
-      status >= 500 ? "server" : status === 403 ? "auth" : "unknown";
-    return new OpenRouterError(explicitMsg, status, kind);
+  if (isUpstreamModelRateLimit) {
+    return new OpenRouterError(
+      "The selected AI model is temporarily busy upstream. Please retry in a few moments or switch models in Settings.",
+      status || 429,
+      "rate_limit",
+    );
   }
 
+  // 2. Auth error
   if (status === 401) {
     return new OpenRouterError(
       explicitMsg ||
@@ -653,13 +698,18 @@ export function friendlyOpenRouterError(
       "auth",
     );
   }
-  if (status === 403)
+
+  // 3. Model access rejected
+  if (status === 403) {
     return new OpenRouterError(
       explicitMsg ||
         "OpenRouter rejected access to this model with the current key. Please select a different model in settings.",
       403,
       "auth",
     );
+  }
+
+  // 4. Out of credits
   if (status === 402) {
     if (!isCustomKey) {
       return new OpenRouterError(DAILY_LIMIT_HOOK_MESSAGE, 402, "daily_limit");
@@ -671,7 +721,14 @@ export function friendlyOpenRouterError(
       "credits",
     );
   }
-  if (isDailyOrRateLimit) {
+
+  // 5. True daily limit (only if explicit daily limit message or custom key 50 req/day limit)
+  const isTrueDailyLimit =
+    /daily limit|daily free limit|50 requests\/day|free tier daily limit/i.test(
+      explicitMsg || bodyString,
+    );
+
+  if (isTrueDailyLimit) {
     if (!isCustomKey) {
       return new OpenRouterError(DAILY_LIMIT_HOOK_MESSAGE, status || 429, "daily_limit");
     }
@@ -682,16 +739,21 @@ export function friendlyOpenRouterError(
       "rate_limit",
     );
   }
+
+  // 6. Generic explicit message
   if (explicitMsg) {
     return new OpenRouterError(explicitMsg, status, status >= 500 ? "server" : "unknown");
   }
-  if (status >= 500)
+
+  if (status >= 500) {
     return new OpenRouterError(
       `OpenRouter service error (${status}). Please retry shortly or select another model.`,
       status,
       "server",
     );
-  const snippet = body.replace(/\s+/g, " ").trim().slice(0, 160);
+  }
+
+  const snippet = (explicitMsg || bodyString).replace(/\s+/g, " ").trim().slice(0, 160);
   return new OpenRouterError(
     `Request failed (${status})${snippet ? `: ${snippet}` : "."}`,
     status,
@@ -920,16 +982,21 @@ export async function streamCompletion(opts: StreamOpts): Promise<void> {
         );
       }
 
-      if (
+      // Check for actual Doclens billing quota exhaustion (HTTP 402 or QUOTA_EXCEEDED code)
+      // NOTE: HTTP 429 is an upstream model rate limit, NOT Doclens quota exhaustion!
+      const isQuotaExceeded =
         response.status === 402 ||
-        response.status === 429 ||
         errorData?.data?.code === "QUOTA_EXCEEDED" ||
-        errorData?.code === "QUOTA_EXCEEDED"
-      ) {
-        const msg =
-          errorData?.data?.error ||
-          errorData?.error ||
+        errorData?.code === "QUOTA_EXCEEDED";
+
+      if (isQuotaExceeded) {
+        let msg =
+          extractProviderErrorMessage(errorData?.data?.error) ||
+          extractProviderErrorMessage(errorData?.error) ||
           "You have reached your translation quota limit (30 pages on Free plan). Upgrade to Reader Pass (300 pages) or Monthly Pro (600 pages) to continue!";
+        if (typeof msg !== "string" || msg.startsWith("{")) {
+          msg = "Translation quota exceeded. Upgrade to Reader Pass (300 pages) or Monthly Pro (600 pages) to continue!";
+        }
         if (typeof window !== "undefined") {
           window.dispatchEvent(new CustomEvent("doclens:open-billing-modal", { detail: { error: msg } }));
         }
@@ -961,6 +1028,85 @@ export async function streamCompletion(opts: StreamOpts): Promise<void> {
     if (totalChars === 0 && !signal.aborted) {
       throw new OpenRouterError(
         "The model returned an empty response. Please choose a different model in settings.",
+        502,
+        "server",
+      );
+    }
+  } finally {
+    cleanup();
+  }
+}
+
+/**
+ * Streaming completion for Personal OpenRouter mode.
+ * Sends translation requests directly from the frontend to OpenRouter,
+ * reuses the existing client-side SSE parser, and never consumes Anuvaad's quota.
+ */
+export async function streamPersonalOpenRouterCompletion(opts: StreamOpts): Promise<void> {
+  const { signal, cleanup } = combinedSignal(opts.signal, opts.timeoutMs ?? STREAM_TIMEOUT_MS);
+  const effectiveKey = (opts.key || getCustomKey()).trim();
+
+  try {
+    if (signal.aborted) throw new DOMException("Aborted", "AbortError");
+
+    if (!effectiveKey) {
+      throw new OpenRouterError(
+        "Personal OpenRouter API key is not configured. Please add your key in Settings.",
+        401,
+        "auth",
+      );
+    }
+
+    const headers: Record<string, string> = {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${effectiveKey}`,
+      ...HEADERS_BASE,
+    };
+
+    let response: Response;
+    try {
+      response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
+        method: "POST",
+        headers,
+        body: JSON.stringify({ ...opts.payload, stream: true }),
+        signal,
+      });
+    } catch (fetchErr: any) {
+      if (signal.aborted) throw fetchErr;
+      throw new OpenRouterError(
+        fetchErr?.message || "Network error communicating with OpenRouter",
+        0,
+        "network",
+      );
+    }
+
+    if (!response.ok) {
+      const bodyText = await response.text();
+      const friendly = friendlyOpenRouterError(response.status, bodyText, true);
+      if (friendly.kind === "auth") {
+        setKeyStatus("invalid");
+      }
+      throw friendly;
+    }
+
+    if (!response.body) {
+      throw new OpenRouterError("OpenRouter returned an empty stream.", 502, "server");
+    }
+
+    let totalChars = 0;
+    try {
+      totalChars = await readSseStream(response.body, opts.onDelta, signal, true);
+    } finally {
+      try {
+        if (!response.body.locked) {
+          await response.body.cancel();
+        }
+      } catch {}
+    }
+
+    if (totalChars === 0 && !signal.aborted) {
+      throw new OpenRouterError(
+        "The model returned an empty response. Please choose a different model in Settings.",
         502,
         "server",
       );

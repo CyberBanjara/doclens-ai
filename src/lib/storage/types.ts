@@ -1,4 +1,4 @@
-export type AiProvider = "openrouter" | "omnirouter" | "ollama";
+export type AiProvider = "managed" | "openrouter" | "omnirouter" | "ollama";
 export type AiMode = "translate" | "explain";
 export type PageStatus = "idle" | "ready" | "running" | "done" | "error";
 
