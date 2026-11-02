@@ -569,3 +569,119 @@ export async function apiGetTranslationActivity(
   }
 }
 
+export interface BillingProfileResponse {
+  success: boolean;
+  subscription: {
+    plan_id: string;
+    plan_type: string;
+    status: string;
+    period_start: string;
+    period_end: string;
+    days_remaining: number;
+    plan_pages_limit: number;
+    plan_pages_used: number;
+    topup_pages_balance: number;
+    reserved_pages: number;
+    available_pages: number;
+    lifetime_pages_used: number;
+  };
+  available_plans: Array<{
+    id: string;
+    name: string;
+    price_inr: number;
+    pages_allotment: number;
+    validity_days: number;
+    plan_type: string;
+    is_active: boolean;
+  }>;
+  recent_usage: Array<{
+    id: string;
+    book_title: string;
+    page_number: number;
+    language: string;
+    status: string;
+    pages: number;
+    quota_source: string;
+    created_at: string;
+    finalized_at?: string;
+  }>;
+  billing_history: Array<{
+    id: string;
+    plan_id: string;
+    amount: number;
+    currency: string;
+    pages_credited: number;
+    validity_days: number;
+    status: string;
+    created_at: string;
+  }>;
+}
+
+/**
+ * Fetch authoritative user billing subscription, quota balances, and plans.
+ */
+export async function apiGetBillingProfile(): Promise<BillingProfileResponse | null> {
+  const token = await getFreshAuthToken();
+  const headers: Record<string, string> = {};
+  if (token) {
+    headers["Authorization"] = `Bearer ${token}`;
+    headers["x-firebase-token"] = token;
+  }
+
+  try {
+    const res = await fetch("/api/translations/billing", {
+      method: "GET",
+      headers,
+      credentials: "include",
+    });
+
+    if (!res.ok) {
+      if (res.status === 401) return null;
+      console.warn("Serverless /api/translations/billing status:", res.status);
+      return null;
+    }
+
+    return await res.json();
+  } catch (err) {
+    console.warn("apiGetBillingProfile notice:", err);
+    return null;
+  }
+}
+
+/**
+ * Subscribe or top up a translation plan via Vercel serverless billing layer.
+ */
+export async function apiSubscribePlan(params: {
+  planId: string;
+  razorpay_order_id?: string;
+  razorpay_payment_id?: string;
+  razorpay_signature?: string;
+}): Promise<BillingProfileResponse | null> {
+  const token = await getFreshAuthToken();
+  const headers: Record<string, string> = { "Content-Type": "application/json" };
+  if (token) {
+    headers["Authorization"] = `Bearer ${token}`;
+    headers["x-firebase-token"] = token;
+  }
+
+  try {
+    const res = await fetch("/api/translations/subscribe", {
+      method: "POST",
+      headers,
+      credentials: "include",
+      body: JSON.stringify(params),
+    });
+
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.error || err.data?.error || `Subscription failed (${res.status})`);
+    }
+
+    return await res.json();
+  } catch (err) {
+    console.warn("apiSubscribePlan error:", err);
+    throw err;
+  }
+}
+
+

@@ -490,3 +490,478 @@ export async function getUserTranslationActivity(
     return emptySummary;
   }
 }
+
+// ============================================================================
+// TRANSLATION BILLING LAYER (CONFIGURABLE PLANS & ATOMIC QUOTA LIFECYCLE)
+// ============================================================================
+
+export interface ValidateQuotaParams {
+  userId: string;
+  docId?: string;
+  bookId?: string;
+  bookTitle?: string;
+  pageNumber: number;
+  language?: string;
+  pageKey?: string;
+}
+
+export interface QuotaReservationResult {
+  authorized: boolean;
+  already_counted?: boolean;
+  reservation_id?: string | null;
+  remaining_pages?: number;
+  plan?: string;
+  quota_source?: string;
+  valid_until?: string;
+  code?: string;
+  error?: string;
+  message?: string;
+}
+
+export interface FinalizeQuotaResult {
+  success: boolean;
+  finalized?: boolean;
+  remaining_pages?: number;
+  plan_pages_used?: number;
+  topup_balance?: number;
+  message?: string;
+}
+
+export interface RefundQuotaResult {
+  success: boolean;
+  refunded?: boolean;
+  reason?: string;
+  message?: string;
+}
+
+export interface BillingPlanInfo {
+  id: string;
+  name: string;
+  price_inr: number;
+  pages_allotment: number;
+  validity_days: number;
+  plan_type: string;
+  is_active: boolean;
+}
+
+export interface UserSubscriptionDetails {
+  plan_id: string;
+  plan_type: string;
+  status: string;
+  period_start: string;
+  period_end: string;
+  days_remaining: number;
+  plan_pages_limit: number;
+  plan_pages_used: number;
+  topup_pages_balance: number;
+  reserved_pages: number;
+  available_pages: number;
+  lifetime_pages_used: number;
+}
+
+export interface TranslationReservationSummary {
+  id: string;
+  book_title: string;
+  page_number: number;
+  language: string;
+  status: string;
+  pages: number;
+  quota_source: string;
+  created_at: string;
+  finalized_at?: string;
+}
+
+export interface UserBillingHistoryItem {
+  id: string;
+  plan_id: string;
+  amount: number;
+  currency: string;
+  pages_credited: number;
+  validity_days: number;
+  status: string;
+  created_at: string;
+}
+
+export interface UserBillingProfileData {
+  subscription: UserSubscriptionDetails;
+  available_plans: BillingPlanInfo[];
+  recent_usage: TranslationReservationSummary[];
+  billing_history: UserBillingHistoryItem[];
+}
+
+// In-memory fallback state for dev / offline scenarios without live Supabase
+const memorySubscriptions = new Map<string, UserSubscriptionDetails>();
+const memoryReservations = new Map<string, any>();
+
+export const DEFAULT_BILLING_PLANS: BillingPlanInfo[] = [
+  { id: "free", name: "Free Tier", price_inr: 0, pages_allotment: 30, validity_days: 30, plan_type: "free", is_active: true },
+  { id: "pass", name: "Reader Pass", price_inr: 99, pages_allotment: 300, validity_days: 30, plan_type: "pass", is_active: true },
+  { id: "monthly", name: "Monthly Pro", price_inr: 149, pages_allotment: 600, validity_days: 30, plan_type: "subscription", is_active: true },
+  { id: "topup_100", name: "100 Pages Top-up", price_inr: 49, pages_allotment: 100, validity_days: 30, plan_type: "topup", is_active: true },
+  { id: "topup_300", name: "300 Pages Top-up", price_inr: 99, pages_allotment: 300, validity_days: 30, plan_type: "topup", is_active: true },
+  { id: "topup_600", name: "600 Pages Top-up", price_inr: 149, pages_allotment: 600, validity_days: 30, plan_type: "topup", is_active: true },
+];
+
+/**
+ * Single optimized atomic RPC to validate quota and create a reservation in Supabase.
+ * Checks for deduplication (already translated pages cost 0 quota),
+ * locks subscription balance, verifies validity, and reserves 1 page.
+ */
+export async function validateAndReserveQuota(
+  params: ValidateQuotaParams,
+): Promise<QuotaReservationResult> {
+  const cleanUserId = (params.userId || "").trim();
+  if (!cleanUserId) {
+    return { authorized: false, code: "UNAUTHORIZED", error: "User ID required" };
+  }
+
+  const cleanBookId = (params.bookId || params.docId || "doc").trim();
+  const cleanDocId = (params.docId || cleanBookId).trim();
+  const cleanBookTitle = (params.bookTitle || "").trim() || "Untitled Document";
+  const cleanLanguage = (params.language || "default").trim().toLowerCase();
+  const cleanPageKey = (
+    params.pageKey || `${cleanBookId}:${params.pageNumber}:${cleanLanguage}`
+  ).trim();
+
+  try {
+    const supabase = await getSupabaseServerClient();
+    if (supabase) {
+      const { data, error } = await supabase.rpc("validate_and_reserve_translation_quota", {
+        p_user_id: cleanUserId,
+        p_doc_id: cleanDocId,
+        p_page_number: params.pageNumber,
+        p_language: cleanLanguage,
+        p_page_key: cleanPageKey,
+        p_book_title: cleanBookTitle,
+        p_book_id: cleanBookId,
+      });
+
+      if (!error && data && typeof data === "object") {
+        return data as QuotaReservationResult;
+      }
+      if (error && !error.message?.includes("Could not find the function")) {
+        console.warn("Supabase validate_and_reserve_translation_quota error:", error.message);
+      }
+    }
+  } catch (err) {
+    console.warn("validateAndReserveQuota exception:", err);
+  }
+
+  // Resilient in-memory fallback simulation
+  const now = new Date();
+  let sub = memorySubscriptions.get(cleanUserId);
+  if (!sub) {
+    const periodEnd = new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000).toISOString();
+    sub = {
+      plan_id: "free",
+      plan_type: "free",
+      status: "active",
+      period_start: now.toISOString(),
+      period_end: periodEnd,
+      days_remaining: 30,
+      plan_pages_limit: 30,
+      plan_pages_used: 0,
+      topup_pages_balance: 0,
+      reserved_pages: 0,
+      available_pages: 30,
+      lifetime_pages_used: 0,
+    };
+    memorySubscriptions.set(cleanUserId, sub);
+  }
+
+  // Check period rollover
+  if (new Date(sub.period_end).getTime() < now.getTime()) {
+    sub.period_start = now.toISOString();
+    sub.period_end = new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000).toISOString();
+    sub.plan_pages_used = 0;
+    sub.plan_id = "free";
+    sub.plan_type = "free";
+    sub.plan_pages_limit = 30;
+  }
+
+  const availablePlanPages = Math.max(0, sub.plan_pages_limit - sub.plan_pages_used);
+  const totalAvailable = availablePlanPages + sub.topup_pages_balance - sub.reserved_pages;
+
+  if (totalAvailable < 1) {
+    return {
+      authorized: false,
+      code: "QUOTA_EXCEEDED",
+      error: "Translation quota exceeded. Upgrade to Reader Pass (300 pages) or Monthly Pro (600 pages).",
+      remaining_pages: 0,
+      plan: sub.plan_id,
+      valid_until: sub.period_end,
+    };
+  }
+
+  // Reserve 1 page
+  const resId = `res_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`;
+  sub.reserved_pages += 1;
+  sub.available_pages = Math.max(0, totalAvailable - 1);
+  memoryReservations.set(resId, {
+    id: resId,
+    userId: cleanUserId,
+    pageKey: cleanPageKey,
+    bookTitle: cleanBookTitle,
+    pageNumber: params.pageNumber,
+    language: cleanLanguage,
+    quotaSource: sub.plan_pages_limit > sub.plan_pages_used ? "plan" : "topup",
+    status: "reserved",
+    createdAt: now.toISOString(),
+  });
+
+  return {
+    authorized: true,
+    already_counted: false,
+    reservation_id: resId,
+    remaining_pages: sub.available_pages,
+    plan: sub.plan_id,
+    quota_source: sub.plan_pages_limit > sub.plan_pages_used ? "plan" : "topup",
+    valid_until: sub.period_end,
+  };
+}
+
+/**
+ * Finalize usage when translation completes successfully:
+ * releases reservation and deducts 1 page from user quota.
+ */
+export async function finalizeQuota(
+  reservationId: string,
+  userId: string,
+): Promise<FinalizeQuotaResult> {
+  if (!reservationId || !userId) {
+    return { success: false, message: "Missing reservationId or userId" };
+  }
+
+  try {
+    const supabase = await getSupabaseServerClient();
+    if (supabase) {
+      const { data, error } = await supabase.rpc("finalize_translation_quota", {
+        p_reservation_id: reservationId,
+        p_user_id: userId.trim(),
+      });
+
+      if (!error && data && typeof data === "object") {
+        return data as FinalizeQuotaResult;
+      }
+      if (error && !error.message?.includes("Could not find the function")) {
+        console.warn("Supabase finalize_translation_quota error:", error.message);
+      }
+    }
+  } catch (err) {
+    console.warn("finalizeQuota exception:", err);
+  }
+
+  // Fallback in-memory finalize
+  const res = memoryReservations.get(reservationId);
+  const sub = memorySubscriptions.get(userId.trim());
+  if (res && res.status === "reserved" && sub) {
+    res.status = "finalized";
+    sub.reserved_pages = Math.max(0, sub.reserved_pages - 1);
+    if (res.quotaSource === "topup") {
+      sub.topup_pages_balance = Math.max(0, sub.topup_pages_balance - 1);
+    } else {
+      sub.plan_pages_used += 1;
+    }
+    sub.lifetime_pages_used += 1;
+    const avail = Math.max(0, sub.plan_pages_limit - sub.plan_pages_used) + sub.topup_pages_balance - sub.reserved_pages;
+    sub.available_pages = Math.max(0, avail);
+    return { success: true, finalized: true, remaining_pages: sub.available_pages };
+  }
+
+  return { success: true, finalized: true };
+}
+
+/**
+ * Safely refund usage if translation stream aborts, disconnects, or fails.
+ */
+export async function refundQuota(
+  reservationId: string,
+  userId: string,
+  reason = "translation_failed",
+): Promise<RefundQuotaResult> {
+  if (!reservationId || !userId) {
+    return { success: false, message: "Missing reservationId or userId" };
+  }
+
+  try {
+    const supabase = await getSupabaseServerClient();
+    if (supabase) {
+      const { data, error } = await supabase.rpc("refund_translation_quota", {
+        p_reservation_id: reservationId,
+        p_user_id: userId.trim(),
+        p_reason: reason,
+      });
+
+      if (!error && data && typeof data === "object") {
+        return data as RefundQuotaResult;
+      }
+      if (error && !error.message?.includes("Could not find the function")) {
+        console.warn("Supabase refund_translation_quota error:", error.message);
+      }
+    }
+  } catch (err) {
+    console.warn("refundQuota exception:", err);
+  }
+
+  // Fallback in-memory refund
+  const res = memoryReservations.get(reservationId);
+  const sub = memorySubscriptions.get(userId.trim());
+  if (res && res.status === "reserved" && sub) {
+    res.status = "refunded";
+    sub.reserved_pages = Math.max(0, sub.reserved_pages - 1);
+    const avail = Math.max(0, sub.plan_pages_limit - sub.plan_pages_used) + sub.topup_pages_balance - sub.reserved_pages;
+    sub.available_pages = Math.max(0, avail);
+    return { success: true, refunded: true, reason };
+  }
+
+  return { success: true, refunded: true };
+}
+
+/**
+ * Fetch full user billing profile, active subscription, available plans, and usage history.
+ */
+export async function getUserBillingProfile(userId: string): Promise<UserBillingProfileData> {
+  const cleanUserId = (userId || "").trim();
+  const defaultPeriodEnd = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString();
+
+  const emptyProfile: UserBillingProfileData = {
+    subscription: {
+      plan_id: "free",
+      plan_type: "free",
+      status: "active",
+      period_start: new Date().toISOString(),
+      period_end: defaultPeriodEnd,
+      days_remaining: 30,
+      plan_pages_limit: 30,
+      plan_pages_used: 0,
+      topup_pages_balance: 0,
+      reserved_pages: 0,
+      available_pages: 30,
+      lifetime_pages_used: 0,
+    },
+    available_plans: DEFAULT_BILLING_PLANS,
+    recent_usage: [],
+    billing_history: [],
+  };
+
+  if (!cleanUserId) return emptyProfile;
+
+  try {
+    const supabase = await getSupabaseServerClient();
+    if (supabase) {
+      const { data, error } = await supabase.rpc("get_user_billing_profile", {
+        p_user_id: cleanUserId,
+      });
+
+      if (!error && data && typeof data === "object" && data.subscription) {
+        return data as UserBillingProfileData;
+      }
+      if (error && !error.message?.includes("Could not find the function")) {
+        console.warn("Supabase get_user_billing_profile error:", error.message);
+      }
+    }
+  } catch (err) {
+    console.warn("getUserBillingProfile exception:", err);
+  }
+
+  // Fallback in-memory
+  const sub = memorySubscriptions.get(cleanUserId);
+  if (sub) {
+    const daysLeft = Math.max(0, Math.ceil((new Date(sub.period_end).getTime() - Date.now()) / (1000 * 60 * 60 * 24)));
+    return {
+      subscription: { ...sub, days_remaining: daysLeft },
+      available_plans: DEFAULT_BILLING_PLANS,
+      recent_usage: Array.from(memoryReservations.values())
+        .filter((r) => r.userId === cleanUserId)
+        .map((r) => ({
+          id: r.id,
+          book_title: r.bookTitle,
+          page_number: r.pageNumber,
+          language: r.language,
+          status: r.status,
+          pages: 1,
+          quota_source: r.quotaSource,
+          created_at: r.createdAt,
+        })),
+      billing_history: [],
+    };
+  }
+
+  return emptyProfile;
+}
+
+/**
+ * Update user subscription upon verified plan purchase or topup.
+ */
+export async function purchasePlan(
+  userId: string,
+  planId: string,
+  paymentDetails: { razorpayOrderId?: string; razorpayPaymentId?: string },
+): Promise<{ success: boolean; plan_id?: string; available_pages?: number; error?: string }> {
+  const cleanUserId = (userId || "").trim();
+  if (!cleanUserId || !planId) {
+    return { success: false, error: "Missing required parameters" };
+  }
+
+  try {
+    const supabase = await getSupabaseServerClient();
+    if (supabase) {
+      const { data, error } = await supabase.rpc("purchase_or_topup_plan", {
+        p_user_id: cleanUserId,
+        p_plan_id: planId,
+        p_razorpay_order_id: paymentDetails.razorpayOrderId || null,
+        p_razorpay_payment_id: paymentDetails.razorpayPaymentId || null,
+      });
+
+      if (!error && data && typeof data === "object" && data.success) {
+        return data;
+      }
+      if (error) {
+        console.warn("Supabase purchase_or_topup_plan error:", error.message);
+      }
+    }
+  } catch (err) {
+    console.warn("purchasePlan exception:", err);
+  }
+
+  // Fallback in-memory
+  const plan = DEFAULT_BILLING_PLANS.find((p) => p.id === planId);
+  if (!plan) return { success: false, error: "Invalid plan ID" };
+
+  let sub = memorySubscriptions.get(cleanUserId);
+  const now = new Date();
+  if (!sub) {
+    sub = {
+      plan_id: "free",
+      plan_type: "free",
+      status: "active",
+      period_start: now.toISOString(),
+      period_end: new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000).toISOString(),
+      days_remaining: 30,
+      plan_pages_limit: 30,
+      plan_pages_used: 0,
+      topup_pages_balance: 0,
+      reserved_pages: 0,
+      available_pages: 30,
+      lifetime_pages_used: 0,
+    };
+  }
+
+  if (plan.plan_type === "topup") {
+    sub.topup_pages_balance += plan.pages_allotment;
+  } else {
+    sub.plan_id = plan.id;
+    sub.plan_type = plan.plan_type;
+    sub.plan_pages_limit = plan.pages_allotment;
+    sub.plan_pages_used = 0;
+    sub.period_start = now.toISOString();
+    sub.period_end = new Date(now.getTime() + plan.validity_days * 24 * 60 * 60 * 1000).toISOString();
+  }
+
+  const avail = Math.max(0, sub.plan_pages_limit - sub.plan_pages_used) + sub.topup_pages_balance - sub.reserved_pages;
+  sub.available_pages = Math.max(0, avail);
+  memorySubscriptions.set(cleanUserId, sub);
+
+  return { success: true, plan_id: sub.plan_id, available_pages: sub.available_pages };
+}
+

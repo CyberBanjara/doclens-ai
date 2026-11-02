@@ -14,7 +14,11 @@ import {
   ChevronRight,
   Copy,
   Check,
+  Zap,
+  CreditCard,
 } from "lucide-react";
+import { openBillingModal } from "@/components/BillingModal";
+import { apiGetBillingProfile, type BillingProfileResponse } from "@/lib/auth-client";
 import { useAuth } from "@/context/AuthContext";
 import { SidebarLayout } from "@/components/SidebarLayout";
 import { UserAvatar } from "@/components/UserAvatar";
@@ -91,6 +95,15 @@ function UserProfileRoute() {
   const [langModalOpen, setLangModalOpen] = useState(false);
   const [educationModalOpen, setEducationModalOpen] = useState(false);
   const [styleModalOpen, setStyleModalOpen] = useState(false);
+  const [billingProfile, setBillingProfile] = useState<BillingProfileResponse | null>(null);
+
+  useEffect(() => {
+    if (user?.uid) {
+      void apiGetBillingProfile().then((data) => {
+        if (data) setBillingProfile(data);
+      });
+    }
+  }, [user?.uid, refreshTrigger]);
 
   // Initialize preference states once user loads
   useEffect(() => {
@@ -349,6 +362,83 @@ function UserProfileRoute() {
                     {user.style || selectedStyle || "Native"}
                   </span>
                 </button>
+              </div>
+            </div>
+
+            {/* Subscription & Translation Quota Card */}
+            <div className="rounded-xl border border-border/60 bg-card p-5 sm:p-6 shadow-xs">
+              <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+                <div className="flex items-center gap-3">
+                  <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-primary/10 text-primary border border-primary/20">
+                    <Zap className="h-5 w-5 text-amber-400" />
+                  </div>
+                  <div>
+                    <div className="flex items-center gap-2">
+                      <span className="text-sm font-bold text-foreground">
+                        {billingProfile?.subscription?.plan_id === "monthly"
+                          ? "Monthly Pro Plan"
+                          : billingProfile?.subscription?.plan_id === "pass"
+                            ? "Reader Pass"
+                            : "Free Plan"}
+                      </span>
+                      <span className="inline-flex items-center rounded-md border border-primary/30 bg-primary/10 px-2 py-0.5 text-[10px] font-semibold text-primary uppercase">
+                        {billingProfile?.subscription?.days_remaining ?? 30} Days Left
+                      </span>
+                    </div>
+                    <p className="text-xs text-muted-foreground mt-0.5">
+                      <strong className="text-foreground font-semibold">
+                        {billingProfile?.subscription?.available_pages ?? 30}
+                      </strong>{" "}
+                      pages available of{" "}
+                      {(billingProfile?.subscription?.plan_pages_limit ?? 30) +
+                        (billingProfile?.subscription?.topup_pages_balance ?? 0)}{" "}
+                      total quota
+                    </p>
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => openBillingModal()}
+                    className="inline-flex items-center gap-1.5 rounded-lg bg-primary text-primary-foreground px-3.5 py-2 text-xs font-semibold hover:bg-primary/90 transition-all cursor-pointer shadow-2xs"
+                  >
+                    <CreditCard className="h-3.5 w-3.5" />
+                    <span>Plans &amp; Top-ups</span>
+                  </button>
+                </div>
+              </div>
+
+              {/* Quota Progress Bar */}
+              <div className="mt-4 pt-3 border-t border-border/40">
+                <div className="flex justify-between text-[11px] text-muted-foreground mb-1.5">
+                  <span>Quota Usage</span>
+                  <span>
+                    {billingProfile?.subscription?.plan_pages_used ?? 0} /{" "}
+                    {(billingProfile?.subscription?.plan_pages_limit ?? 30) +
+                      (billingProfile?.subscription?.topup_pages_balance ?? 0)}{" "}
+                    pages used
+                  </span>
+                </div>
+                <div className="h-2 w-full rounded-full bg-surface-2 overflow-hidden">
+                  <div
+                    className="h-full bg-gradient-to-r from-primary to-indigo-400 rounded-full transition-all duration-500"
+                    style={{
+                      width: `${Math.min(
+                        100,
+                        Math.round(
+                          ((billingProfile?.subscription?.plan_pages_used ?? 0) /
+                            Math.max(
+                              1,
+                              (billingProfile?.subscription?.plan_pages_limit ?? 30) +
+                                (billingProfile?.subscription?.topup_pages_balance ?? 0),
+                            )) *
+                            100,
+                        ),
+                      )}%`,
+                    }}
+                  />
+                </div>
               </div>
             </div>
 

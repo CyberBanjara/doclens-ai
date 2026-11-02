@@ -9,6 +9,7 @@ import {
 import { Analytics } from "@vercel/analytics/react";
 import { SpeedInsights } from "@vercel/speed-insights/react";
 import { ApiKeyModal } from "@/components/ApiKeyModal";
+import { BillingModal } from "@/components/BillingModal";
 import { Toaster } from "@/components/ui/sonner";
 import { useEffect, useState } from "react";
 import { initTheme } from "@/lib/theme";
@@ -389,6 +390,7 @@ function RootComponent() {
         <GlobalAuthPreferencesWatcher />
         {/* <AdBannerWidget /> - Hidden temporarily */}
         <ApiKeyModal />
+        <BillingModal />
         <Analytics />
         <SpeedInsights />
         <Toaster position="bottom-right" richColors closeButton />

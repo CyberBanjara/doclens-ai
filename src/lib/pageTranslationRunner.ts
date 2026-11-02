@@ -254,7 +254,7 @@ export async function executePageTranslation({
         return { success: false, error: errorMsg };
       }
 
-      if (!isOmni && !isOllama && !key) {
+      if (!isOmni && !isOllama && !key && !authToken) {
         const errorMsg = "No OpenRouter API key configured.";
         await upsertPageAi(docId, pageNumber, {
           status: "error",
@@ -324,11 +324,19 @@ export async function executePageTranslation({
           onDelta: onChunk,
         });
       } else {
+        const rawTitle = docRec?.fileName || "Untitled Document";
+        const bookTitle = rawTitle.replace(/\.pdf$/i, "").trim() || "Untitled Document";
         await streamCompletion({
           key: key || "",
           payload,
           signal: internalAbort.signal,
           onDelta: onChunk,
+          docId,
+          bookId,
+          bookTitle,
+          pageNumber,
+          language: eff.language,
+          pageKey: `${bookId || docId}:${pageNumber}:${eff.language}`,
         });
       }
 

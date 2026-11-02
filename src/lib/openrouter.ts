@@ -710,6 +710,12 @@ export interface StreamOpts {
   onDelta: (text: string) => void;
   /** Override default timeout (ms). */
   timeoutMs?: number;
+  docId?: string;
+  bookId?: string;
+  bookTitle?: string;
+  pageNumber?: number;
+  language?: string;
+  pageKey?: string;
 }
 
 function combinedSignal(
@@ -842,44 +848,94 @@ async function readSseStream(
 }
 
 /**
- * Direct client-side streaming completion to OpenRouter API.
- * Bypasses all server middleware for minimal round-trip latency and instant UI streaming.
- * Hard-stops immediately on error or abort with NO automatic retry loop.
+/**
+ * Streaming completion routed through the Vercel serverless billing layer.
+ * Authenticates users, reserves quota via single Supabase RPC, proxies SSE stream,
+ * and finalizes/refunds usage safely.
  */
 export async function streamCompletion(opts: StreamOpts): Promise<void> {
   const { signal, cleanup } = combinedSignal(opts.signal, opts.timeoutMs ?? STREAM_TIMEOUT_MS);
-  const resolvedKey = opts.key || getKey();
   const isCustomKey = !!getCustomKey();
-
-  if (!resolvedKey) {
-    cleanup();
-    const err = new OpenRouterError("No OpenRouter API key configured.", 401, "auth");
-    setKeyStatus("missing");
-    throw err;
-  }
 
   try {
     if (signal.aborted) throw new DOMException("Aborted", "AbortError");
 
+    // Retrieve fresh session token for authenticated Vercel billing proxy
+    let token: string | null = null;
+    try {
+      const { getFreshAuthToken } = await import("./auth-client");
+      token = await getFreshAuthToken();
+    } catch {
+      // In non-auth or test context
+    }
+
+    const headers: Record<string, string> = {
+      "Content-Type": "application/json",
+      ...HEADERS_BASE,
+    };
+    if (token) {
+      headers["Authorization"] = `Bearer ${token}`;
+      headers["x-firebase-token"] = token;
+    }
+    const customKey = getCustomKey() || opts.key;
+    if (customKey) {
+      headers["x-custom-openrouter-key"] = customKey;
+    }
+
     let response: Response;
     try {
-      response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
+      response = await fetch("/api/translations/translate", {
         method: "POST",
-        headers: {
-          Authorization: `Bearer ${resolvedKey}`,
-          "Content-Type": "application/json",
-          ...HEADERS_BASE,
-        },
-        body: JSON.stringify({ ...opts.payload, stream: true }),
+        headers,
+        credentials: "include",
+        body: JSON.stringify({
+          payload: { ...opts.payload, stream: true },
+          docId: opts.docId,
+          bookId: opts.bookId,
+          bookTitle: opts.bookTitle,
+          pageNumber: opts.pageNumber,
+          language: opts.language,
+          pageKey: opts.pageKey,
+        }),
         signal,
       });
     } catch (fetchErr: any) {
       if (signal.aborted) throw fetchErr;
-      throw new OpenRouterError(fetchErr?.message || "Network error", 0, "network");
+      throw new OpenRouterError(fetchErr?.message || "Network error communicating with server", 0, "network");
     }
 
     if (!response.ok) {
       const bodyText = await response.text();
+      let errorData: any = null;
+      try {
+        errorData = JSON.parse(bodyText);
+      } catch {}
+
+      if (response.status === 401) {
+        setKeyStatus("missing");
+        throw new OpenRouterError(
+          errorData?.data?.error || errorData?.error || "Please sign in to translate pages using your account's quota.",
+          401,
+          "auth",
+        );
+      }
+
+      if (
+        response.status === 402 ||
+        response.status === 429 ||
+        errorData?.data?.code === "QUOTA_EXCEEDED" ||
+        errorData?.code === "QUOTA_EXCEEDED"
+      ) {
+        const msg =
+          errorData?.data?.error ||
+          errorData?.error ||
+          "You have reached your translation quota limit (30 pages on Free plan). Upgrade to Reader Pass (300 pages) or Monthly Pro (600 pages) to continue!";
+        if (typeof window !== "undefined") {
+          window.dispatchEvent(new CustomEvent("doclens:open-billing-modal", { detail: { error: msg } }));
+        }
+        throw new OpenRouterError(msg, response.status, "quota");
+      }
+
       const friendly = friendlyOpenRouterError(response.status, bodyText, isCustomKey);
       if (friendly.kind === "auth") {
         setKeyStatus("invalid");
