@@ -98,7 +98,43 @@ export default defineEventHandler(async (event) => {
       });
     }
 
-    // 5. Route request to OpenRouter API with SSE streaming enabled
+    // 5. Enforce AI model server-side in Managed-AI mode (when using server API key)
+    // The AI model must always be read from environment variables and enforced server-side.
+    // Users must not be able to change or override it from the client under any circumstances.
+    // Automatically append `:floor` to select the cheapest available provider on OpenRouter.
+    const isManagedMode = !customHeaderKey || !customHeaderKey.trim();
+    const serverEnforcedModel = (
+      process.env.OPENROUTER_DEFAULT_MODEL ||
+      process.env.MANAGED_AI_MODEL ||
+      process.env.VITE_OPENROUTER_DEFAULT_MODEL ||
+      "z-ai/glm-5.3-flash"
+    ).trim();
+
+    const withFloor = (m: string): string => {
+      const trimmed = m.trim();
+      if (!trimmed) return trimmed;
+      return trimmed.endsWith(":floor") ? trimmed : `${trimmed}:floor`;
+    };
+
+    const requestPayload: Record<string, any> = {
+      ...body.payload,
+      stream: true,
+    };
+
+    if (isManagedMode) {
+      requestPayload.model = withFloor(serverEnforcedModel);
+      delete requestPayload.models;
+    } else if (typeof requestPayload.model === "string" && requestPayload.model.trim()) {
+      requestPayload.model = withFloor(requestPayload.model);
+    }
+
+    if (Array.isArray(requestPayload.models)) {
+      requestPayload.models = requestPayload.models.map((m: any) =>
+        typeof m === "string" ? withFloor(m) : m
+      );
+    }
+
+    // 6. Route request to OpenRouter API with SSE streaming enabled
     let orResponse: Response;
     const fetchUpstream = async () => {
       return await fetch("https://openrouter.ai/api/v1/chat/completions", {
@@ -109,7 +145,7 @@ export default defineEventHandler(async (event) => {
           "HTTP-Referer": "https://doclens-ai.vercel.app",
           "X-Title": "Anuwad Document Reader",
         },
-        body: JSON.stringify({ ...body.payload, stream: true }),
+        body: JSON.stringify(requestPayload),
       });
     };
 

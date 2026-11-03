@@ -270,21 +270,33 @@ export async function executePageTranslation({
       }
 
       const modelId =
-        eff.modelId ||
-        (eff.provider === "ollama"
-          ? currentGlobals.ollamaModelId || getOllamaSelectedModel() || "llama3"
-          : eff.provider === "omnirouter"
-            ? currentGlobals.omniModelId || getOmniSelectedModel() || getOmniDefaultModelSync() || "auto/best-coding"
-            : eff.provider === "openrouter"
-              ? getSelectedModel() || getDefaultModelSync()
-              : getSelectedModel() || CURATED_MODELS[0]?.id || "liquid/lfm-2.5-2.6b:free");
+        eff.provider === "managed"
+          ? getDefaultModelSync() || CURATED_MODELS[0]?.id || "liquid/lfm-2.5-2.6b:free"
+          : eff.modelId ||
+            (eff.provider === "ollama"
+              ? currentGlobals.ollamaModelId || getOllamaSelectedModel() || "llama3"
+              : eff.provider === "omnirouter"
+                ? currentGlobals.omniModelId ||
+                  getOmniSelectedModel() ||
+                  getOmniDefaultModelSync() ||
+                  "auto/best-coding"
+                : eff.provider === "openrouter"
+                  ? getSelectedModel() || getDefaultModelSync()
+                  : getDefaultModelSync() || CURATED_MODELS[0]?.id || "liquid/lfm-2.5-2.6b:free");
 
       const effectiveText = customTextOverride ?? pageRec.text;
       const previousContext = await getPreviousContext(docId, pageNumber, eff);
 
       let payload: Record<string, unknown>;
       if (state.isCustom && state.customRequest) {
-        payload = { ...state.customRequest, stream: true, model: modelId };
+        payload = {
+          ...state.customRequest,
+          stream: true,
+          model:
+            eff.provider === "managed"
+              ? getDefaultModelSync() || CURATED_MODELS[0]?.id || "liquid/lfm-2.5-2.6b:free"
+              : modelId,
+        };
       } else {
         payload = buildPagePayload({
           modelId,

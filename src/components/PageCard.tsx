@@ -1,43 +1,76 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Sparkles, KeyRound } from "lucide-react";
+import { Sparkles, KeyRound, SlidersHorizontal, ChevronDown, Code2, X } from "lucide-react";
 import {
   buildPagePayload,
-  EXPLANATION_STYLES,
-  TRANSLATION_STYLES,
   MODE_LABELS,
   openApiKeyModal,
-  isOmniRouterConfigured,
-  CURATED_MODELS,
   extractProviderErrorMessage,
   type GlobalMode,
   type Globals,
   type ORModel,
-  type AiProvider,
 } from "@/lib/openrouter";
 import {
   getPageData,
   upsertPageAi,
   type PageAi,
   type PageAiSummaryEntry,
-  type PageOverrides,
 } from "@/lib/storage";
 import { effective, summarize } from "@/lib/pageAi";
 import { HighlightableText } from "./HighlightableText";
 import { LoadingLogo } from "@/components/LoadingLogo";
-
 import { getPreviousContext } from "@/lib/contextStore";
 
-const STYLES = EXPLANATION_STYLES.map((s) => s.id);
-const QUICK_LANGS = [
-  "हिंदी",
-  "বাংলা",
-  "తెలుగు",
-  "മലയാളം",
-  "தமிழ்",
-  "English",
-  "Spanish",
-  "French",
-  "Japanese",
+export interface ModeOption {
+  id: string;
+  label: string;
+  mode: GlobalMode;
+  style: string;
+  description: string;
+}
+
+export const MODE_OPTIONS: ModeOption[] = [
+  {
+    id: "translate",
+    label: "Translate",
+    mode: "translate",
+    style: "Native",
+    description: "Translate content preserving structure",
+  },
+  {
+    id: "standard",
+    label: "Standard",
+    mode: "explain",
+    style: "Standard",
+    description: "Clear and organized balanced explanation",
+  },
+  {
+    id: "simple",
+    label: "Simple",
+    mode: "explain",
+    style: "Simple",
+    description: "Beginner-friendly explanation with everyday analogies",
+  },
+  {
+    id: "story",
+    label: "Story",
+    mode: "explain",
+    style: "Story",
+    description: "Engaging scenario and narrative-driven explanation",
+  },
+  {
+    id: "deep",
+    label: "Deep",
+    mode: "explain",
+    style: "Deep",
+    description: "In-depth technical analysis and critical reasoning",
+  },
+  {
+    id: "ai",
+    label: "AI Mode",
+    mode: "explain",
+    style: "AI",
+    description: "First-principles holistic reasoning and synthesis",
+  },
 ];
 
 /* ---------- Per-page card loader (fetches its own data) ---------- */
@@ -46,7 +79,7 @@ interface CardLoaderProps {
   docId: string;
   pageNumber: number;
   globals: Globals;
-  models: ORModel[];
+  models?: ORModel[];
   omniModels?: ORModel[];
   ollamaModels?: ORModel[];
   summary?: PageAiSummaryEntry;
@@ -67,7 +100,7 @@ export function PageCardLoader(props: CardLoaderProps) {
   }));
   const [prevContext, setPrevContext] = useState<string>("");
 
-  // Track stream buffer to eliminate any frame lag / empty flash when isRunning transitions to false
+  // Track stream buffer to eliminate frame lag when isRunning transitions to false
   const streamCacheRef = useRef("");
   if (streamBuf) {
     streamCacheRef.current = streamBuf;
@@ -146,9 +179,7 @@ export function PageCardLoader(props: CardLoaderProps) {
       columns={columns}
       state={pageAi}
       eff={effective(props.globals, pageAi.overrides)}
-      models={props.models}
-      omniModels={props.omniModels}
-      ollamaModels={props.ollamaModels}
+      globals={props.globals}
       streamBuf={streamBuf}
       previousContext={prevContext}
       fallbackResult={streamCacheRef.current}
@@ -169,9 +200,7 @@ interface CardProps {
   columns: number;
   state: PageAi;
   eff: ReturnType<typeof effective>;
-  models: ORModel[];
-  omniModels?: ORModel[];
-  ollamaModels?: ORModel[];
+  globals: Globals;
   streamBuf: string;
   previousContext?: string;
   fallbackResult?: string;
@@ -186,22 +215,20 @@ function PageCard({
   pageText,
   state,
   eff,
-  models,
-  omniModels,
-  ollamaModels,
+  globals,
   streamBuf,
   previousContext,
-  fallbackResult,
   isRunning,
   onUpdate,
   onRun,
   onCancel,
 }: CardProps) {
-  const [showSettings, setShowSettings] = useState(false);
+  const [showModeSelector, setShowModeSelector] = useState(false);
   const [editingJson, setEditingJson] = useState(false);
   const [draft, setDraft] = useState("");
   const [draftError, setDraftError] = useState("");
 
+  // Build the automatic schema payload for previewing / editing JSON
   const autoPayload = useMemo(() => {
     return buildPagePayload({
       modelId: eff.modelId,
@@ -225,9 +252,8 @@ function PageCard({
   ]);
 
   const previewPayload = state.isCustom && state.customRequest ? state.customRequest : autoPayload;
-  const overrideCount = state.overrides ? Object.keys(state.overrides).length : 0;
 
-  // Reactively keep JSON draft in sync with parameter overrides unless custom request is active
+  // Reactively keep draft in sync with autoPayload unless custom request is active
   useEffect(() => {
     if (!state.isCustom) {
       setDraft(JSON.stringify(previewPayload, null, 2));
@@ -235,155 +261,289 @@ function PageCard({
     }
   }, [previewPayload, state.isCustom]);
 
-  const setOverride = (patch: Partial<PageOverrides>) => {
-    onUpdate({ overrides: { ...(state.overrides ?? {}), ...patch } });
+  // Close mode selector if page processing starts
+  useEffect(() => {
+    if (isRunning) {
+      setShowModeSelector(false);
+    }
+  }, [isRunning]);
+
+  const activeModeTitle = useMemo(() => {
+    if (state.overrides?.mode === "translate") return "Translate";
+    if (state.overrides?.mode === "explain") {
+      return state.overrides.style || "Explain";
+    }
+    return null;
+  }, [state.overrides]);
+
+  const hasModeOverride = !!activeModeTitle;
+
+  const isCurrentMode = (opt: ModeOption) => {
+    if (state.isCustom) return false;
+    if (opt.mode === "translate") {
+      return eff.mode === "translate";
+    }
+    return eff.mode === "explain" && eff.style === opt.style;
+  };
+
+  const handleSelectMode = (opt: ModeOption) => {
+    const matchesGlobal =
+      globals.mode === opt.mode &&
+      (opt.mode === "translate" || globals.style === opt.style);
+
+    if (matchesGlobal) {
+      onUpdate({
+        overrides: undefined,
+        isCustom: false,
+        customRequest: null,
+      });
+    } else {
+      onUpdate({
+        overrides: {
+          mode: opt.mode,
+          style: opt.style,
+        },
+        isCustom: false,
+        customRequest: null,
+      });
+    }
+    setShowModeSelector(false);
+    setEditingJson(false);
   };
 
   const startEdit = () => {
     setDraft(JSON.stringify(previewPayload, null, 2));
     setDraftError("");
     setEditingJson(true);
+    setShowModeSelector(false);
   };
+
   const saveEdit = () => {
     try {
       const parsed = JSON.parse(draft);
-      if (typeof parsed !== "object" || !parsed) throw new Error("Not an object");
-      // Reset status so a stale pre-edit result is never mistaken for fresh
-      // output of this new custom request (see doclens:ensure-page-ready).
+      if (typeof parsed !== "object" || !parsed) {
+        throw new Error("Payload must be a valid JSON object");
+      }
       onUpdate({ customRequest: parsed, isCustom: true, status: "idle" });
       setEditingJson(false);
     } catch (e) {
-      setDraftError(e instanceof Error ? e.message : "Invalid JSON");
+      setDraftError(e instanceof Error ? e.message : "Invalid JSON syntax");
     }
   };
+
   const resetAuto = () => {
     onUpdate({ customRequest: null, isCustom: false });
     setEditingJson(false);
   };
 
   /* Determine button label from mode */
-  const modeLabel = MODE_LABELS[eff.mode] || "Translate";
-  const hasResult = !!state.result || isRunning;
+  const modeLabel = MODE_LABELS[eff.mode] || (eff.mode === "translate" ? "Translate" : "Explain");
 
   return (
     <article className={`reader-card ${isRunning ? "!border-primary/20" : ""}`}>
       {/* ─── Header ─── */}
-      <header className="mb-4 flex items-center justify-between">
-        <div className="flex items-center gap-2">
-          <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+      <header className="mb-4 flex items-center justify-between gap-2">
+        <div className="flex items-center gap-2 min-w-0 flex-wrap">
+          <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground shrink-0">
             Page {pageNumber}
           </h3>
           {state.status === "done" && (
-            <span className="flex h-1.5 w-1.5 rounded-full bg-primary" title="Translated" />
+            <span className="flex h-1.5 w-1.5 rounded-full bg-primary shrink-0" title="Completed" />
           )}
           {state.status === "running" && (
-            <span className="inline-block h-3 w-3 rounded-full border-[1.5px] border-primary border-t-transparent spin-slow" />
+            <span className="inline-block h-3 w-3 rounded-full border-[1.5px] border-primary border-t-transparent spin-slow shrink-0" />
           )}
           {state.status === "error" && (
-            <span className="flex h-1.5 w-1.5 rounded-full bg-destructive" title="Error" />
+            <span className="flex h-1.5 w-1.5 rounded-full bg-destructive shrink-0" title="Error" />
           )}
-          {state.isCustom && (
-            <span className="rounded-full bg-accent/10 px-2 py-0.5 text-[10px] font-medium text-accent">
-              Custom
-            </span>
-          )}
-          {overrideCount > 0 && (
-            <span className="rounded-full bg-primary/10 px-2 py-0.5 text-[10px] font-medium text-primary">
-              {overrideCount} override{overrideCount > 1 ? "s" : ""}
-            </span>
-          )}
-        </div>
-        <div className="flex items-center gap-1">
-          {/* Settings gear */}
-          <button
-            onClick={() => setShowSettings(!showSettings)}
-            className={`flex h-7 w-7 items-center justify-center rounded-md transition-colors ${showSettings ? "bg-surface-2 text-foreground" : "text-muted-foreground hover:bg-surface-2 hover:text-foreground"}`}
-            title="Configure"
-          >
-            ⚙
-          </button>
 
-          {/* Run / Cancel */}
-          {isRunning ? (
+          {/* Custom JSON Badge or Mode Override Badge */}
+          {state.isCustom ? (
+            <div className="inline-flex items-center gap-1 rounded-full bg-accent/15 border border-accent/25 px-2 py-0.5 text-[10px] font-medium text-accent shrink-0">
+              <Code2 className="h-2.5 w-2.5" />
+              <span>Custom JSON</span>
+              <button
+                type="button"
+                onClick={resetAuto}
+                className="ml-0.5 rounded-full hover:bg-accent/20 p-0.5 cursor-pointer text-accent"
+                title="Reset to automatic mode"
+              >
+                <X className="h-2.5 w-2.5" />
+              </button>
+            </div>
+          ) : hasModeOverride ? (
             <button
-              onClick={onCancel}
-              className="ml-1 rounded-lg border border-destructive/30 px-2.5 py-1 text-xs font-medium text-destructive transition-colors hover:bg-destructive/10"
+              type="button"
+              onClick={() => onUpdate({ overrides: undefined })}
+              className="group inline-flex items-center gap-1 rounded-full bg-primary/10 px-2 py-0.5 text-[10px] font-medium text-primary hover:bg-primary/20 transition-colors cursor-pointer shrink-0"
+              title="Page mode overridden. Click to reset to document default."
             >
-              Stop
+              <span>{activeModeTitle}</span>
+              <X className="h-2.5 w-2.5 opacity-60 group-hover:opacity-100" />
             </button>
-          ) : (
-            <button
-              onClick={onRun}
-              className="ml-1 rounded-lg bg-primary px-3 py-1 text-xs font-semibold text-primary-foreground transition-opacity hover:opacity-90"
-            >
-              {modeLabel}
-            </button>
-          )}
+          ) : null}
         </div>
-      </header>
 
-      {/* ─── Settings panel (collapsed by default) ─── */}
-      <div className={`collapsible-content ${showSettings ? "open" : ""}`}>
-        <div>
-          <div className="mb-4 space-y-3 rounded-lg bg-surface-2/30 p-3">
-            <div className="flex items-center justify-between">
-              <span className="text-xs font-medium text-muted-foreground">Page Overrides</span>
-              <div className="flex items-center gap-2">
-                {state.isCustom && (
+        {/* ─── Right Controls: Inline Mode Selector or Mode & Action Buttons ─── */}
+        {showModeSelector && !isRunning ? (
+          <div className="flex items-center gap-1 animate-in fade-in duration-150 max-w-full">
+            <div className="flex items-center gap-0.5 rounded-lg border border-border/70 bg-surface-2/70 p-0.5 shadow-xs overflow-x-auto no-scrollbar">
+              {MODE_OPTIONS.map((opt) => {
+                const isCurrent = isCurrentMode(opt);
+                return (
                   <button
-                    onClick={resetAuto}
-                    className="rounded-md bg-primary/10 px-2 py-0.5 text-[11px] font-medium text-primary hover:bg-primary/20 cursor-pointer"
+                    key={opt.id}
+                    type="button"
+                    onClick={() => handleSelectMode(opt)}
+                    className={`shrink-0 rounded-md px-2.5 py-1 text-[11px] font-medium transition-all cursor-pointer ${
+                      isCurrent
+                        ? "bg-primary text-primary-foreground font-semibold shadow-xs"
+                        : "text-muted-foreground hover:bg-surface hover:text-foreground"
+                    }`}
+                    title={opt.description}
                   >
-                    Reset to Auto
+                    {opt.label}
                   </button>
-                )}
-                <button
-                  onClick={editingJson ? () => setEditingJson(false) : startEdit}
-                  className="rounded-md border border-border px-2 py-0.5 text-[11px] text-muted-foreground transition-colors hover:text-foreground cursor-pointer"
-                >
-                  {editingJson ? "Hide JSON" : "Edit JSON"}
-                </button>
-              </div>
+                );
+              })}
+
+              {/* Subtle divider */}
+              <div className="mx-0.5 h-3.5 w-px bg-border/70 shrink-0" />
+
+              {/* Edit JSON Option */}
+              <button
+                type="button"
+                onClick={startEdit}
+                className={`shrink-0 inline-flex items-center gap-1 rounded-md px-2 py-1 text-[11px] font-medium transition-all cursor-pointer ${
+                  state.isCustom || editingJson
+                    ? "bg-accent/20 text-accent font-semibold"
+                    : "text-muted-foreground hover:bg-surface hover:text-foreground"
+                }`}
+                title="Edit raw prompt JSON payload"
+              >
+                <Code2 className="h-3 w-3" />
+                <span>JSON</span>
+              </button>
             </div>
 
-            <OverrideControls
-              eff={eff}
-              models={models}
-              omniModels={omniModels}
-              ollamaModels={ollamaModels}
-              overrides={state.overrides}
-              onSetOverride={setOverride}
-              onClearOverrides={() => onUpdate({ overrides: undefined })}
-            />
+            {/* Dismiss selector */}
+            <button
+              type="button"
+              onClick={() => setShowModeSelector(false)}
+              className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-surface-2 hover:text-foreground cursor-pointer"
+              title="Close"
+              aria-label="Close mode selector"
+            >
+              <X className="h-3.5 w-3.5" />
+            </button>
+          </div>
+        ) : (
+          <div className="flex items-center gap-1.5 shrink-0">
+            {/* Mode trigger button */}
+            <button
+              type="button"
+              onClick={() => {
+                setShowModeSelector(true);
+                setEditingJson(false);
+              }}
+              disabled={isRunning}
+              className="flex h-7 items-center gap-1.5 rounded-lg border border-border/60 bg-surface-2/40 px-2.5 text-xs font-medium text-foreground transition-all hover:bg-surface-2 hover:border-border cursor-pointer disabled:opacity-50"
+              title="Select Page Mode"
+              aria-label="Select Page Mode"
+            >
+              <SlidersHorizontal className="h-3.5 w-3.5 text-primary" />
+              <span>Mode</span>
+              <ChevronDown className="h-3 w-3 text-muted-foreground opacity-70" />
+            </button>
 
-            {editingJson && (
-              <div className="rounded-lg border border-border bg-background/40 p-3">
-                <textarea
-                  value={draft}
-                  onChange={(e) => setDraft(e.target.value)}
-                  spellCheck={false}
-                  className="h-56 w-full rounded-md border border-border bg-background px-3 py-2 font-mono text-[12px] outline-none focus:border-primary"
-                />
-                {draftError && <div className="mt-1 text-xs text-destructive">{draftError}</div>}
-                <div className="mt-2 flex items-center gap-2">
-                  <button
-                    onClick={saveEdit}
-                    className="rounded-md bg-primary px-3 py-1 text-xs font-semibold text-primary-foreground hover:opacity-90 cursor-pointer"
-                  >
-                    Save
-                  </button>
-                  <button
-                    onClick={() => setEditingJson(false)}
-                    className="rounded-md border border-border px-3 py-1 text-xs text-muted-foreground hover:text-foreground cursor-pointer"
-                  >
-                    Cancel
-                  </button>
-                </div>
-              </div>
+            {/* Run / Stop button */}
+            {isRunning ? (
+              <button
+                type="button"
+                onClick={onCancel}
+                className="rounded-lg border border-destructive/30 px-2.5 py-1 text-xs font-medium text-destructive transition-colors hover:bg-destructive/10 cursor-pointer"
+              >
+                Stop
+              </button>
+            ) : (
+              <button
+                type="button"
+                onClick={onRun}
+                className="rounded-lg bg-primary px-3 py-1 text-xs font-semibold text-primary-foreground transition-opacity hover:opacity-90 cursor-pointer"
+              >
+                {modeLabel}
+              </button>
             )}
           </div>
+        )}
+      </header>
+
+      {/* ─── Inline JSON Editor Panel ─── */}
+      {editingJson && (
+        <div className="mb-4 rounded-xl border border-border/80 bg-surface-2/40 p-3 shadow-xs animate-in fade-in slide-in-from-top-1 duration-150">
+          <div className="mb-2.5 flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <Code2 className="h-3.5 w-3.5 text-primary" />
+              <span className="text-xs font-semibold text-foreground">Edit Page JSON Payload</span>
+              {state.isCustom && (
+                <span className="rounded-full bg-accent/15 px-2 py-0.5 text-[10px] font-medium text-accent">
+                  Custom Active
+                </span>
+              )}
+            </div>
+            <div className="flex items-center gap-2">
+              {state.isCustom && (
+                <button
+                  type="button"
+                  onClick={resetAuto}
+                  className="rounded-md bg-primary/10 px-2 py-0.5 text-[11px] font-medium text-primary hover:bg-primary/20 transition-colors cursor-pointer"
+                >
+                  Reset to Auto
+                </button>
+              )}
+              <button
+                type="button"
+                onClick={() => setEditingJson(false)}
+                className="flex h-5 w-5 items-center justify-center rounded-md text-muted-foreground hover:bg-surface-2 hover:text-foreground cursor-pointer"
+                title="Close JSON editor"
+              >
+                <X className="h-3 w-3" />
+              </button>
+            </div>
+          </div>
+
+          <textarea
+            value={draft}
+            onChange={(e) => {
+              setDraft(e.target.value);
+              setDraftError("");
+            }}
+            spellCheck={false}
+            className="h-56 w-full rounded-lg border border-border bg-background px-3 py-2 font-mono text-[11px] leading-relaxed text-foreground outline-none focus:border-primary focus:ring-1 focus:ring-primary/30"
+          />
+
+          {draftError && (
+            <div className="mt-1.5 text-xs text-destructive font-medium">{draftError}</div>
+          )}
+
+          <div className="mt-2.5 flex items-center justify-end gap-2">
+            <button
+              type="button"
+              onClick={() => setEditingJson(false)}
+              className="rounded-lg border border-border px-3 py-1 text-xs text-muted-foreground hover:bg-surface hover:text-foreground cursor-pointer transition-colors"
+            >
+              Cancel
+            </button>
+            <button
+              type="button"
+              onClick={saveEdit}
+              className="rounded-lg bg-primary px-3 py-1 text-xs font-semibold text-primary-foreground hover:opacity-90 cursor-pointer shadow-xs transition-opacity"
+            >
+              Save & Apply
+            </button>
+          </div>
         </div>
-      </div>
+      )}
 
       {/* ─── Error banner if request failed ─── */}
       {state.error &&
@@ -472,170 +632,4 @@ function PageCard({
 
 function ReadableResult({ text, pageNumber }: { text: string; pageNumber: number }) {
   return <HighlightableText text={text} source="ai" pageNumber={pageNumber} />;
-}
-
-function SmallSelect({
-  label,
-  value,
-  onChange,
-  options,
-}: {
-  label: string;
-  value: string;
-  onChange: (v: string) => void;
-  options: [string, string][];
-}) {
-  return (
-    <label className="block">
-      <span className="text-[11px] font-medium text-muted-foreground capitalize">{label}</span>
-      <select
-        value={value}
-        onChange={(e) => onChange(e.target.value)}
-        className="mt-1 w-full rounded-md border border-border bg-background/50 px-2 py-1.5 text-[12px] text-foreground outline-none focus:border-primary"
-      >
-        {options.map(([v, l]) => (
-          <option key={v} value={v}>
-            {l}
-          </option>
-        ))}
-      </select>
-    </label>
-  );
-}
-
-function OverrideControls({
-  eff,
-  models,
-  omniModels,
-  ollamaModels,
-  overrides,
-  onSetOverride,
-  onClearOverrides,
-}: {
-  eff: ReturnType<typeof effective>;
-  models: ORModel[];
-  omniModels?: ORModel[];
-  ollamaModels?: ORModel[];
-  overrides?: PageOverrides;
-  onSetOverride: (patch: Partial<PageOverrides>) => void;
-  onClearOverrides: () => void;
-}) {
-  const isOmniConfigured = isOmniRouterConfigured();
-  const hasOverrides = !!overrides && Object.keys(overrides).length > 0;
-
-  const styleOptions = useMemo(() => {
-    return (eff.mode === "translate" ? TRANSLATION_STYLES : EXPLANATION_STYLES).map(
-      (s) => [s.id, s.label] as [string, string],
-    );
-  }, [eff.mode]);
-
-  const langOptions = useMemo(() => {
-    const list = QUICK_LANGS.map((l) => [l, l] as [string, string]);
-    if (eff.language && !QUICK_LANGS.includes(eff.language)) {
-      return [[eff.language, eff.language] as [string, string], ...list];
-    }
-    return list;
-  }, [eff.language]);
-
-  const activeModelList = useMemo(() => {
-    if (eff.provider === "managed") {
-      return CURATED_MODELS;
-    }
-    if (eff.provider === "ollama") {
-      return ollamaModels && ollamaModels.length > 0 ? ollamaModels : models;
-    }
-    if (eff.provider === "omnirouter") {
-      return omniModels && omniModels.length > 0 ? omniModels : models;
-    }
-    return models && models.length > 0 ? models : CURATED_MODELS;
-  }, [eff.provider, ollamaModels, omniModels, models]);
-
-  const modelOptions = useMemo(() => {
-    const list = activeModelList
-      .slice(0, 100)
-      .map((m) => [m.id, (m.name ?? m.id).slice(0, 36)] as [string, string]);
-    if (eff.modelId && !list.some(([id]) => id === eff.modelId)) {
-      return [[eff.modelId, eff.modelId.slice(0, 36)] as [string, string], ...list];
-    }
-    return list;
-  }, [activeModelList, eff.modelId]);
-
-  return (
-    <div>
-      <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
-        <SmallSelect
-          label="Provider"
-          value={eff.provider}
-          onChange={(v) => {
-            const nextProvider = v as AiProvider;
-            onSetOverride({ provider: nextProvider, modelId: undefined });
-          }}
-          options={[
-            ["managed", "Managed AI (Default)"],
-            ["openrouter", "Personal OpenRouter"],
-            ["omnirouter", "OmniRouter"],
-            ["ollama", "Ollama (Local)"],
-          ]}
-        />
-        <SmallSelect
-          label="Mode"
-          value={eff.mode}
-          onChange={(v) => {
-            const nextMode = v as GlobalMode;
-            let nextStyle = eff.style;
-            if (nextMode === "translate" && !TRANSLATION_STYLES.some((s) => s.id === nextStyle)) {
-              nextStyle = "Native";
-            } else if (
-              nextMode === "explain" &&
-              !EXPLANATION_STYLES.some((s) => s.id === nextStyle)
-            ) {
-              nextStyle = "Standard";
-            }
-            onSetOverride({ mode: nextMode, style: nextStyle });
-          }}
-          options={Object.entries(MODE_LABELS).map(([k, v]) => [k, v] as [string, string])}
-        />
-        <SmallSelect
-          label="Mother Tongue"
-          value={eff.language}
-          onChange={(v) => onSetOverride({ language: v })}
-          options={langOptions}
-        />
-        <SmallSelect
-          label="Style"
-          value={eff.style}
-          onChange={(v) => onSetOverride({ style: v })}
-          options={styleOptions}
-        />
-        <SmallSelect
-          label="Model"
-          value={eff.modelId}
-          onChange={(v) => onSetOverride({ modelId: v })}
-          options={modelOptions}
-        />
-        <label className="block">
-          <span className="text-[11px] font-medium text-muted-foreground">
-            Temperature · {(overrides?.temperature ?? eff.temperature).toFixed(2)}
-          </span>
-          <input
-            type="range"
-            min={0}
-            max={1.5}
-            step={0.05}
-            value={overrides?.temperature ?? eff.temperature}
-            onChange={(e) => onSetOverride({ temperature: parseFloat(e.target.value) })}
-            className="mt-1 w-full accent-primary"
-          />
-        </label>
-      </div>
-      {hasOverrides && (
-        <button
-          onClick={onClearOverrides}
-          className="mt-2 rounded-md border border-border px-2.5 py-1 text-[11px] text-muted-foreground transition-colors hover:text-foreground"
-        >
-          Clear Overrides
-        </button>
-      )}
-    </div>
-  );
 }

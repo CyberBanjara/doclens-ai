@@ -241,12 +241,21 @@ export async function getDefaultModel(): Promise<string> {
   return getDefaultModelSync();
 }
 
+/**
+ * Automatically appends `:floor` to the model ID to ensure OpenRouter routes
+ * to the cheapest available provider for that model. Avoids duplicate suffixes.
+ */
+export function withFloorSuffix(model: string): string {
+  const trimmed = (model || "").trim();
+  if (!trimmed) return trimmed;
+  return trimmed.endsWith(":floor") ? trimmed : `${trimmed}:floor`;
+}
+
 export async function getEffectiveSelectedModel(): Promise<string> {
   const provider = getAiProvider();
   if (provider === "managed") {
-    const sel = getSelectedModel();
-    if (sel && CURATED_MODELS.some((m) => m.id === sel)) return sel;
-    return CURATED_MODELS[0]?.id || "liquid/lfm-2.5-2.6b:free";
+    // In Managed AI, the model is strictly read from environment variables (CURATED_MODELS fallback)
+    return getDefaultModelSync() || CURATED_MODELS[0]?.id || "liquid/lfm-2.5-2.6b:free";
   }
   if (provider === "omnirouter") {
     return (
@@ -395,11 +404,15 @@ export interface Globals {
 
 export function readGlobals(): Globals {
   const mode = getMode();
+  const provider = getAiProvider();
   return {
-    provider: getAiProvider(),
+    provider,
     mode,
     language: getOutputLanguage(),
-    modelId: getSelectedModel() || getDefaultModelSync(),
+    modelId:
+      provider === "managed"
+        ? getDefaultModelSync()
+        : getSelectedModel() || getDefaultModelSync(),
     omniModelId: getOmniSelectedModel() || getOmniDefaultModelSync(),
     ollamaEndpoint: getOllamaEndpoint(),
     ollamaModelId: getOllamaSelectedModel(),
@@ -533,6 +546,7 @@ export const CURATED_MODELS: ORModel[] = [
     id: "liquid/lfm-2.5-2.6b:free",
     name: "Liquid LFM 2.5 (Free, Ultra Fast)",
     context_length: 32768,
+    pricing: { prompt: "0", completion: "0" },
     description:
       "Liquid AI's highly efficient neural architecture optimized for rapid reasoning and streaming.",
   },
@@ -540,18 +554,21 @@ export const CURATED_MODELS: ORModel[] = [
     id: "google/gemini-2.0-flash-exp:free",
     name: "Gemini 2.0 Flash (Free, Fast)",
     context_length: 1048576,
+    pricing: { prompt: "0", completion: "0" },
     description: "Next-gen multimodal model by Google with near-instant streaming.",
   },
   {
     id: "meta-llama/llama-3.3-70b-instruct:free",
     name: "Llama 3.3 70B Instruct (Free)",
     context_length: 131072,
+    pricing: { prompt: "0", completion: "0" },
     description: "Meta's flagship 70B model with exceptional reasoning and translation quality.",
   },
   {
     id: "anthropic/claude-3.5-sonnet",
     name: "Claude 3.5 Sonnet",
     context_length: 200000,
+    pricing: { prompt: "0.000003", completion: "0.000015" },
     description:
       "Anthropic's state-of-the-art model for nuanced explanations and reading comprehension.",
   },
@@ -559,12 +576,14 @@ export const CURATED_MODELS: ORModel[] = [
     id: "openai/gpt-4o-mini",
     name: "GPT-4o Mini",
     context_length: 128000,
+    pricing: { prompt: "0.00000015", completion: "0.0000006" },
     description: "OpenAI's high-speed, affordable powerhouse for document workflows.",
   },
   {
     id: "deepseek/deepseek-chat",
     name: "DeepSeek V3",
     context_length: 64000,
+    pricing: { prompt: "0.00000014", completion: "0.00000028" },
     description: "Top-tier open weights model with strong multilingual fluency.",
   },
 ];
@@ -944,6 +963,19 @@ export async function streamCompletion(opts: StreamOpts): Promise<void> {
       headers["x-custom-openrouter-key"] = customKey;
     }
 
+    const outgoingPayload: Record<string, any> = {
+      ...opts.payload,
+      stream: true,
+    };
+    if (typeof outgoingPayload.model === "string" && outgoingPayload.model.trim()) {
+      outgoingPayload.model = withFloorSuffix(outgoingPayload.model);
+    }
+    if (Array.isArray(outgoingPayload.models)) {
+      outgoingPayload.models = outgoingPayload.models.map((m: any) =>
+        typeof m === "string" ? withFloorSuffix(m) : m
+      );
+    }
+
     let response: Response;
     try {
       response = await fetch("/api/translations/translate", {
@@ -951,7 +983,7 @@ export async function streamCompletion(opts: StreamOpts): Promise<void> {
         headers,
         credentials: "include",
         body: JSON.stringify({
-          payload: { ...opts.payload, stream: true },
+          payload: outgoingPayload,
           docId: opts.docId,
           bookId: opts.bookId,
           bookTitle: opts.bookTitle,
@@ -1063,12 +1095,25 @@ export async function streamPersonalOpenRouterCompletion(opts: StreamOpts): Prom
       ...HEADERS_BASE,
     };
 
+    const outgoingPayload: Record<string, any> = {
+      ...opts.payload,
+      stream: true,
+    };
+    if (typeof outgoingPayload.model === "string" && outgoingPayload.model.trim()) {
+      outgoingPayload.model = withFloorSuffix(outgoingPayload.model);
+    }
+    if (Array.isArray(outgoingPayload.models)) {
+      outgoingPayload.models = outgoingPayload.models.map((m: any) =>
+        typeof m === "string" ? withFloorSuffix(m) : m
+      );
+    }
+
     let response: Response;
     try {
       response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
         method: "POST",
         headers,
-        body: JSON.stringify({ ...opts.payload, stream: true }),
+        body: JSON.stringify(outgoingPayload),
         signal,
       });
     } catch (fetchErr: any) {

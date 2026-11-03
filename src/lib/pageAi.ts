@@ -46,7 +46,7 @@ export function effective(globals: Globals, ov?: PageOverrides) {
     }
   }
 
-  let defaultModelForProvider = globals.modelId || getSelectedModel() || CURATED_MODELS[0]?.id || "liquid/lfm-2.5-2.6b:free";
+  let defaultModelForProvider = getDefaultModelSync();
   if (provider === "ollama") {
     defaultModelForProvider =
       globals.ollamaModelId ||
@@ -57,18 +57,20 @@ export function effective(globals: Globals, ov?: PageOverrides) {
   } else if (provider === "openrouter") {
     defaultModelForProvider = globals.modelId || getSelectedModel() || getDefaultModelSync();
   } else {
-    const sel = globals.modelId || getSelectedModel();
+    // In Managed AI, the AI model is strictly read from environment variables and cannot be overridden by user
     defaultModelForProvider =
-      sel && CURATED_MODELS.some((m) => m.id === sel)
-        ? sel
-        : CURATED_MODELS[0]?.id || "liquid/lfm-2.5-2.6b:free";
+      getDefaultModelSync() || CURATED_MODELS[0]?.id || "liquid/lfm-2.5-2.6b:free";
   }
+
+  // In Managed-AI mode, users cannot change or override the model from the client under any circumstances
+  const modelId =
+    provider === "managed" ? defaultModelForProvider : (ov?.modelId ?? defaultModelForProvider);
 
   return {
     provider,
     mode,
     language: ov?.language ?? globals.language,
-    modelId: ov?.modelId ?? defaultModelForProvider,
+    modelId,
     style: rawStyle,
     temperature: ov?.temperature ?? globals.temperature,
   };

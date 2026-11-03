@@ -320,7 +320,7 @@ export function PageWorkstation({
   const isOmniProvider = globals.provider === "omnirouter";
   const isLocalProvider = isOllamaProvider || isOmniProvider;
   const activeModelId = isManagedProvider
-    ? globals.modelId || CURATED_MODELS[0]?.id || "liquid/lfm-2.5-2.6b:free"
+    ? getDefaultModelSync() || CURATED_MODELS[0]?.id || "liquid/lfm-2.5-2.6b:free"
     : isOllamaProvider
       ? globals.ollamaModelId || getOllamaSelectedModel() || globals.modelId
       : isOmniProvider
