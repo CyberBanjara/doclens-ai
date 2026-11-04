@@ -67,7 +67,7 @@ export default defineEventHandler(async (event) => {
       totalTranslatedPages,
     };
 
-    return { user: clientUser };
+    return { user: clientUser, token: renewedJwt };
   } catch (err: any) {
     console.error("Session check error:", err);
     return { user: null };

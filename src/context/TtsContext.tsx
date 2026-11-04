@@ -28,6 +28,7 @@ import {
   markTtsVoiceSetupComplete,
   resetInferenceChain,
   ONNX_MODEL_BUFFER_CACHE,
+  clearOnnxModelBufferCache,
 } from "@/lib/ttsEngine";
 
 export type TtsSource = "original" | "ai";

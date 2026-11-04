@@ -29,6 +29,7 @@ import {
   setOmniRouterBaseUrl,
   getOmniSelectedModel,
   setOmniSelectedModel,
+  getOmniRouterApiKey,
 } from "@/lib/omnirouter";
 import { createDoc, StorageError } from "@/lib/storage";
 import { toast } from "sonner";
@@ -181,7 +182,7 @@ function SettingsPage() {
     setOmniError("");
     setOmniStatus("checking");
     try {
-      const res = await validateOmniRouterConnection(ep, undefined, AbortSignal.timeout(5000));
+      const res = await validateOmniRouterConnection(ep, getOmniRouterApiKey() || undefined, AbortSignal.timeout(5000));
       if (res.ok) {
         setOmniStatus("connected");
       } else {
@@ -268,7 +269,7 @@ function SettingsPage() {
     } else if (currentProvider === "omnirouter") {
       setOmniStatus("checking");
       setLoadingOmni(true);
-      void validateOmniRouterConnection(savedOmni || undefined, omniApiKey || undefined).then((res) => {
+      void validateOmniRouterConnection(savedOmni || undefined, getOmniRouterApiKey() || undefined).then((res) => {
         setLoadingOmni(false);
         if (res.ok) {
           setOmniStatus("connected");
@@ -356,7 +357,7 @@ function SettingsPage() {
     setOmniStatus("checking");
     setOmniRouterBaseUrl(epToValidate);
     try {
-      const res = await validateOmniRouterConnection(epToValidate, omniApiKey.trim() || undefined);
+      const res = await validateOmniRouterConnection(epToValidate, getOmniRouterApiKey().trim() || undefined);
       if (res.ok) {
         setOmniStatus("connected");
         setOmniError("");

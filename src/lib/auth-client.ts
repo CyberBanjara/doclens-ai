@@ -152,7 +152,29 @@ export async function getFreshAuthToken(): Promise<string | null> {
       // Fall through to stored token
     }
   }
-  return getStoredAuthToken();
+  const stored = getStoredAuthToken();
+  if (stored) return stored;
+
+  // Fallback: If Firebase client token is missing or expired, check server session cookie via /api/auth/me
+  if (typeof window !== "undefined") {
+    try {
+      const res = await fetch("/api/auth/me", {
+        method: "GET",
+        credentials: "include",
+      });
+      if (res.ok) {
+        const data = await res.json();
+        if (data?.token && typeof data.token === "string") {
+          setStoredAuthToken(data.token);
+          return data.token;
+        }
+      }
+    } catch {
+      // Ignore network errors
+    }
+  }
+
+  return null;
 }
 
 /**
@@ -262,6 +284,9 @@ export async function apiFetchCurrentUser(providedToken?: string): Promise<Clien
 
     if (!res.ok) return null;
     const data = await res.json();
+    if (data?.token && typeof data.token === "string") {
+      setStoredAuthToken(data.token);
+    }
     return (data?.user as ClientUser) || null;
   } catch (err) {
     console.error("Failed to check auth session:", err);
