@@ -6,6 +6,17 @@ import {
   refundQuota,
 } from "../../lib/supabase-server";
 
+declare const __SERVER_OPENROUTER_DEFAULT_KEY__: string | undefined;
+declare const __SERVER_OPENROUTER_DEFAULT_MODEL__: string | undefined;
+
+function cleanApiKey(raw?: string | null): string {
+  if (!raw) return "";
+  let k = raw.trim();
+  k = k.replace(/^["']+|["']+$/g, "").trim();
+  k = k.replace(/^Bearer\s+/i, "").trim();
+  return k;
+}
+
 export default defineEventHandler(async (event) => {
   try {
     // 1. Authenticate user session strictly
@@ -75,16 +86,30 @@ export default defineEventHandler(async (event) => {
 
     const reservationId = reservation.already_counted ? null : reservation.reservation_id;
 
-    // 4. Resolve server-side OpenRouter API key (kept strictly server-side)
-    const customHeaderKey = getHeader(event, "x-custom-openrouter-key");
-    const serverApiKey = (
-      (customHeaderKey && customHeaderKey.trim()) ||
-      process.env.OPENROUTER_API_KEY ||
-      process.env.VITE_OPENROUTER_API_KEY ||
-      ""
-    ).trim();
+    // 4. Resolve OpenRouter API keys (support server runtime env, build-time inject, and client default env fallback)
+    const customHeaderKey = cleanApiKey(getHeader(event, "x-custom-openrouter-key"));
+    const defaultHeaderKey = cleanApiKey(getHeader(event, "x-default-openrouter-key"));
+    const runtimeEnvKey = cleanApiKey(
+      process.env.OPENROUTER_API_KEY || process.env.VITE_OPENROUTER_API_KEY
+    );
+    let buildTimeKey = "";
+    try {
+      if (typeof __SERVER_OPENROUTER_DEFAULT_KEY__ !== "undefined" && __SERVER_OPENROUTER_DEFAULT_KEY__) {
+        buildTimeKey = cleanApiKey(__SERVER_OPENROUTER_DEFAULT_KEY__);
+      }
+    } catch {}
 
-    if (!serverApiKey) {
+    const isManagedMode = !customHeaderKey;
+    const primaryKey = customHeaderKey || runtimeEnvKey || buildTimeKey || defaultHeaderKey;
+    const fallbackKey = !customHeaderKey
+      ? (buildTimeKey && buildTimeKey !== primaryKey ? buildTimeKey : "") ||
+        (defaultHeaderKey && defaultHeaderKey !== primaryKey ? defaultHeaderKey : "") ||
+        (runtimeEnvKey && runtimeEnvKey !== primaryKey ? runtimeEnvKey : "")
+      : "";
+
+    let activeApiKey = primaryKey;
+
+    if (!activeApiKey) {
       if (reservationId) {
         await refundQuota(reservationId, session.uid, "server_key_missing");
       }
@@ -102,11 +127,18 @@ export default defineEventHandler(async (event) => {
     // The AI model must always be read from environment variables and enforced server-side.
     // Users must not be able to change or override it from the client under any circumstances.
     // Automatically append `:floor` to select the cheapest available provider on OpenRouter.
-    const isManagedMode = !customHeaderKey || !customHeaderKey.trim();
+    let buildTimeModel = "";
+    try {
+      if (typeof __SERVER_OPENROUTER_DEFAULT_MODEL__ !== "undefined" && __SERVER_OPENROUTER_DEFAULT_MODEL__) {
+        buildTimeModel = String(__SERVER_OPENROUTER_DEFAULT_MODEL__).trim();
+      }
+    } catch {}
+
     const serverEnforcedModel = (
       process.env.OPENROUTER_DEFAULT_MODEL ||
       process.env.MANAGED_AI_MODEL ||
       process.env.VITE_OPENROUTER_DEFAULT_MODEL ||
+      buildTimeModel ||
       "z-ai/glm-5.3-flash"
     ).trim();
 
@@ -136,11 +168,11 @@ export default defineEventHandler(async (event) => {
 
     // 6. Route request to OpenRouter API with SSE streaming enabled
     let orResponse: Response;
-    const fetchUpstream = async () => {
+    const fetchUpstream = async (keyToUse: string) => {
       return await fetch("https://openrouter.ai/api/v1/chat/completions", {
         method: "POST",
         headers: {
-          Authorization: `Bearer ${serverApiKey}`,
+          Authorization: `Bearer ${keyToUse}`,
           "Content-Type": "application/json",
           "HTTP-Referer": "https://doclens-ai.vercel.app",
           "X-Title": "Anuwad Document Reader",
@@ -150,7 +182,25 @@ export default defineEventHandler(async (event) => {
     };
 
     try {
-      orResponse = await fetchUpstream();
+      orResponse = await fetchUpstream(activeApiKey);
+
+      // If upstream rejects with 401 (e.g. "User not found." due to stale/invalid server env key on Vercel),
+      // and we have a valid configured fallback key, retry once with the fallback key.
+      if (orResponse.status === 401 && fallbackKey) {
+        let isUserNotFound = false;
+        try {
+          const errClone = await orResponse.clone().text();
+          isUserNotFound = /user not found|unauthorized|invalid api key/i.test(errClone);
+        } catch {}
+
+        if (isUserNotFound) {
+          console.warn(
+            "[Managed AI] Primary key returned 401 (User not found). Automatically recovering using configured fallback key."
+          );
+          activeApiKey = fallbackKey;
+          orResponse = await fetchUpstream(activeApiKey);
+        }
+      }
 
       // If temporary upstream rate-limit with retry-after <= 3 seconds, retry once automatically
       if (orResponse.status === 429) {
@@ -166,7 +216,7 @@ export default defineEventHandler(async (event) => {
 
         if (retrySeconds <= 3) {
           await new Promise((resolve) => setTimeout(resolve, Math.max(1000, retrySeconds * 1000)));
-          orResponse = await fetchUpstream();
+          orResponse = await fetchUpstream(activeApiKey);
         }
       }
     } catch (fetchErr: any) {

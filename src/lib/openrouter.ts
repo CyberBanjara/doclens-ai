@@ -1024,12 +1024,14 @@ export async function streamCompletion(opts: StreamOpts): Promise<void> {
       headers["Authorization"] = `Bearer ${token}`;
       headers["x-firebase-token"] = token;
     }
-    // In Managed AI mode, never allow client custom keys to override server environment credentials
-    if (getAiProvider() === "openrouter") {
-      const customKey = getCustomKey() || opts.key;
-      if (customKey) {
-        headers["x-custom-openrouter-key"] = customKey;
-      }
+    // Forward configured default environment key as fallback in case server environment variable is missing/stale on Vercel
+    const defaultEnvKey = getDefaultKey();
+    if (defaultEnvKey) {
+      headers["x-default-openrouter-key"] = defaultEnvKey;
+    }
+    const customKey = getCustomKey() || opts.key;
+    if (customKey) {
+      headers["x-custom-openrouter-key"] = customKey;
     }
 
     const outgoingPayload: Record<string, any> = {

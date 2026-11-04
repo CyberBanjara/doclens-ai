@@ -47,10 +47,18 @@ export default defineConfig({
       measurementId: process.env.FIREBASE_MEASUREMENT_ID || env.FIREBASE_MEASUREMENT_ID || "",
     }),
     __OPENROUTER_DEFAULT_KEY__: JSON.stringify(
-      process.env.OPENROUTER_API_KEY || env.OPENROUTER_API_KEY || "",
+      process.env.OPENROUTER_API_KEY ||
+        env.OPENROUTER_API_KEY ||
+        process.env.VITE_OPENROUTER_API_KEY ||
+        env.VITE_OPENROUTER_API_KEY ||
+        "",
     ),
     __OPENROUTER_DEFAULT_MODEL__: JSON.stringify(
-      process.env.OPENROUTER_DEFAULT_MODEL || env.OPENROUTER_DEFAULT_MODEL || "",
+      process.env.OPENROUTER_DEFAULT_MODEL ||
+        env.OPENROUTER_DEFAULT_MODEL ||
+        process.env.VITE_OPENROUTER_DEFAULT_MODEL ||
+        env.VITE_OPENROUTER_DEFAULT_MODEL ||
+        "",
     ),
     __OMNIROUTER_BASE_URL__: JSON.stringify(
       process.env.OMNIROUTER_BASE_URL || env.OMNIROUTER_BASE_URL || "",
@@ -182,6 +190,22 @@ export default defineConfig({
               functions: {
                 runtime: "nodejs22.x",
               },
+            },
+            replace: {
+              __SERVER_OPENROUTER_DEFAULT_KEY__: JSON.stringify(
+                process.env.OPENROUTER_API_KEY ||
+                  env.OPENROUTER_API_KEY ||
+                  process.env.VITE_OPENROUTER_API_KEY ||
+                  env.VITE_OPENROUTER_API_KEY ||
+                  "",
+              ),
+              __SERVER_OPENROUTER_DEFAULT_MODEL__: JSON.stringify(
+                process.env.OPENROUTER_DEFAULT_MODEL ||
+                  env.OPENROUTER_DEFAULT_MODEL ||
+                  process.env.VITE_OPENROUTER_DEFAULT_MODEL ||
+                  env.VITE_OPENROUTER_DEFAULT_MODEL ||
+                  "z-ai/glm-5.3-flash",
+              ),
             },
             rollupConfig: {
               external: ["pdfjs-dist"],
