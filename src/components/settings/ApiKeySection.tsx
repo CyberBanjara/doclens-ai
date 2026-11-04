@@ -42,6 +42,7 @@ export function ApiKeySection({
   const [isRemoving, setIsRemoving] = useState(false);
 
   const savedKey = typeof window !== "undefined" ? getCustomKey() : "";
+  const hasKey = Boolean(customKey.trim() || savedKey);
   const isConfigured = Boolean(savedKey && keyStatus === "valid");
 
   const handleSave = async () => {
@@ -52,7 +53,9 @@ export function ApiKeySection({
     }
     setCustomKey(trimmed);
     setIsSaved(true);
-    await onValidate();
+    if (isActive) {
+      await onValidate();
+    }
     toast.success("OpenRouter API key saved. You can now toggle it ON.");
     setTimeout(() => setIsSaved(false), 2000);
   };
@@ -65,7 +68,6 @@ export function ApiKeySection({
     }
     setIsRemoving(true);
     toast.info("OpenRouter key removed. Reverted to Managed AI (Default).");
-    void onValidate();
     setTimeout(() => setIsRemoving(false), 1500);
   };
 
@@ -109,10 +111,10 @@ export function ApiKeySection({
               aria-checked={isActive}
               id="toggle-openrouter-switch"
               onClick={onToggle}
-              disabled={!isConfigured}
+              disabled={!isActive && !hasKey}
               title={
-                !isConfigured
-                  ? "Enter and verify a valid key first"
+                !isActive && !hasKey
+                  ? "Enter an API key first"
                   : isActive
                     ? "Turn OFF to revert to Managed AI"
                     : "Turn ON to use Personal OpenRouter"
@@ -121,7 +123,7 @@ export function ApiKeySection({
                 isActive
                   ? "bg-emerald-500 shadow-[0_0_10px_rgba(16,185,129,0.4)]"
                   : "bg-surface-3 border-border hover:bg-surface-4"
-              } ${!isConfigured ? "opacity-40 cursor-not-allowed" : ""}`}
+              } ${!isActive && !hasKey ? "opacity-40 cursor-not-allowed" : ""}`}
             >
               <span className="sr-only">Toggle OpenRouter ON/OFF</span>
               <span
@@ -186,12 +188,12 @@ export function ApiKeySection({
 
         {/* Dynamic Helper Note */}
         <div className="min-h-5 text-[11px]">
-          {isConfigured ? (
+          {isActive && isConfigured ? (
             <span className="flex items-center gap-1.5 text-emerald-600 dark:text-emerald-400 font-medium">
               <CheckCircle2 className="h-3 w-3 shrink-0" />
-              <span>Valid key configured. {isActive ? "Provider active." : "Toggle ON to use."}</span>
+              <span>Valid key configured. Provider active.</span>
             </span>
-          ) : keyStatus === "invalid" ? (
+          ) : isActive && keyStatus === "invalid" ? (
             <span className="flex items-center gap-1.5 text-rose-500 font-medium">
               <AlertCircle className="h-3 w-3 shrink-0" />
               <span>Key verification failed. Please check your credentials.</span>
@@ -226,10 +228,10 @@ export function ApiKeySection({
           type="button"
           id="toggle-openrouter-btn"
           onClick={onToggle}
-          disabled={!isConfigured}
+          disabled={!isActive && !hasKey}
           title={
-            !isConfigured
-              ? "Save a valid key to enable"
+            !isActive && !hasKey
+              ? "Enter an API key to enable"
               : isActive
                 ? "Click to turn OFF (use Managed AI)"
                 : "Click to turn ON"
@@ -238,7 +240,7 @@ export function ApiKeySection({
             isActive
               ? "bg-emerald-600 hover:bg-emerald-500 text-white shadow-emerald-600/20"
               : "bg-surface-2 hover:bg-surface-3 text-muted-foreground border border-border"
-          } ${!isConfigured ? "opacity-40 cursor-not-allowed" : ""}`}
+          } ${!isActive && !hasKey ? "opacity-40 cursor-not-allowed" : ""}`}
         >
           <span className={`h-2 w-2 rounded-full ${isActive ? "bg-white animate-pulse" : "bg-muted-foreground/40"}`} />
           <span>{isActive ? "Turn OFF" : "Turn ON"}</span>

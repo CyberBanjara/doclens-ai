@@ -181,16 +181,26 @@ function SettingsPage() {
     setOmniError("");
     setOmniStatus("checking");
     try {
-      const res = await validateOmniRouterConnection(ep);
+      const res = await validateOmniRouterConnection(ep, undefined, AbortSignal.timeout(5000));
       if (res.ok) {
         setOmniStatus("connected");
       } else {
         setOmniStatus("disconnected");
-        setOmniError(res.error || "Could not connect to OmniRouter.");
+        setOmniError("");
+        toast.error("Not a valid API key");
+        if (provider === "omnirouter") {
+          setProvider("managed");
+          setAiProvider("managed");
+        }
       }
-    } catch (e) {
+    } catch {
       setOmniStatus("disconnected");
-      setOmniError(getFriendlyErrorMessage(e, "Connection test failed"));
+      setOmniError("");
+      toast.error("Not a valid API key");
+      if (provider === "omnirouter") {
+        setProvider("managed");
+        setAiProvider("managed");
+      }
     } finally {
       setLoadingOmni(false);
     }
@@ -204,18 +214,23 @@ function SettingsPage() {
     }
     setKeyStatus("checking");
     setCustomKey(targetKey);
-    const ok = await validateKey(targetKey);
+    const ok = await validateKey(targetKey, 5000);
     if (ok) {
       setKeyStatus("valid");
     } else {
-      const nextStatus = getKeyStatus();
-      setKeyStatus(nextStatus === "invalid" ? "invalid" : "missing");
+      setKeyStatus("unknown");
+      toast.error("Not a valid API key");
+      if (provider === "openrouter") {
+        setProvider("managed");
+        setAiProvider("managed");
+      }
     }
   };
 
   useEffect(() => {
     const globals = readGlobals();
-    setProvider(globals.provider ?? getAiProvider());
+    const currentProvider = globals.provider ?? getAiProvider();
+    setProvider(currentProvider);
     setLanguage(globals.language);
     setModeState(globals.mode);
     setStyleState(globals.style as ProcessingStyle);
@@ -225,18 +240,46 @@ function SettingsPage() {
 
     const savedKey = getCustomKey();
     setCustomKeyInput(savedKey);
-    if (savedKey) {
-      void handleValidate(savedKey);
-    } else {
-      setKeyStatus("missing");
-    }
 
     const savedOmni = getOmniRouterBaseUrl();
     setOmniEndpoint(savedOmni || "");
-    if (savedOmni) {
-      void loadOmniModels(savedOmni);
-    } else {
+
+    // 1. Application startup: If both providers are OFF, do not perform any API key validation,
+    // endpoint checks, or provider-related requests. Use Managed AI through environment variables by default.
+    if (currentProvider === "managed") {
+      setKeyStatus("unknown");
       setOmniStatus("disconnected");
+      setOmniError("");
+    } else if (currentProvider === "openrouter" && savedKey) {
+      // 3. Startup with a previously enabled provider: Validate its key once.
+      // If invalid, automatically turn it OFF after the existing 5-second validation period
+      // and permanently stop retrying until the user explicitly enables it again.
+      setKeyStatus("checking");
+      void validateKey(savedKey, 5000).then((ok) => {
+        if (ok) {
+          setKeyStatus("valid");
+        } else {
+          setKeyStatus("unknown");
+          setProvider("managed");
+          setAiProvider("managed");
+          toast.error("Not a valid API key");
+        }
+      });
+    } else if (currentProvider === "omnirouter") {
+      setOmniStatus("checking");
+      setLoadingOmni(true);
+      void validateOmniRouterConnection(savedOmni || undefined, omniApiKey || undefined).then((res) => {
+        setLoadingOmni(false);
+        if (res.ok) {
+          setOmniStatus("connected");
+        } else {
+          setOmniStatus("disconnected");
+          setOmniError(res.error || "");
+          setProvider("managed");
+          setAiProvider("managed");
+          toast.error(res.error || "Could not connect to OmniRouter");
+        }
+      });
     }
 
     void refreshTtsVoices(true);
@@ -255,37 +298,87 @@ function SettingsPage() {
     };
   }, [refreshTtsVoices]);
 
-  const handleToggleOpenRouter = () => {
-    const isConfigured = Boolean(customKey.trim() && keyStatus === "valid");
-    if (!isConfigured) {
-      toast.error("Please enter and verify a valid OpenRouter API key first.");
-      return;
-    }
+  const handleToggleOpenRouter = async () => {
     if (provider === "openrouter") {
       setProvider("managed");
       setAiProvider("managed");
+      setKeyStatus("unknown");
       toast.info("OpenRouter turned OFF. Reverted to Managed AI (Default).");
-    } else {
-      setProvider("openrouter");
-      setAiProvider("openrouter");
-      toast.success("Personal OpenRouter turned ON.");
+      return;
+    }
+
+    const keyToValidate = customKey.trim() || getCustomKey().trim();
+    if (!keyToValidate) {
+      toast.error("Please enter an OpenRouter API key first.");
+      return;
+    }
+
+    setKeyStatus("checking");
+    setCustomKey(keyToValidate);
+    try {
+      const ok = await validateKey(keyToValidate, 5000);
+      if (ok) {
+        setKeyStatus("valid");
+        setProvider("openrouter");
+        setAiProvider("openrouter");
+        toast.success("Personal OpenRouter turned ON.");
+      } else {
+        setKeyStatus("unknown");
+        setProvider("managed");
+        setAiProvider("managed");
+        toast.error("Not a valid API key");
+      }
+    } catch {
+      setKeyStatus("unknown");
+      setProvider("managed");
+      setAiProvider("managed");
+      toast.error("Not a valid API key");
     }
   };
 
-  const handleToggleOmniRouter = () => {
-    const isConfigured = Boolean(omniEndpoint.trim() && omniStatus === "connected");
-    if (!isConfigured) {
-      toast.error("Please enter and connect to a working OmniRouter endpoint first.");
-      return;
-    }
+  const handleToggleOmniRouter = async () => {
     if (provider === "omnirouter") {
       setProvider("managed");
       setAiProvider("managed");
+      setOmniStatus("disconnected");
+      setOmniError("");
       toast.info("OmniRouter turned OFF. Reverted to Managed AI (Default).");
-    } else {
-      setProvider("omnirouter");
-      setAiProvider("omnirouter");
-      toast.success("OmniRouter turned ON.");
+      return;
+    }
+
+    const epToValidate = omniEndpoint.trim() || getOmniRouterBaseUrl().trim();
+    if (!epToValidate) {
+      toast.error("Please enter an OmniRouter endpoint URL first.");
+      return;
+    }
+
+    setLoadingOmni(true);
+    setOmniStatus("checking");
+    setOmniRouterBaseUrl(epToValidate);
+    try {
+      const res = await validateOmniRouterConnection(epToValidate, omniApiKey.trim() || undefined);
+      if (res.ok) {
+        setOmniStatus("connected");
+        setOmniError("");
+        setProvider("omnirouter");
+        setAiProvider("omnirouter");
+        toast.success("OmniRouter turned ON.");
+      } else {
+        setOmniStatus("disconnected");
+        setOmniError(res.error || "");
+        setProvider("managed");
+        setAiProvider("managed");
+        toast.error(res.error || "Could not connect to OmniRouter");
+      }
+    } catch (err: any) {
+      setOmniStatus("disconnected");
+      const msg = err?.message || "Failed to connect to OmniRouter";
+      setOmniError(msg);
+      setProvider("managed");
+      setAiProvider("managed");
+      toast.error(msg);
+    } finally {
+      setLoadingOmni(false);
     }
   };
 

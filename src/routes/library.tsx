@@ -18,6 +18,7 @@ import {
 } from "@/components/ui/alert-dialog";
 import {
   getKeyStatus,
+  getAiProvider,
   onKeyChange,
   openApiKeyModal,
   validateKey,
@@ -48,9 +49,19 @@ function LibraryPage() {
   const [keyStatus, setKeyStatus] = useState<KeyStatus>("unknown");
 
   useEffect(() => {
-    setKeyStatus(getKeyStatus());
-    void validateKey().then(() => setKeyStatus(getKeyStatus()));
-    return onKeyChange(() => setKeyStatus(getKeyStatus()));
+    if (getAiProvider() === "openrouter") {
+      setKeyStatus(getKeyStatus());
+      void validateKey().then(() => setKeyStatus(getKeyStatus()));
+    } else {
+      setKeyStatus("valid");
+    }
+    return onKeyChange(() => {
+      if (getAiProvider() === "openrouter") {
+        setKeyStatus(getKeyStatus());
+      } else {
+        setKeyStatus("valid");
+      }
+    });
   }, []);
 
   useEffect(() => {
@@ -197,8 +208,8 @@ function LibraryPage() {
             )}
           </div>
 
-          {/* API Key Banner */}
-          {keyStatus !== "valid" && (
+          {/* API Key Banner - only visible when OpenRouter is actively selected */}
+          {getAiProvider() === "openrouter" && keyStatus !== "valid" && (
             <div
               className={`flex flex-col gap-3 rounded-[18px] border px-4 py-3 sm:flex-row sm:items-center sm:justify-between ${
                 keyStatus === "invalid"
@@ -216,8 +227,8 @@ function LibraryPage() {
                 </div>
                 <p className="mt-1 text-sm text-foreground/85">
                   {keyStatus === "invalid"
-                    ? "The server OpenRouter key was rejected. Update the environment variable to keep translating."
-                    : "Configure OPENROUTER_API_KEY on the server to start translating documents."}
+                    ? "The OpenRouter key was rejected. Update the key in Settings to keep translating."
+                    : "Configure OpenRouter in Settings to start translating documents."}
                 </p>
               </div>
               <button

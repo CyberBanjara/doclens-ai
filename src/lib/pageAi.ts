@@ -15,6 +15,7 @@ import {
   getOmniDefaultModelSync,
   getSelectedModel,
   getDefaultModelSync,
+  getAiProvider,
 } from "@/lib/openrouter";
 import { dispatchDocEvent } from "@/lib/docEvents";
 import { cleanAiText } from "./cleanAiText";
@@ -24,7 +25,7 @@ export { cleanAiText };
 export function effective(globals: Globals, ov?: PageOverrides) {
   const defaultProvider: AiProvider = "managed";
   const rawProvider = ov?.provider ?? globals.provider ?? defaultProvider;
-  const provider: AiProvider =
+  let provider: AiProvider =
     rawProvider === "ollama"
       ? "ollama"
       : rawProvider === "omnirouter"
@@ -32,6 +33,12 @@ export function effective(globals: Globals, ov?: PageOverrides) {
         : rawProvider === "openrouter"
           ? "openrouter"
           : "managed";
+
+  // When OpenRouter is disabled in globals and not explicitly overridden, fall back to Managed AI.
+  const activeAiProvider = getAiProvider();
+  if (provider === "openrouter" && activeAiProvider !== "openrouter" && !ov?.provider) {
+    provider = "managed";
+  }
 
   const mode = ov?.mode ?? globals.mode;
   let rawStyle = ov?.style ?? globals.style;

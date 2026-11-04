@@ -24,7 +24,10 @@ export function clearOnnxModelBufferCache(): void {
  */
 export async function clearTtsSessionCache(): Promise<void> {
   const cleanup = async () => {
-    for (const session of ONNX_SESSION_CACHE.values()) {
+    // Collect unique sessions into a Set because ONNX_SESSION_CACHE maps multiple keys
+    // (modelName and cacheKey) to the same underlying session instance.
+    const uniqueSessions = new Set(ONNX_SESSION_CACHE.values());
+    for (const session of uniqueSessions) {
       try {
         if (session && typeof session.release === "function") {
           await session.release();
@@ -37,7 +40,7 @@ export async function clearTtsSessionCache(): Promise<void> {
     clearOnnxModelBufferCache();
   };
 
-  inferenceChain = inferenceChain.then(cleanup, cleanup);
+  inferenceChain = inferenceChain.then(cleanup, cleanup).catch(() => {});
   return inferenceChain;
 }
 
@@ -45,11 +48,11 @@ export async function clearTtsSessionCache(): Promise<void> {
 let inferenceChain: Promise<any> = Promise.resolve();
 
 /**
- * Ensures the inference chain mutex is unblocked from prior rejections
- * without breaking serialization so new syntheses never run concurrently in WASM.
+ * Resets the inference chain mutex to an immediately resolved promise.
+ * Frees accumulated promise closures and unblocks new playback.
  */
 export function resetInferenceChain(): void {
-  inferenceChain = inferenceChain.catch(() => {});
+  inferenceChain = Promise.resolve();
 }
 
 /**

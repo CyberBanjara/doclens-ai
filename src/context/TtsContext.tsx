@@ -241,15 +241,13 @@ async function getNeuralTtsEngine(): Promise<{ mod: any; catalog: any[] }> {
         (Blob.prototype as any)._doclensPatched = true;
         Blob.prototype.arrayBuffer = async function (this: any) {
           const name = this.name || (this as any)._modelName;
-          const isModelFile =
-            (name && typeof name === "string" && name.endsWith(".onnx")) ||
-            (typeof this.size === "number" && this.size > 10_000_000);
+          const isModelFile = typeof name === "string" && name.endsWith(".onnx");
 
           if (isModelFile) {
-            const key = name || `model-${this.size}`;
+            const key = name;
             // If the session is already active in cache, return a tiny dummy buffer immediately!
             // vits-web only passes it to InferenceSession.create which returns the cached session.
-            if (ONNX_SESSION_CACHE.has(key) || (name && ONNX_SESSION_CACHE.has(name))) {
+            if (ONNX_SESSION_CACHE.has(key)) {
               const dummy = new ArrayBuffer(16);
               (dummy as any)._modelName = key;
               return dummy;
@@ -257,7 +255,6 @@ async function getNeuralTtsEngine(): Promise<{ mod: any; catalog: any[] }> {
 
             const buf = await origArrayBuffer.call(this);
             (buf as any)._modelName = key;
-            ONNX_MODEL_BUFFER_CACHE.set(key, buf);
             return buf;
           }
           return origArrayBuffer.call(this);
@@ -273,29 +270,19 @@ async function getNeuralTtsEngine(): Promise<{ mod: any; catalog: any[] }> {
             return ONNX_SESSION_CACHE.get(modelName);
           }
 
-          let actualModel = model;
-          if (
-            model instanceof ArrayBuffer &&
-            model.byteLength === 16 &&
-            modelName &&
-            ONNX_MODEL_BUFFER_CACHE.has(modelName)
-          ) {
-            actualModel = ONNX_MODEL_BUFFER_CACHE.get(modelName);
-          }
-
           let cacheKey: string;
-          if (actualModel instanceof ArrayBuffer) {
-            if (actualModel.byteLength === 0 || (actualModel as any).detached) {
+          if (model instanceof ArrayBuffer) {
+            if (model.byteLength === 0 || (model as any).detached) {
               cacheKey = modelName || "detached";
             } else {
               try {
-                cacheKey = `${actualModel.byteLength}-${new Uint8Array(actualModel.slice(0, 100)).join(",")}`;
+                cacheKey = `${model.byteLength}-${new Uint8Array(model.slice(0, 100)).join(",")}`;
               } catch {
                 cacheKey = modelName || "fallback";
               }
             }
           } else {
-            cacheKey = String(actualModel);
+            cacheKey = String(model);
           }
 
           if (ONNX_SESSION_CACHE.has(cacheKey)) {
@@ -307,11 +294,12 @@ async function getNeuralTtsEngine(): Promise<{ mod: any; catalog: any[] }> {
             ort.env.wasm.numThreads = 1;
           } catch {}
 
-          const session = await ort.InferenceSession.originalCreate(actualModel, options);
+          const session = await ort.InferenceSession.originalCreate(model, options);
           if (modelName) {
             ONNX_SESSION_CACHE.set(modelName, session);
           }
           ONNX_SESSION_CACHE.set(cacheKey, session);
+          clearOnnxModelBufferCache();
           return session;
         };
       }
@@ -668,7 +656,7 @@ export function TtsProvider({ children }: { children: React.ReactNode }) {
     if (!isNeural || !ttsRef.current) return;
 
     const activeVoiceId = voice?.voiceURI || targetVoiceUri;
-    const LOOKAHEAD_COUNT = 3; // Pre-synthesize up to 3 sentences ahead
+    const LOOKAHEAD_COUNT = 1; // Pre-synthesize 1 sentence ahead for gapless playback without memory bloat
 
     // Evict entries behind current sentence index to free memory
     preSynthesizedMapRef.current.forEach((entry, idx) => {
@@ -746,12 +734,14 @@ export function TtsProvider({ children }: { children: React.ReactNode }) {
       isTransitioningRef.current = false;
       const currentSessionId = synthesisSessionIdRef.current;
 
-      // Pause previous audio without discarding the singleton HTMLAudioElement
+      // Pause previous audio and detach source to release Chromium media pipeline channels
       if (audioRef.current) {
         try {
           audioRef.current.onended = null;
           audioRef.current.onerror = null;
           audioRef.current.pause();
+          audioRef.current.removeAttribute("src");
+          audioRef.current.load();
         } catch (e) {}
       }
       if (activeAudioUrlRef.current) {
@@ -883,10 +873,12 @@ export function TtsProvider({ children }: { children: React.ReactNode }) {
 
       const playNeuralAudio = (audioUrl: string) => {
         const audio = getOrCreateAudioElement(audioRef);
-        audio.onended = null;
-        audio.onerror = null;
         try {
+          audio.onended = null;
+          audio.onerror = null;
           audio.pause();
+          audio.removeAttribute("src");
+          audio.load();
         } catch (e) {}
 
         audio.src = audioUrl;
@@ -909,10 +901,12 @@ export function TtsProvider({ children }: { children: React.ReactNode }) {
 
       const initPausedAudio = (audioUrl: string) => {
         const audio = getOrCreateAudioElement(audioRef);
-        audio.onended = null;
-        audio.onerror = null;
         try {
+          audio.onended = null;
+          audio.onerror = null;
           audio.pause();
+          audio.removeAttribute("src");
+          audio.load();
         } catch (e) {}
         audio.src = audioUrl;
         attachAudioHandlers(audio, audioUrl);
@@ -1211,6 +1205,9 @@ export function TtsProvider({ children }: { children: React.ReactNode }) {
     if (typeof window !== "undefined" && window.speechSynthesis) {
       window.speechSynthesis.cancel();
     }
+    // Release ONNX sessions to immediately reclaim WASM memory when playback is stopped
+    resetInferenceChain();
+    void clearTtsSessionCache();
     setIsPlaying(false);
     setIsPaused(false);
     setSentences([]);
@@ -1295,6 +1292,10 @@ export function TtsProvider({ children }: { children: React.ReactNode }) {
     if (selectedVoiceUri !== lastVoiceUriRef.current) {
       const oldVoice = lastVoiceUriRef.current;
       lastVoiceUriRef.current = selectedVoiceUri;
+
+      // Release cached ONNX sessions when selected voice changes to prevent holding multiple voices in memory
+      resetInferenceChain();
+      void clearTtsSessionCache();
 
       if (isPlayingRef.current && oldVoice && selectedVoiceUri) {
         cleanupAudio();

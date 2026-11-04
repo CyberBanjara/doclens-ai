@@ -165,13 +165,14 @@ export function PageWorkstation({
   }, [globals.provider, isOmniConfigured]);
 
   useEffect(() => {
-    const k = getKey();
-    if (k) {
-      fetchModels(k)
-        .then(setModels)
-        .catch(() => {});
-    }
-    if (globals.provider === "ollama") {
+    if (globals.provider === "openrouter") {
+      const k = getCustomKey();
+      if (k && getKeyStatus() !== "invalid") {
+        fetchModels(k)
+          .then(setModels)
+          .catch(() => {});
+      }
+    } else if (globals.provider === "ollama") {
       fetchOllamaModels()
         .then(setOllamaModels)
         .catch(() => {});
@@ -183,22 +184,28 @@ export function PageWorkstation({
     setKeyStatusState(getKeyStatus());
     return onKeyChange(() => {
       setKeyStatusState(getKeyStatus());
-      const k = getKey();
-      if (k)
-        fetchModels(k)
-          .then(setModels)
-          .catch(() => {});
+      if (globals.provider === "openrouter") {
+        const k = getCustomKey();
+        if (k && getKeyStatus() !== "invalid") {
+          fetchModels(k)
+            .then(setModels)
+            .catch(() => {});
+        }
+      }
     });
-  }, []);
+  }, [globals.provider]);
 
-  const hasKey = !!getKey();
+  const hasKey = !!getCustomKey();
   const keyReady = keyStatus !== "invalid" && keyStatus !== "missing" && hasKey;
 
   /** Returns true if the key is usable; otherwise opens modal + shows toast and returns false. */
   const ensureKeyReady = useCallback((): boolean => {
-    if (!getKey()) {
-      toast.error("Configure OPENROUTER_API_KEY to run translations.");
-      openApiKeyModal("Add a valid OPENROUTER_API_KEY to start translating.");
+    if (globals.provider !== "openrouter") {
+      return true;
+    }
+    if (!getCustomKey()) {
+      toast.error("Configure your personal OpenRouter API key in Settings to translate.");
+      openApiKeyModal("Add a valid OpenRouter API key to start translating.");
       return false;
     }
     if (getKeyStatus() === "invalid") {
@@ -207,7 +214,7 @@ export function PageWorkstation({
       return false;
     }
     return true;
-  }, []);
+  }, [globals.provider]);
 
   /* ---------- Per-page execution ---------- */
 

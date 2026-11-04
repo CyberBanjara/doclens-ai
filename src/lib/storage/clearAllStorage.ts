@@ -151,6 +151,10 @@ export function clearLocalStorage(): void {
   try {
     if (typeof window !== "undefined" && window.localStorage) {
       window.localStorage.clear();
+      window.dispatchEvent(new Event("storage"));
+      window.dispatchEvent(new CustomEvent("doclens:globals-changed", { detail: {} }));
+      window.dispatchEvent(new CustomEvent("doclens:openrouter-key-change"));
+      window.dispatchEvent(new CustomEvent("doclens:omnirouter-status", { detail: { baseUrl: "" } }));
     }
   } catch (e) {
     console.warn("[Storage] Failed to clear localStorage:", e);

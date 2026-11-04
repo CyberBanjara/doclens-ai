@@ -12,7 +12,7 @@ import { clearSelectedStorage, getStorageOverview, type StorageOverview } from "
 import { toast } from "sonner";
 
 interface StorageItemOption {
-  id: "documents" | "voices";
+  id: "documents" | "voices" | "settings";
   title: string;
   description: string;
   badge?: string;
@@ -23,10 +23,11 @@ export function StorageManagerSection() {
   const [dialogOpen, setDialogOpen] = useState(false);
   const [isClearing, setIsClearing] = useState(false);
 
-  // Selection states for documents and voices (default all selected)
-  const [selected, setSelected] = useState<Record<"documents" | "voices", boolean>>({
+  // Selection states for documents, voices, and local storage/settings (default all selected)
+  const [selected, setSelected] = useState<Record<"documents" | "voices" | "settings", boolean>>({
     documents: true,
     voices: true,
+    settings: true,
   });
 
   const loadStats = async () => {
@@ -59,6 +60,12 @@ export function StorageManagerSection() {
         ? `${stats.voiceCount} ${stats.voiceCount === 1 ? "voice" : "voices"}`
         : undefined,
     },
+    {
+      id: "settings",
+      title: "Settings, API Keys & Local Storage",
+      description: "Personal API keys, custom endpoints, model preferences, and cached configs.",
+      badge: "localStorage",
+    },
   ];
 
   const selectedCount = Object.values(selected).filter(Boolean).length;
@@ -69,10 +76,11 @@ export function StorageManagerSection() {
     setSelected({
       documents: nextState,
       voices: nextState,
+      settings: nextState,
     });
   };
 
-  const toggleItem = (id: "documents" | "voices") => {
+  const toggleItem = (id: "documents" | "voices" | "settings") => {
     setSelected((prev) => ({
       ...prev,
       [id]: !prev[id],

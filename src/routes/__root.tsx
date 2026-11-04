@@ -24,6 +24,7 @@ import {
   setMode,
   getStoredLanguage,
   getStoredStyle,
+  initProviderOnStartup,
   type ProcessingStyle,
   type GlobalMode,
 } from "@/lib/openrouter";
@@ -359,6 +360,7 @@ function RootComponent() {
   useEffect(() => {
     initTheme();
     warmR2FilesCache();
+    void initProviderOnStartup();
 
     // Hide and remove preloader once React application is fully mounted
     const preloader = document.getElementById("preloader");

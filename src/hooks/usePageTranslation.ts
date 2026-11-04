@@ -3,6 +3,7 @@ import { toast } from "sonner";
 import {
   getKey,
   getCustomKey,
+  getKeyStatus,
   getAiProvider,
   setAiProvider,
   OpenRouterError,
@@ -120,11 +121,11 @@ export function usePageTranslation(
 
       if (activeProvider === "openrouter") {
         const customKey = getCustomKey();
-        if (!customKey) {
-          ensureKeyReady();
+        if (!customKey || getKeyStatus() === "invalid") {
+          setAiProvider("managed");
           await upsertPageAi(docId, pageNumber, {
             status: "error",
-            error: "No Personal OpenRouter API key configured.",
+            error: "No valid Personal OpenRouter API key configured. Switched to Managed AI.",
           });
           onPageAiChangeRef.current?.(pageNumber, {
             status: "error",

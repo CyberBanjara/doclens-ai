@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import {
   getKeyStatus,
+  getAiProvider,
   onKeyChange,
   openApiKeyModal,
   validateKey,
@@ -27,7 +28,9 @@ export function ApiKeyStatusBadge() {
 
   useEffect(() => {
     setStatus(getKeyStatus());
-    void validateKey().then(() => setStatus(getKeyStatus()));
+    if (getAiProvider() === "openrouter") {
+      void validateKey().then(() => setStatus(getKeyStatus()));
+    }
     return onKeyChange(() => setStatus(getKeyStatus()));
   }, []);
 

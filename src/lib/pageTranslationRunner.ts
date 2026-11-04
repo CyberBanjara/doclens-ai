@@ -5,6 +5,8 @@ import {
   setSelectedModel,
   getKey,
   getCustomKey,
+  getKeyStatus,
+  setKeyStatus,
   setAiProvider,
   OpenRouterError,
   readGlobals,
@@ -267,6 +269,13 @@ export async function executePageTranslation({
           dispatchDocEvent("doclens:page-status-changed", { docId, pageNumber, status: "error", error: errorMsg });
           return { success: false, error: errorMsg };
         }
+        if (getKeyStatus() === "invalid") {
+          setAiProvider("managed");
+          const errorMsg = "Personal OpenRouter API key is invalid. Switched to Managed AI.";
+          await upsertPageAi(docId, pageNumber, { status: "error", error: errorMsg });
+          dispatchDocEvent("doclens:page-status-changed", { docId, pageNumber, status: "error", error: errorMsg });
+          return { success: false, error: errorMsg };
+        }
       }
 
       const modelId =
@@ -345,12 +354,20 @@ export async function executePageTranslation({
         });
       } else if (eff.provider === "openrouter") {
         // Personal OpenRouter: direct frontend request, never consumes Anuvaad quota
-        await streamPersonalOpenRouterCompletion({
-          key: getCustomKey(),
-          payload,
-          signal: internalAbort.signal,
-          onDelta: onChunk,
-        });
+        try {
+          await streamPersonalOpenRouterCompletion({
+            key: getCustomKey(),
+            payload,
+            signal: internalAbort.signal,
+            onDelta: onChunk,
+          });
+        } catch (poErr) {
+          if (poErr instanceof OpenRouterError && poErr.kind === "auth") {
+            setKeyStatus("invalid");
+            setAiProvider("managed");
+          }
+          throw poErr;
+        }
       } else {
         // Managed AI (default): routes through Vercel serverless billing layer
         const rawTitle = docRec?.fileName || "Untitled Document";

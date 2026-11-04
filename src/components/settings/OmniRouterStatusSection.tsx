@@ -55,8 +55,12 @@ export function OmniRouterStatusSection({
     onEndpointChange?.(trimmed);
 
     setIsSaved(true);
-    toast.success("OmniRouter endpoint saved. Verifying connection...");
-    await onRefresh(trimmed);
+    if (isActive) {
+      toast.success("OmniRouter endpoint saved. Verifying connection...");
+      await onRefresh(trimmed);
+    } else {
+      toast.success("OmniRouter endpoint saved. Toggle ON to verify and activate.");
+    }
     setTimeout(() => setIsSaved(false), 2000);
   };
 
@@ -112,10 +116,10 @@ export function OmniRouterStatusSection({
               aria-checked={isActive}
               id="toggle-omnirouter-switch"
               onClick={onToggle}
-              disabled={!isConfigured || status !== "connected"}
+              disabled={!isActive && !isConfigured}
               title={
-                !isConfigured || status !== "connected"
-                  ? "Connect to a working endpoint first"
+                !isActive && !isConfigured
+                  ? "Enter an endpoint URL first"
                   : isActive
                     ? "Turn OFF to revert to Managed AI"
                     : "Turn ON to use OmniRouter"
@@ -124,7 +128,7 @@ export function OmniRouterStatusSection({
                 isActive
                   ? "bg-emerald-500 shadow-[0_0_10px_rgba(16,185,129,0.4)]"
                   : "bg-surface-3 border-border hover:bg-surface-4"
-              } ${!isConfigured || status !== "connected" ? "opacity-40 cursor-not-allowed" : ""}`}
+              } ${!isActive && !isConfigured ? "opacity-40 cursor-not-allowed" : ""}`}
             >
               <span className="sr-only">Toggle OmniRouter ON/OFF</span>
               <span
@@ -179,12 +183,12 @@ export function OmniRouterStatusSection({
 
         {/* Dynamic Helper Note */}
         <div className="min-h-5 text-[11px]">
-          {status === "connected" ? (
+          {isActive && status === "connected" ? (
             <span className="flex items-center gap-1.5 text-emerald-600 dark:text-emerald-400 font-medium">
               <CheckCircle2 className="h-3 w-3 shrink-0" />
-              <span>Endpoint online &amp; responding. {isActive ? "Provider active." : "Toggle ON to use."}</span>
+              <span>Endpoint online &amp; responding. Provider active.</span>
             </span>
-          ) : error && isConfigured ? (
+          ) : isActive && error ? (
             <span className="flex items-center gap-1.5 text-rose-500 font-medium">
               <AlertCircle className="h-3 w-3 shrink-0" />
               <span className="truncate">{error}</span>
@@ -219,10 +223,10 @@ export function OmniRouterStatusSection({
           type="button"
           id="toggle-omnirouter-btn"
           onClick={onToggle}
-          disabled={!isConfigured || status !== "connected"}
+          disabled={!isActive && !isConfigured}
           title={
-            !isConfigured || status !== "connected"
-              ? "Connect to a working endpoint first"
+            !isActive && !isConfigured
+              ? "Enter an endpoint URL to enable"
               : isActive
                 ? "Click to turn OFF (use Managed AI)"
                 : "Click to turn ON"
@@ -231,7 +235,7 @@ export function OmniRouterStatusSection({
             isActive
               ? "bg-emerald-600 hover:bg-emerald-500 text-white shadow-emerald-600/20"
               : "bg-surface-2 hover:bg-surface-3 text-muted-foreground border border-border"
-          } ${!isConfigured || status !== "connected" ? "opacity-40 cursor-not-allowed" : ""}`}
+          } ${!isActive && !isConfigured ? "opacity-40 cursor-not-allowed" : ""}`}
         >
           <span className={`h-2 w-2 rounded-full ${isActive ? "bg-white animate-pulse" : "bg-muted-foreground/40"}`} />
           <span>{isActive ? "Turn OFF" : "Turn ON"}</span>

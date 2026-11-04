@@ -55,14 +55,20 @@ export function getAiProvider(): AiProvider {
     return "managed";
   }
   const saved = localStorage.getItem(PROVIDER_LS);
-  if (saved === "managed") {
-    return "managed";
-  }
   if (saved === "openrouter") {
-    return getCustomKey() ? "openrouter" : "managed";
+    const customKey = getCustomKey();
+    const keyStatus = localStorage.getItem(KEY_STATUS_LS);
+    if (!customKey || keyStatus === "invalid") {
+      localStorage.setItem(PROVIDER_LS, "managed");
+      return "managed";
+    }
+    return "openrouter";
   }
-  if (saved === "omnirouter" || saved === "ollama") {
-    return saved as AiProvider;
+  if (saved === "omnirouter") {
+    return "omnirouter";
+  }
+  if (saved === "ollama") {
+    return "ollama";
   }
   return "managed";
 }
@@ -517,27 +523,83 @@ export async function syncGlobalKey(): Promise<string> {
 }
 
 /** Validates key directly from the browser with OpenRouter's auth API. */
-export async function validateKey(key?: string): Promise<boolean> {
-  try {
-    const effectiveKey = key && key.trim() ? key.trim() : getKey();
-    if (!effectiveKey) {
-      setKeyStatus("missing");
-      return false;
-    }
+export async function validateKey(key?: string, timeoutMs = 5000): Promise<boolean> {
+  // If no explicit key was passed and OpenRouter is disabled, do not perform repeated validation or network calls
+  if (!key && getAiProvider() !== "openrouter") {
+    return false;
+  }
 
+  const effectiveKey = key && key.trim() ? key.trim() : getCustomKey();
+  if (!effectiveKey) {
+    return false;
+  }
+
+  try {
     const res = await fetch("https://openrouter.ai/api/v1/auth/key", {
       headers: { Authorization: `Bearer ${effectiveKey}`, ...HEADERS_BASE },
+      signal: AbortSignal.timeout(timeoutMs),
     });
     const status: KeyStatus = res.ok ? "valid" : "invalid";
     setKeyStatus(status);
+    if (status === "invalid" && getAiProvider() === "openrouter") {
+      setAiProvider("managed");
+    }
     return status === "valid";
   } catch (err) {
     if (isNetworkError(err)) {
       setKeyStatus("unknown");
       return false;
     }
-    setKeyStatus("unknown");
+    setKeyStatus("invalid");
+    if (getAiProvider() === "openrouter") {
+      setAiProvider("managed");
+    }
     return false;
+  }
+}
+
+let hasRunStartupValidation = false;
+
+/**
+ * Validates provider on application startup according to strict activation rules:
+ * 1. If both providers are OFF, do not perform any API key validation or endpoint checks.
+ * 2. If a provider was previously enabled, validate its key once with a 5-second timeout.
+ *    If invalid, automatically turn it OFF and permanently stop retrying.
+ */
+export async function initProviderOnStartup(): Promise<void> {
+  if (typeof window === "undefined" || hasRunStartupValidation) return;
+  hasRunStartupValidation = true;
+
+  const savedProvider = localStorage.getItem(PROVIDER_LS);
+  if (!savedProvider || savedProvider === "managed") {
+    // Both are OFF by default: do not validate or ping endpoints
+    return;
+  }
+
+  if (savedProvider === "openrouter") {
+    const key = getCustomKey();
+    if (!key) {
+      setAiProvider("managed");
+      setKeyStatus("unknown");
+      return;
+    }
+    const ok = await validateKey(key, 5000);
+    if (!ok) {
+      setKeyStatus("unknown");
+      setAiProvider("managed");
+      if (typeof window !== "undefined") {
+        import("sonner").then(({ toast }) => {
+          toast.error("Not a valid API key");
+        }).catch(() => {});
+      }
+    }
+  } else if (savedProvider === "omnirouter") {
+    try {
+      const { validateOmniRouterConnection } = await import("./omnirouter");
+      await validateOmniRouterConnection();
+    } catch {
+      // Ignore network errors on startup
+    }
   }
 }
 
@@ -590,7 +652,11 @@ export const CURATED_MODELS: ORModel[] = [
 
 /** Fetches available models directly from OpenRouter API without server proxy. */
 export async function fetchModels(key?: string): Promise<ORModel[]> {
-  const effectiveKey = key ? key.trim() : getKey();
+  // If no key was passed and OpenRouter is disabled, return CURATED_MODELS immediately without hitting the network
+  if (!key && getAiProvider() !== "openrouter") {
+    return CURATED_MODELS;
+  }
+  const effectiveKey = key ? key.trim() : getCustomKey();
   try {
     const headers: Record<string, string> = { ...HEADERS_BASE };
     if (effectiveKey) headers["Authorization"] = `Bearer ${effectiveKey}`;
@@ -958,9 +1024,12 @@ export async function streamCompletion(opts: StreamOpts): Promise<void> {
       headers["Authorization"] = `Bearer ${token}`;
       headers["x-firebase-token"] = token;
     }
-    const customKey = getCustomKey() || opts.key;
-    if (customKey) {
-      headers["x-custom-openrouter-key"] = customKey;
+    // In Managed AI mode, never allow client custom keys to override server environment credentials
+    if (getAiProvider() === "openrouter") {
+      const customKey = getCustomKey() || opts.key;
+      if (customKey) {
+        headers["x-custom-openrouter-key"] = customKey;
+      }
     }
 
     const outgoingPayload: Record<string, any> = {
@@ -1036,8 +1105,9 @@ export async function streamCompletion(opts: StreamOpts): Promise<void> {
       }
 
       const friendly = friendlyOpenRouterError(response.status, bodyText, isCustomKey);
-      if (friendly.kind === "auth") {
+      if (friendly.kind === "auth" && getAiProvider() === "openrouter") {
         setKeyStatus("invalid");
+        setAiProvider("managed");
       }
       throw friendly;
     }
@@ -1130,6 +1200,7 @@ export async function streamPersonalOpenRouterCompletion(opts: StreamOpts): Prom
       const friendly = friendlyOpenRouterError(response.status, bodyText, true);
       if (friendly.kind === "auth") {
         setKeyStatus("invalid");
+        setAiProvider("managed");
       }
       throw friendly;
     }

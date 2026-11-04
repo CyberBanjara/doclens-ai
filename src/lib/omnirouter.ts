@@ -251,7 +251,7 @@ export function friendlyOmniRouterError(status: number, body: string): OmniRoute
   );
 }
 
-/** Fetches available models directly from the configured OmniRouter endpoint. */
+/** Fetches available models from direct local OmniRouter or backend proxy API. */
 export async function fetchOmniRouterModels(
   targetBaseUrl?: string,
   targetApiKey?: string,
@@ -260,58 +260,91 @@ export async function fetchOmniRouterModels(
   const directBaseUrl = sanitizeBaseUrl(targetBaseUrl || getOmniRouterBaseUrl());
   const directApiKey = (targetApiKey !== undefined ? targetApiKey : getOmniRouterApiKey()).trim();
 
-  if (!directBaseUrl) return [];
-
-  try {
-    const headers: Record<string, string> = {
-      "ngrok-skip-browser-warning": "true",
-    };
-    if (directApiKey) {
-      headers["Authorization"] = `Bearer ${directApiKey}`;
-    }
-    const res = await fetch(`${directBaseUrl}/models`, {
-      headers,
-      signal: signal || AbortSignal.timeout(8000),
-    });
-    if (res.ok) {
-      const json = (await res.json()) as { data?: unknown };
-      const rawList = Array.isArray(json?.data) ? json.data : [];
-      if (rawList.length > 0) {
-        return rawList.map((item) => {
-          const m = (typeof item === "object" && item !== null ? item : {}) as Record<
-            string,
-            unknown
-          >;
-          const id = String(m.id || "");
-          const name = String(m.name || id);
-          const context_length =
-            typeof m.context_length === "number"
-              ? m.context_length
-              : typeof m.max_input_tokens === "number"
-                ? m.max_input_tokens
-                : 128000;
-          const pricing = (
-            typeof m.pricing === "object" && m.pricing !== null
-              ? m.pricing
-              : { prompt: "0", completion: "0" }
-          ) as ORModel["pricing"];
-          const description = typeof m.description === "string" ? m.description : undefined;
-          const top_provider =
-            typeof m.top_provider === "object" && m.top_provider !== null
-              ? (m.top_provider as ORModel["top_provider"])
-              : undefined;
-          return { id, name, context_length, pricing, description, top_provider };
-        });
+  // 1. Direct connection
+  if (directBaseUrl) {
+    try {
+      const headers: Record<string, string> = {
+        "ngrok-skip-browser-warning": "true",
+      };
+      if (directApiKey) {
+        headers["Authorization"] = `Bearer ${directApiKey}`;
       }
+      const res = await fetch(`${directBaseUrl}/models`, {
+        headers,
+        signal: signal || AbortSignal.timeout(6000),
+      });
+      if (res.ok) {
+        const json = (await res.json()) as { data?: unknown };
+        const rawList = Array.isArray(json?.data) ? json.data : [];
+        if (rawList.length > 0) {
+          return rawList.map((item) => {
+            const m = (typeof item === "object" && item !== null ? item : {}) as Record<
+              string,
+              unknown
+            >;
+            const id = String(m.id || "");
+            const name = String(m.name || id);
+            const context_length =
+              typeof m.context_length === "number"
+                ? m.context_length
+                : typeof m.max_input_tokens === "number"
+                  ? m.max_input_tokens
+                  : 128000;
+            const pricing = (
+              typeof m.pricing === "object" && m.pricing !== null
+                ? m.pricing
+                : { prompt: "0", completion: "0" }
+            ) as ORModel["pricing"];
+            const description = typeof m.description === "string" ? m.description : undefined;
+            const top_provider =
+              typeof m.top_provider === "object" && m.top_provider !== null
+                ? (m.top_provider as ORModel["top_provider"])
+                : undefined;
+            return { id, name, context_length, pricing, description, top_provider };
+          });
+        }
+      }
+    } catch {
+      // Fall through to backend proxy fallback
     }
-  } catch {
-    // Return empty on failure
   }
 
-  return [];
+  // 2. Backend proxy fallback
+  try {
+    const res = await fetch("/api/omni/models", {
+      signal: signal || AbortSignal.timeout(6000),
+    });
+    if (!res.ok) return [];
+    const json = (await res.json()) as { data?: unknown };
+    const rawList = Array.isArray(json?.data) ? json.data : [];
+    return rawList.map((item) => {
+      const m = (typeof item === "object" && item !== null ? item : {}) as Record<string, unknown>;
+      const id = String(m.id || "");
+      const name = String(m.name || id);
+      const context_length =
+        typeof m.context_length === "number"
+          ? m.context_length
+          : typeof m.max_input_tokens === "number"
+            ? m.max_input_tokens
+            : 128000;
+      const pricing = (
+        typeof m.pricing === "object" && m.pricing !== null
+          ? m.pricing
+          : { prompt: "0", completion: "0" }
+      ) as ORModel["pricing"];
+      const description = typeof m.description === "string" ? m.description : undefined;
+      const top_provider =
+        typeof m.top_provider === "object" && m.top_provider !== null
+          ? (m.top_provider as ORModel["top_provider"])
+          : undefined;
+      return { id, name, context_length, pricing, description, top_provider };
+    });
+  } catch {
+    return [];
+  }
 }
 
-/** Validates connectivity directly to the configured OmniRouter endpoint. */
+/** Validates connectivity directly to the configured OmniRouter endpoint or backend proxy. */
 export async function validateOmniRouterConnection(
   targetBaseUrl?: string,
   targetApiKey?: string,
@@ -324,33 +357,56 @@ export async function validateOmniRouterConnection(
   const directBaseUrl = sanitizeBaseUrl(targetBaseUrl || getOmniRouterBaseUrl());
   const directApiKey = (targetApiKey !== undefined ? targetApiKey : getOmniRouterApiKey()).trim();
 
-  if (!directBaseUrl) {
-    return { ok: false, error: "OmniRouter endpoint URL is not configured." };
+  // 1. Direct connection
+  if (directBaseUrl) {
+    try {
+      const headers: Record<string, string> = {
+        "ngrok-skip-browser-warning": "true",
+      };
+      if (directApiKey) {
+        headers["Authorization"] = `Bearer ${directApiKey}`;
+      }
+      const res = await fetch(`${directBaseUrl}/models`, {
+        headers,
+        signal: signal || AbortSignal.timeout(6000),
+      });
+      if (res.ok) {
+        const json = (await res.json()) as { data?: unknown };
+        const count = Array.isArray(json?.data) ? json.data.length : 0;
+        return { ok: true, modelCount: count };
+      }
+      if (targetBaseUrl && targetApiKey) {
+        const txt = await res.text();
+        return { ok: false, error: `HTTP ${res.status}: ${txt.slice(0, 120)}` };
+      }
+    } catch (err: unknown) {
+      if (targetBaseUrl && targetApiKey) {
+        if (isNetworkError(err)) {
+          return {
+            ok: false,
+            error: `Could not connect to ${directBaseUrl}. Make sure your OmniRouter server is running.`,
+          };
+        }
+        return { ok: false, error: err instanceof Error ? err.message : "Connection failed." };
+      }
+    }
   }
 
+  // 2. Backend proxy fallback
   try {
-    const headers: Record<string, string> = {
-      "ngrok-skip-browser-warning": "true",
-    };
-    if (directApiKey) {
-      headers["Authorization"] = `Bearer ${directApiKey}`;
-    }
-    const res = await fetch(`${directBaseUrl}/models`, {
-      headers,
-      signal: signal || AbortSignal.timeout(8000),
+    const res = await fetch("/api/omni/validate", {
+      signal: signal || AbortSignal.timeout(6000),
     });
-    if (!res.ok) {
-      const txt = await res.text();
-      return { ok: false, error: `HTTP ${res.status}: ${txt.slice(0, 120)}` };
+    const json = (await res.json()) as { ok?: boolean; error?: string; modelCount?: number };
+    if (!res.ok || !json?.ok) {
+      return { ok: false, error: json?.error || `HTTP ${res.status}` };
     }
-    const json = (await res.json()) as { data?: unknown };
-    const count = Array.isArray(json?.data) ? json.data.length : 0;
-    return { ok: true, modelCount: count };
+    return { ok: true, modelCount: json.modelCount ?? 0 };
   } catch (err: unknown) {
     if (isNetworkError(err)) {
       return {
         ok: false,
-        error: `Could not connect to ${directBaseUrl}. Make sure your OmniRouter server is running.`,
+        error: `Could not connect to OmniRouter gateway.`,
       };
     }
     return { ok: false, error: err instanceof Error ? err.message : "Connection failed." };
@@ -494,20 +550,65 @@ export async function streamOmniRouterCompletion(opts: OmniStreamOpts): Promise<
   try {
     if (signal.aborted) throw new DOMException("Aborted", "AbortError");
 
-    // Direct connection to OmniRouter endpoint
-    const headers: Record<string, string> = {
-      "Content-Type": "application/json",
-      "ngrok-skip-browser-warning": "true",
-    };
-    if (directApiKey) {
-      headers["Authorization"] = `Bearer ${directApiKey}`;
+    // 1. Direct local connection (preferred when both endpoint and key are available)
+    if (directBaseUrl && directApiKey) {
+      try {
+        const headers: Record<string, string> = {
+          "Content-Type": "application/json",
+          "ngrok-skip-browser-warning": "true",
+          Authorization: `Bearer ${directApiKey}`,
+        };
+
+        const response = await fetch(`${directBaseUrl}/chat/completions`, {
+          method: "POST",
+          headers,
+          body: JSON.stringify(requestPayload),
+          signal,
+        });
+
+        if (response.ok && response.body) {
+          let totalChars = 0;
+          try {
+            totalChars = await readOmniSseStream(response.body, opts.onDelta, signal);
+          } finally {
+            try {
+              if (!response.body.locked) {
+                await response.body.cancel();
+              }
+            } catch {}
+          }
+
+          if (totalChars === 0 && !signal.aborted) {
+            throw new OmniRouterError(
+              "OmniRouter model returned an empty response. Please check model availability or select another model.",
+              502,
+              "server",
+            );
+          }
+          return;
+        }
+
+        if (opts.baseUrl && opts.apiKey) {
+          const bodyText = await response.text();
+          throw friendlyOmniRouterError(response.status, bodyText);
+        }
+      } catch (directErr) {
+        if (signal.aborted) throw directErr;
+        if (opts.baseUrl && opts.apiKey) {
+          throw directErr;
+        }
+        // Fall through to backend proxy fallback
+      }
     }
 
+    // 2. Backend proxy fallback (routes through /api/omni/chat)
     let response: Response;
     try {
-      response = await fetch(`${directBaseUrl}/chat/completions`, {
+      response = await fetch("/api/omni/chat", {
         method: "POST",
-        headers,
+        headers: {
+          "Content-Type": "application/json",
+        },
         body: JSON.stringify(requestPayload),
         signal,
       });
@@ -516,7 +617,7 @@ export async function streamOmniRouterCompletion(opts: OmniStreamOpts): Promise<
       throw new OmniRouterError(
         fetchErr instanceof Error
           ? fetchErr.message
-          : `Failed to connect to OmniRouter endpoint at ${directBaseUrl}`,
+          : "Failed to connect to OmniRouter proxy endpoint",
         0,
         "network",
       );
