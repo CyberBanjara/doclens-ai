@@ -386,6 +386,11 @@ export function TtsProvider({ children }: { children: React.ReactNode }) {
     return true;
   });
 
+  const continuousPlayRef = useRef<boolean>(continuousPlay);
+  useEffect(() => {
+    continuousPlayRef.current = continuousPlay;
+  }, [continuousPlay]);
+
   const [outputLanguage, setOutputLanguageState] = useState<string>(() => {
     return getOutputLanguage();
   });
@@ -570,6 +575,7 @@ export function TtsProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   const setContinuousPlay = (val: boolean) => {
+    continuousPlayRef.current = val;
     setContinuousPlayState(val);
     localStorage.setItem("doclens:tts-continuous", val.toString());
   };
@@ -761,7 +767,7 @@ export function TtsProvider({ children }: { children: React.ReactNode }) {
       if (index < 0 || index >= sentenceList.length) {
         stopCurrentAudioElement(audioRef);
         if (
-          continuousPlay &&
+          continuousPlayRef.current &&
           activePageNumberRef.current !== null &&
           activePageNumberRef.current > 0
         ) {

@@ -96,13 +96,18 @@ export function RightPanel({
     };
   }, [docId, activePage, activePageAiStatus, activePageAiUpdatedAt]);
 
+  const activePageRef = useRef(activePage);
+  activePageRef.current = activePage;
+
   // Handle continuous play page transition event
   useEffect(() => {
     return listenDocEvent("doclens:tts-next-page", (d) => {
-      if (d.currentPage < pageCount) {
-        setActivePage(d.currentPage + 1);
-      } else {
-        stop();
+      if (d.currentPage === activePageRef.current) {
+        if (d.currentPage < pageCount) {
+          setActivePage(d.currentPage + 1);
+        } else {
+          stop();
+        }
       }
     });
   }, [pageCount, setActivePage, stop]);

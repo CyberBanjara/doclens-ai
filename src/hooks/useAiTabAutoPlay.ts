@@ -3,8 +3,14 @@ import { listenDocEvent } from "@/lib/docEvents";
 import { hasCompletedTtsVoiceSetup, type TtsSource } from "@/context/TtsContext";
 import { getPageData, type PageAiSummaryEntry, type PageDataRecord } from "@/lib/storage";
 import { executePageTranslation, isPageTranslating } from "@/lib/pageTranslationRunner";
-import { getAiProvider, getKey, isOmniRouterConfigured, readGlobals } from "@/lib/openrouter";
-import { effective, hashFor } from "@/lib/pageAi";
+import {
+  getAiProvider,
+  getCustomKey,
+  getKeyStatus,
+  isOmniRouterConfigured,
+  readGlobals,
+} from "@/lib/openrouter";
+import { getStoredAuthToken } from "@/lib/auth-client";
 import { getFirebaseAuth } from "@/lib/firebase";
 
 interface UseAiTabAutoPlayArgs {
@@ -26,15 +32,66 @@ interface UseAiTabAutoPlayArgs {
   requestVoiceOnboarding: (onReady: () => void) => void;
 }
 
+/** Check if current user is authenticated (via session token or Firebase auth) */
+function isUserAuthenticated(): boolean {
+  if (typeof window === "undefined") return false;
+  return Boolean(getStoredAuthToken() || getFirebaseAuth().currentUser);
+}
+
+/** Check if current AI provider is configured and ready to execute requests */
+function isProviderConfigured(): boolean {
+  const globals = readGlobals();
+  const provider = globals.provider || getAiProvider();
+  if (provider === "managed") {
+    // Managed AI uses serverless backend with server-side keys
+    return true;
+  }
+  if (provider === "ollama") {
+    return true;
+  }
+  if (provider === "omnirouter") {
+    return isOmniRouterConfigured();
+  }
+  if (provider === "openrouter") {
+    const customKey = getCustomKey();
+    return Boolean(customKey && getKeyStatus() !== "invalid");
+  }
+  return true;
+}
+
+/** Check if a translation is available for the given page (without checking prior read status or settings hash) */
+async function getAvailableTranslation(
+  docId: string,
+  pageNumber: number,
+  activePageData: PageDataRecord | null,
+): Promise<string | null> {
+  // 1. Check in-memory activePageData if it matches this page
+  if (activePageData && activePageData.pageNumber === pageNumber) {
+    const res = activePageData.pageAi?.result?.trim();
+    if (res) return res;
+  }
+
+  // 2. Check IndexedDB storage directly
+  try {
+    const rec = await getPageData(docId, pageNumber);
+    const res = rec?.pageAi?.result?.trim();
+    if (res) return res;
+  } catch {
+    // Ignore storage lookup errors
+  }
+
+  return null;
+}
+
 /**
  * Continuous play and AI auto-read orchestration:
- * 1. Automatically initiates and transitions TTS playback when advancing across pages.
- * 2. Look-ahead background translation: while page N is actively reading and continuous play is on,
- *    once initial TTS speech synthesis finishes and the processor is free, automatically begins
- *    translating/explaining page N+1 according to the active global mode and style settings.
- * 3. Cache freshness verification: ensures that pre-translation and auto-advance strictly use the
- *    translation/explanation matching the active global mode (e.g. Explain, Translate) and style.
- * 4. Gracefully handles transition states without aborting playback while waiting for background processing.
+ * 1. While TTS is reading page N and Continuous mode is enabled, ongoing TTS processing is never interrupted.
+ * 2. Once TTS processing for page N is complete (neural synthesis finished and audio streaming),
+ *    checks whether page N+1 has already been translated.
+ * 3. If page N+1 is not translated, automatically triggers its translation in the background without interrupting playback.
+ * 4. When the user reaches page N+1, automatically starts TTS playback of its translated text.
+ * 5. Continues this cycle for every subsequent page as long as Continuous mode remains enabled.
+ * 6. The user never needs to manually click the Play button for subsequent pages.
  */
 export function useAiTabAutoPlay({
   docId,
@@ -93,15 +150,16 @@ export function useAiTabAutoPlay({
   };
 
   // 1. Look-ahead background translation:
-  // When TTS is actively playing page N with continuous play enabled,
-  // wait for TTS speech synthesis to complete and processor/WASM thread to be free,
-  // then automatically pre-translate/explain page N+1 matching the active global settings.
+  // While TTS is reading page N, do not interrupt ongoing TTS speech synthesis.
+  // Once the TTS processing for page N is complete (audio is actively playing and processor is free),
+  // check whether page N+1 has already been translated.
+  // If N+1 is not translated, automatically trigger its translation in the background.
   useEffect(() => {
     if (!isPlaying || isPaused || !continuousPlay || tab !== "ai" || isNeuralLoading || analyzing) {
       return;
     }
 
-    // Only initiate look-ahead when audio playback has stabilized on the current page
+    // Only initiate look-ahead when audio playback has stabilized on current page
     if (activePageNumber === null || activePageNumber <= 0 || activePageNumber !== activePage) {
       return;
     }
@@ -111,38 +169,31 @@ export function useAiTabAutoPlay({
       return;
     }
 
-    const currentGlobals = readGlobals();
-    const currentHash = hashFor(effective(currentGlobals));
-
-    // Check if next page is already translated and matches the current mode/style
-    const nextSummary = aiSummaryRef.current?.[nextPage];
-    const isNextPageFresh =
-      nextSummary?.status === "done" &&
-      nextSummary.hasResult &&
-      (nextSummary.isCustom || nextSummary.settingsHash === currentHash);
-
-    if (isNextPageFresh) {
-      return;
-    }
-
-    // Check if already in-flight or already scheduled in this cycle
+    // Skip if already in-flight or already scheduled in this cycle
     if (isPageTranslating(docId, nextPage) || lookaheadScheduledPageRef.current === nextPage) {
       return;
     }
 
-    // RACE CONDITION & PROCESSOR LOAD CONTROL:
-    // Settle delay (1500ms) after audio is actively playing:
-    // - Ensures initial Piper ONNX WASM synthesis is completely finished.
-    // - Audio is smoothly streaming through Web Audio/hardware audio pipeline (near 0% CPU).
-    // - If user rapidly pauses, stops, or navigates, lookahead is safely cancelled before starting.
+    // Verify auth and provider readiness before triggering translation
+    if (!isUserAuthenticated() || !isProviderConfigured()) {
+      return;
+    }
+
+    // Check if next page is already translated in aiSummary
+    const nextSummary = aiSummaryRef.current?.[nextPage];
+    if (nextSummary?.hasResult && nextSummary?.status === "done") {
+      return;
+    }
+
+    // Settle delay: ensures initial TTS neural synthesis has completed and audio is smoothly streaming
     let cancelIdle: (() => void) | null = null;
     const timer = setTimeout(() => {
-      const scheduleIdle = (callback: () => void, timeoutMs = 2500) => {
+      const scheduleIdle = (callback: () => void, timeoutMs = 2000) => {
         if (typeof window !== "undefined" && "requestIdleCallback" in window) {
           const handle = (window as any).requestIdleCallback(callback, { timeout: timeoutMs });
           return () => (window as any).cancelIdleCallback(handle);
         }
-        const handle = setTimeout(callback, 100);
+        const handle = setTimeout(callback, 50);
         return () => clearTimeout(handle);
       };
 
@@ -165,34 +216,27 @@ export function useAiTabAutoPlay({
           return;
         }
 
-        // If already translated in storage with matching mode & settings, skip rerun
-        const isStorageFresh =
-          nextRec.pageAi?.status === "done" &&
-          nextRec.pageAi?.result?.trim() &&
-          (nextRec.pageAi.isCustom || nextRec.pageAi.settingsHash === currentHash);
-
-        if (isStorageFresh) {
+        // Only check whether its translation is available (do not check prior read status)
+        if (nextRec.pageAi?.result?.trim()) {
           return;
         }
 
-        // Check authentication & provider configuration
-        const user = getFirebaseAuth().currentUser;
-        if (!user) return;
-        const provider = currentGlobals.provider || getAiProvider();
-        if (provider === "openrouter" && !getKey()) return;
-        if (provider === "omnirouter" && !isOmniRouterConfigured()) return;
+        // Re-verify provider and auth readiness
+        if (!isUserAuthenticated() || !isProviderConfigured()) {
+          return;
+        }
 
         lookaheadScheduledPageRef.current = nextPage;
-
+        const currentGlobals = readGlobals();
         void executePageTranslation({
           docId,
           pageNumber: nextPage,
           globals: currentGlobals,
         }).catch((err) => {
-          console.warn(`[AutoPlay] Lookahead processing error for page ${nextPage}:`, err);
+          console.warn(`[AutoPlay] Lookahead translation error for page ${nextPage}:`, err);
         });
       });
-    }, 1500);
+    }, 1200);
 
     return () => {
       clearTimeout(timer);
@@ -213,8 +257,10 @@ export function useAiTabAutoPlay({
   ]);
 
   // 2. Page transition auto-advance playback handler:
-  // When TTS completes page N and advances to page N+1, smoothly start playback
-  // if N+1 is ready for the current mode/style, or wait for the in-flight processing to finish (without calling stop()).
+  // When TTS completes page N and advances to page N+1:
+  // - If page N+1 is translated, automatically starts TTS playback of its translated text.
+  // - If N+1 translation is in flight, stays in transition state (DO NOT call stop!).
+  // - If N+1 translation has not been triggered yet, triggers it immediately without calling stop.
   useEffect(() => {
     const isPendingTransition =
       isPlaying &&
@@ -229,68 +275,39 @@ export function useAiTabAutoPlay({
 
     const handleTransition = async () => {
       if (tab === "ai") {
-        const currentGlobals = readGlobals();
-        const currentHash = hashFor(effective(currentGlobals));
+        // Check if translation is available for activePage (do not check prior read status)
+        const availableText = await getAvailableTranslation(docId, activePage, activePageData);
+        if (cancelled) return;
 
-        // Step A: Check activePageData from state
-        let pageResult =
-          activePageData && activePageData.pageNumber === activePage
-            ? activePageData.pageAi?.result
-            : undefined;
-        let pageStatus =
-          activePageData && activePageData.pageNumber === activePage
-            ? activePageData.pageAi?.status
-            : undefined;
-        let pageSettingsHash =
-          activePageData && activePageData.pageNumber === activePage
-            ? activePageData.pageAi?.settingsHash
-            : undefined;
-        let isCustom =
-          activePageData && activePageData.pageNumber === activePage
-            ? !!activePageData.pageAi?.isCustom
-            : false;
-
-        // Step B: If activePageData not yet synced for this page or settings mismatch, check storage directly
-        if (
-          !pageResult ||
-          pageStatus !== "done" ||
-          (!isCustom && pageSettingsHash !== currentHash)
-        ) {
-          const rec = await getPageData(docId, activePage).catch(() => null);
-          if (cancelled) return;
-          if (rec && rec.pageNumber === activePage) {
-            pageResult = rec.pageAi?.result;
-            pageStatus = rec.pageAi?.status;
-            pageSettingsHash = rec.pageAi?.settingsHash;
-            isCustom = !!rec.pageAi?.isCustom;
-          }
-        }
-
-        // If translation is ready and matches current settings/mode, begin playback immediately
-        const isFresh =
-          pageStatus === "done" &&
-          pageResult?.trim() &&
-          (isCustom || pageSettingsHash === currentHash);
-
-        if (isFresh && pageResult) {
-          startPlaybackForPage(pageResult, "ai", activePage);
+        if (availableText) {
+          startPlaybackForPage(availableText, "ai", activePage);
           return;
         }
 
-        // If translation is currently running in background, stay in transition state (DO NOT stop!)
-        if (pageStatus === "running" || isPageTranslating(docId, activePage)) {
+        // If translation is currently in-flight in background, wait for it (DO NOT call stop!)
+        if (isPageTranslating(docId, activePage)) {
           return;
         }
 
-        // If page has not been started yet (idle) or has a stale result from a different mode/style,
-        // trigger translation with current settings/mode now
-        const user = getFirebaseAuth().currentUser;
-        if (!user || (!getKey() && !isOmniRouterConfigured())) {
+        // Check storage again in case it just finished
+        const rec = await getPageData(docId, activePage).catch(() => null);
+        if (cancelled) return;
+        if (rec?.pageAi?.result?.trim()) {
+          startPlaybackForPage(rec.pageAi.result, "ai", activePage);
+          return;
+        }
+        if (rec?.pageAi?.status === "running") {
+          return;
+        }
+
+        // If translation is not yet started, trigger it now without stopping playback
+        if (!isUserAuthenticated() || !isProviderConfigured()) {
           stop();
           return;
         }
 
         lookaheadScheduledPageRef.current = activePage;
+        const currentGlobals = readGlobals();
         void executePageTranslation({
           docId,
           pageNumber: activePage,
