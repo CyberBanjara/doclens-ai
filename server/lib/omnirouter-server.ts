@@ -95,3 +95,34 @@ export function getOmniUpstreamHeaders(apiKey: string): Record<string, string> {
     "ngrok-skip-browser-warning": "true",
   };
 }
+
+/**
+ * Sanitizes upstream error text to strictly ensure no internal endpoints, hostnames,
+ * or credentials are ever returned or leaked to the client.
+ */
+export function sanitizeUpstreamError(
+  rawText: string,
+  baseUrl?: string,
+  apiKey?: string,
+): string {
+  if (!rawText) return "OmniRouter upstream request failed.";
+  let sanitized = rawText;
+  if (apiKey && apiKey.length > 4) {
+    sanitized = sanitized.replaceAll(apiKey, "[REDACTED_API_KEY]");
+  }
+  if (baseUrl) {
+    try {
+      const parsedUrl = new URL(baseUrl);
+      sanitized = sanitized.replaceAll(baseUrl, "[REDACTED_GATEWAY]");
+      if (parsedUrl.host) {
+        sanitized = sanitized.replaceAll(parsedUrl.host, "[REDACTED_HOST]");
+      }
+    } catch {
+      sanitized = sanitized.replaceAll(baseUrl, "[REDACTED_GATEWAY]");
+    }
+  }
+  // Strip any raw bearer tokens or URL patterns that may have leaked from upstream error traces
+  sanitized = sanitized.replace(/Bearer\s+[A-Za-z0-9_\-\.]+/gi, "Bearer [REDACTED]");
+  sanitized = sanitized.replace(/https?:\/\/[^\s"'<>]+/gi, "[REDACTED_URL]");
+  return sanitized.slice(0, 300).trim();
+}

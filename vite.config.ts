@@ -16,6 +16,7 @@ const env = loadEnv(process.env.NODE_ENV || "development", process.cwd(), "");
 Object.assign(process.env, env);
 
 const isVercel = process.env.VERCEL === "1" || env.VERCEL === "1";
+const isProduction = process.env.NODE_ENV === "production" || isVercel;
 
 export default defineConfig({
   server: {
@@ -60,11 +61,13 @@ export default defineConfig({
         env.VITE_OPENROUTER_DEFAULT_MODEL ||
         "",
     ),
+    // In production (Vercel builds), system-level OmniRouter endpoint & API key remain strictly server-side
+    // and are never exposed or inlined into the client bundle. In local dev, local values are preserved.
     __OMNIROUTER_BASE_URL__: JSON.stringify(
-      process.env.OMNIROUTER_BASE_URL || env.OMNIROUTER_BASE_URL || "",
+      isProduction ? "" : process.env.OMNIROUTER_BASE_URL || env.OMNIROUTER_BASE_URL || "",
     ),
     __OMNIROUTER_API_KEY__: JSON.stringify(
-      process.env.OMNIROUTER_API_KEY || env.OMNIROUTER_API_KEY || "",
+      isProduction ? "" : process.env.OMNIROUTER_API_KEY || env.OMNIROUTER_API_KEY || "",
     ),
     __OMNIROUTER_CONFIGURED__: JSON.stringify(
       Boolean(

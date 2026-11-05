@@ -65,21 +65,21 @@ describe("Managed AI Key Resolution & Production 401 Auto-Recovery", () => {
     );
     assert.match(
       translateTs,
-      /primaryKey/,
-      "translate.post.ts must determine primary key"
+      /candidateKeys/,
+      "translate.post.ts must collect candidate keys"
     );
     assert.match(
       translateTs,
-      /fallbackKey/,
-      "translate.post.ts must determine fallback key"
+      /omniEnvKey\.startsWith\(["']sk-or-v1-["']\)/,
+      "translate.post.ts must check if OMNIROUTER_API_KEY holds an OpenRouter key"
     );
   });
 
-  it("4. translate.post.ts automatically recovers from 401 User not found using fallback key", () => {
+  it("4. translate.post.ts automatically recovers from 401 User not found using fallback candidate keys", () => {
     assert.match(
       translateTs,
-      /orResponse\.status\s*===\s*401\s*&&\s*fallbackKey/,
-      "translate.post.ts must check for 401 status with available fallbackKey"
+      /orResponse\.status\s*===\s*401\s*&&\s*candidateKeys\.length\s*>\s*1/,
+      "translate.post.ts must check for 401 status with candidateKeys"
     );
     assert.match(
       translateTs,
@@ -88,8 +88,8 @@ describe("Managed AI Key Resolution & Production 401 Auto-Recovery", () => {
     );
     assert.match(
       translateTs,
-      /orResponse\s*=\s*await\s+fetchUpstream\(activeApiKey\)/,
-      "translate.post.ts must retry fetchUpstream with fallback key on 401"
+      /const\s+retryRes\s*=\s*await\s+fetchUpstream\(nextKey\)/,
+      "translate.post.ts must retry fetchUpstream with candidate keys on 401"
     );
   });
 

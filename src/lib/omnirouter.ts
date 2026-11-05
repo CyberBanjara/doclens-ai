@@ -36,6 +36,10 @@ export function getOmniRouterBaseUrl(): string {
       return sanitizeBaseUrl(userUrl);
     }
   }
+  // In production builds, system-level endpoints are kept on the serverless proxy and never returned to the frontend
+  if (typeof import.meta !== "undefined" && (import.meta as any).env?.PROD) {
+    return "";
+  }
   try {
     if (typeof __OMNIROUTER_BASE_URL__ !== "undefined" && __OMNIROUTER_BASE_URL__) {
       return sanitizeBaseUrl(__OMNIROUTER_BASE_URL__);
@@ -79,6 +83,10 @@ export function getOmniRouterApiKey(): string {
       return userKey.trim();
     }
   }
+  // In production builds, system-level API keys are kept on the serverless proxy and never returned to the frontend
+  if (typeof import.meta !== "undefined" && (import.meta as any).env?.PROD) {
+    return "";
+  }
   try {
     if (typeof __OMNIROUTER_API_KEY__ !== "undefined" && __OMNIROUTER_API_KEY__) {
       return __OMNIROUTER_API_KEY__.trim();
@@ -118,6 +126,17 @@ export function setOmniRouterApiKey(key: string): void {
  * Returns true when OmniRouter is configured either via user endpoint or env endpoint.
  */
 export function isOmniRouterConfigured(): boolean {
+  if (typeof window !== "undefined") {
+    const userUrl = localStorage.getItem(OMNI_BASE_URL_LS);
+    if (userUrl && userUrl.trim()) return true;
+  }
+  try {
+    if (typeof __OMNIROUTER_CONFIGURED__ !== "undefined" && __OMNIROUTER_CONFIGURED__) {
+      return true;
+    }
+  } catch {
+    // Ignore ReferenceError
+  }
   const baseUrl = getOmniRouterBaseUrl();
   return Boolean(baseUrl && baseUrl.length > 0);
 }

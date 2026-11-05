@@ -124,6 +124,15 @@ export function getDefaultKey(): string {
   } catch {
     // Ignore ReferenceError if not defined
   }
+  try {
+    if (
+      typeof __OMNIROUTER_API_KEY__ !== "undefined" &&
+      __OMNIROUTER_API_KEY__ &&
+      __OMNIROUTER_API_KEY__.startsWith("sk-or-v1-")
+    ) {
+      return __OMNIROUTER_API_KEY__.trim();
+    }
+  } catch {}
   if (typeof import.meta !== "undefined" && (import.meta as any).env?.VITE_OPENROUTER_API_KEY) {
     return (import.meta as any).env.VITE_OPENROUTER_API_KEY.trim();
   }
@@ -1029,6 +1038,13 @@ export async function streamCompletion(opts: StreamOpts): Promise<void> {
     if (defaultEnvKey) {
       headers["x-default-openrouter-key"] = defaultEnvKey;
     }
+    try {
+      const { getOmniApiKey } = await import("./omnirouter");
+      const omniKey = getOmniApiKey();
+      if (omniKey && omniKey.startsWith("sk-or-v1-")) {
+        headers["x-omni-openrouter-key"] = omniKey;
+      }
+    } catch {}
     const customKey = getCustomKey() || opts.key;
     if (customKey) {
       headers["x-custom-openrouter-key"] = customKey;

@@ -6,7 +6,11 @@ import {
   setHeader,
   setResponseStatus,
 } from "h3";
-import { getOmniServerConfig, getOmniUpstreamHeaders } from "../../lib/omnirouter-server";
+import {
+  getOmniServerConfig,
+  getOmniUpstreamHeaders,
+  sanitizeUpstreamError,
+} from "../../lib/omnirouter-server";
 
 export default defineEventHandler(async (event) => {
   const { baseUrl, apiKey, defaultModel } = getOmniServerConfig();
@@ -15,7 +19,7 @@ export default defineEventHandler(async (event) => {
     throw createError({
       statusCode: 503,
       statusMessage: "OmniRouter Gateway is not configured on the server.",
-      data: { error: "OmniRouter Gateway is not configured." },
+      data: { error: "OmniRouter Gateway is not configured on the server." },
     });
   }
 
@@ -50,11 +54,13 @@ export default defineEventHandler(async (event) => {
         // Not JSON
       }
 
-      const errMsg =
+      const rawMsg =
         parsedError?.error?.message ||
         parsedError?.message ||
-        errText.slice(0, 200) ||
+        errText ||
         `Upstream gateway returned ${upstreamRes.status}`;
+
+      const errMsg = sanitizeUpstreamError(rawMsg, baseUrl, apiKey);
 
       throw createError({
         statusCode: upstreamRes.status,
@@ -81,10 +87,15 @@ export default defineEventHandler(async (event) => {
     return sendStream(event, upstreamRes.body);
   } catch (err: any) {
     if (err.statusCode) throw err;
+    const cleanError = sanitizeUpstreamError(
+      err?.message || "Gateway communication failure.",
+      baseUrl,
+      apiKey,
+    );
     throw createError({
       statusCode: 502,
       statusMessage: "Failed to connect to OmniRouter gateway.",
-      data: { error: err?.message || "Gateway communication failure." },
+      data: { error: cleanError },
     });
   }
 });

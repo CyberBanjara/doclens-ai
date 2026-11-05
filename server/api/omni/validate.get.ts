@@ -1,5 +1,9 @@
 import { defineEventHandler } from "h3";
-import { getOmniServerConfig, getOmniUpstreamHeaders } from "../../lib/omnirouter-server";
+import {
+  getOmniServerConfig,
+  getOmniUpstreamHeaders,
+  sanitizeUpstreamError,
+} from "../../lib/omnirouter-server";
 
 export default defineEventHandler(async () => {
   const { baseUrl, apiKey } = getOmniServerConfig();
@@ -20,7 +24,7 @@ export default defineEventHandler(async () => {
       const txt = await res.text();
       return {
         ok: false,
-        error: `Upstream Gateway HTTP ${res.status}: ${txt.slice(0, 120)}`,
+        error: `Upstream Gateway HTTP ${res.status}: ${sanitizeUpstreamError(txt, baseUrl, apiKey)}`,
       };
     }
 
@@ -34,7 +38,11 @@ export default defineEventHandler(async () => {
   } catch (err: any) {
     return {
       ok: false,
-      error: err?.message || "Could not connect to upstream OmniRouter gateway.",
+      error: sanitizeUpstreamError(
+        err?.message || "Could not connect to upstream OmniRouter gateway.",
+        baseUrl,
+        apiKey,
+      ),
     };
   }
 });

@@ -3,6 +3,7 @@ import { Server, Globe, CheckCircle2, AlertCircle, Loader2, Trash2, Check, FileT
 import {
   getOmniRouterBaseUrl,
   setOmniRouterBaseUrl,
+  isOmniRouterConfigured,
 } from "@/lib/omnirouter";
 import { toast } from "sonner";
 
@@ -36,7 +37,7 @@ export function OmniRouterStatusSection({
   const [isSaved, setIsSaved] = useState(false);
   const [isRemoving, setIsRemoving] = useState(false);
 
-  const isConfigured = Boolean(inputUrl.trim());
+  const isConfigured = Boolean(inputUrl.trim()) || isOmniRouterConfigured();
 
   useEffect(() => {
     if (endpoint !== undefined) {

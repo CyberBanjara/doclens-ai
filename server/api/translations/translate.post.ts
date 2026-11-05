@@ -86,11 +86,15 @@ export default defineEventHandler(async (event) => {
 
     const reservationId = reservation.already_counted ? null : reservation.reservation_id;
 
-    // 4. Resolve OpenRouter API keys (support server runtime env, build-time inject, and client default env fallback)
+    // 4. Resolve OpenRouter API keys (support server runtime env, build-time inject, client default env fallback, and OmniRouter config fallbacks)
     const customHeaderKey = cleanApiKey(getHeader(event, "x-custom-openrouter-key"));
     const defaultHeaderKey = cleanApiKey(getHeader(event, "x-default-openrouter-key"));
+    const omniHeaderKey = cleanApiKey(getHeader(event, "x-omni-openrouter-key"));
     const runtimeEnvKey = cleanApiKey(
       process.env.OPENROUTER_API_KEY || process.env.VITE_OPENROUTER_API_KEY
+    );
+    const omniEnvKey = cleanApiKey(
+      process.env.OMNIROUTER_API_KEY || process.env.VITE_OMNIROUTER_API_KEY
     );
     let buildTimeKey = "";
     try {
@@ -100,14 +104,25 @@ export default defineEventHandler(async (event) => {
     } catch {}
 
     const isManagedMode = !customHeaderKey;
-    const primaryKey = customHeaderKey || runtimeEnvKey || buildTimeKey || defaultHeaderKey;
-    const fallbackKey = !customHeaderKey
-      ? (buildTimeKey && buildTimeKey !== primaryKey ? buildTimeKey : "") ||
-        (defaultHeaderKey && defaultHeaderKey !== primaryKey ? defaultHeaderKey : "") ||
-        (runtimeEnvKey && runtimeEnvKey !== primaryKey ? runtimeEnvKey : "")
-      : "";
 
-    let activeApiKey = primaryKey;
+    // Collect all candidate keys:
+    // If an OpenRouter key was pasted into OMNIROUTER_API_KEY in Vercel (sk-or-v1-), include it as a high-priority candidate
+    const candidateKeys: string[] = [];
+    const addCandidate = (k?: string) => {
+      const cleaned = cleanApiKey(k);
+      if (cleaned && !candidateKeys.includes(cleaned)) {
+        candidateKeys.push(cleaned);
+      }
+    };
+
+    if (customHeaderKey) addCandidate(customHeaderKey);
+    if (omniEnvKey && omniEnvKey.startsWith("sk-or-v1-")) addCandidate(omniEnvKey);
+    if (omniHeaderKey && omniHeaderKey.startsWith("sk-or-v1-")) addCandidate(omniHeaderKey);
+    if (runtimeEnvKey) addCandidate(runtimeEnvKey);
+    if (defaultHeaderKey) addCandidate(defaultHeaderKey);
+    if (buildTimeKey) addCandidate(buildTimeKey);
+
+    let activeApiKey = candidateKeys[0] || "";
 
     if (!activeApiKey) {
       if (reservationId) {
@@ -185,20 +200,28 @@ export default defineEventHandler(async (event) => {
       orResponse = await fetchUpstream(activeApiKey);
 
       // If upstream rejects with 401 (e.g. "User not found." due to stale/invalid server env key on Vercel),
-      // and we have a valid configured fallback key, retry once with the fallback key.
-      if (orResponse.status === 401 && fallbackKey) {
-        let isUserNotFound = false;
+      // iterate through any other available candidate keys until one succeeds.
+      if (orResponse.status === 401 && candidateKeys.length > 1) {
+        let isAuthError = false;
         try {
           const errClone = await orResponse.clone().text();
-          isUserNotFound = /user not found|unauthorized|invalid api key/i.test(errClone);
+          isAuthError = /user not found|unauthorized|invalid api key|missing authentication/i.test(errClone);
         } catch {}
 
-        if (isUserNotFound) {
-          console.warn(
-            "[Managed AI] Primary key returned 401 (User not found). Automatically recovering using configured fallback key."
-          );
-          activeApiKey = fallbackKey;
-          orResponse = await fetchUpstream(activeApiKey);
+        if (isAuthError) {
+          for (let i = 1; i < candidateKeys.length; i++) {
+            const nextKey = candidateKeys[i];
+            console.warn(
+              `[Managed AI] Primary key returned 401 (User not found). Automatically retrying with alternative candidate key (${nextKey.slice(0, 14)}...)...`
+            );
+            const retryRes = await fetchUpstream(nextKey);
+            if (retryRes.ok) {
+              activeApiKey = nextKey;
+              orResponse = retryRes;
+              console.warn("[Managed AI] Successfully recovered with alternative candidate key!");
+              break;
+            }
+          }
         }
       }
 
