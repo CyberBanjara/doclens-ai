@@ -173,7 +173,7 @@ function SettingsPage() {
 
   const loadOmniModels = async (targetBaseUrl?: string) => {
     const ep = targetBaseUrl !== undefined ? targetBaseUrl : (omniEndpoint || getOmniRouterBaseUrl());
-    if (!ep) {
+    if (!ep && !isOmniRouterConfigured()) {
       setOmniStatus("disconnected");
       setOmniError("");
       return;
@@ -182,7 +182,11 @@ function SettingsPage() {
     setOmniError("");
     setOmniStatus("checking");
     try {
-      const res = await validateOmniRouterConnection(ep, getOmniRouterApiKey() || undefined, AbortSignal.timeout(5000));
+      const res = await validateOmniRouterConnection(
+        ep || undefined,
+        getOmniRouterApiKey() || undefined,
+        AbortSignal.timeout(5000),
+      );
       if (res.ok) {
         setOmniStatus("connected");
       } else {
@@ -348,16 +352,21 @@ function SettingsPage() {
     }
 
     const epToValidate = omniEndpoint.trim() || getOmniRouterBaseUrl().trim();
-    if (!epToValidate) {
+    if (!epToValidate && !isOmniRouterConfigured()) {
       toast.error("Please enter an OmniRouter endpoint URL first.");
       return;
     }
 
     setLoadingOmni(true);
     setOmniStatus("checking");
-    setOmniRouterBaseUrl(epToValidate);
+    if (epToValidate) {
+      setOmniRouterBaseUrl(epToValidate);
+    }
     try {
-      const res = await validateOmniRouterConnection(epToValidate, getOmniRouterApiKey().trim() || undefined);
+      const res = await validateOmniRouterConnection(
+        epToValidate || undefined,
+        getOmniRouterApiKey().trim() || undefined,
+      );
       if (res.ok) {
         setOmniStatus("connected");
         setOmniError("");
