@@ -114,49 +114,39 @@ export async function checkRedirectResult(): Promise<ClientUser | null> {
 /**
  * Get the current fresh ID token from Firebase auth or storage.
  */
-export async function getFreshAuthToken(): Promise<string | null> {
-  if (typeof window !== "undefined") {
-    try {
-      const auth = getFirebaseAuth();
-      if (auth.currentUser) {
-        const token = await auth.currentUser.getIdToken(false);
-        setStoredAuthToken(token);
-        return token;
+// Firebase restores its persisted user asynchronously on page load. Wait for that once
+// (shared by all callers) instead of every caller waiting up to 1.2s on its own.
+let authReadyPromise: Promise<void> | null = null;
+function waitForFirebaseAuthReady(timeoutMs = 1200): Promise<void> {
+  if (!authReadyPromise) {
+    authReadyPromise = (async () => {
+      try {
+        const auth = getFirebaseAuth();
+        await Promise.race([
+          auth.authStateReady(),
+          new Promise<void>((r) => setTimeout(r, timeoutMs)),
+        ]);
+      } catch {
+        // Firebase unavailable — fall through to stored token / server session
       }
-
-      // If Firebase Auth is still initializing on page reload, wait briefly
-      const token = await new Promise<string | null>((resolve) => {
-        const unsubscribe = auth.onAuthStateChanged(async (fbUser) => {
-          unsubscribe();
-          if (fbUser) {
-            try {
-              const tok = await fbUser.getIdToken();
-              setStoredAuthToken(tok);
-              resolve(tok);
-            } catch {
-              resolve(getStoredAuthToken());
-            }
-          } else {
-            resolve(getStoredAuthToken());
-          }
-        });
-
-        setTimeout(() => {
-          unsubscribe();
-          resolve(getStoredAuthToken());
-        }, 1200);
-      });
-
-      if (token) return token;
-    } catch {
-      // Fall through to stored token
-    }
+    })();
   }
-  const stored = getStoredAuthToken();
-  if (stored) return stored;
+  return authReadyPromise;
+}
 
-  // Fallback: If Firebase client token is missing or expired, check server session cookie via /api/auth/me
-  if (typeof window !== "undefined") {
+// Shared /api/auth/me fallback: one in-flight request, and a short-lived negative result
+// so guests don't trigger a session check on every translation request.
+const SERVER_FALLBACK_NEGATIVE_TTL_MS = 60 * 1000;
+let serverFallbackInFlight: Promise<string | null> | null = null;
+let serverFallbackNoSessionAt = 0;
+
+function fetchTokenFromServerSession(): Promise<string | null> {
+  if (Date.now() - serverFallbackNoSessionAt < SERVER_FALLBACK_NEGATIVE_TTL_MS) {
+    return Promise.resolve(null);
+  }
+  if (serverFallbackInFlight) return serverFallbackInFlight;
+
+  serverFallbackInFlight = (async () => {
     try {
       const res = await fetch("/api/auth/me", {
         method: "GET",
@@ -166,12 +156,52 @@ export async function getFreshAuthToken(): Promise<string | null> {
         const data = await res.json();
         if (data?.token && typeof data.token === "string") {
           setStoredAuthToken(data.token);
-          return data.token;
+          return data.token as string;
         }
       }
+      serverFallbackNoSessionAt = Date.now();
+      return null;
     } catch {
-      // Ignore network errors
+      return null;
+    } finally {
+      serverFallbackInFlight = null;
     }
+  })();
+  return serverFallbackInFlight;
+}
+
+/** Reset the cached "no server session" result (e.g. after login/logout). */
+export function resetAuthTokenFallbackCache(): void {
+  serverFallbackNoSessionAt = 0;
+}
+
+export async function getFreshAuthToken(options?: {
+  /** When false, never call /api/auth/me to recover a token (caller will hit /me itself). */
+  serverFallback?: boolean;
+}): Promise<string | null> {
+  const serverFallback = options?.serverFallback ?? true;
+
+  if (typeof window !== "undefined") {
+    try {
+      const auth = getFirebaseAuth();
+      if (!auth.currentUser) {
+        await waitForFirebaseAuthReady();
+      }
+      if (auth.currentUser) {
+        const token = await auth.currentUser.getIdToken(false);
+        setStoredAuthToken(token);
+        return token;
+      }
+    } catch {
+      // Fall through to stored token
+    }
+  }
+  const stored = getStoredAuthToken();
+  if (stored) return stored;
+
+  // Fallback: If Firebase client token is missing or expired, check server session cookie via /api/auth/me
+  if (serverFallback && typeof window !== "undefined") {
+    return fetchTokenFromServerSession();
   }
 
   return null;
@@ -269,7 +299,8 @@ export async function apiLoginWithGoogle(): Promise<ClientUser> {
  */
 export async function apiFetchCurrentUser(providedToken?: string): Promise<ClientUser | null> {
   try {
-    const token = providedToken || (await getFreshAuthToken());
+    // This function calls /api/auth/me itself, so skip getFreshAuthToken's /me fallback
+    const token = providedToken || (await getFreshAuthToken({ serverFallback: false }));
     const headers: Record<string, string> = {};
     if (token) {
       headers["Authorization"] = `Bearer ${token}`;
@@ -286,6 +317,12 @@ export async function apiFetchCurrentUser(providedToken?: string): Promise<Clien
     const data = await res.json();
     if (data?.token && typeof data.token === "string") {
       setStoredAuthToken(data.token);
+    }
+    if (data?.user) {
+      serverFallbackNoSessionAt = 0;
+    } else {
+      // Server confirmed there is no session — let getFreshAuthToken skip its own /me check
+      serverFallbackNoSessionAt = Date.now();
     }
     return (data?.user as ClientUser) || null;
   } catch (err) {
@@ -307,6 +344,7 @@ export async function apiRenewSession(providedToken?: string): Promise<ClientUse
  */
 export async function apiLogout(): Promise<void> {
   setStoredAuthToken(null);
+  invalidateBillingCache();
 
   try {
     const auth = getFirebaseAuth();
@@ -645,7 +683,49 @@ export interface BillingProfileResponse {
 /**
  * Fetch authoritative user billing subscription, quota balances, and plans.
  */
-export async function apiGetBillingProfile(): Promise<BillingProfileResponse | null> {
+// Billing profile is shown on /user and in the billing modal. Share one in-flight request and
+// reuse a very recent result; invalidated after subscribe, translation, and logout.
+const BILLING_CACHE_TTL_MS = 30 * 1000;
+let billingInFlight: Promise<BillingProfileResponse | null> | null = null;
+let billingCache: { data: BillingProfileResponse; at: number } | null = null;
+let billingGeneration = 0;
+
+export function invalidateBillingCache(): void {
+  billingCache = null;
+  billingInFlight = null;
+  billingGeneration++;
+}
+
+if (typeof window !== "undefined") {
+  // Quota usage changes whenever a translation is counted
+  window.addEventListener("doclens:translation-counter-updated", invalidateBillingCache);
+}
+
+export async function apiGetBillingProfile(options?: {
+  forceRefresh?: boolean;
+}): Promise<BillingProfileResponse | null> {
+  if (options?.forceRefresh) invalidateBillingCache();
+  if (billingCache && Date.now() - billingCache.at < BILLING_CACHE_TTL_MS) {
+    return billingCache.data;
+  }
+  if (billingInFlight) return billingInFlight;
+
+  const generation = billingGeneration;
+  const request = fetchBillingProfile()
+    .then((data) => {
+      if (data && generation === billingGeneration) {
+        billingCache = { data, at: Date.now() };
+      }
+      return data;
+    })
+    .finally(() => {
+      if (billingInFlight === request) billingInFlight = null;
+    });
+  billingInFlight = request;
+  return request;
+}
+
+async function fetchBillingProfile(): Promise<BillingProfileResponse | null> {
   const token = await getFreshAuthToken();
   const headers: Record<string, string> = {};
   if (token) {
@@ -702,6 +782,7 @@ export async function apiSubscribePlan(params: {
       throw new Error(err.error || err.data?.error || `Subscription failed (${res.status})`);
     }
 
+    invalidateBillingCache();
     return await res.json();
   } catch (err) {
     console.warn("apiSubscribePlan error:", err);

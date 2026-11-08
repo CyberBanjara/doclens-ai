@@ -5,6 +5,7 @@ import {
   DrawerTitle,
   DrawerDescription,
 } from "@/components/ui/drawer";
+import { PageGrid } from "@/components/PageSelector";
 import type { PageAiSummaryEntry } from "@/lib/storage";
 
 interface MobilePageJumpSheetProps {
@@ -34,30 +35,17 @@ export function MobilePageJumpSheet({
             {pageCount} pages total &middot; blue dot = translated
           </DrawerDescription>
         </DrawerHeader>
-        <div className="grid grid-cols-6 gap-2 overflow-y-auto px-6 pb-8 pt-1">
-          {Array.from({ length: pageCount }, (_, i) => i + 1).map((n) => {
-            const isActive = n === activePage;
-            const hasAi = aiSummary[n]?.status === "done";
-            return (
-              <button
-                key={n}
-                onClick={() => {
-                  onJump(n);
-                  onOpenChange(false);
-                }}
-                className={`relative flex h-11 items-center justify-center rounded-xl text-sm font-medium tabular-nums transition-colors active:scale-95 ${
-                  isActive
-                    ? "bg-primary text-primary-foreground"
-                    : "bg-surface-2/60 text-foreground hover:bg-surface-2"
-                }`}
-              >
-                {n}
-                {hasAi && !isActive && (
-                  <span className="absolute right-1.5 top-1.5 h-1.5 w-1.5 rounded-full bg-primary" />
-                )}
-              </button>
-            );
-          })}
+        <div data-page-scroll className="relative overflow-y-auto px-5 pb-8 pt-1">
+          <PageGrid
+            pageCount={pageCount}
+            activePage={activePage}
+            aiSummary={aiSummary}
+            onSelect={(n) => {
+              onJump(n);
+              onOpenChange(false);
+            }}
+            className="grid-cols-5 gap-2 min-[400px]:grid-cols-6 [&>button]:h-11 [&>button]:rounded-xl [&>button]:text-sm"
+          />
         </div>
       </DrawerContent>
     </Drawer>

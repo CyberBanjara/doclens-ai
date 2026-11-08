@@ -33,10 +33,10 @@ export function BillingModal() {
   const [processingPlanId, setProcessingPlanId] = useState<string | null>(null);
   const [quotaNotice, setQuotaNotice] = useState<string | null>(null);
 
-  const loadBilling = async () => {
+  const loadBilling = async (forceRefresh = false) => {
     setLoading(true);
     try {
-      const data = await apiGetBillingProfile();
+      const data = await apiGetBillingProfile({ forceRefresh });
       if (data) setBillingData(data);
     } catch {
       // Ignored
@@ -51,7 +51,8 @@ export function BillingModal() {
         setQuotaNotice(e.detail.error);
       }
       setOpen(true);
-      void loadBilling();
+      // Opened due to a quota error → balances just changed server-side, bypass the short cache
+      void loadBilling(Boolean(e?.detail?.error));
     };
 
     window.addEventListener("doclens:open-billing-modal", handleOpen);
@@ -183,7 +184,7 @@ export function BillingModal() {
               </p>
             </div>
             <button
-              onClick={() => void loadBilling()}
+              onClick={() => void loadBilling(true)}
               className="inline-flex items-center gap-1.5 self-start sm:self-auto text-muted-foreground hover:text-foreground text-xs p-1"
               title="Refresh Quota"
             >

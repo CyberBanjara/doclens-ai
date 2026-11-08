@@ -99,7 +99,7 @@ function UserProfileRoute() {
 
   useEffect(() => {
     if (user?.uid) {
-      void apiGetBillingProfile().then((data) => {
+      void apiGetBillingProfile({ forceRefresh: refreshTrigger > 0 }).then((data) => {
         if (data) setBillingProfile(data);
       });
     }

@@ -9,6 +9,7 @@ import { MobileTopBar } from "@/components/mobile/MobileTopBar";
 import { MobileBottomBar } from "@/components/mobile/MobileBottomBar";
 import { MobileOverflowSheet } from "@/components/mobile/MobileOverflowSheet";
 import { MobilePageJumpSheet } from "@/components/mobile/MobilePageJumpSheet";
+import { PageSelector } from "@/components/PageSelector";
 import { ProfileDropdown } from "@/components/ProfileDropdown";
 import {
   getDoc,
@@ -107,7 +108,14 @@ function DocPage() {
   const { page: urlPage } = Route.useSearch();
   const navigate = useNavigate();
   const isMobile = useIsMobile();
-  const { user, loading: authLoading, signInWithGoogle, updateProfile, isAdmin, isPrivileged } = useAuth();
+  const {
+    user,
+    loading: authLoading,
+    signInWithGoogle,
+    updateProfile,
+    isAdmin,
+    isPrivileged,
+  } = useAuth();
   const canManageCloud = isAdmin || isPrivileged;
   const [readerOpen, setReaderOpen] = useState(false);
   const [pageJumpOpen, setPageJumpOpen] = useState(false);
@@ -734,27 +742,12 @@ function DocPage() {
               >
                 <ChevronLeft className="h-4 w-4" />
               </button>
-              <div className="flex h-8 items-center gap-2 rounded-md bg-surface-2/60 px-3">
-                <select
-                  value={activePage}
-                  onChange={(e) => setActivePage(Number(e.target.value))}
-                  className="cursor-pointer bg-transparent pl-1 pr-6 text-center text-xs font-medium tabular-nums text-foreground outline-none"
-                  style={{ minWidth: `${Math.max(4.25, String(pageCount).length + 3.5)}rem` }}
-                  aria-label="Select page"
-                >
-                  {Array.from({ length: pageCount }, (_, i) => i + 1).map((n) => {
-                    const hasAi = aiSummary[n]?.status === "done";
-                    return (
-                      <option key={n} value={n} className="bg-surface">
-                        {n} {hasAi ? "🔵" : ""}
-                      </option>
-                    );
-                  })}
-                </select>
-                <span className="whitespace-nowrap text-xs tabular-nums text-muted-foreground">
-                  / {pageCount}
-                </span>
-              </div>
+              <PageSelector
+                pageCount={pageCount}
+                activePage={activePage}
+                aiSummary={aiSummary}
+                onSelect={setActivePage}
+              />
               <button
                 onClick={() => setActivePage(Math.min(pageCount, activePage + 1))}
                 disabled={activePage >= pageCount}

@@ -46,34 +46,63 @@ export async function getCachedTranslationActivity(
   const forceRefresh = options?.forceRefresh ?? false;
   const days = options?.days ?? 365;
 
-  // 1. Check in-memory cache if not force refreshing
+  // A request for this user is already on the wire — share it, even for forceRefresh
+  // (it was started moments ago, so its result is as fresh as a new one would be).
+  const inFlight = inFlightRequests.get(userId);
+  if (inFlight) return inFlight;
+
   if (!forceRefresh) {
+    // 1. In-memory cache
     const memory = inMemoryActivity.get(userId);
     if (memory && typeof memory.total_pages === "number") {
+      revalidateIfStale(userId, days);
       return memory;
     }
-  }
 
-  // 2. Check persistent IndexedDB META store before making any network call
-  if (!forceRefresh) {
+    // 2. Persistent IndexedDB META store
     try {
       const d = await db();
       const stored = (await d.get(META, getActivityKey(userId))) as UserActivityData | undefined;
       if (stored && typeof stored.total_pages === "number" && stored.daily_activity) {
         inMemoryActivity.set(userId, stored);
+        revalidateIfStale(userId, days);
         return stored;
       }
     } catch (e) {
       console.warn("Failed reading translation activity from IndexedDB:", e);
     }
+
+    // Another caller may have started a fetch while we awaited IndexedDB
+    const raced = inFlightRequests.get(userId);
+    if (raced) return raced;
   }
 
-  // 3. Deduplicate concurrent in-flight network requests for the same user
-  if (!forceRefresh && inFlightRequests.has(userId)) {
-    return inFlightRequests.get(userId)!;
-  }
+  return startActivityFetch(userId, days);
+}
 
-  // 4. Fetch from Supabase
+/** Cached activity older than this is returned immediately but refreshed once in the background. */
+const ACTIVITY_STALE_MS = 60 * 60 * 1000;
+const revalidationChecked = new Set<string>();
+
+function revalidateIfStale(userId: string, days: number): void {
+  // Check staleness at most once per session per user; local translations keep it current after that.
+  if (revalidationChecked.has(userId)) return;
+  revalidationChecked.add(userId);
+  void (async () => {
+    try {
+      const d = await db();
+      const at = (await d.get(META, getActivityAtKey(userId))) as number | undefined;
+      if (typeof at === "number" && Date.now() - at < ACTIVITY_STALE_MS) return;
+      if (inFlightRequests.has(userId)) return;
+      // Result is broadcast via doclens:translation-activity-updated
+      await startActivityFetch(userId, days);
+    } catch {
+      // Ignore — cached data remains usable
+    }
+  })();
+}
+
+function startActivityFetch(userId: string, days: number): Promise<UserActivityData | null> {
   const request = (async () => {
     try {
       const remoteData = await apiGetTranslationActivity(days);
@@ -102,6 +131,8 @@ export async function getCachedTranslationActivity(
   })();
 
   inFlightRequests.set(userId, request);
+  // A fresh fetch counts as the staleness check for this session
+  revalidationChecked.add(userId);
   return request;
 }
 
@@ -223,11 +254,13 @@ export async function clearCachedTranslationActivity(userId?: string): Promise<v
   try {
     if (userId) {
       inMemoryActivity.delete(userId);
+      revalidationChecked.delete(userId);
       const d = await db();
       await d.delete(META, getActivityKey(userId));
       await d.delete(META, getActivityAtKey(userId));
     } else {
       inMemoryActivity.clear();
+      revalidationChecked.clear();
       const d = await db();
       const tx = d.transaction(META, "readwrite");
       let cursor = await tx.store.openCursor();
