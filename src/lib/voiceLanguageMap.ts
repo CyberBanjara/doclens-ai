@@ -45,6 +45,45 @@ export const LANGUAGES: LanguageInfo[] = [
   { id: "Arabic", native: "العربية", english: "Arabic", script: "Arabic" },
   { id: "Russian", native: "Русский", english: "Russian", script: "Cyrillic" },
   { id: "Portuguese", native: "Português", english: "Portuguese", script: "Latin" },
+  // Additional languages with Piper neural voices
+  { id: "Albanian", native: "Shqip", english: "Albanian", script: "Latin" },
+  { id: "Armenian", native: "Հայերեն", english: "Armenian", script: "Armenian" },
+  { id: "Basque", native: "Euskara", english: "Basque", script: "Latin" },
+  { id: "Bulgarian", native: "Български", english: "Bulgarian", script: "Cyrillic" },
+  { id: "Catalan", native: "Català", english: "Catalan", script: "Latin" },
+  { id: "Czech", native: "Čeština", english: "Czech", script: "Latin" },
+  { id: "Danish", native: "Dansk", english: "Danish", script: "Latin" },
+  { id: "Dutch", native: "Nederlands", english: "Dutch", script: "Latin" },
+  { id: "Estonian", native: "Eesti", english: "Estonian", script: "Latin" },
+  { id: "Finnish", native: "Suomi", english: "Finnish", script: "Latin" },
+  { id: "Georgian", native: "ქართული", english: "Georgian", script: "Georgian" },
+  { id: "Greek", native: "Ελληνικά", english: "Greek", script: "Greek" },
+  { id: "Hebrew", native: "עברית", english: "Hebrew", script: "Hebrew" },
+  { id: "Hungarian", native: "Magyar", english: "Hungarian", script: "Latin" },
+  { id: "Icelandic", native: "Íslenska", english: "Icelandic", script: "Latin" },
+  { id: "Indonesian", native: "Bahasa Indonesia", english: "Indonesian", script: "Latin" },
+  { id: "Italian", native: "Italiano", english: "Italian", script: "Latin" },
+  { id: "Kazakh", native: "Қазақша", english: "Kazakh", script: "Cyrillic" },
+  { id: "Korean", native: "한국어", english: "Korean", script: "Hangul" },
+  { id: "Kurdish", native: "Kurmancî", english: "Kurdish", script: "Latin" },
+  { id: "Latvian", native: "Latviešu", english: "Latvian", script: "Latin" },
+  { id: "Lithuanian", native: "Lietuvių", english: "Lithuanian", script: "Latin" },
+  { id: "Luxembourgish", native: "Lëtzebuergesch", english: "Luxembourgish", script: "Latin" },
+  { id: "Nepali", native: "नेपाली", english: "Nepali", script: "Devanagari" },
+  { id: "Norwegian", native: "Norsk", english: "Norwegian", script: "Latin" },
+  { id: "Persian", native: "فارسی", english: "Persian", script: "Arabic" },
+  { id: "Polish", native: "Polski", english: "Polish", script: "Latin" },
+  { id: "Romanian", native: "Română", english: "Romanian", script: "Latin" },
+  { id: "Serbian", native: "Srpski", english: "Serbian", script: "Latin" },
+  { id: "Slovak", native: "Slovenčina", english: "Slovak", script: "Latin" },
+  { id: "Slovenian", native: "Slovenščina", english: "Slovenian", script: "Latin" },
+  { id: "Swahili", native: "Kiswahili", english: "Swahili", script: "Latin" },
+  { id: "Swedish", native: "Svenska", english: "Swedish", script: "Latin" },
+  { id: "Thai", native: "ไทย", english: "Thai", script: "Thai" },
+  { id: "Turkish", native: "Türkçe", english: "Turkish", script: "Latin" },
+  { id: "Ukrainian", native: "Українська", english: "Ukrainian", script: "Cyrillic" },
+  { id: "Vietnamese", native: "Tiếng Việt", english: "Vietnamese", script: "Latin" },
+  { id: "Welsh", native: "Cymraeg", english: "Welsh", script: "Latin" },
 ];
 
 /* ─── Alias Map: UI name → BCP-47 locale prefix(es) ─── */
@@ -131,6 +170,46 @@ const LANGUAGE_ALIASES: Record<string, string[]> = {
   turkish: ["tr"],
   türkçe: ["tr"],
 
+  // Bulgarian
+  bulgarian: ["bg"],
+  български: ["bg"],
+
+  // Welsh
+  welsh: ["cy"],
+  cymraeg: ["cy"],
+
+  // Estonian
+  estonian: ["et"],
+  eesti: ["et"],
+
+  // Basque
+  basque: ["eu"],
+  euskara: ["eu"],
+
+  // Hebrew
+  hebrew: ["he"],
+  עברית: ["he"],
+
+  // Armenian
+  armenian: ["hy"],
+  հայերեն: ["hy"],
+
+  // Kurdish (Kurmanji)
+  kurdish: ["ku"],
+  kurmancî: ["ku"],
+
+  // Latvian
+  latvian: ["lv"],
+  latviešu: ["lv"],
+
+  // Albanian
+  albanian: ["sq"],
+  shqip: ["sq"],
+
+  // Lithuanian
+  lithuanian: ["lt"],
+  lietuvių: ["lt"],
+
   // Polish
   polish: ["pl"],
   polski: ["pl"],
@@ -215,6 +294,7 @@ const LANGUAGE_ALIASES: Record<string, string[]> = {
   // Serbian
   serbian: ["sr"],
   српски: ["sr"],
+  srpski: ["sr"],
 
   // Luxembourgish
   luxembourgish: ["lb"],
