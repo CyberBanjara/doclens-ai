@@ -1,92 +1,58 @@
 import { Link } from "@tanstack/react-router";
-import { FileText, HardDrive, Trash2 } from "lucide-react";
+import { BookOpen, Trash2 } from "lucide-react";
 import { useThumbnail } from "@/hooks/useThumbnail";
-import { useIsMobile } from "@/hooks/use-mobile";
 import type { DocSummary } from "@/lib/storage";
+import { BookCover, GeneratedCover } from "@/components/BookCover";
 
 interface DocumentCardProps {
   doc: DocSummary;
   onDelete: (doc: DocSummary, e: React.MouseEvent) => void;
 }
 
+const displayTitle = (fileName: string) => fileName.replace(/\.pdf$/i, "");
+
 export function DocumentCard({ doc, onDelete }: DocumentCardProps) {
-  const isMobile = useIsMobile();
   const { thumbnailUrl, loading } = useThumbnail(doc.id);
+  const title = displayTitle(doc.fileName);
+  const hasProgress = (doc.lastReadPage ?? 0) > 1;
 
   return (
     <Link
       to="/doc/$id"
       params={{ id: doc.id }}
       search={doc.lastReadPage ? { page: doc.lastReadPage } : undefined}
-      className="group glass-panel flex flex-col gap-3 rounded-[18px] p-3 transition-all duration-300 hover:bg-surface-2/40 border border-border"
+      aria-label={`${hasProgress ? "Continue reading" : "Read"} ${title}`}
+      className="book is-openable block"
     >
-      {/* Thumbnail Area */}
-      <div className="relative h-44 overflow-hidden rounded-xl border border-border bg-muted/20 shadow-sm">
-        {thumbnailUrl ? (
-          <img
-            src={thumbnailUrl}
-            alt={`Preview of ${doc.fileName}`}
-            className="h-full w-full object-cover object-top opacity-100 transition-transform duration-500 group-hover:scale-105"
-          />
-        ) : loading ? (
-          <div className="flex h-full w-full items-center justify-center">
-            <div className="h-8 w-8 animate-spin rounded-full border-2 border-primary border-t-transparent" />
-          </div>
-        ) : (
-          <div className="flex h-full w-full items-center justify-center">
-            <div className="flex h-14 w-14 items-center justify-center rounded-lg bg-primary/10 font-mono text-lg font-black text-primary ring-1 ring-primary/20">
-              PDF
-            </div>
-          </div>
-        )}
-      </div>
-
-      {/* Document Info */}
-      <div className="space-y-1.5">
-        <h4 className="truncate text-sm font-semibold text-foreground group-hover:text-primary transition-colors">
-          {doc.fileName}
-        </h4>
-        <div className="flex flex-wrap items-center gap-1.5 min-h-[20px]">
-          {doc.aiResultCount > 0 ? (
-            <span className="rounded-md bg-primary/10 px-2 py-0.5 text-[10px] font-medium text-primary">
-              {doc.aiResultCount} {doc.aiResultCount === 1 ? "translation" : "translations"}
-            </span>
-          ) : doc.hasExtraction ? (
-            <span className="rounded-md bg-surface-2 px-2 py-0.5 text-[10px] font-medium text-muted-foreground">
-              Ready
-            </span>
-          ) : null}
-        </div>
-      </div>
-
-      {/* Footer */}
-      <div className="mt-auto flex items-center justify-between border-t border-border/30 pt-3">
-        <div className="flex gap-4">
-          <div className="flex items-center gap-1 text-muted-foreground">
-            <FileText className="h-3.5 w-3.5" />
-            <span className="text-[11px] font-bold">{doc.pageCount || "—"} Pgs</span>
-          </div>
-          <div className="flex items-center gap-1 text-muted-foreground">
-            <HardDrive className="h-3.5 w-3.5" />
-            <span className="text-[11px] font-bold">
-              {doc.fileSize >= 1024 * 1024
-                ? `${(doc.fileSize / (1024 * 1024)).toFixed(1)} MB`
-                : `${(doc.fileSize / 1024).toFixed(1)} KB`}
-            </span>
-          </div>
-        </div>
-        {/* Hover-reveal works on desktop; on touch devices there's no hover, so
-            the delete affordance must stay visible there instead. */}
-        <button
-          onClick={(e) => onDelete(doc, e)}
-          className={`rounded p-1 text-muted-foreground transition-all hover:text-destructive ${
-            isMobile ? "opacity-100" : "opacity-0 group-hover:opacity-100"
-          }`}
-          aria-label="Delete document"
-        >
-          <Trash2 className="h-4 w-4" />
-        </button>
-      </div>
+      <BookCover
+        title={title}
+        thumbnailUrl={thumbnailUrl}
+        loading={loading}
+        fallback={<GeneratedCover title={title} icon="📄" />}
+        topRight={
+          <button
+            onClick={(e) => onDelete(doc, e)}
+            className="book-hover-chip flex h-6 w-6 items-center justify-center rounded-full border border-white/15 bg-black/55 text-white/80 backdrop-blur-md transition-colors hover:border-red-400/50 hover:bg-red-500/80 hover:text-white"
+            aria-label="Delete document"
+            title="Delete document"
+          >
+            <Trash2 className="h-3 w-3" />
+          </button>
+        }
+        subtitle={
+          hasProgress
+            ? `Page ${doc.lastReadPage}${doc.pageCount ? ` of ${doc.pageCount}` : ""}`
+            : doc.pageCount
+              ? `${doc.pageCount} pages`
+              : undefined
+        }
+        action={
+          <span className="book-action is-read">
+            <BookOpen className="h-3.5 w-3.5" />
+            {hasProgress ? "Continue Reading" : "Read Book"}
+          </span>
+        }
+      />
     </Link>
   );
 }

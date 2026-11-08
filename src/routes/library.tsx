@@ -174,7 +174,7 @@ function LibraryPage() {
               <Dropzone onFile={handleFile} gridCard />
             </div>
           ) : (
-            <div className="grid grid-cols-2 gap-3">
+            <div className="grid grid-cols-2 gap-x-4 gap-y-6">
               <Dropzone onFile={handleFile} gridCard />
               {filteredDocs.map((d) => (
                 <DocumentCard key={d.id} doc={d} onDelete={handleDeleteClick} />
@@ -245,7 +245,7 @@ function LibraryPage() {
               <Dropzone onFile={handleFile} />
             </div>
           ) : (
-            <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+            <div className="grid grid-cols-2 gap-x-6 gap-y-9 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5">
               <Dropzone onFile={handleFile} gridCard />
               {filteredDocs.map((d) => (
                 <DocumentCard key={d.id} doc={d} onDelete={handleDeleteClick} />

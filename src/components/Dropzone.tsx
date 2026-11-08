@@ -94,7 +94,7 @@ export function Dropzone({ onFile, compact = false, gridCard = false }: Dropzone
       <div
         {...dragHandlers}
         onClick={() => inputRef.current?.click()}
-        className={`group relative flex flex-col items-center justify-center min-h-[250px] h-full cursor-pointer rounded-[18px] border-2 border-dashed p-6 text-center transition-all duration-300 ${
+        className={`group relative flex flex-col items-center justify-center aspect-[2/3] h-full cursor-pointer rounded-[3px_10px_10px_3px] border-2 border-dashed p-6 text-center transition-all duration-300 ${
           hover
             ? "border-primary bg-primary/10 scale-[1.02] shadow-lg"
             : "border-primary/40 bg-surface/40 hover:border-primary hover:bg-primary/5 hover:scale-[1.01]"

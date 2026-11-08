@@ -503,3 +503,280 @@
     pointer-events: auto !important;
   }
 }
+
+/* ─── Book cover cards (Global + Local Library) ───
+   A full-bleed cover hinged on its left edge. On hover the cover swings open
+   a few degrees, revealing the page block beneath, while the title + reading
+   action rise from the bottom. Transforms/opacity only, so it stays cheap. */
+@layer components {
+  .book {
+    position: relative;
+    aspect-ratio: 2 / 3;
+    isolation: isolate;
+    cursor: pointer;
+    outline: none;
+  }
+  .book-lift {
+    position: absolute;
+    inset: 0;
+    perspective: 1500px;
+    perspective-origin: 55% 50%;
+    transition: transform 0.45s cubic-bezier(0.22, 1, 0.36, 1);
+  }
+  .book:hover .book-lift,
+  .book:focus-visible .book-lift {
+    transform: translateY(-6px);
+  }
+
+  /* Soft floor shadow that grows as the book lifts */
+  .book::after {
+    content: "";
+    position: absolute;
+    left: 8%;
+    right: 8%;
+    bottom: -10px;
+    height: 18px;
+    border-radius: 50%;
+    background: rgba(0, 0, 0, 0.45);
+    filter: blur(12px);
+    opacity: 0.5;
+    z-index: -1;
+    transition:
+      opacity 0.45s ease,
+      transform 0.45s cubic-bezier(0.22, 1, 0.36, 1);
+  }
+  .book:hover::after {
+    opacity: 0.8;
+    transform: scaleX(1.06) translateY(4px);
+  }
+
+  /* Page block peeking out behind the cover */
+  .book-pages {
+    position: absolute;
+    inset: 3px 0 3px 4px;
+    border-radius: 2px 8px 8px 2px;
+    background:
+      repeating-linear-gradient(to right, transparent 0 2px, rgba(0, 0, 0, 0.07) 2px 3px) right /
+        10px 100% no-repeat,
+      linear-gradient(to right, #e9e3d4, #f8f4ea 18%, #fbf8f1);
+    box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.08);
+    overflow: hidden;
+  }
+  .book-pages-lines {
+    position: absolute;
+    inset: 14% 14% 18% 22%;
+    background: repeating-linear-gradient(
+      to bottom,
+      rgba(60, 50, 30, 0.14) 0 1px,
+      transparent 1px 9px
+    );
+    opacity: 0;
+    transition: opacity 0.5s ease 0.08s;
+  }
+  .book:hover .book-pages-lines,
+  .book:focus-visible .book-pages-lines {
+    opacity: 1;
+  }
+
+  .book-cover {
+    position: absolute;
+    inset: 0;
+    border-radius: 3px 10px 10px 3px;
+    overflow: hidden;
+    background: var(--surface-2);
+    transform-origin: left center;
+    transform: rotateY(0deg);
+    transition:
+      transform 0.6s cubic-bezier(0.22, 1, 0.36, 1),
+      box-shadow 0.6s ease;
+    box-shadow:
+      0 1px 2px rgba(0, 0, 0, 0.3),
+      0 10px 24px -8px rgba(0, 0, 0, 0.5),
+      inset 0 0 0 1px rgba(255, 255, 255, 0.06);
+    will-change: transform;
+    backface-visibility: hidden;
+  }
+  .book.is-openable:hover .book-cover,
+  .book.is-openable:focus-visible .book-cover {
+    transform: rotateY(-42deg);
+    box-shadow:
+      14px 4px 28px -6px rgba(0, 0, 0, 0.55),
+      inset 0 0 0 1px rgba(255, 255, 255, 0.08);
+  }
+  .book:not(.is-openable):hover .book-cover {
+    transform: rotateY(-6deg);
+  }
+  .book-cover img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    object-position: top;
+    transition: transform 0.7s cubic-bezier(0.22, 1, 0.36, 1);
+  }
+  .book:hover .book-cover img {
+    transform: scale(1.04);
+  }
+
+  /* Spine crease + glossy sheen */
+  .book-spine {
+    pointer-events: none;
+    position: absolute;
+    inset: 0;
+    background:
+      linear-gradient(
+        to right,
+        rgba(0, 0, 0, 0.5) 0,
+        rgba(0, 0, 0, 0.18) 3%,
+        rgba(255, 255, 255, 0.18) 4.5%,
+        rgba(255, 255, 255, 0) 7%,
+        rgba(0, 0, 0, 0.08) 8%,
+        transparent 12%
+      ),
+      linear-gradient(115deg, rgba(255, 255, 255, 0.14) 0%, transparent 35%);
+    z-index: 2;
+  }
+  .book-sheen {
+    pointer-events: none;
+    position: absolute;
+    inset: 0;
+    z-index: 3;
+    background: linear-gradient(
+      100deg,
+      transparent 30%,
+      rgba(255, 255, 255, 0.16) 45%,
+      transparent 60%
+    );
+    transform: translateX(-120%);
+    transition: transform 0.9s cubic-bezier(0.22, 1, 0.36, 1);
+  }
+  .book:hover .book-sheen {
+    transform: translateX(120%);
+  }
+
+  /* Bottom reveal: title + action */
+  .book-reveal {
+    position: absolute;
+    inset: auto 0 0 0;
+    z-index: 6;
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+    padding: 2.75rem 0.75rem 0.75rem 1rem;
+    border-radius: 0 0 10px 3px;
+    background: linear-gradient(
+      to top,
+      rgba(6, 9, 18, 0.94) 0%,
+      rgba(6, 9, 18, 0.78) 45%,
+      transparent 100%
+    );
+    opacity: 0;
+    transform: translateY(12px);
+    transition:
+      opacity 0.35s ease,
+      transform 0.45s cubic-bezier(0.22, 1, 0.36, 1);
+    pointer-events: none;
+  }
+  .book:hover .book-reveal,
+  .book:focus-visible .book-reveal,
+  .book:focus-within .book-reveal,
+  .book.is-busy .book-reveal {
+    opacity: 1;
+    transform: translateY(-6px);
+    pointer-events: auto;
+  }
+  .book-reveal > * {
+    transform: translateY(6px);
+    transition: transform 0.45s cubic-bezier(0.22, 1, 0.36, 1);
+  }
+  .book:hover .book-reveal > *,
+  .book:focus-within .book-reveal > * {
+    transform: translateY(0);
+  }
+  .book:hover .book-reveal > *:nth-child(2) {
+    transition-delay: 0.05s;
+  }
+
+  .book-action {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.4rem;
+    width: 100%;
+    border-radius: 999px;
+    padding: 0.5rem 0.75rem;
+    font-size: 0.72rem;
+    font-weight: 700;
+    letter-spacing: 0.01em;
+    color: #fff;
+    background: rgba(255, 255, 255, 0.12);
+    border: 1px solid rgba(255, 255, 255, 0.22);
+    backdrop-filter: blur(10px);
+    transition:
+      background 0.2s ease,
+      transform 0.15s ease;
+    cursor: pointer;
+  }
+  .book-action:hover {
+    background: rgba(255, 255, 255, 0.22);
+  }
+  .book-action:active {
+    transform: scale(0.97);
+  }
+  .book-action:disabled {
+    opacity: 0.6;
+    cursor: default;
+  }
+  .book-action.is-read {
+    background: linear-gradient(135deg, #10b981, #059669);
+    border-color: rgba(110, 231, 183, 0.45);
+    box-shadow: 0 6px 18px -6px rgba(16, 185, 129, 0.7);
+  }
+  .book-action.is-read:hover {
+    background: linear-gradient(135deg, #34d399, #10b981);
+  }
+
+  /* Corner chips that fade in on hover (delete, size) */
+  .book-hover-chip {
+    opacity: 0;
+    transform: translateY(-4px);
+    transition:
+      opacity 0.25s ease,
+      transform 0.3s ease;
+  }
+  .book:hover .book-hover-chip,
+  .book:focus-within .book-hover-chip {
+    opacity: 1;
+    transform: translateY(0);
+  }
+
+  /* Touch devices have no hover: keep the title + action visible. */
+  @media (hover: none) {
+    .book-reveal,
+    .book-reveal > *,
+    .book-hover-chip {
+      opacity: 1;
+      transform: none;
+      pointer-events: auto;
+    }
+    .book-reveal {
+      padding-top: 2.25rem;
+    }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .book-lift,
+    .book-cover,
+    .book-cover img,
+    .book-sheen,
+    .book-reveal,
+    .book-reveal > *,
+    .book-hover-chip {
+      transition-duration: 0.01ms !important;
+    }
+    .book.is-openable:hover .book-cover,
+    .book:not(.is-openable):hover .book-cover,
+    .book:hover .book-cover img {
+      transform: none;
+    }
+  }
+}
