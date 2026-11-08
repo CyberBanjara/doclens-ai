@@ -121,6 +121,9 @@ function DocPage() {
   const [pageJumpOpen, setPageJumpOpen] = useState(false);
   const [overflowOpen, setOverflowOpen] = useState(false);
   const [doc, setDoc] = useState<DocRecord | null>(null);
+  // Latest document id shown in the Workspace — guards async Supabase sync results.
+  const activeDocIdRef = useRef(id);
+  activeDocIdRef.current = id;
   const [missing, setMissing] = useState(false);
   const [pageCount, setPageCount] = useState(0);
   const [analyzing, setAnalyzing] = useState(false);
@@ -345,7 +348,11 @@ function DocPage() {
         // Step 3: Run background sync from Supabase for the active native language
         void (async () => {
           try {
-            const updated = await syncFromSupabase(id, currentRec.fileName, activeLang, false);
+            // Opening a PDF in the Workspace (from either library, or a refresh) always
+            // fetches fresh translations; repeat triggers of the same open are de-duplicated.
+            const updated = await syncFromSupabase(id, currentRec.fileName, activeLang, false, {
+              force: true,
+            });
             if (updated && !cancelled) {
               const updatedRec = await getDoc(id);
               if (updatedRec) {
@@ -504,12 +511,16 @@ function DocPage() {
           const activeLang =
             user?.nativeLanguage || getOutputLanguage() || freshDoc.selectedLanguage || "हिंदी";
           if (activeLang) {
-            await syncFromSupabase(id, freshDoc.fileName, activeLang, false);
-            const updatedRec = await getDoc(id);
-            if (updatedRec) {
-              setDoc(updatedRec);
+            await syncFromSupabase(id, freshDoc.fileName, activeLang, false, { force: true });
+            // The user may have switched to another PDF while this sync was in flight:
+            // never let this (older) document's result overwrite the current one's state.
+            if (activeDocIdRef.current === id) {
+              const updatedRec = await getDoc(id);
+              if (updatedRec && activeDocIdRef.current === id) {
+                setDoc(updatedRec);
+              }
+              if (activeDocIdRef.current === id) await refreshSummary();
             }
-            await refreshSummary();
           }
         } catch (syncErr) {
           console.warn("Supabase initial translation check note:", syncErr);

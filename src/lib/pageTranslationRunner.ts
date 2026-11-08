@@ -33,9 +33,9 @@ import {
   type PageAi,
 } from "@/lib/storage";
 import { cleanAiText, effective, hashFor, dispatchPageReady } from "@/lib/pageAi";
-import { fetchSupabaseLanguagePage, saveSupabaseLanguagePage } from "@/lib/supabase";
+import { fetchSupabaseLanguagePage } from "@/lib/supabase";
 import { getLanguageSlug, getPageAiLanguageSlug } from "@/lib/languageTableMap";
-import { getCachedRemotePage } from "@/lib/sync";
+import { getCachedRemotePage, isSupabasePushAllowed, persistPageToSupabase } from "@/lib/sync";
 import { getPreviousContext, mergeContextDelta } from "@/lib/contextStore";
 import { dispatchDocEvent } from "@/lib/docEvents";
 import { apiIncrementTranslationCounter, getFreshAuthToken } from "@/lib/auth-client";
@@ -440,12 +440,16 @@ export async function executePageTranslation({
         result,
       });
 
-      // Background Supabase shared cache save (if standard translation)
-      if (isDefaultTranslation && bookId) {
-        void saveSupabaseLanguagePage({
-          data: { language: eff.language, bookId, pageNumber, content: result, docId },
-        }).catch((err) => {
-          console.warn("Supabase background save note:", err?.message || err);
+      // Background Supabase shared cache save: every finished page result (any mode/style) is
+      // stored in its language's table so it can be retrieved from any browser. Ad-hoc custom
+      // requests are not page results and stay local. Only roles the server accepts write.
+      if (bookId && !customTextOverride && !state.isCustom && isSupabasePushAllowed()) {
+        void persistPageToSupabase({
+          language: eff.language,
+          bookId,
+          pageNumber,
+          content: result,
+          docId,
         });
       }
 

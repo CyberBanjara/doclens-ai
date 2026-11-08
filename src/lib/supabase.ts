@@ -392,21 +392,18 @@ export const saveSupabaseLanguagePage = createServerFn({ method: "POST" })
       );
 
       if (error) {
-        if (
-          !error.message?.includes("relation") &&
-          !error.message?.includes("does not exist") &&
-          !error.message?.includes("schema cache")
-        ) {
-          console.warn(`Supabase ${tableName} upsert warning:`, error.message || error);
-        }
+        console.error(`Supabase ${tableName} upsert failed:`, error.message || error);
         return { success: false, error: error.message };
       }
 
       // Fetch all translated page numbers for (primaryId, langSlug) to maintain complete page list
-      const { data: pageRows } = await supabase
+      const { data: pageRows, error: pageListErr } = await supabase
         .from(tableName)
         .select("page_number")
         .eq("book_id", primaryId);
+      if (pageListErr) {
+        console.error(`Supabase ${tableName} page list read failed:`, pageListErr.message);
+      }
 
       const allPages =
         pageRows && pageRows.length > 0
@@ -415,23 +412,32 @@ export const saveSupabaseLanguagePage = createServerFn({ method: "POST" })
             )
           : [data.pageNumber];
 
-      // Register / update language availability in book_languages with full page list
-      void Promise.resolve(
-        supabase.from("book_languages").upsert(
-          {
-            book_id: primaryId,
-            language: langSlug,
-            pages: allPages,
-            translated_count: allPages.length,
-            updated_at: nowIso,
-          },
-          { onConflict: "book_id,language" },
-        ),
-      ).catch((err: any) => console.warn("book_languages upsert note:", err?.message || err));
+      // Register / update language availability in book_languages with full page list.
+      // Awaited: on serverless hosts an un-awaited request can be dropped once the response
+      // is sent, and Supabase reports failures in `error` rather than by throwing.
+      const { error: metaErr } = await supabase.from("book_languages").upsert(
+        {
+          book_id: primaryId,
+          language: langSlug,
+          pages: allPages,
+          translated_count: allPages.length,
+          updated_at: nowIso,
+        },
+        { onConflict: "book_id,language" },
+      );
+      if (metaErr) {
+        console.error("Supabase book_languages upsert failed:", metaErr.message);
+        // The page itself is saved and retrievable; only the availability index is stale.
+        return {
+          success: true,
+          pages: allPages,
+          warning: `Page saved, but book_languages update failed: ${metaErr.message}`,
+        };
+      }
 
       return { success: true, pages: allPages };
     } catch (e: any) {
-      console.warn("Supabase saveSupabaseLanguagePage exception:", e?.message || String(e));
+      console.error("Supabase saveSupabaseLanguagePage exception:", e?.message || String(e));
       return { success: false, error: e?.message || String(e) };
     }
   });
@@ -489,8 +495,21 @@ export const batchSaveSupabaseLanguagePages = createServerFn({ method: "POST" })
           p.content?.trim() &&
           !isContentScriptMismatch(data.language, p.content),
       );
+      const rejected = data.pages.length - validPages.length;
+      if (rejected > 0) {
+        console.error(
+          `Supabase ${tableName}: rejected ${rejected} page(s) not written in ${data.language}.`,
+        );
+      }
       if (validPages.length === 0) {
-        return { success: true, count: 0, pages: [] };
+        return {
+          success: rejected === 0,
+          count: 0,
+          pages: [],
+          ...(rejected > 0
+            ? { error: `Rejected: ${rejected} page(s) not written in ${data.language}.` }
+            : {}),
+        };
       }
 
       const rows = validPages.map((p) => ({
@@ -506,21 +525,18 @@ export const batchSaveSupabaseLanguagePages = createServerFn({ method: "POST" })
         .upsert(rows, { onConflict: "book_id,page_number" });
 
       if (error) {
-        if (
-          !error.message?.includes("relation") &&
-          !error.message?.includes("does not exist") &&
-          !error.message?.includes("schema cache")
-        ) {
-          console.warn(`Supabase ${tableName} batch upsert warning:`, error.message || error);
-        }
+        console.error(`Supabase ${tableName} batch upsert failed:`, error.message || error);
         return { success: false, error: error.message };
       }
 
       // 2. Query all existing translated page numbers from the dedicated table
-      const { data: pageRows } = await supabase
+      const { data: pageRows, error: pageListErr } = await supabase
         .from(tableName)
         .select("page_number")
         .eq("book_id", primaryId);
+      if (pageListErr) {
+        console.error(`Supabase ${tableName} page list read failed:`, pageListErr.message);
+      }
 
       const allPages =
         pageRows && pageRows.length > 0
@@ -529,23 +545,30 @@ export const batchSaveSupabaseLanguagePages = createServerFn({ method: "POST" })
             )
           : Array.from(new Set(validPages.map((p) => p.pageNumber))).sort((a, b) => a - b);
 
-      // 3. Register / update language availability in book_languages with full page list
-      void Promise.resolve(
-        supabase.from("book_languages").upsert(
-          {
-            book_id: primaryId,
-            language: langSlug,
-            pages: allPages,
-            translated_count: allPages.length,
-            updated_at: nowIso,
-          },
-          { onConflict: "book_id,language" },
-        ),
-      ).catch((err: any) => console.warn("book_languages batch upsert note:", err?.message || err));
+      // 3. Register / update language availability in book_languages with full page list (awaited)
+      const { error: metaErr } = await supabase.from("book_languages").upsert(
+        {
+          book_id: primaryId,
+          language: langSlug,
+          pages: allPages,
+          translated_count: allPages.length,
+          updated_at: nowIso,
+        },
+        { onConflict: "book_id,language" },
+      );
+      if (metaErr) {
+        console.error("Supabase book_languages batch upsert failed:", metaErr.message);
+        return {
+          success: true,
+          count: rows.length,
+          pages: allPages,
+          warning: `Pages saved, but book_languages update failed: ${metaErr.message}`,
+        };
+      }
 
       return { success: true, count: rows.length, pages: allPages };
     } catch (e: any) {
-      console.warn("Supabase batchSaveSupabaseLanguagePages exception:", e?.message || String(e));
+      console.error("Supabase batchSaveSupabaseLanguagePages exception:", e?.message || String(e));
       return { success: false, error: e?.message || String(e) };
     }
   });

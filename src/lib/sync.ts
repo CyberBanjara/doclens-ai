@@ -1,5 +1,9 @@
 import { createServerFn } from "@tanstack/react-start";
-import { fetchSupabaseLanguageBook, batchSaveSupabaseLanguagePages } from "./supabase";
+import {
+  fetchSupabaseLanguageBook,
+  batchSaveSupabaseLanguagePages,
+  saveSupabaseLanguagePage,
+} from "./supabase";
 import {
   getDoc,
   updateDoc,
@@ -75,10 +79,16 @@ export async function purgeDocLanguageTranslations(
  *    reopening / navigating between PDFs does not refetch;
  *  - local reconciliation (cheap IndexedDB work) still runs every time so a
  *    language switch is always applied correctly.
- * Pass { force: true } to bypass the snapshot (explicit user refresh).
+ * Pass { force: true } when a PDF is opened in the Workspace to fetch fresh data.
  * ============================================================================
  */
 const SYNC_SNAPSHOT_TTL_MS = 10 * 60 * 1000;
+/**
+ * A forced refresh (a PDF being opened in the Workspace) always refetches, except when a
+ * fetch for the same doc + language finished within this window — that is the same open
+ * event arriving twice (mount sync + first-open analysis, React StrictMode re-mount).
+ */
+const FORCED_REFRESH_DEDUPE_MS = 5 * 1000;
 const SYNC_SNAPSHOT_MAX_ENTRIES = 20;
 
 interface RemoteSnapshot {
@@ -95,6 +105,102 @@ const latestRequestedSlug = new Map<string, string>();
 let supabasePushAllowed = false;
 export function setSupabasePushAllowed(allowed: boolean): void {
   supabasePushAllowed = allowed;
+  if (!allowed) {
+    // Signed out or a role the server will reject: queued pushes can never succeed.
+    pendingPushes.clear();
+    return;
+  }
+  // The document's sync usually starts before /api/auth/me resolves the role; send the
+  // pushes it had to defer now that writing is known to be allowed.
+  const queued = Array.from(pendingPushes.values());
+  pendingPushes.clear();
+  for (const job of queued) void runBackgroundPush(job);
+}
+
+interface PushJob {
+  docId: string;
+  slug: string;
+  language: string;
+  bookId: string;
+  pages: Array<{ pageNumber: number; content: string }>;
+}
+
+/** Pushes found while the user's role was not yet known, keyed by doc + language. */
+const pendingPushes = new Map<string, PushJob>();
+
+async function runBackgroundPush(job: PushJob): Promise<void> {
+  try {
+    const res = await batchSaveSupabaseLanguagePages({
+      data: { language: job.language, bookId: job.bookId, pages: job.pages, docId: job.docId },
+    });
+    if (res?.success) {
+      noteRemotePages(job.docId, job.slug, job.pages);
+      if ((res as { warning?: string }).warning) {
+        console.warn("Supabase background push:", (res as { warning?: string }).warning);
+      }
+    } else {
+      console.error(
+        `Supabase background push FAILED for ${job.pages.length} page(s) (${job.language}):`,
+        res?.error || "unknown error",
+      );
+    }
+  } catch (err) {
+    console.error(
+      "Supabase background push FAILED:",
+      err instanceof Error ? err.message : String(err),
+    );
+  }
+}
+export function isSupabasePushAllowed(): boolean {
+  return supabasePushAllowed;
+}
+
+const SAVE_RETRY_DELAY_MS = 3000;
+
+/**
+ * Saves one finished page result to its language's Supabase table.
+ * The server reports database failures as `{ success: false, error }` (it does not throw),
+ * so the result is checked explicitly: a failed write is retried once and then logged as an
+ * error. A page that still failed is pushed again by the next syncFromSupabase of the
+ * document, because Supabase does not have it.
+ */
+export async function persistPageToSupabase(params: {
+  language: string;
+  bookId: string;
+  pageNumber: number;
+  content: string;
+  docId: string;
+}): Promise<boolean> {
+  const { language, bookId, pageNumber, content, docId } = params;
+  if (!isGlobalSyncEnabled() || !isSupportedTranslationLanguage(language)) return false;
+
+  let lastError = "";
+  for (let attempt = 1; attempt <= 2; attempt++) {
+    try {
+      const res = await saveSupabaseLanguagePage({
+        data: { language, bookId, pageNumber, content, docId },
+      });
+      if (res?.success) {
+        noteRemotePages(docId, getLanguageSlug(language), [{ pageNumber, content }]);
+        if ((res as { warning?: string }).warning) {
+          console.warn(`Supabase save page ${pageNumber}:`, (res as { warning?: string }).warning);
+        }
+        return true;
+      }
+      lastError = res?.error || "Unknown Supabase save failure";
+      // Validation rejections will not succeed on retry.
+      if (lastError.startsWith("Rejected") || lastError.startsWith("Missing required")) break;
+    } catch (err) {
+      lastError = err instanceof Error ? err.message : String(err);
+      // Authorization failures will not succeed on retry.
+      if (/Unauthorized|Forbidden/.test(lastError)) break;
+    }
+    if (attempt === 1) await new Promise((r) => setTimeout(r, SAVE_RETRY_DELAY_MS));
+  }
+  console.error(
+    `Supabase save FAILED for "${bookId}" page ${pageNumber} (${language}): ${lastError}`,
+  );
+  return false;
 }
 
 function snapshotKey(docId: string, slug: string): string {
@@ -166,7 +272,8 @@ async function getRemoteSnapshot(
   const key = snapshotKey(docId, slug);
 
   const cached = remoteSnapshots.get(key);
-  if (!force && cached && Date.now() - cached.fetchedAt < SYNC_SNAPSHOT_TTL_MS) {
+  const reuseWindow = force ? FORCED_REFRESH_DEDUPE_MS : SYNC_SNAPSHOT_TTL_MS;
+  if (cached && Date.now() - cached.fetchedAt < reuseWindow) {
     return { snapshot: cached, fresh: false };
   }
 
@@ -204,14 +311,13 @@ async function getRemoteSnapshot(
 /** True when a cached result is a standard (translate / Native) translation eligible for the shared cache. */
 function isShareableTranslation(
   ai: PageAi | PageAiLanguageEntry,
-  overrides?: PageAi["overrides"],
+  _overrides?: PageAi["overrides"],
 ): boolean {
+  // Every page result produced locally (translate or explain, any style) is shared in its
+  // language's table. Ad-hoc custom requests are not page results and stay local.
   if ((ai as PageAi).isCustom) return false;
-  if (overrides?.mode && overrides.mode !== "translate") return false;
-  if (overrides?.style && overrides.style !== "Native") return false;
-  if (!ai.settingsHash) return false; // remote-origin entries are already in Supabase
-  const [mode, , style] = ai.settingsHash.split("|");
-  return mode === "translate" && style === "Native";
+  // No settings hash = the result came FROM Supabase, so it is already stored there.
+  return !!ai.settingsHash;
 }
 
 /**
@@ -413,23 +519,16 @@ export async function syncFromSupabase(
     //    privileged users (the server rejects others), and only for this language's table.
     if (
       fetchedFresh &&
-      supabasePushAllowed &&
       localPagesToPush.length > 0 &&
       isGlobalSyncEnabled() &&
       isSupportedTranslationLanguage(language)
     ) {
-      void batchSaveSupabaseLanguagePages({
-        data: { language, bookId, pages: localPagesToPush, docId },
-      })
-        .then((res) => {
-          if (res?.success) noteRemotePages(docId, targetSlug, localPagesToPush);
-        })
-        .catch((err) => {
-          console.warn(
-            "Background auto-sync of local translations to Supabase note:",
-            err?.message || err,
-          );
-        });
+      const job: PushJob = { docId, slug: targetSlug, language, bookId, pages: localPagesToPush };
+      if (supabasePushAllowed) {
+        void runBackgroundPush(job);
+      } else {
+        pendingPushes.set(snapshotKey(docId, targetSlug), job);
+      }
     }
 
     return updatedAny;
