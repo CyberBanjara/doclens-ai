@@ -34,6 +34,8 @@ import {
 } from "@/lib/storage";
 import { cleanAiText, effective, hashFor, dispatchPageReady } from "@/lib/pageAi";
 import { fetchSupabaseLanguagePage, saveSupabaseLanguagePage } from "@/lib/supabase";
+import { getLanguageSlug, getPageAiLanguageSlug } from "@/lib/languageTableMap";
+import { getCachedRemotePage } from "@/lib/sync";
 import { getPreviousContext, mergeContextDelta } from "@/lib/contextStore";
 import { dispatchDocEvent } from "@/lib/docEvents";
 import { apiIncrementTranslationCounter, getFreshAuthToken } from "@/lib/auth-client";
@@ -183,12 +185,21 @@ export async function executePageTranslation({
       // 0. LOCAL STORAGE CACHE REUSE CHECK
       // ─────────────────────────────────────────────────────────────────
       // Reopening or loading an already translated page must never increase the counter
+      // Pages filled from the shared Supabase cache carry their language but no settings hash;
+      // they are valid cache hits for the default (translate / Native) settings in that language.
+      const isSyncedDefaultHit =
+        !state.settingsHash &&
+        !!state.language &&
+        eff.mode === "translate" &&
+        eff.style === "Native" &&
+        !state.isCustom &&
+        getPageAiLanguageSlug(state) === getLanguageSlug(eff.language);
       if (
         !forceRegenerate &&
         !customTextOverride &&
         state.status === "done" &&
         state.result &&
-        state.settingsHash === hash
+        (state.settingsHash === hash || isSyncedDefaultHit)
       ) {
         dispatchPageReady(docId, pageNumber, state.result);
         return { success: true, result: state.result, fromCache: true };
@@ -206,14 +217,19 @@ export async function executePageTranslation({
 
       if (!forceRegenerate && !customTextOverride && isDefaultTranslation && bookId) {
         try {
-          const supabaseLookup = await fetchSupabaseLanguagePage({
-            data: {
-              language: eff.language,
-              bookId,
-              pageNumber,
-              docId,
-            },
-          });
+          // Reuse the book snapshot fetched when the document was opened; only ask the
+          // server when no fresh snapshot exists for this document + language.
+          const cachedRemote = getCachedRemotePage(docId, eff.language, pageNumber);
+          const supabaseLookup = cachedRemote.known
+            ? { found: !!cachedRemote.content, content: cachedRemote.content }
+            : await fetchSupabaseLanguagePage({
+                data: {
+                  language: eff.language,
+                  bookId,
+                  pageNumber,
+                  docId,
+                },
+              });
 
           if (supabaseLookup && supabaseLookup.found && supabaseLookup.content) {
             const result = cleanAiText(supabaseLookup.content);
@@ -223,6 +239,7 @@ export async function executePageTranslation({
               result,
               error: undefined,
               settingsHash: hash,
+              language: eff.language,
             });
 
             dispatchPageReady(docId, pageNumber, result);
@@ -407,6 +424,7 @@ export async function executePageTranslation({
         contextDelta: contextDelta || undefined,
         error: undefined,
         settingsHash: hash,
+        language: eff.language,
       });
 
       if (contextDelta) {

@@ -84,6 +84,7 @@ import {
   SUPPORTED_TRANSLATION_SLUGS,
   isSupportedTranslationLanguage,
   normalizeBookCandidates,
+  isContentScriptMismatch,
 } from "./languageTableMap";
 
 /**
@@ -241,6 +242,14 @@ export const fetchSupabaseLanguagePage = createServerFn({ method: "POST" })
         return { found: false };
       }
 
+      // Never serve another language's text from this language's table (legacy contamination).
+      if (isContentScriptMismatch(data.language, records[0].content)) {
+        console.warn(
+          `Supabase ${tableName}: page ${data.pageNumber} content is not in ${data.language}; treating as missing.`,
+        );
+        return { found: false };
+      }
+
       return {
         found: true,
         content: records[0].content,
@@ -295,7 +304,14 @@ export const fetchSupabaseLanguageBook = createServerFn({ method: "POST" })
       }
 
       const pages = records
-        .filter((r) => r.page_number > 0 && typeof r.content === "string" && r.content.trim())
+        .filter(
+          (r) =>
+            r.page_number > 0 &&
+            typeof r.content === "string" &&
+            r.content.trim() &&
+            // Skip rows written in another language's script (legacy contamination)
+            !isContentScriptMismatch(data.language, r.content),
+        )
         .map((r) => ({
           pageNumber: r.page_number,
           content: r.content,
@@ -339,6 +355,13 @@ export const saveSupabaseLanguagePage = createServerFn({ method: "POST" })
       return {
         success: false,
         error: `Supabase sync table does not exist for language "${data.language}".`,
+      };
+    }
+
+    if (isContentScriptMismatch(data.language, data.content)) {
+      return {
+        success: false,
+        error: `Rejected: page content is not written in ${data.language}.`,
       };
     }
 
@@ -458,7 +481,14 @@ export const batchSaveSupabaseLanguagePages = createServerFn({ method: "POST" })
       const { primaryId } = normalizeBookCandidates(data.bookId, data.docId);
       const nowIso = new Date().toISOString();
 
-      const validPages = data.pages.filter((p) => p.pageNumber > 0 && p.content?.trim());
+      // Drop pages whose text is clearly in another language's script — they must never
+      // land in this language's table.
+      const validPages = data.pages.filter(
+        (p) =>
+          p.pageNumber > 0 &&
+          p.content?.trim() &&
+          !isContentScriptMismatch(data.language, p.content),
+      );
       if (validPages.length === 0) {
         return { success: true, count: 0, pages: [] };
       }

@@ -40,6 +40,22 @@ export interface PageAi {
   overrides?: PageOverrides;
   settingsHash?: string;
   updatedAt?: number;
+  /** Language the `result` was produced in (as selected by the user, e.g. "हिंदी"). */
+  language?: string;
+  /**
+   * Completed results for languages other than the active one, keyed by language slug.
+   * Lets a language switch hide (not destroy) the previous language's work and restore it
+   * instantly — without a network request — when the user switches back.
+   */
+  byLanguage?: Record<string, PageAiLanguageEntry>;
+}
+
+export interface PageAiLanguageEntry {
+  result: string;
+  language: string;
+  settingsHash?: string;
+  contextDelta?: string;
+  updatedAt?: number;
 }
 
 export interface StructuredTranslationResult {

@@ -307,6 +307,10 @@ import { clearDocContext } from "./contextStore";
 export function setOutputLanguage(lang: string) {
   if (typeof window === "undefined") return;
   const trimmed = lang?.trim() || "";
+  // No-op when the language is unchanged. Callers such as AuthContext (on every /api/auth/me
+  // and profile update) and the settings page re-apply the same value; re-broadcasting it
+  // used to trigger library-wide reconciliation and duplicate Supabase fetches.
+  if (trimmed === (localStorage.getItem(LANG_LS)?.trim() ?? "")) return;
   if (trimmed) {
     localStorage.setItem(LANG_LS, trimmed);
   } else {

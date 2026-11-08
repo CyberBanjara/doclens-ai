@@ -72,6 +72,15 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     currentUidRef.current = user?.uid ?? null;
   }, [user?.uid]);
 
+  // Background translation sync only pushes to Supabase for roles the server accepts,
+  // so regular users never fire write requests that are guaranteed to be rejected.
+  useEffect(() => {
+    const allowed = !!user && ["admin", "editor", "moderator"].includes(user.role);
+    void import("@/lib/sync")
+      .then(({ setSupabasePushAllowed }) => setSupabasePushAllowed(allowed))
+      .catch(() => {});
+  }, [user?.role, user?.uid]);
+
   const markVerified = (u: ClientUser | null) => {
     lastVerifiedAtRef.current = Date.now();
     currentUidRef.current = u?.uid ?? null;
@@ -266,6 +275,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     photoURL?: string;
   }): Promise<ClientUser> => {
     const updated = await apiUpdateUserProfile(updates);
+    // The profile endpoint authenticates the session and returns the authoritative user,
+    // so it counts as a fresh verification (avoids an immediate redundant /api/auth/me).
+    markVerified(updated);
     const retainedUser = {
       ...updated,
       totalTranslatedPages: user?.totalTranslatedPages ?? updated.totalTranslatedPages ?? 0,

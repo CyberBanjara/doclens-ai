@@ -253,6 +253,156 @@ export function getLanguageTableName(language: string): string {
 }
 
 /**
+ * ============================================================================
+ * SCRIPT-LEVEL LANGUAGE GUARD
+ * ----------------------------------------------------------------------------
+ * Translations are stored in per-language tables, but nothing at the database
+ * level stops (say) Bengali text from being upserted into `translations_hindi`.
+ * These helpers detect the dominant writing system of a text so both the write
+ * path and the read path can reject content that is clearly in another script.
+ *
+ * The check is deliberately conservative: it only reports a mismatch when the
+ * text is dominated by a *different non-Latin* script than the one the language
+ * is written in (Latin is ignored for Indic targets because translations
+ * legitimately contain English terms, numbers and names).
+ * ============================================================================
+ */
+
+type ScriptId =
+  | "devanagari"
+  | "bengali"
+  | "gurmukhi"
+  | "gujarati"
+  | "odia"
+  | "tamil"
+  | "telugu"
+  | "kannada"
+  | "malayalam"
+  | "arabic"
+  | "han"
+  | "kana"
+  | "hangul"
+  | "cyrillic"
+  | "latin";
+
+const SCRIPT_RANGES: Array<[ScriptId, number, number]> = [
+  ["devanagari", 0x0900, 0x097f],
+  ["bengali", 0x0980, 0x09ff],
+  ["gurmukhi", 0x0a00, 0x0a7f],
+  ["gujarati", 0x0a80, 0x0aff],
+  ["odia", 0x0b00, 0x0b7f],
+  ["tamil", 0x0b80, 0x0bff],
+  ["telugu", 0x0c00, 0x0c7f],
+  ["kannada", 0x0c80, 0x0cff],
+  ["malayalam", 0x0d00, 0x0d7f],
+  ["arabic", 0x0600, 0x06ff],
+  ["cyrillic", 0x0400, 0x04ff],
+  ["kana", 0x3040, 0x30ff],
+  ["han", 0x4e00, 0x9fff],
+  ["hangul", 0xac00, 0xd7af],
+];
+
+/** Expected script per language slug. Languages not listed are never script-checked. */
+const SLUG_SCRIPT: Record<string, ScriptId> = {
+  hindi: "devanagari",
+  marathi: "devanagari",
+  bengali: "bengali",
+  assamese: "bengali",
+  punjabi: "gurmukhi",
+  gujarati: "gujarati",
+  odia: "odia",
+  tamil: "tamil",
+  telugu: "telugu",
+  kannada: "kannada",
+  malayalam: "malayalam",
+  urdu: "arabic",
+  arabic: "arabic",
+  mandarin: "han",
+  russian: "cyrillic",
+  korean: "hangul",
+  english: "latin",
+  spanish: "latin",
+  french: "latin",
+  german: "latin",
+};
+
+/** Returns the dominant non-Latin script of a text (or "latin" if no other script is present). */
+export function detectDominantScript(text: string): ScriptId | null {
+  if (!text) return null;
+  const counts = new Map<ScriptId, number>();
+  let latin = 0;
+  // Sample at most the first ~4000 chars — plenty to identify the script cheaply.
+  const sample = text.length > 4000 ? text.slice(0, 4000) : text;
+  for (const ch of sample) {
+    const cp = ch.codePointAt(0)!;
+    if ((cp >= 0x41 && cp <= 0x5a) || (cp >= 0x61 && cp <= 0x7a) || (cp >= 0xc0 && cp <= 0x24f)) {
+      latin++;
+      continue;
+    }
+    for (const [id, lo, hi] of SCRIPT_RANGES) {
+      if (cp >= lo && cp <= hi) {
+        counts.set(id, (counts.get(id) || 0) + 1);
+        break;
+      }
+    }
+  }
+  let best: ScriptId | null = null;
+  let bestCount = 0;
+  for (const [id, n] of counts) {
+    if (n > bestCount) {
+      best = id;
+      bestCount = n;
+    }
+  }
+  // Require a meaningful amount of script characters before deciding.
+  if (best && bestCount >= 20) return best;
+  if (latin >= 20) return "latin";
+  return null;
+}
+
+/**
+ * True when `content` is clearly written in a script that does not belong to `language`
+ * (e.g. Bengali text for Hindi). Returns false whenever the result is uncertain.
+ */
+export function isContentScriptMismatch(language: string, content: string): boolean {
+  const expected = SLUG_SCRIPT[getLanguageSlug(language)];
+  if (!expected) return false;
+  const actual = detectDominantScript(content);
+  if (!actual) return false;
+  if (expected === "latin") {
+    // Latin-script languages: mismatch only when a non-Latin script dominates.
+    return actual !== "latin";
+  }
+  // Non-Latin languages: Latin-heavy pages (tables, formulas, names) are not proof of a mismatch.
+  if (actual === "latin") return false;
+  if (expected === "han" && actual === "kana") return false;
+  return actual !== expected;
+}
+
+/**
+ * Extracts the language slug a cached page result was produced in, from its
+ * recorded `language` field or (for older records) its settings hash
+ * `mode|language|style|temperature`. Returns null when it cannot be determined.
+ */
+export function getPageAiLanguageSlug(
+  ai:
+    | {
+        language?: string;
+        settingsHash?: string;
+      }
+    | null
+    | undefined,
+): string | null {
+  if (!ai) return null;
+  if (ai.language && ai.language.trim()) return getLanguageSlug(ai.language);
+  if (ai.settingsHash) {
+    const parts = ai.settingsHash.split("|");
+    if (parts.length >= 2 && parts[1]?.trim()) return getLanguageSlug(parts[1]);
+  }
+  return null;
+}
+
+/**
  * Normalizes a book key, filename, or ID into search candidate IDs.
  * This guarantees matches whether the book is identified by:
  * - Full R2 path (e.g. "history/class-10/jess101.pdf")
