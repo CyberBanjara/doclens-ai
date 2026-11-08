@@ -1,12 +1,26 @@
 import { defineEventHandler, createError } from "h3";
 import {
-  getOmniServerConfig,
+  resolveOmniConfig,
+  OmniConfigError,
   getOmniUpstreamHeaders,
   sanitizeUpstreamError,
 } from "../../lib/omnirouter-server";
 
-export default defineEventHandler(async () => {
-  const { baseUrl, apiKey } = getOmniServerConfig();
+export default defineEventHandler(async (event) => {
+  let config;
+  try {
+    config = resolveOmniConfig(event);
+  } catch (err) {
+    if (err instanceof OmniConfigError) {
+      throw createError({
+        statusCode: err.statusCode,
+        statusMessage: err.message,
+        data: { error: err.message },
+      });
+    }
+    throw err;
+  }
+  const { baseUrl, apiKey } = config;
 
   if (!baseUrl || !apiKey) {
     throw createError({
@@ -19,6 +33,7 @@ export default defineEventHandler(async () => {
   try {
     const res = await fetch(`${baseUrl}/models`, {
       headers: getOmniUpstreamHeaders(apiKey),
+      signal: AbortSignal.timeout(10_000),
     });
 
     if (!res.ok) {
@@ -51,7 +66,11 @@ export default defineEventHandler(async () => {
     };
   } catch (err: any) {
     if (err.statusCode) throw err;
-    const cleanError = sanitizeUpstreamError(err?.message || "Gateway unreachable", baseUrl, apiKey);
+    const cleanError = sanitizeUpstreamError(
+      err?.message || "Gateway unreachable",
+      baseUrl,
+      apiKey,
+    );
     throw createError({
       statusCode: 502,
       statusMessage: "Failed to fetch models from OmniRouter gateway.",

@@ -197,7 +197,7 @@ export function ProviderModelSelectorModal({
       if (provider === "omnirouter") {
         const fetched = await fetchOmniRouterModels(endpoint || undefined, apiKey);
         if (fetched.length === 0) {
-          setError("No models returned by OmniRouter endpoint. Verify the endpoint URL is active.");
+          setError("No models returned by OmniRouter endpoint. Verify the endpoint URL and API key in Settings.");
         }
         setModels(fetched);
       } else {

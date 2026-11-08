@@ -122,14 +122,40 @@ export function setOmniRouterApiKey(key: string): void {
   window.dispatchEvent(new CustomEvent(GLOBALS_CHANGE_EVT, { detail: { omniApiKey: trimmed } }));
 }
 
+/** Back-compat alias used by other modules. */
+export const getOmniApiKey = getOmniRouterApiKey;
+
+/** True when the user saved their own endpoint URL in Settings. */
+export function hasUserOmniEndpoint(): boolean {
+  if (typeof window === "undefined") return false;
+  return Boolean(localStorage.getItem(OMNI_BASE_URL_LS)?.trim());
+}
+
+/** True when the user saved their own API key in Settings. */
+export function hasUserOmniApiKey(): boolean {
+  if (typeof window === "undefined") return false;
+  return Boolean(localStorage.getItem(OMNI_API_KEY_LS)?.trim());
+}
+
 /**
- * Returns true when OmniRouter is configured either via user endpoint or env endpoint.
+ * Headers that let the serverless proxy (/api/omni/*) reach the user's own OmniRouter
+ * endpoint when the browser can't call it directly (CORS / mixed content in production).
+ * Sent only when both an endpoint and a key are known; otherwise the proxy uses server env.
+ */
+function omniProxyHeaders(baseUrl?: string, apiKey?: string): Record<string, string> {
+  const url = sanitizeBaseUrl(baseUrl || (hasUserOmniEndpoint() ? getOmniRouterBaseUrl() : ""));
+  const key = (apiKey ?? (hasUserOmniEndpoint() ? getOmniRouterApiKey() : "")).trim();
+  if (!url || !key) return {};
+  // Env/build-time endpoints (local dev) are already known to the server — don't forward them.
+  if (!hasUserOmniEndpoint() && url === sanitizeBaseUrl(getOmniRouterBaseUrl())) return {};
+  return { "x-omni-base-url": url, "x-omni-api-key": key };
+}
+
+/**
+ * Returns true when OmniRouter is configured: a user endpoint + API key, or a server/env gateway.
  */
 export function isOmniRouterConfigured(): boolean {
-  if (typeof window !== "undefined") {
-    const userUrl = localStorage.getItem(OMNI_BASE_URL_LS);
-    if (userUrl && userUrl.trim()) return true;
-  }
+  if (hasUserOmniEndpoint() && getOmniRouterApiKey()) return true;
   try {
     if (typeof __OMNIROUTER_CONFIGURED__ !== "undefined" && __OMNIROUTER_CONFIGURED__) {
       return true;
@@ -331,7 +357,8 @@ export async function fetchOmniRouterModels(
   // 2. Backend proxy fallback
   try {
     const res = await fetch("/api/omni/models", {
-      signal: signal || AbortSignal.timeout(6000),
+      headers: omniProxyHeaders(targetBaseUrl, targetApiKey),
+      signal: signal || AbortSignal.timeout(12000),
     });
     if (!res.ok) return [];
     const json = (await res.json()) as { data?: unknown };
@@ -376,7 +403,10 @@ export async function validateOmniRouterConnection(
   const directBaseUrl = sanitizeBaseUrl(targetBaseUrl || getOmniRouterBaseUrl());
   const directApiKey = (targetApiKey !== undefined ? targetApiKey : getOmniRouterApiKey()).trim();
 
-  // 1. Direct connection
+  const userSupplied = Boolean(targetBaseUrl && directApiKey);
+  let directError = "";
+
+  // 1. Direct connection from the browser (works for localhost in dev, or CORS-enabled endpoints)
   if (directBaseUrl) {
     try {
       const headers: Record<string, string> = {
@@ -394,34 +424,48 @@ export async function validateOmniRouterConnection(
         const count = Array.isArray(json?.data) ? json.data.length : 0;
         return { ok: true, modelCount: count };
       }
-      if (targetBaseUrl && targetApiKey) {
+      // The endpoint answered: its verdict is authoritative (e.g. a wrong API key).
+      if (userSupplied) {
+        if (res.status === 401 || res.status === 403) {
+          return {
+            ok: false,
+            error: "OmniRouter rejected the API key. Please check it and try again.",
+          };
+        }
         const txt = await res.text();
         return { ok: false, error: `HTTP ${res.status}: ${txt.slice(0, 120)}` };
       }
     } catch (err: unknown) {
-      if (targetBaseUrl && targetApiKey) {
-        if (isNetworkError(err)) {
-          return {
-            ok: false,
-            error: `Could not connect to ${directBaseUrl}. Make sure your OmniRouter server is running.`,
-          };
-        }
-        return { ok: false, error: err instanceof Error ? err.message : "Connection failed." };
+      if (signal?.aborted) {
+        return { ok: false, error: "Connection check timed out." };
       }
+      directError = isNetworkError(err)
+        ? `Could not reach ${directBaseUrl} from the browser.`
+        : err instanceof Error
+          ? err.message
+          : "Connection failed.";
+      // Fall through: the browser may be blocked by CORS / mixed content — retry via the server.
     }
   }
 
-  // 2. Backend proxy fallback
+  // 2. Backend proxy (forwards the user's endpoint + key when provided, else uses server env)
   try {
     const res = await fetch("/api/omni/validate", {
-      signal: signal || AbortSignal.timeout(6000),
+      headers: omniProxyHeaders(targetBaseUrl, targetApiKey),
+      signal: AbortSignal.timeout(12000),
     });
-    const json = (await res.json()) as { ok?: boolean; error?: string; modelCount?: number };
+    const json = (await res.json().catch(() => ({}))) as {
+      ok?: boolean;
+      error?: string;
+      modelCount?: number;
+    };
     if (!res.ok || !json?.ok) {
-      return { ok: false, error: json?.error || `HTTP ${res.status}` };
+      const proxyError = json?.error || `HTTP ${res.status}`;
+      return { ok: false, error: directError ? `${directError} ${proxyError}` : proxyError };
     }
     return { ok: true, modelCount: json.modelCount ?? 0 };
   } catch (err: unknown) {
+    if (directError) return { ok: false, error: directError };
     if (isNetworkError(err)) {
       return {
         ok: false,
@@ -569,8 +613,9 @@ export async function streamOmniRouterCompletion(opts: OmniStreamOpts): Promise<
   try {
     if (signal.aborted) throw new DOMException("Aborted", "AbortError");
 
-    // 1. Direct local connection (preferred when both endpoint and key are available)
+    // 1. Direct connection (preferred when both endpoint and key are available)
     if (directBaseUrl && directApiKey) {
+      let response: Response | null = null;
       try {
         const headers: Record<string, string> = {
           "Content-Type": "application/json",
@@ -578,13 +623,19 @@ export async function streamOmniRouterCompletion(opts: OmniStreamOpts): Promise<
           Authorization: `Bearer ${directApiKey}`,
         };
 
-        const response = await fetch(`${directBaseUrl}/chat/completions`, {
+        response = await fetch(`${directBaseUrl}/chat/completions`, {
           method: "POST",
           headers,
           body: JSON.stringify(requestPayload),
           signal,
         });
+      } catch (directErr) {
+        if (signal.aborted) throw directErr;
+        // Browser couldn't reach the endpoint (CORS / mixed content / offline) — use the proxy.
+        response = null;
+      }
 
+      if (response) {
         if (response.ok && response.body) {
           let totalChars = 0;
           try {
@@ -607,26 +658,20 @@ export async function streamOmniRouterCompletion(opts: OmniStreamOpts): Promise<
           return;
         }
 
-        if (opts.baseUrl && opts.apiKey) {
-          const bodyText = await response.text();
-          throw friendlyOmniRouterError(response.status, bodyText);
-        }
-      } catch (directErr) {
-        if (signal.aborted) throw directErr;
-        if (opts.baseUrl && opts.apiKey) {
-          throw directErr;
-        }
-        // Fall through to backend proxy fallback
+        // The endpoint answered with an error — surface it instead of silently re-sending.
+        const bodyText = await response.text().catch(() => "");
+        throw friendlyOmniRouterError(response.status, bodyText);
       }
     }
 
-    // 2. Backend proxy fallback (routes through /api/omni/chat)
+    // 2. Backend proxy (routes through /api/omni/chat with the user's endpoint + key when set)
     let response: Response;
     try {
       response = await fetch("/api/omni/chat", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
+          ...omniProxyHeaders(opts.baseUrl, opts.apiKey),
         },
         body: JSON.stringify(requestPayload),
         signal,

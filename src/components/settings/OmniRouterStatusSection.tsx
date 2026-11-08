@@ -1,8 +1,24 @@
 import { useState, useEffect } from "react";
-import { Server, Globe, CheckCircle2, AlertCircle, Loader2, Trash2, Check, FileText, Download, Sparkles } from "lucide-react";
+import {
+  Server,
+  Globe,
+  KeyRound,
+  Eye,
+  EyeOff,
+  CheckCircle2,
+  AlertCircle,
+  Loader2,
+  Trash2,
+  Check,
+  FileText,
+  Download,
+  Sparkles,
+} from "lucide-react";
 import {
   getOmniRouterBaseUrl,
   setOmniRouterBaseUrl,
+  getOmniRouterApiKey,
+  setOmniRouterApiKey,
   isOmniRouterConfigured,
 } from "@/lib/omnirouter";
 import { toast } from "sonner";
@@ -19,7 +35,18 @@ interface OmniRouterStatusSectionProps {
   models?: any[];
   endpoint?: string;
   onEndpointChange?: (url: string) => void;
+  apiKey?: string;
+  onApiKeyChange?: (key: string) => void;
   onOpenModelSelector?: () => void;
+}
+
+function isValidHttpUrl(value: string): boolean {
+  try {
+    const u = new URL(value);
+    return u.protocol === "http:" || u.protocol === "https:";
+  } catch {
+    return false;
+  }
 }
 
 export function OmniRouterStatusSection({
@@ -30,14 +57,23 @@ export function OmniRouterStatusSection({
   onToggle,
   endpoint,
   onEndpointChange,
+  apiKey,
+  onApiKeyChange,
   selectedModel,
   onOpenModelSelector,
 }: OmniRouterStatusSectionProps) {
   const [inputUrl, setInputUrl] = useState(() => endpoint || getOmniRouterBaseUrl() || "");
+  const [inputKey, setInputKey] = useState(() => apiKey ?? getOmniRouterApiKey() ?? "");
+  const [showKey, setShowKey] = useState(false);
   const [isSaved, setIsSaved] = useState(false);
   const [isRemoving, setIsRemoving] = useState(false);
 
-  const isConfigured = Boolean(inputUrl.trim()) || isOmniRouterConfigured();
+  const trimmedUrl = inputUrl.trim();
+  const trimmedKey = inputKey.trim();
+  const urlInvalid = Boolean(trimmedUrl) && !isValidHttpUrl(trimmedUrl);
+  const hasBothInputs = Boolean(trimmedUrl && trimmedKey) && !urlInvalid;
+  const isConfigured = hasBothInputs || isOmniRouterConfigured();
+  const hasAnyInput = Boolean(trimmedUrl || trimmedKey);
 
   useEffect(() => {
     if (endpoint !== undefined) {
@@ -45,36 +81,65 @@ export function OmniRouterStatusSection({
     }
   }, [endpoint]);
 
+  useEffect(() => {
+    if (apiKey !== undefined) {
+      setInputKey(apiKey);
+    }
+  }, [apiKey]);
+
   const handleSave = async () => {
-    const trimmed = inputUrl.trim();
-    if (!trimmed) {
-      toast.error("Please enter an OmniRouter endpoint URL.");
+    if (!trimmedUrl) {
+      toast.error("Please enter your OmniRouter endpoint URL.");
+      return;
+    }
+    if (urlInvalid) {
+      toast.error("Endpoint URL must start with http:// or https://");
+      return;
+    }
+    if (!trimmedKey) {
+      toast.error("Please enter your OmniRouter API key.");
       return;
     }
 
-    setOmniRouterBaseUrl(trimmed);
-    onEndpointChange?.(trimmed);
+    setOmniRouterBaseUrl(trimmedUrl);
+    setOmniRouterApiKey(trimmedKey);
+    onEndpointChange?.(trimmedUrl);
+    onApiKeyChange?.(trimmedKey);
 
     setIsSaved(true);
     if (isActive) {
-      toast.success("OmniRouter endpoint saved. Verifying connection...");
-      await onRefresh(trimmed);
+      toast.success("OmniRouter settings saved. Verifying connection...");
+      await onRefresh(trimmedUrl, trimmedKey);
     } else {
-      toast.success("OmniRouter endpoint saved. Toggle ON to verify and activate.");
+      toast.success("OmniRouter settings saved. Toggle ON to verify and activate.");
     }
     setTimeout(() => setIsSaved(false), 2000);
   };
 
   const handleRemove = () => {
     setOmniRouterBaseUrl("");
+    setOmniRouterApiKey("");
     setInputUrl("");
+    setInputKey("");
     onEndpointChange?.("");
+    onApiKeyChange?.("");
     if (isActive) {
       onToggle();
     }
     setIsRemoving(true);
-    toast.info("OmniRouter endpoint removed. Switched to Managed AI (Default).");
+    toast.info("OmniRouter settings removed. Switched to Managed AI (Default).");
     setTimeout(() => setIsRemoving(false), 1500);
+  };
+
+  // Turning ON persists whatever is typed so the parent validates the current inputs.
+  const handleToggle = () => {
+    if (!isActive && hasBothInputs) {
+      setOmniRouterBaseUrl(trimmedUrl);
+      setOmniRouterApiKey(trimmedKey);
+      onEndpointChange?.(trimmedUrl);
+      onApiKeyChange?.(trimmedKey);
+    }
+    onToggle();
   };
 
   return (
@@ -91,7 +156,9 @@ export function OmniRouterStatusSection({
           <div className="flex items-center gap-2.5">
             <div
               className={`flex h-9 w-9 items-center justify-center rounded-xl shrink-0 transition-colors ${
-                isActive ? "bg-emerald-500/20 text-emerald-600 dark:text-emerald-400" : "bg-primary/10 text-primary"
+                isActive
+                  ? "bg-emerald-500/20 text-emerald-600 dark:text-emerald-400"
+                  : "bg-primary/10 text-primary"
               }`}
             >
               <Server className="h-5 w-5" />
@@ -116,11 +183,11 @@ export function OmniRouterStatusSection({
               role="switch"
               aria-checked={isActive}
               id="toggle-omnirouter-switch"
-              onClick={onToggle}
+              onClick={handleToggle}
               disabled={!isActive && !isConfigured}
               title={
                 !isActive && !isConfigured
-                  ? "Enter an endpoint URL first"
+                  ? "Enter an endpoint URL and API key first"
                   : isActive
                     ? "Turn OFF to revert to Managed AI"
                     : "Turn ON to use OmniRouter"
@@ -142,7 +209,8 @@ export function OmniRouterStatusSection({
         </div>
 
         <p className="text-xs text-muted-foreground leading-relaxed">
-          Route requests through your private or local OmniRouter instance. Direct connection without consuming Anuvaad quota.
+          Route requests through your private or local OmniRouter instance. Direct connection
+          without consuming Anuvaad quota.
         </p>
 
         {/* How to set up hyperlink */}
@@ -160,9 +228,12 @@ export function OmniRouterStatusSection({
         </div>
       </div>
 
-      {/* Input Field */}
+      {/* Input Fields */}
       <div className="space-y-2">
-        <label htmlFor="omnirouter-endpoint-url-input" className="text-xs font-semibold text-foreground">
+        <label
+          htmlFor="omnirouter-endpoint-url-input"
+          className="text-xs font-semibold text-foreground"
+        >
           Endpoint URL
         </label>
 
@@ -178,8 +249,48 @@ export function OmniRouterStatusSection({
             placeholder="http://localhost:20128/v1"
             value={inputUrl}
             onChange={(e) => setInputUrl(e.target.value)}
-            className="w-full rounded-xl border border-border bg-background/80 pl-10 pr-3.5 py-2.5 text-xs font-mono text-foreground placeholder:text-muted-foreground/50 outline-none focus:border-primary focus:ring-1 focus:ring-primary transition-colors shadow-2xs"
+            aria-invalid={urlInvalid}
+            className={`w-full rounded-xl border bg-background/80 pl-10 pr-3.5 py-2.5 text-xs font-mono text-foreground placeholder:text-muted-foreground/50 outline-none focus:ring-1 transition-colors shadow-2xs ${
+              urlInvalid
+                ? "border-rose-500/70 focus:border-rose-500 focus:ring-rose-500"
+                : "border-border focus:border-primary focus:ring-primary"
+            }`}
           />
+        </div>
+
+        <label
+          htmlFor="omnirouter-api-key-input"
+          className="block pt-1 text-xs font-semibold text-foreground"
+        >
+          API Key
+        </label>
+
+        <div className="relative flex items-center">
+          <div className="absolute left-3.5 text-muted-foreground pointer-events-none">
+            <KeyRound className="h-4 w-4" />
+          </div>
+          <input
+            id="omnirouter-api-key-input"
+            type={showKey ? "text" : "password"}
+            autoComplete="off"
+            spellCheck={false}
+            placeholder="Your OmniRouter API key"
+            value={inputKey}
+            onChange={(e) => setInputKey(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter" && hasBothInputs) void handleSave();
+            }}
+            className="w-full rounded-xl border border-border bg-background/80 pl-10 pr-10 py-2.5 text-xs font-mono text-foreground placeholder:text-muted-foreground/50 outline-none focus:border-primary focus:ring-1 focus:ring-primary transition-colors shadow-2xs"
+          />
+          <button
+            type="button"
+            onClick={() => setShowKey((v) => !v)}
+            aria-label={showKey ? "Hide API key" : "Show API key"}
+            title={showKey ? "Hide API key" : "Show API key"}
+            className="absolute right-2.5 rounded-md p-1 text-muted-foreground hover:text-foreground transition-colors cursor-pointer"
+          >
+            {showKey ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+          </button>
         </div>
 
         {/* Dynamic Helper Note */}
@@ -194,9 +305,19 @@ export function OmniRouterStatusSection({
               <AlertCircle className="h-3 w-3 shrink-0" />
               <span className="truncate">{error}</span>
             </span>
+          ) : urlInvalid ? (
+            <span className="flex items-center gap-1.5 text-rose-500 font-medium">
+              <AlertCircle className="h-3 w-3 shrink-0" />
+              <span>Endpoint URL must start with http:// or https://</span>
+            </span>
+          ) : trimmedUrl && !trimmedKey ? (
+            <span className="text-amber-600 dark:text-amber-400 font-medium">
+              An API key is required to connect to your endpoint.
+            </span>
           ) : (
             <span className="text-muted-foreground">
-              Default: http://localhost:20128/v1. Leave empty to use Managed AI.
+              Both values are required. Use a public URL (e.g. ngrok) when not running locally.
+              Leave empty to use Managed AI.
             </span>
           )}
         </div>
@@ -223,11 +344,11 @@ export function OmniRouterStatusSection({
         <button
           type="button"
           id="toggle-omnirouter-btn"
-          onClick={onToggle}
+          onClick={handleToggle}
           disabled={!isActive && !isConfigured}
           title={
             !isActive && !isConfigured
-              ? "Enter an endpoint URL to enable"
+              ? "Enter an endpoint URL and API key to enable"
               : isActive
                 ? "Click to turn OFF (use Managed AI)"
                 : "Click to turn ON"
@@ -238,7 +359,9 @@ export function OmniRouterStatusSection({
               : "bg-surface-2 hover:bg-surface-3 text-muted-foreground border border-border"
           } ${!isActive && !isConfigured ? "opacity-40 cursor-not-allowed" : ""}`}
         >
-          <span className={`h-2 w-2 rounded-full ${isActive ? "bg-white animate-pulse" : "bg-muted-foreground/40"}`} />
+          <span
+            className={`h-2 w-2 rounded-full ${isActive ? "bg-white animate-pulse" : "bg-muted-foreground/40"}`}
+          />
           <span>{isActive ? "Turn OFF" : "Turn ON"}</span>
         </button>
 
@@ -261,7 +384,7 @@ export function OmniRouterStatusSection({
           type="button"
           id="save-omnirouter-endpoint-btn"
           onClick={handleSave}
-          disabled={status === "checking" || !inputUrl.trim()}
+          disabled={status === "checking" || !hasBothInputs}
           className="flex-1 rounded-xl bg-surface-2 hover:bg-surface-3 border border-border text-foreground py-2.5 px-3 text-xs font-semibold transition-all active:scale-98 disabled:opacity-50 disabled:cursor-not-allowed shadow-xs flex items-center justify-center gap-2 cursor-pointer"
         >
           {status === "checking" ? (
@@ -275,18 +398,18 @@ export function OmniRouterStatusSection({
               <span>Saved!</span>
             </>
           ) : (
-            <span>Save Endpoint</span>
+            <span>Save</span>
           )}
         </button>
 
         {/* Remove Button */}
-        {Boolean(inputUrl.trim()) && (
+        {hasAnyInput && (
           <button
             type="button"
             id="remove-omnirouter-endpoint-btn"
             onClick={handleRemove}
             disabled={isRemoving}
-            title="Remove OmniRouter endpoint and revert to Managed AI"
+            title="Remove OmniRouter endpoint & API key and revert to Managed AI"
             className="rounded-xl border border-border bg-surface-2 hover:bg-destructive/10 hover:border-destructive/30 hover:text-destructive py-2.5 px-3 text-xs font-semibold text-muted-foreground transition-colors cursor-pointer flex items-center justify-center gap-1.5"
           >
             <Trash2 className="h-3.5 w-3.5" />

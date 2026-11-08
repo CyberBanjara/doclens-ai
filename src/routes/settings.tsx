@@ -83,6 +83,7 @@ function SettingsPage() {
 
   // OmniRouter state
   const [omniEndpoint, setOmniEndpoint] = useState(() => getOmniRouterBaseUrl() || "");
+  const [omniApiKey, setOmniApiKeyState] = useState(() => getOmniRouterApiKey() || "");
   const [loadingOmni, setLoadingOmni] = useState(false);
   const [omniStatus, setOmniStatus] = useState<"connected" | "disconnected" | "checking">(
     "checking",
@@ -171,8 +172,9 @@ function SettingsPage() {
     }
   };
 
-  const loadOmniModels = async (targetBaseUrl?: string) => {
+  const loadOmniModels = async (targetBaseUrl?: string, targetApiKey?: string) => {
     const ep = targetBaseUrl !== undefined ? targetBaseUrl : (omniEndpoint || getOmniRouterBaseUrl());
+    const key = (targetApiKey ?? (getOmniRouterApiKey() || omniApiKey)).trim();
     if (!ep && !isOmniRouterConfigured()) {
       setOmniStatus("disconnected");
       setOmniError("");
@@ -182,17 +184,13 @@ function SettingsPage() {
     setOmniError("");
     setOmniStatus("checking");
     try {
-      const res = await validateOmniRouterConnection(
-        ep || undefined,
-        getOmniRouterApiKey() || undefined,
-        AbortSignal.timeout(5000),
-      );
+      const res = await validateOmniRouterConnection(ep || undefined, key || undefined);
       if (res.ok) {
         setOmniStatus("connected");
       } else {
         setOmniStatus("disconnected");
-        setOmniError("");
-        toast.error("Not a valid API key");
+        setOmniError(res.error || "");
+        toast.error(res.error || "Could not connect to OmniRouter");
         if (provider === "omnirouter") {
           setProvider("managed");
           setAiProvider("managed");
@@ -201,7 +199,7 @@ function SettingsPage() {
     } catch {
       setOmniStatus("disconnected");
       setOmniError("");
-      toast.error("Not a valid API key");
+      toast.error("Could not connect to OmniRouter");
       if (provider === "omnirouter") {
         setProvider("managed");
         setAiProvider("managed");
@@ -248,6 +246,7 @@ function SettingsPage() {
 
     const savedOmni = getOmniRouterBaseUrl();
     setOmniEndpoint(savedOmni || "");
+    setOmniApiKeyState(getOmniRouterApiKey() || "");
 
     // 1. Application startup: If both providers are OFF, do not perform any API key validation,
     // endpoint checks, or provider-related requests. Use Managed AI through environment variables by default.
@@ -351,9 +350,14 @@ function SettingsPage() {
       return;
     }
 
-    const epToValidate = omniEndpoint.trim() || getOmniRouterBaseUrl().trim();
-    if (!epToValidate && !isOmniRouterConfigured()) {
-      toast.error("Please enter an OmniRouter endpoint URL first.");
+    const epToValidate = getOmniRouterBaseUrl().trim() || omniEndpoint.trim();
+    const keyToValidate = getOmniRouterApiKey().trim() || omniApiKey.trim();
+    if (!isOmniRouterConfigured() && (!epToValidate || !keyToValidate)) {
+      toast.error(
+        !epToValidate
+          ? "Please enter your OmniRouter endpoint URL first."
+          : "Please enter your OmniRouter API key first.",
+      );
       return;
     }
 
@@ -365,7 +369,7 @@ function SettingsPage() {
     try {
       const res = await validateOmniRouterConnection(
         epToValidate || undefined,
-        getOmniRouterApiKey().trim() || undefined,
+        keyToValidate || undefined,
       );
       if (res.ok) {
         setOmniStatus("connected");
@@ -563,9 +567,11 @@ function SettingsPage() {
             <OmniRouterStatusSection
               status={omniStatus}
               error={omniError}
-              onRefresh={(baseUrl) => loadOmniModels(baseUrl)}
+              onRefresh={(baseUrl, apiKey) => loadOmniModels(baseUrl, apiKey)}
               endpoint={omniEndpoint}
               onEndpointChange={(ep) => setOmniEndpoint(ep)}
+              apiKey={omniApiKey}
+              onApiKeyChange={(key) => setOmniApiKeyState(key)}
               isActive={provider === "omnirouter"}
               onToggle={handleToggleOmniRouter}
               selectedModel={selectedOmniModel}
@@ -587,7 +593,7 @@ function SettingsPage() {
           provider={activeSelectorProvider}
           selectedModelId={activeSelectorProvider === "omnirouter" ? selectedOmniModel : selectedOpenRouterModel}
           endpoint={omniEndpoint}
-          apiKey={activeSelectorProvider === "openrouter" ? customKey : undefined}
+          apiKey={activeSelectorProvider === "openrouter" ? customKey : omniApiKey || undefined}
           onSelectModel={(modelId) => {
             if (activeSelectorProvider === "omnirouter") {
               setSelectedOmniModel(modelId);

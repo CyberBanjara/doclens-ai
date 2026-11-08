@@ -7,13 +7,27 @@ import {
   setResponseStatus,
 } from "h3";
 import {
-  getOmniServerConfig,
+  resolveOmniConfig,
+  OmniConfigError,
   getOmniUpstreamHeaders,
   sanitizeUpstreamError,
 } from "../../lib/omnirouter-server";
 
 export default defineEventHandler(async (event) => {
-  const { baseUrl, apiKey, defaultModel } = getOmniServerConfig();
+  let config;
+  try {
+    config = resolveOmniConfig(event);
+  } catch (err) {
+    if (err instanceof OmniConfigError) {
+      throw createError({
+        statusCode: err.statusCode,
+        statusMessage: err.message,
+        data: { error: err.message },
+      });
+    }
+    throw err;
+  }
+  const { baseUrl, apiKey, defaultModel } = config;
 
   if (!baseUrl || !apiKey) {
     throw createError({
