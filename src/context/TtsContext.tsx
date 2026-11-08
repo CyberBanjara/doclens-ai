@@ -663,7 +663,12 @@ export function TtsProvider({ children }: { children: React.ReactNode }) {
     if (!isNeural || !ttsRef.current) return;
 
     const activeVoiceId = voice?.voiceURI || targetVoiceUri;
-    const LOOKAHEAD_COUNT = 1; // Pre-synthesize 1 sentence ahead for gapless playback without memory bloat
+    // Keep several sentences synthesized ahead of playback. A single-sentence buffer
+    // starves whenever a long sentence follows a short one (synthesis of N+1 outlasts
+    // playback of N), which is what produced audible gaps mid-paragraph. Inference is
+    // serialized, so only one of these is ever computing at a time; finished WAV
+    // blobs are small (~100–500 KB) so a few in memory is cheap.
+    const LOOKAHEAD_COUNT = 4;
 
     // Evict entries behind current sentence index to free memory
     preSynthesizedMapRef.current.forEach((entry, idx) => {
@@ -681,7 +686,7 @@ export function TtsProvider({ children }: { children: React.ReactNode }) {
     let nextIdxToSynthesize: number | null = null;
     for (let i = currentIndex + 1; i <= currentIndex + LOOKAHEAD_COUNT; i++) {
       if (i < sentenceList.length) {
-        const text = sentenceList[i]?.trim();
+        const text = sentenceList[i]?.replace(/[*#]/g, "").trim();
         if (text && !preSynthesizedMapRef.current.has(i)) {
           nextIdxToSynthesize = i;
           break;
@@ -692,7 +697,9 @@ export function TtsProvider({ children }: { children: React.ReactNode }) {
     if (nextIdxToSynthesize === null) return;
 
     const targetIndex = nextIdxToSynthesize;
-    const textToSynthesize = sentenceList[targetIndex].trim();
+    // Must match the normalisation speakSentence applies, so the pre-rendered audio is
+    // identical to what on-demand synthesis would produce.
+    const textToSynthesize = sentenceList[targetIndex].replace(/[*#]/g, "").trim();
 
     const promise: Promise<Blob> = predictWithRecovery(
       ttsRef.current,
@@ -1001,11 +1008,11 @@ export function TtsProvider({ children }: { children: React.ReactNode }) {
 
           let toastId: string | number | undefined;
 
-          // Immediately kick off look-ahead pre-synthesis in parallel so subsequent sentences
-          // are queued immediately, preventing lookahead pipeline starvation!
-          processPreSynthesizeQueue(index, sentenceList);
-
-          predictWithRecovery(
+          // NOTE: the current sentence is enqueued on the (serialized) inference chain
+          // first; the look-ahead is kicked off right after so it queues *behind* it.
+          // Enqueuing look-ahead first made the sentence the user is waiting on sit
+          // behind the next one, doubling the start-up / recovery delay.
+          const currentPromise = predictWithRecovery(
             ttsRef.current,
             {
               text: sentenceText,
@@ -1023,7 +1030,11 @@ export function TtsProvider({ children }: { children: React.ReactNode }) {
               }
             },
             () => synthesisSessionIdRef.current !== currentSessionId || !isPlayingRef.current,
-          )
+          );
+
+          processPreSynthesizeQueue(index, sentenceList);
+
+          currentPromise
             .then((wavBlob: Blob) => {
               if (toastId) toast.dismiss(toastId);
 
